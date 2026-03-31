@@ -36,3 +36,27 @@ export function getBusinessIdFromToken(token) {
 
   return businessId
 }
+
+/**
+ * Extrae el rol del usuario desde user metadata, app metadata o claims del token.
+ * @param {object|null} user - Usuario de Supabase
+ * @param {string|null} token - JWT de acceso
+ * @returns {string|null} rol detectado
+ */
+export function getUserRole(user, token) {
+  const claims = token ? decodeJWT(token) : null
+
+  const role =
+    user?.user_metadata?.role ||
+    user?.user_metadata?.user_role ||
+    user?.app_metadata?.role ||
+    user?.app_metadata?.user_role ||
+    claims?.user_metadata?.role ||
+    claims?.user_metadata?.user_role ||
+    claims?.app_metadata?.role ||
+    claims?.app_metadata?.user_role ||
+    claims?.role ||
+    null
+
+  return role
+}

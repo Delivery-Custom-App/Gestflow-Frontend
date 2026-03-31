@@ -1,9 +1,11 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useLocals } from '../hooks/useLocals'
 import CreateLocalModal from './CreateLocalModal'
 import '../styles/AdminDashboard.css'
 
-function AdminDashboard({ user, onLogout }) {
+function AdminDashboard({ user, userRole, onLogout }) {
+  const navigate = useNavigate()
   const [selectedLocal, setSelectedLocal] = useState(0)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const { locales, loading, error, refetch } = useLocals()
@@ -13,6 +15,17 @@ function AdminDashboard({ user, onLogout }) {
   const handleCreateSuccess = () => {
     refetch()
     setSelectedLocal(0)
+  }
+
+  const handleGestionarClick = () => {
+    if (currentLocal) {
+      navigate(`/local/${currentLocal.id}`, { state: { local: currentLocal } })
+    }
+  }
+
+  const handleLocalCardClick = (local, index) => {
+    setSelectedLocal(index)
+    navigate(`/local/${local.id}`, { state: { local } })
   }
 
   return (
@@ -34,7 +47,7 @@ function AdminDashboard({ user, onLogout }) {
 
           <div className="user-section">
             <span className="user-email">{user?.email}</span>
-            <span className="user-badge">SUPERADMIN</span>
+            <span className="user-badge">{userRole || 'Usuario'}</span>
             <button className="logout-button" onClick={onLogout} aria-label="Cerrar sesión">
               <svg viewBox="0 0 24 24" fill="none" role="presentation">
                 <path
@@ -68,7 +81,7 @@ function AdminDashboard({ user, onLogout }) {
               <button
                 key={local.id}
                 className={`local-button ${selectedLocal === index ? 'active' : ''}`}
-                onClick={() => setSelectedLocal(index)}
+                onClick={() => handleLocalCardClick(local, index)}
               >
                 <span className="local-name">{local.name}</span>
               </button>
@@ -88,7 +101,7 @@ function AdminDashboard({ user, onLogout }) {
 
           <div className="action-buttons">
             <button className="action-btn primary">Ver Detalles</button>
-            <button className="action-btn secondary">Gestionar</button>
+            <button className="action-btn secondary" onClick={handleGestionarClick}>Gestionar</button>
           </div>
         </section>
       )}

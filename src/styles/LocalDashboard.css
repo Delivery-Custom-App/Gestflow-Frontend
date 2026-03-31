@@ -1,0 +1,383 @@
+.local-dashboard {
+  min-height: 100vh;
+  background: #eaf2ee;
+  color: #065f46;
+}
+
+.local-header {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  background: #ffffff;
+  border-bottom: 1px solid #b7e6c8;
+  box-shadow: 0 1px 4px rgba(6, 95, 70, 0.08);
+}
+
+.local-header-content {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0.7rem 1.2rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.brand-section {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+}
+
+.brand-logo {
+  width: 36px;
+  height: 36px;
+  color: #0a7f48;
+}
+
+.brand-text h1 {
+  margin: 0;
+  font-size: 1.65rem;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  color: #06643a;
+}
+
+.brand-text p {
+  margin: 0.2rem 0 0;
+  font-size: 1.05rem;
+  color: #0f9e52;
+}
+
+.header-user {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.header-user-name {
+  margin: 0;
+  text-align: right;
+  font-weight: 700;
+  color: #0a7f48;
+}
+
+.header-user-role {
+  margin: 0.18rem 0 0;
+  text-align: right;
+  font-size: 0.82rem;
+  color: #1ea963;
+}
+
+.logout-button {
+  border: 2px solid #53be83;
+  background: #ffffff;
+  color: #0a7f48;
+  border-radius: 0.65rem;
+  padding: 0.48rem 1rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+.logout-button:hover {
+  background: #0a7f48;
+  color: #ffffff;
+}
+
+.welcome-section {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 2.2rem 1.2rem 1.4rem;
+  text-align: center;
+}
+
+.welcome-section h2 {
+  margin: 0;
+  font-size: clamp(1.8rem, 3.3vw, 2.8rem);
+  color: #006b3f;
+  letter-spacing: -0.02em;
+}
+
+.welcome-subtitle {
+  margin: 0.95rem 0 0;
+  font-size: 1.35rem;
+  color: #06a64d;
+}
+
+.welcome-local {
+  margin: 0.75rem 0 0;
+  color: #138350;
+  font-size: 0.92rem;
+}
+
+.modules-section {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 1.2rem 1.8rem;
+}
+
+.modules-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1.1rem;
+}
+
+.module-card {
+  background: #ffffff;
+  border: 2px solid #aee2c2;
+  border-radius: 1rem;
+  overflow: hidden;
+  box-shadow: 0 6px 20px rgba(5, 100, 58, 0.08);
+}
+
+.module-header {
+  background: linear-gradient(120deg, #08a647, #067f3d 85%);
+  color: #e8fff0;
+  min-height: 88px;
+  padding: 0.95rem 1.05rem;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.module-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.module-icon svg {
+  width: 24px;
+  height: 24px;
+  color: #f0fff5;
+}
+
+.module-title-section h3 {
+  margin: 0;
+  font-size: 1.8rem;
+  font-weight: 600;
+}
+
+.module-subtitle {
+  margin: 0.3rem 0 0;
+  font-size: 0.95rem;
+  color: #dcffe9;
+}
+
+.module-arrow {
+  font-size: 1.8rem;
+  font-weight: 300;
+  color: rgba(236, 255, 244, 0.9);
+}
+
+.module-content {
+  padding: 1rem 1.05rem 1.05rem;
+}
+
+.module-content h4 {
+  margin: 0 0 0.8rem;
+  color: #0c8e4b;
+  font-size: 1.25rem;
+}
+
+.features-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.55rem 0.85rem;
+}
+
+.features-list li {
+  position: relative;
+  padding-left: 0.85rem;
+  color: #10a350;
+  font-size: 0.95rem;
+}
+
+.features-list li::before {
+  content: '•';
+  position: absolute;
+  left: 0;
+  color: #10a350;
+}
+
+.module-button {
+  margin-top: 0.95rem;
+  width: 100%;
+  border: none;
+  border-radius: 0.65rem;
+  background: #08a946;
+  color: #ffffff;
+  padding: 0.66rem 0.9rem;
+  font-size: 1.1rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.module-button:hover {
+  background: #05863a;
+}
+
+.stats-section {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0.2rem 1.2rem 1.6rem;
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.8rem;
+}
+
+.stat-card {
+  background: #ffffff;
+  border: 2px solid #b8e4ca;
+  border-radius: 0.85rem;
+  min-height: 88px;
+  padding: 0.9rem 0.7rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+}
+
+.stat-number {
+  font-size: 1.65rem;
+  font-weight: 700;
+  color: #0b8047;
+}
+
+.stat-label {
+  margin-top: 0.15rem;
+  font-size: 0.85rem;
+  color: #1aa95f;
+}
+
+.local-footer {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 1.2rem 1.4rem;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.back-button {
+  border: 1px solid #80d2a2;
+  background: #ffffff;
+  color: #0d8b4b;
+  border-radius: 999px;
+  padding: 0.5rem 0.85rem;
+  font-size: 0.9rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.local-footer p {
+  margin: 0;
+  border: 2px solid #b8e4ca;
+  border-radius: 999px;
+  background: #ffffff;
+  color: #0e8f4e;
+  padding: 0.55rem 1.35rem;
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+@media (max-width: 1200px) {
+  .brand-text h1 {
+    font-size: 1.4rem;
+  }
+
+  .brand-text p {
+    font-size: 0.95rem;
+  }
+
+  .welcome-subtitle {
+    font-size: 1.2rem;
+  }
+
+  .module-title-section h3 {
+    font-size: 1.45rem;
+  }
+
+  .module-content h4,
+  .module-button {
+    font-size: 1.05rem;
+  }
+
+  .features-list li {
+    font-size: 0.9rem;
+  }
+}
+
+@media (max-width: 900px) {
+  .local-header-content {
+    flex-wrap: wrap;
+  }
+
+  .header-user {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .modules-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .stats-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .local-header-content,
+  .welcome-section,
+  .modules-section,
+  .stats-section,
+  .local-footer {
+    padding-left: 0.95rem;
+    padding-right: 0.95rem;
+  }
+
+  .welcome-section {
+    padding-top: 1.5rem;
+  }
+
+  .welcome-subtitle {
+    font-size: 1rem;
+  }
+
+  .module-header {
+    min-height: auto;
+  }
+
+  .features-list {
+    grid-template-columns: 1fr;
+  }
+
+  .stats-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .local-footer {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .back-button,
+  .local-footer p {
+    text-align: center;
+  }
+}
