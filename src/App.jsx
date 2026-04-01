@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react'
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
 import './App.css'
 import AdminDashboard from './components/AdminDashboard'
+import OrderSummary from './components/OrderSummary'
+import ChangeLocal from './components/ChangeLocal'
 import LocalDashboard from './components/LocalDashboard'
 import AdministrativeModule from './components/AdministrativeModule'
 import { isSupabaseConfigured, supabase } from './lib/supabaseClient'
@@ -143,23 +145,21 @@ function App() {
     }
   }
 
-  // Si el usuario no está logueado, mostrar pantalla de login
-  if (!user || !userRole) {
+  // Si el usuario está logueado como SUPERADMIN, mostrar el dashboard
+  if (user && userRole === 'SUPERADMIN') {
     return (
-      <main className="login-page">
-        <header className="brand-header" aria-label="Marca">
-          <div className="brand-icon" aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="none" role="presentation">
-              <rect x="5" y="3" width="10" height="18" rx="1.5" stroke="currentColor" strokeWidth="1.8" />
-              <rect x="9" y="7" width="10" height="14" rx="1.5" stroke="currentColor" strokeWidth="1.8" />
-              <line x1="9" y1="11" x2="13" y2="11" stroke="currentColor" strokeWidth="1.8" />
-              <line x1="9" y1="14" x2="13" y2="14" stroke="currentColor" strokeWidth="1.8" />
-            </svg>
-          </div>
-          <h1>SibaGestion</h1>
-          <p className="subtitle">Sistema de Gestion Comercial</p>
-          <p className="tagline">Sibaritico desde 1991</p>
-        </header>
+      <Router>
+        <Routes>
+          <Route path="/admin" element={<AdminDashboard user={user} onLogout={handleLogout} />} />
+          {/* HU-19 Routes */}
+          <Route path="/order/:orderId/summary" element={<OrderSummary />} />
+          <Route path="/order/:orderId/change-local" element={<ChangeLocal />} />
+          {/* Default redirect */}
+          <Route path="/" element={<Navigate to="/admin" replace />} />
+        </Routes>
+      </Router>
+    )
+  }
 
         <section className="login-card" aria-label="Formulario de inicio de sesion">
           <h2>Iniciar Sesion</h2>
