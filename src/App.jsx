@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react'
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import './App.css'
 import AdminDashboard from './components/AdminDashboard'
+import Cart from './components/Cart'
 import { isSupabaseConfigured, supabase } from './lib/supabaseClient'
 
 function App() {
@@ -76,13 +78,8 @@ function App() {
     }
   }
 
-  // Si el usuario está logueado como SUPERADMIN, mostrar el dashboard
-  if (user && userRole === 'SUPERADMIN') {
-    return <AdminDashboard user={user} onLogout={handleLogout} />
-  }
-
-  // Si no está logueado, mostrar pantalla de login
-  return (
+  // Componente para la pantalla de login
+  const LoginPage = () => (
     <main className="login-page">
       <header className="brand-header" aria-label="Marca">
         <div className="brand-icon" aria-hidden="true">
@@ -217,6 +214,30 @@ function App() {
         </nav>
       </section>
     </main>
+  )
+
+  // Si el usuario está logueado como SUPERADMIN, mostrar el dashboard
+  // Si no está logueado, mostrar pantalla de login
+  const HomeRoute = () => {
+    if (user && userRole === 'SUPERADMIN') {
+      return <AdminDashboard user={user} onLogout={handleLogout} />
+    }
+    return <LoginPage />
+  }
+
+  return (
+    <BrowserRouter>
+      <Routes>
+        {/* Ruta pública del carrito - accesible sin login */}
+        <Route path="/cart" element={<Cart />} />
+
+        {/* Ruta del dashboard/login - requiere login para acceder al dashboard */}
+        <Route path="/" element={<HomeRoute />} />
+
+        {/* Redirigir cualquier otra ruta a home */}
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </BrowserRouter>
   )
 }
 
