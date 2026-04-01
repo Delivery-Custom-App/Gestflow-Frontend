@@ -161,6 +161,10 @@ function App() {
     )
   }
 
+  if (!user) {
+    return (
+      <main className="login-page">
+
         <section className="login-card" aria-label="Formulario de inicio de sesion">
           <h2>Iniciar Sesion</h2>
 

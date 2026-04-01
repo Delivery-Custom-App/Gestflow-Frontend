@@ -23,7 +23,7 @@
   gap: 1rem;
 }
 
-.brand-section {
+.ld-brand-section {
   display: flex;
   align-items: center;
   gap: 0.9rem;
@@ -49,27 +49,27 @@
   color: #0f9e52;
 }
 
-.header-user {
+.ld-header-user {
   display: flex;
   align-items: center;
   gap: 1rem;
 }
 
-.header-user-name {
+.ld-header-user-name {
   margin: 0;
   text-align: right;
   font-weight: 700;
   color: #0a7f48;
 }
 
-.header-user-role {
+.ld-header-user-role {
   margin: 0.18rem 0 0;
   text-align: right;
   font-size: 0.82rem;
   color: #1ea963;
 }
 
-.logout-button {
+.ld-logout-button {
   border: 2px solid #53be83;
   background: #ffffff;
   color: #0a7f48;
@@ -80,7 +80,7 @@
   transition: background 0.2s ease, color 0.2s ease;
 }
 
-.logout-button:hover {
+.ld-logout-button:hover {
   background: #0a7f48;
   color: #ffffff;
 }
@@ -118,13 +118,13 @@
   padding: 0 1.5rem 1.5rem;
 }
 
-.modules-grid {
+.ld-modules-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 2.2rem 2.2rem;
 }
 
-.module-card {
+.ld-module-card {
   background: #ffffff;
   border: 2px solid #b7e6c8;
   border-radius: 1.1rem;
@@ -136,11 +136,11 @@
   height: 100%;
   transition: box-shadow 0.2s;
 }
-.module-card:hover {
+.ld-module-card:hover {
   box-shadow: 0 8px 32px rgba(6, 95, 70, 0.16);
 }
 
-.module-header {
+.ld-module-header {
   background: linear-gradient(120deg, #08a647, #067f3d 85%);
   color: #e8fff0;
   min-height: 70px;
@@ -151,7 +151,7 @@
   gap: 1rem;
 }
 
-.module-icon {
+.ld-module-icon {
   width: 44px;
   height: 44px;
   border-radius: 10px;
@@ -161,33 +161,33 @@
   justify-content: center;
 }
 
-.module-icon svg {
+.ld-module-icon svg {
   width: 24px;
   height: 24px;
   color: #f0fff5;
 }
 
-.module-title-section h3 {
+.ld-module-title-section h3 {
   margin: 0;
   font-size: 1.35rem;
   font-weight: 600;
   color: #fff;
 }
 
-.module-subtitle {
+.ld-module-subtitle {
   margin: 0.25rem 0 0;
   font-size: 1.01rem;
   color: #e8fff0;
   font-weight: 400;
 }
 
-.module-arrow {
+.ld-module-arrow {
   font-size: 2rem;
   font-weight: 300;
   color: rgba(236, 255, 244, 0.9);
 }
 
-.module-content {
+.ld-module-content {
   padding: 1.1rem 1.3rem 1.3rem 1.3rem;
   flex: 1 1 auto;
   display: flex;
@@ -195,14 +195,14 @@
   justify-content: space-between;
 }
 
-.module-content h4 {
+.ld-module-content h4 {
   margin: 0 0 0.7rem;
   color: #0c8e4b;
   font-size: 1.13rem;
   font-weight: 600;
 }
 
-.features-list {
+.ld-features-list {
   margin: 0;
   padding: 0;
   list-style: none;
@@ -211,7 +211,7 @@
   gap: 0.55rem 0.85rem;
 }
 
-.features-list li {
+.ld-features-list li {
   position: relative;
   padding-left: 0.7rem;
   color: #10a350;
@@ -219,14 +219,14 @@
   font-weight: 400;
 }
 
-.features-list li::before {
+.ld-features-list li::before {
   content: '•';
   position: absolute;
   left: 0;
   color: #10a350;
 }
 
-.module-button {
+.ld-module-button {
   margin-top: 1.2rem;
   width: 100%;
   border: none;
@@ -244,7 +244,7 @@
   box-shadow: 0 2px 8px rgba(22, 163, 74, 0.08);
   transition: background 0.2s;
 }
-.module-button:hover {
+.ld-module-button:hover {
   background: #15803d;
 }
 
@@ -301,7 +301,7 @@
   gap: 0.65rem;
 }
 
-.back-button {
+.ld-back-button {
   border: 1px solid #80d2a2;
   background: #ffffff;
   color: #0d8b4b;
@@ -336,16 +336,16 @@
     font-size: 1.2rem;
   }
 
-  .module-title-section h3 {
+  .ld-module-title-section h3 {
     font-size: 1.45rem;
   }
 
-  .module-content h4,
-  .module-button {
+  .ld-module-content h4,
+  .ld-module-button {
     font-size: 1.05rem;
   }
 
-  .features-list li {
+  .ld-features-list li {
     font-size: 0.9rem;
   }
 }
@@ -363,12 +363,12 @@
     font-size: 1.02rem;
   }
 
-  .header-user {
+  .ld-header-user {
     width: 100%;
     justify-content: space-between;
   }
 
-  .modules-grid {
+  .ld-modules-grid {
     grid-template-columns: 1fr;
   }
 
@@ -408,18 +408,18 @@
     font-size: 0.88rem;
   }
 
-  .header-user {
+  .ld-header-user {
     flex-direction: column;
     align-items: stretch;
     gap: 0.55rem;
   }
 
-  .header-user-name,
-  .header-user-role {
+  .ld-header-user-name,
+  .ld-header-user-role {
     text-align: left;
   }
 
-  .logout-button {
+  .ld-logout-button {
     width: 100%;
     padding: 0.55rem 0.85rem;
     font-size: 0.9rem;
@@ -430,55 +430,55 @@
     padding-bottom: 0.8rem;
   }
 
-  .module-header {
+  .ld-module-header {
     min-height: auto;
     grid-template-columns: auto 1fr;
     padding: 0.8rem 0.9rem;
     gap: 0.65rem;
   }
 
-  .module-arrow {
+  .ld-module-arrow {
     display: none;
   }
 
-  .module-icon {
+  .ld-module-icon {
     width: 38px;
     height: 38px;
   }
 
-  .module-icon svg {
+  .ld-module-icon svg {
     width: 20px;
     height: 20px;
   }
 
-  .module-title-section h3 {
+  .ld-module-title-section h3 {
     font-size: 1.1rem;
   }
 
-  .module-subtitle {
+  .ld-module-subtitle {
     font-size: 0.84rem;
     margin-top: 0.12rem;
   }
 
-  .module-content {
+  .ld-module-content {
     padding: 0.85rem 0.9rem 0.95rem;
   }
 
-  .module-content h4 {
+  .ld-module-content h4 {
     font-size: 0.96rem;
     margin-bottom: 0.45rem;
   }
 
-  .features-list {
+  .ld-features-list {
     grid-template-columns: 1fr;
     gap: 0.45rem;
   }
 
-  .features-list li {
+  .ld-features-list li {
     font-size: 0.86rem;
   }
 
-  .module-button {
+  .ld-module-button {
     min-height: 2.25rem;
     padding: 0.5rem 0.7rem;
     font-size: 0.9rem;
@@ -501,7 +501,7 @@
     align-items: stretch;
   }
 
-  .back-button,
+  .ld-back-button,
   .local-footer p {
     width: 100%;
     text-align: center;

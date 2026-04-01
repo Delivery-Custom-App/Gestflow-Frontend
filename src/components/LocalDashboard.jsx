@@ -96,7 +96,7 @@ function LocalDashboard({ user, userRole, onLogout }) {
     <main className="local-dashboard">
       <header className="local-header">
         <div className="local-header-content">
-          <div className="brand-section">
+          <div className="ld-brand-section">
             <div className="brand-logo" aria-hidden="true">
               <svg viewBox="0 0 24 24" fill="none" role="presentation">
                 <path d="M12 2L20 7V17L12 22L4 17V7L12 2Z" fill="currentColor" opacity="0.15" />
@@ -109,12 +109,12 @@ function LocalDashboard({ user, userRole, onLogout }) {
             </div>
           </div>
 
-          <div className="header-user">
+          <div className="ld-header-user">
             <div>
-              <p className="header-user-name">{user?.email || 'Administrador Demo'}</p>
-              <p className="header-user-role">{userRole || 'Usuario'}</p>
+              <p className="ld-header-user-name">{user?.email || 'Administrador Demo'}</p>
+              <p className="ld-header-user-role">{userRole || 'Usuario'}</p>
             </div>
-            <button className="logout-button" onClick={handleLogoutClick} type="button">
+            <button className="ld-logout-button" onClick={handleLogoutClick} type="button">
               Salir
             </button>
           </div>
@@ -130,27 +130,27 @@ function LocalDashboard({ user, userRole, onLogout }) {
       </section>
 
       <section className="modules-section">
-        <div className="modules-grid">
+        <div className="ld-modules-grid">
           {modules.map((module) => (
-            <article key={module.id} className="module-card">
-              <div className="module-header">
-                <span className="module-icon">{module.icon}</span>
-                <div className="module-title-section">
+            <article key={module.id} className="ld-module-card">
+              <div className="ld-module-header">
+                <span className="ld-module-icon">{module.icon}</span>
+                <div className="ld-module-title-section">
                   <h3>{module.title}</h3>
-                  <p className="module-subtitle">{module.subtitle}</p>
+                  <p className="ld-module-subtitle">{module.subtitle}</p>
                 </div>
-                <span className="module-arrow">→</span>
+                <span className="ld-module-arrow">→</span>
               </div>
 
-              <div className="module-content">
+              <div className="ld-module-content">
                 <h4>FUNCIONALIDADES:</h4>
-                <ul className="features-list">
+                <ul className="ld-features-list">
                   {module.features.map((feature, index) => (
                     <li key={index}>{feature}</li>
                   ))}
                 </ul>
 
-                <button className="module-button" type="button" onClick={() => handleModuleAccess(module.id)}>
+                <button className="ld-module-button" type="button" onClick={() => handleModuleAccess(module.id)}>
                   Acceder al Módulo <span aria-hidden="true">→</span>
                 </button>
               </div>
@@ -181,7 +181,7 @@ function LocalDashboard({ user, userRole, onLogout }) {
       </section>
 
       <footer className="local-footer">
-        <button className="back-button" type="button" onClick={handleBackClick}>
+        <button className="ld-back-button" type="button" onClick={handleBackClick}>
           Volver a Locales
         </button>
         <p>Sibaritico desde 1991</p>
