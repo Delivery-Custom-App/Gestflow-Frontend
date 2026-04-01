@@ -1,6 +1,5 @@
 import { useState } from 'react'
-import { supabase } from '../lib/supabaseClient'
-import { getBusinessIdFromToken } from '../utils/jwt'
+import { apiRequest, getAuthContext } from '../lib/apiClient'
 import '../styles/CreateLocalModal.css'
 
 function CreateLocalModal({ isOpen, onClose, onSuccess }) {
@@ -37,40 +36,21 @@ function CreateLocalModal({ isOpen, onClose, onSuccess }) {
         throw new Error('El teléfono es requerido')
       }
 
-      // Obtener sesión y token
-      const { data } = await supabase.auth.getSession()
-      if (!data.session) {
-        throw new Error('No hay sesión activa')
-      }
-
-      const token = data.session.access_token
-
-      // Extraer business_id del token
-      const businessId = getBusinessIdFromToken(token)
+      const { token, businessId } = await getAuthContext()
       if (!businessId) {
-        throw new Error('No se encontró business_id en el token')
+        throw new Error('No se encontro business_id en el token')
       }
 
-      // Crear local en el backend
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
-      const response = await fetch(`${apiUrl}/api/locals`, {
+      await apiRequest('/locals', {
         method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
+        token,
+        body: {
           business_id: businessId,
           name: formData.name.trim(),
           address: formData.address.trim(),
           phone: formData.phone.trim(),
-        }),
+        },
       })
-
-      if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.detail || `Error ${response.status}`)
-      }
 
       // Éxito
       setFormData({ name: '', address: '', phone: '' })

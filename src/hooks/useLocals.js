@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { supabase } from '../lib/supabaseClient'
-import { getBusinessIdFromToken } from '../utils/jwt'
+import { apiRequest, getOptionalAuthContext } from '../lib/apiClient'
 
 /**
  * Hook para obtener locales del backend
@@ -16,42 +15,22 @@ export function useLocals() {
       setLoading(true)
       setError(null)
 
-      // Obtener sesión y token
-      const { data } = await supabase.auth.getSession()
-      if (!data.session) {
-        setError('No hay sesión activa')
+      const { token, businessId } = await getOptionalAuthContext()
+
+      // Guard clause: sin token no se dispara request al backend.
+      if (!token) {
         setLocales([])
         return
       }
 
-      const token = data.session.access_token
-
-      // Extraer business_id del token
-      const businessId = getBusinessIdFromToken(token)
       if (!businessId) {
-        setError('No se encontró business_id en el token')
+        setError('No se encontro business_id en el token')
         setLocales([])
         return
       }
 
-      // Obtener locales del backend
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
-      const response = await fetch(
-        `${apiUrl}/api/locals?business_id=${businessId}`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-        },
-      )
-
-      if (!response.ok) {
-        throw new Error(`Error ${response.status}: ${response.statusText}`)
-      }
-
-      const data_locales = await response.json()
-      setLocales(data_locales)
+      const dataLocales = await apiRequest(`/locals?business_id=${businessId}`, { token })
+      setLocales(Array.isArray(dataLocales) ? dataLocales : [])
     } catch (err) {
       console.error('Error obteniendo locales:', err)
       setError(err.message)
