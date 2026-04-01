@@ -83,6 +83,15 @@ function LocalDashboard({ user, userRole, onLogout }) {
     navigate('/admin')
   }
 
+  const handleModuleAccess = (moduleId) => {
+    if (!selectedLocal?.id) return
+
+    if (moduleId === 'administrativo') {
+      navigate(`/local/${selectedLocal.id}/administrativo/dashboard`, { state: { local: selectedLocal } })
+      return
+    }
+  }
+
   return (
     <main className="local-dashboard">
       <header className="local-header">
@@ -141,7 +150,7 @@ function LocalDashboard({ user, userRole, onLogout }) {
                   ))}
                 </ul>
 
-                <button className="module-button" type="button">
+                <button className="module-button" type="button" onClick={() => handleModuleAccess(module.id)}>
                   Acceder al Módulo <span aria-hidden="true">→</span>
                 </button>
               </div>
@@ -157,7 +166,7 @@ function LocalDashboard({ user, userRole, onLogout }) {
             <span className="stat-label">Módulos Disponibles</span>
           </article>
           <article className="stat-card">
-            <span className="stat-number">{userRole || 'Usuario'}</span>
+            <span className="stat-number stat-number-role">{userRole || 'Usuario'}</span>
             <span className="stat-label">Tu Rol</span>
           </article>
           <article className="stat-card">

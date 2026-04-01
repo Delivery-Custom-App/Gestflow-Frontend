@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import './App.css'
 import AdminDashboard from './components/AdminDashboard'
 import LocalDashboard from './components/LocalDashboard'
+import AdministrativeModule from './components/AdministrativeModule'
 import { isSupabaseConfigured, supabase } from './lib/supabaseClient'
 import { getUserRole } from './utils/jwt'
 
@@ -25,19 +26,53 @@ function App() {
   const [user, setUser] = useState(null)
   const [userRole, setUserRole] = useState(null)
 
+  const clearStoredAuthToken = () => {
+    if (typeof window === 'undefined') return
+
+    const keys = Object.keys(window.localStorage)
+    keys.forEach((key) => {
+      if (key.startsWith('sb-') && key.endsWith('-auth-token')) {
+        window.localStorage.removeItem(key)
+      }
+    })
+  }
+
+  const clearAuthState = () => {
+    setUser(null)
+    setUserRole(null)
+  }
+
+  const clearPreviousSession = async () => {
+    if (supabase) {
+      try {
+        await supabase.auth.signOut()
+      } catch {
+        // Si falla signOut igual forzamos limpieza local para evitar tokens stale.
+      }
+    }
+
+    clearStoredAuthToken()
+    clearAuthState()
+  }
+
   useEffect(() => {
     // Verificar sesión existente
     const checkSession = async () => {
       if (!isSupabaseConfigured || !supabase) return
 
-      const { data } = await supabase.auth.getSession()
-      if (data.session) {
-        const sessionUser = data.session.user
-        const roleFromDb = getUserRole(sessionUser, data.session.access_token)
+      const { data, error } = await supabase.auth.getSession()
+      const accessToken = data.session?.access_token
 
-        setUser(sessionUser)
-        setUserRole(formatRoleLabel(roleFromDb))
+      if (error || !accessToken) {
+        clearAuthState()
+        return
       }
+
+      const sessionUser = data.session.user
+      const roleFromDb = getUserRole(sessionUser, accessToken)
+
+      setUser(sessionUser)
+      setUserRole(formatRoleLabel(roleFromDb))
     }
 
     checkSession()
@@ -61,24 +96,41 @@ function App() {
 
     setIsLoading(true)
 
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    })
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      })
 
-    if (error) {
-      setErrorMessage(error.message)
+      if (error) {
+        await clearPreviousSession()
+        setErrorMessage(error.message || 'Error de autenticacion')
+        return
+      }
+
+      const accessToken = data.session?.access_token
+      if (!accessToken) {
+        await clearPreviousSession()
+        setErrorMessage('No se recibio session.access_token al iniciar sesion')
+        return
+      }
+
+      const sessionUser = data.session?.user || data.user
+      if (!sessionUser) {
+        await clearPreviousSession()
+        setErrorMessage('No se recibio el usuario autenticado en la sesion')
+        return
+      }
+
+      const userEmail = sessionUser.email ?? email
+      const roleFromDb = getUserRole(sessionUser, accessToken)
+
+      setUser(sessionUser)
+      setUserRole(formatRoleLabel(roleFromDb))
+      setSuccessMessage(`Sesion iniciada como ${userEmail}.`)
+    } finally {
       setIsLoading(false)
-      return
     }
-
-    const userEmail = data.user?.email ?? email
-    const roleFromDb = getUserRole(data.user, data.session?.access_token)
-
-    setUser(data.user)
-    setUserRole(formatRoleLabel(roleFromDb))
-    setSuccessMessage(`Sesion iniciada como ${userEmail}.`)
-    setIsLoading(false)
   }
 
   const handleLogout = async () => {
@@ -112,18 +164,7 @@ function App() {
         <section className="login-card" aria-label="Formulario de inicio de sesion">
           <h2>Iniciar Sesion</h2>
 
-          <p className="demo-status">
-            {isSupabaseConfigured ? 'Autenticacion Supabase activada' : 'Modo demostracion activado'}
-          </p>
-
-          <aside className="demo-box">
-            <p className="demo-title">Estado:</p>
-            <p>
-              {isSupabaseConfigured
-                ? 'Tu proyecto esta conectado a Supabase. Puedes iniciar sesion con usuarios reales.'
-                : 'Aun no hay variables de entorno de Supabase. Configuralas para usar autenticacion real.'}
-            </p>
-          </aside>
+          {/* Status block removed as requested */}
 
           <form className="login-form" onSubmit={handleSubmit}>
             <label htmlFor="email">Correo Electronico</label>
@@ -203,29 +244,7 @@ function App() {
             {errorMessage && <p className="auth-message auth-error">{errorMessage}</p>}
             {successMessage && <p className="auth-message auth-success">{successMessage}</p>}
           </form>
-
-          <nav className="bottom-nav" aria-label="Acciones">
-            <button type="button" aria-label="Tendencias">
-              <svg viewBox="0 0 24 24" fill="none" role="presentation">
-                <path d="M4 16L9 11L13 14L20 7" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-                <path d="M15 7H20V12" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-            </button>
-            <button type="button" aria-label="Inventario">
-              <svg viewBox="0 0 24 24" fill="none" role="presentation">
-                <rect x="5" y="3" width="10" height="18" rx="1.5" stroke="currentColor" strokeWidth="1.8" />
-                <rect x="9" y="7" width="10" height="14" rx="1.5" stroke="currentColor" strokeWidth="1.8" />
-              </svg>
-            </button>
-            <button type="button" aria-label="Usuarios">
-              <svg viewBox="0 0 24 24" fill="none" role="presentation">
-                <circle cx="9" cy="9" r="3" stroke="currentColor" strokeWidth="1.8" />
-                <circle cx="17" cy="10" r="2" stroke="currentColor" strokeWidth="1.8" />
-                <path d="M3.5 19C4.1 16.6 6.3 15 9 15C11.7 15 13.9 16.6 14.5 19" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-                <path d="M14.5 18.5C14.9 17 16.3 16 18 16C19.7 16 21.1 17 21.5 18.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-              </svg>
-            </button>
-          </nav>
+          {/* Bottom nav buttons removed as requested */}
         </section>
       </main>
     )
@@ -238,6 +257,10 @@ function App() {
         <Route path="/" element={<AdminDashboard user={user} userRole={userRole} onLogout={handleLogout} />} />
         <Route path="/admin" element={<AdminDashboard user={user} userRole={userRole} onLogout={handleLogout} />} />
         <Route path="/local/:localId" element={<LocalDashboard user={user} userRole={userRole} onLogout={handleLogout} />} />
+        <Route
+          path="/local/:localId/administrativo/:sectionId?"
+          element={<AdministrativeModule user={user} userRole={userRole} onLogout={handleLogout} />}
+        />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Router>

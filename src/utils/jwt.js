@@ -5,13 +5,19 @@
  */
 export function decodeJWT(token) {
   try {
+    if (!token || typeof token !== 'string') {
+      throw new Error('Token invalido')
+    }
+
     const parts = token.split('.')
     if (parts.length !== 3) {
-      throw new Error('Token inválido')
+      throw new Error('Token invalido')
     }
 
     const payload = parts[1]
-    const decoded = JSON.parse(atob(payload))
+    const normalizedPayload = payload.replace(/-/g, '+').replace(/_/g, '/')
+    const paddedPayload = normalizedPayload.padEnd(Math.ceil(normalizedPayload.length / 4) * 4, '=')
+    const decoded = JSON.parse(atob(paddedPayload))
     return decoded
   } catch (error) {
     console.error('Error decodificando JWT:', error)
@@ -26,13 +32,8 @@ export function decodeJWT(token) {
  */
 export function getBusinessIdFromToken(token) {
   const claims = decodeJWT(token)
-  console.log('JWT Claims completo:', claims)
-  console.log('user_metadata:', claims?.user_metadata)
-  console.log('app_metadata:', claims?.app_metadata)
 
-  // Busca en user_metadata (lo más común en Supabase)
-  const businessId = claims?.user_metadata?.business_id || claims?.app_metadata?.business_id || null
-  console.log('business_id encontrado:', businessId)
+  const businessId = claims?.user_metadata?.business_id || claims?.app_metadata?.business_id || claims?.business_id || null
 
   return businessId
 }
