@@ -196,6 +196,36 @@
   box-shadow: 0 6px 20px rgba(27, 160, 49, 0.4);
 }
 
+.empty-cart-actions {
+  display: flex;
+  gap: 15px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.btn-seed-data {
+  display: inline-block;
+  background: linear-gradient(135deg, #4B7BFF 0%, #2E5FD8 100%);
+  color: white;
+  padding: 12px 30px;
+  border: none;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.3s, box-shadow 0.3s;
+  box-shadow: 0 4px 15px rgba(75, 123, 255, 0.3);
+  font-size: 1em;
+}
+
+.btn-seed-data:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(75, 123, 255, 0.4);
+}
+
+.btn-seed-data:active {
+  transform: translateY(0);
+}
+
 /* Cart Items */
 .cart-items {
   background: white;

@@ -26,25 +26,22 @@ export function useLocals() {
 
       const token = data.session.access_token
 
-      // Extraer business_id del token
-      const businessId = getBusinessIdFromToken(token)
-      if (!businessId) {
-        setError('No se encontró business_id en el token')
-        setLocales([])
-        return
-      }
+      // Obtener business_id de variables de entorno o del token
+      const businessId = import.meta.env.VITE_BUSINESS_ID || getBusinessIdFromToken(token)
+      
+      // Construir URL - si no hay business_id, igualmente intentamos obtener los locales
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+      const url = businessId 
+        ? `${apiUrl}/api/locals?business_id=${businessId}`
+        : `${apiUrl}/api/locals`
 
       // Obtener locales del backend
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
-      const response = await fetch(
-        `${apiUrl}/api/locals?business_id=${businessId}`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
+      const response = await fetch(url, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
         },
-      )
+      })
 
       if (!response.ok) {
         throw new Error(`Error ${response.status}: ${response.statusText}`)

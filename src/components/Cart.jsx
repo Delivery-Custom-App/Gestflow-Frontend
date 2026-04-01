@@ -97,6 +97,43 @@ export default function Cart() {
     }
   }
 
+  // Función para cargar datos de prueba (seed)
+  const handleLoadSeedData = async () => {
+    try {
+      setCheckoutError('')
+      const businessId = import.meta.env.VITE_BUSINESS_ID || 'default-business'
+      
+      // Productos de prueba
+      const seedProducts = [
+        { product_id: 'prod-001', name: 'Pizza Margherita', price: 12500, quantity: 1 },
+        { product_id: 'prod-002', name: 'Pizza Pepperoni', price: 14500, quantity: 2 },
+        { product_id: 'prod-003', name: 'Pasta Carbonara', price: 9800, quantity: 1 },
+        { product_id: 'prod-004', name: 'Ensalada César', price: 8500, quantity: 1 },
+        { product_id: 'prod-005', name: 'Hamburguesa Clásica', price: 11000, quantity: 3 },
+      ]
+
+      // Agregar cada producto al carrito
+      for (const product of seedProducts) {
+        try {
+          await addItem(
+            product.product_id,
+            businessId,
+            product.quantity,
+            `Pedido de prueba: ${product.name}`,
+          )
+        } catch (err) {
+          console.warn(`No se pudo agregar ${product.name}, pero se guardó localmente`)
+        }
+      }
+
+      setSuccessMessage(`✓ ${seedProducts.length} productos de prueba agregados al carrito`)
+      setTimeout(() => setSuccessMessage(''), 3000)
+    } catch (err) {
+      console.error('Error loading seed data:', err)
+      setCheckoutError('Error al cargar datos de prueba: ' + err.message)
+    }
+  }
+
   if (loading) {
     return (
       <div className="cart-container">
@@ -137,9 +174,18 @@ export default function Cart() {
           <div className="empty-icon">🛍️</div>
           <h2>Tu carrito está vacío</h2>
           <p>Agrega productos desde el menú para comenzar tu pedido</p>
-          <a href="/" className="btn-continue-shopping">
-            Continuar comprando
-          </a>
+          <div className="empty-cart-actions">
+            <a href="/" className="btn-continue-shopping">
+              Continuar comprando
+            </a>
+            <button
+              className="btn-seed-data"
+              onClick={handleLoadSeedData}
+              title="Cargar productos de prueba para testing"
+            >
+              📦 Cargar Datos de Prueba
+            </button>
+          </div>
         </div>
       ) : (
         <>

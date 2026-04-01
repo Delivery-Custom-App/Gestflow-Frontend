@@ -124,24 +124,28 @@ export function useCart() {
         },
       })
 
-      if (!response.ok) {
-        throw new Error(`Error ${response.status}: ${response.statusText}`)
+      if (response.ok) {
+        const data = await response.json()
+        const serverItems = data.items || []
+        setItems(serverItems)
+        saveToLocalStorage(serverItems)
+        setIsSynced(true)
+        localStorage.setItem(SYNC_STATUS_KEY, 'true')
+        console.log('Carrito sincronizado desde servidor')
+      } else {
+        console.warn(`Error ${response.status}: usando carrito local`)
+        setIsSynced(false)
+        localStorage.setItem(SYNC_STATUS_KEY, 'false')
+        // Mantener los items locales
       }
-
-      const data = await response.json()
-      setItems(data.items || [])
-      saveToLocalStorage(data.items || [])
-      setIsSynced(true)
-      localStorage.setItem(SYNC_STATUS_KEY, 'true')
     } catch (err) {
-      console.error('Error fetching cart:', err)
-      setError(err.message)
+      console.warn('Error fetching cart - usando modo offline:', err)
+      setIsSynced(false)
+      localStorage.setItem(SYNC_STATUS_KEY, 'false')
       // Si falla la conexión, cargar desde localStorage
       const localItems = loadFromLocalStorage()
       if (localItems.length > 0) {
         setItems(localItems)
-        setIsSynced(false)
-        localStorage.setItem(SYNC_STATUS_KEY, 'false')
       }
     } finally {
       setLoading(false)
@@ -155,35 +159,59 @@ export function useCart() {
     async (productId, localId, quantity = 1, notes = '') => {
       try {
         setError(null)
-        const token = await getToken()
-        const apiUrl = getApiUrl()
-
-        const response = await fetch(`${apiUrl}/api/cart/items`, {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            product_id: productId,
-            local_id: localId,
-            quantity,
-            notes: notes || null,
-          }),
-        })
-
-        const responseData = await response.json()
-
-        if (!response.ok) {
-          throw new Error(
-            responseData.message ||
-              `Error ${response.status}: ${response.statusText}`,
-          )
+        const businessId = import.meta.env.VITE_BUSINESS_ID || 'default-business'
+        
+        // Primero agregar localmente
+        const newItem = {
+          id: `${productId}-${localId}-${Date.now()}`,
+          product_id: productId,
+          product_name: productId.replace('prod-', '').replace(/-/g, ' '),
+          local_id: localId,
+          quantity: parseInt(quantity),
+          unit_price: 0,
+          total_price: 0,
+          notes: notes || null,
+          created_at: new Date().toISOString(),
         }
 
-        // Recargar carrito después de agregar
-        await fetchCart()
-        return responseData
+        setItems((prev) => [...prev, newItem])
+
+        // Intentar sincronizar con servidor (sin fallar si no funciona)
+        try {
+          const token = await getToken()
+          const apiUrl = getApiUrl()
+
+          const response = await fetch(`${apiUrl}/api/cart/items`, {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${token}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              product_id: productId,
+              local_id: localId,
+              business_id: businessId,
+              quantity,
+              notes: notes || null,
+            }),
+          })
+
+          if (response.ok) {
+            console.log('Item agregado al servidor')
+            // Si funciona, recargar desde servidor
+            await fetchCart()
+          } else {
+            console.warn('No se pudo sincronizar con servidor, guardando localmente')
+            setIsSynced(false)
+            localStorage.setItem(SYNC_STATUS_KEY, 'false')
+          }
+        } catch (syncErr) {
+          console.warn('Error de conexión al servidor:', syncErr)
+          setIsSynced(false)
+          localStorage.setItem(SYNC_STATUS_KEY, 'false')
+        }
+
+        return newItem
       } catch (err) {
         console.error('Error adding item to cart:', err)
         setError(err.message)
@@ -200,30 +228,42 @@ export function useCart() {
     async (itemId) => {
       try {
         setError(null)
-        const token = await getToken()
-        const apiUrl = getApiUrl()
+        
+        // Primero eliminar localmente
+        setItems((prev) => prev.filter((item) => item.id !== itemId))
 
-        const response = await fetch(`${apiUrl}/api/cart/items/${itemId}`, {
-          method: 'DELETE',
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-        })
+        // Intentar sincronizar con servidor (sin fallar si no funciona)
+        try {
+          const token = await getToken()
+          const apiUrl = getApiUrl()
 
-        if (!response.ok) {
-          throw new Error(`Error ${response.status}: ${response.statusText}`)
+          const response = await fetch(`${apiUrl}/api/cart/items/${itemId}`, {
+            method: 'DELETE',
+            headers: {
+              Authorization: `Bearer ${token}`,
+              'Content-Type': 'application/json',
+            },
+          })
+
+          if (response.ok) {
+            console.log('Item eliminado del servidor')
+            setIsSynced(true)
+          } else {
+            console.warn('No se pudo sincronizar eliminación con servidor')
+            setIsSynced(false)
+            localStorage.setItem(SYNC_STATUS_KEY, 'false')
+          }
+        } catch (syncErr) {
+          console.warn('Error de conexión al eliminar del servidor:', syncErr)
+          setIsSynced(false)
+          localStorage.setItem(SYNC_STATUS_KEY, 'false')
         }
-
-        // Recargar carrito después de eliminar
-        await fetchCart()
       } catch (err) {
         console.error('Error removing item from cart:', err)
         setError(err.message)
-        throw err
       }
     },
-    [getToken, fetchCart],
+    [getToken],
   )
 
   /**
@@ -232,29 +272,41 @@ export function useCart() {
   const clearCart = useCallback(async () => {
     try {
       setError(null)
-      const token = await getToken()
-      const apiUrl = getApiUrl()
-
-      const response = await fetch(`${apiUrl}/api/cart`, {
-        method: 'DELETE',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      })
-
-      if (!response.ok) {
-        throw new Error(`Error ${response.status}: ${response.statusText}`)
-      }
-
+      
+      // Primero limpiar localmente
       setItems([])
       localStorage.removeItem(STORAGE_KEY)
-      localStorage.setItem(SYNC_STATUS_KEY, 'true')
-      setIsSynced(true)
+
+      // Intentar sincronizar con servidor (sin fallar si no funciona)
+      try {
+        const token = await getToken()
+        const apiUrl = getApiUrl()
+
+        const response = await fetch(`${apiUrl}/api/cart`, {
+          method: 'DELETE',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+        })
+
+        if (response.ok) {
+          console.log('Carrito vaciado en servidor')
+          localStorage.setItem(SYNC_STATUS_KEY, 'true')
+          setIsSynced(true)
+        } else {
+          console.warn('No se pudo vaciar carrito en servidor')
+          setIsSynced(false)
+          localStorage.setItem(SYNC_STATUS_KEY, 'false')
+        }
+      } catch (syncErr) {
+        console.warn('Error de conexión al vaciar carrito:', syncErr)
+        setIsSynced(false)
+        localStorage.setItem(SYNC_STATUS_KEY, 'false')
+      }
     } catch (err) {
       console.error('Error clearing cart:', err)
       setError(err.message)
-      throw err
     }
   }, [getToken])
 
@@ -281,15 +333,35 @@ export function useCart() {
           console.log('Carrito local cargado:', localItems.length, 'items')
         }
 
-        // Paso 2: Intentar sincronizar con servidor
+        // Paso 2: Intentar sincronizar con servidor (sin fallar si no funciona)
         try {
+          // Pequeño delay para no sobrecargar
+          await new Promise(resolve => setTimeout(resolve, 500))
           const token = await getToken()
-          const synced = await syncWithServer()
-          if (synced) {
-            console.log('Sincronización exitosa')
+          console.log('Intentando sincronizar con servidor...')
+          
+          const apiUrl = getApiUrl()
+          const response = await fetch(`${apiUrl}/api/cart/items`, {
+            headers: {
+              Authorization: `Bearer ${token}`,
+              'Content-Type': 'application/json',
+            },
+          })
+
+          if (response.ok) {
+            const data = await response.json()
+            setItems(data.items || [])
+            saveToLocalStorage(data.items || [])
+            setIsSynced(true)
+            localStorage.setItem(SYNC_STATUS_KEY, 'true')
+            console.log('✓ Sincronización exitosa')
+          } else {
+            console.warn(`⚠ Servidor retornó ${response.status} - usando carrito local`)
+            setIsSynced(false)
+            localStorage.setItem(SYNC_STATUS_KEY, 'false')
           }
         } catch (syncErr) {
-          console.warn('No se pudo sincronizar con servidor, usando carrito local')
+          console.warn('⚠ No se pudo conectar al servidor - usando carrito local')
           setIsSynced(false)
           localStorage.setItem(SYNC_STATUS_KEY, 'false')
         }
@@ -301,7 +373,7 @@ export function useCart() {
     }
 
     initializeCart()
-  }, [getToken, syncWithServer, loadFromLocalStorage])
+  }, [getToken, saveToLocalStorage, loadFromLocalStorage])
 
   // Guardar en localStorage cada vez que cambian los items
   useEffect(() => {

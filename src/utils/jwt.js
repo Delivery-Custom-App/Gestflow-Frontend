@@ -36,3 +36,22 @@ export function getBusinessIdFromToken(token) {
 
   return businessId
 }
+
+/**
+ * Extrae el role del JWT de Supabase
+ * @param {string} token - Token JWT
+ * @returns {string|null} role o null si no existe
+ */
+export function getRoleFromToken(token) {
+  const claims = decodeJWT(token)
+  console.log('Buscando role en claims:', claims)
+
+  // Busca en user_metadata.role o app_metadata.role
+  const role = 
+    claims?.user_metadata?.role || 
+    claims?.app_metadata?.role || 
+    null
+  
+  console.log('role encontrado:', role)
+  return role
+}
