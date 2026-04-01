@@ -1,6 +1,9 @@
 import { useState, useEffect } from 'react'
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
 import './App.css'
 import AdminDashboard from './components/AdminDashboard'
+import OrderSummary from './components/OrderSummary'
+import ChangeLocal from './components/ChangeLocal'
 import { isSupabaseConfigured, supabase } from './lib/supabaseClient'
 
 function App() {
@@ -78,7 +81,18 @@ function App() {
 
   // Si el usuario está logueado como SUPERADMIN, mostrar el dashboard
   if (user && userRole === 'SUPERADMIN') {
-    return <AdminDashboard user={user} onLogout={handleLogout} />
+    return (
+      <Router>
+        <Routes>
+          <Route path="/admin" element={<AdminDashboard user={user} onLogout={handleLogout} />} />
+          {/* HU-19 Routes */}
+          <Route path="/order/:orderId/summary" element={<OrderSummary />} />
+          <Route path="/order/:orderId/change-local" element={<ChangeLocal />} />
+          {/* Default redirect */}
+          <Route path="/" element={<Navigate to="/admin" replace />} />
+        </Routes>
+      </Router>
+    )
   }
 
   // Si no está logueado, mostrar pantalla de login
