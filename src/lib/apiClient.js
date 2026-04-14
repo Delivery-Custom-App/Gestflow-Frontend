@@ -1,7 +1,7 @@
 import { supabase } from './supabaseClient'
 import { getBusinessIdFromToken } from '../utils/jwt'
 
-const apiBaseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+const apiBaseUrl = import.meta.env.VITE_API_URL || ''
 
 async function getSession(forceRefresh = false) {
   if (!supabase) {

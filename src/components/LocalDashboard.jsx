@@ -90,6 +90,11 @@ function LocalDashboard({ user, userRole, onLogout }) {
       navigate(`/local/${selectedLocal.id}/administrativo/dashboard`, { state: { local: selectedLocal } })
       return
     }
+
+    if (moduleId === 'pos') {
+      navigate(`/local/${selectedLocal.id}/pos`, { state: { local: selectedLocal } })
+      return
+    }
   }
 
   return (

@@ -6,6 +6,11 @@ import OrderSummary from './components/OrderSummary'
 import ChangeLocal from './components/ChangeLocal'
 import LocalDashboard from './components/LocalDashboard'
 import AdministrativeModule from './components/AdministrativeModule'
+import POSModule from './components/pos/POSModule'
+import MesaDetail from './components/pos/MesaDetail'
+import WorkerLocalSelector from './components/WorkerLocalSelector'
+
+const WORKER_ROLES = ['Empleado', 'Cajero']
 import { isSupabaseConfigured, supabase } from './lib/supabaseClient'
 import { getUserRole } from './utils/jwt'
 
@@ -161,6 +166,26 @@ function App() {
     )
   }
 
+  // Roles de trabajador: solo acceso al POS
+  if (user && WORKER_ROLES.includes(userRole)) {
+    return (
+      <Router>
+        <Routes>
+          <Route path="/" element={<WorkerLocalSelector user={user} userRole={userRole} onLogout={handleLogout} />} />
+          <Route
+            path="/local/:localId/pos"
+            element={<POSModule user={user} userRole={userRole} onLogout={handleLogout} />}
+          />
+          <Route
+            path="/local/:localId/pos/mesa/:mesaId"
+            element={<MesaDetail user={user} userRole={userRole} onLogout={handleLogout} />}
+          />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </Router>
+    )
+  }
+
   if (!user) {
     return (
       <main className="login-page">
@@ -264,6 +289,15 @@ function App() {
         <Route
           path="/local/:localId/administrativo/:sectionId?"
           element={<AdministrativeModule user={user} userRole={userRole} onLogout={handleLogout} />}
+        />
+        <Route
+          path="/local/:localId/pos"
+          element={<POSModule user={user} userRole={userRole} onLogout={handleLogout} />}
+        />
+        {/* HU-60 SCRUM-486: Ruta para detalle de mesa */}
+        <Route
+          path="/local/:localId/pos/mesa/:mesaId"
+          element={<MesaDetail user={user} userRole={userRole} onLogout={handleLogout} />}
         />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
