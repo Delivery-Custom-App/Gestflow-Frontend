@@ -9,6 +9,8 @@ import AdministrativeModule from './components/AdministrativeModule'
 import POSModule from './components/pos/POSModule'
 import MesaDetail from './components/pos/MesaDetail'
 import WorkerLocalSelector from './components/WorkerLocalSelector'
+import InventoryHub from './components/inventory/InventoryHub'
+import StockControlDashboard from './components/inventory/StockControlDashboard'
 
 const WORKER_ROLES = ['Empleado', 'Cajero']
 import { isSupabaseConfigured, supabase } from './lib/supabaseClient'
@@ -286,6 +288,14 @@ function App() {
         <Route path="/" element={<AdminDashboard user={user} userRole={userRole} onLogout={handleLogout} />} />
         <Route path="/admin" element={<AdminDashboard user={user} userRole={userRole} onLogout={handleLogout} />} />
         <Route path="/local/:localId" element={<LocalDashboard user={user} userRole={userRole} onLogout={handleLogout} />} />
+        <Route
+          path="/local/:localId/inventario"
+          element={<InventoryHub user={user} userRole={userRole} onLogout={handleLogout} />}
+        />
+        <Route
+          path="/local/:localId/inventario/stock"
+          element={<StockControlDashboard user={user} userRole={userRole} onLogout={handleLogout} />}
+        />
         <Route
           path="/local/:localId/administrativo/:sectionId?"
           element={<AdministrativeModule user={user} userRole={userRole} onLogout={handleLogout} />}
