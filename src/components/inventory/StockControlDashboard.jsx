@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useLocation, useNavigate, useParams } from 'react-router-dom'
+import { useParams } from 'react-router-dom'
 import { getAuthContext } from '../../lib/apiClient'
 import { getInventoryKpisByLocal, getInventoryStockList } from '../../lib/inventoryApi'
 import InventoryShell from './InventoryShell'
@@ -18,14 +18,7 @@ function formatMoney(value) {
 
 /** HU-42: visualizacion de listado de productos en inventario */
 function StockControlDashboard({ user, userRole, onLogout }) {
-  const navigate = useNavigate()
-  const location = useLocation()
   const { localId } = useParams()
-
-  const selectedLocal = useMemo(() => {
-    if (location.state?.local) return location.state.local
-    return { id: localId, name: `Local ${localId ?? ''}` }
-  }, [location.state, localId])
 
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -91,17 +84,10 @@ function StockControlDashboard({ user, userRole, onLogout }) {
     return items.slice(start, start + pageSize)
   }, [items, safeCurrentPage, pageSize])
 
-  const backToHub = () => {
-    navigate(`/local/${localId}/inventario`, { state: { local: selectedLocal } })
-  }
-
   return (
     <InventoryShell user={user} userRole={userRole} onLogout={onLogout} active="stock">
-      <button type="button" className="scd-back" onClick={backToHub}>
-        ← Volver al dashboard de inventario
-      </button>
-
-      <header className="scd-header">
+      <div className="inv-stock-page">
+      <header className="scd-header scd-header--compact">
         <span className="scd-header-icon" aria-hidden="true">
           <svg viewBox="0 0 24 24" fill="none">
             <path d="M12 3L20 7.5V16.5L12 21L4 16.5V7.5L12 3Z" stroke="currentColor" strokeWidth="1.6" />
@@ -109,7 +95,7 @@ function StockControlDashboard({ user, userRole, onLogout }) {
         </span>
         <div>
           <h1 className="scd-title">Control de stock</h1>
-          <p className="scd-subtitle">Inventario de productos · HU-42</p>
+          <p className="scd-subtitle">Inventario de productos · KPIs y movimientos</p>
         </div>
       </header>
 
@@ -211,6 +197,7 @@ function StockControlDashboard({ user, userRole, onLogout }) {
           loadItems()
         }}
       />
+      </div>
     </InventoryShell>
   )
 }

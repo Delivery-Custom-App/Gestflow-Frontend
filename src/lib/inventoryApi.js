@@ -15,3 +15,12 @@ export function postInventoryNewProduct(localId, token, body) {
     body,
   })
 }
+
+/** Actualiza stock o mínimo; la API devuelve la fila con total_value recalculado (stock × costo). */
+export function patchInventoryStock(localId, inventoryId, token, body) {
+  return apiRequest(`/inventory/locals/${localId}/stock/${inventoryId}`, {
+    method: 'PATCH',
+    token,
+    body,
+  })
+}

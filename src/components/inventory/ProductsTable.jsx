@@ -1,3 +1,5 @@
+import { getStockAlertLevel } from './stockAlertUtils'
+
 function formatClp(value) {
   if (value == null || Number.isNaN(Number(value))) return '—'
   return new Intl.NumberFormat('es-CL', {
@@ -7,13 +9,9 @@ function formatClp(value) {
 }
 
 function getStockStatus(row) {
-  const stockCurrent = Number(row.stock_current ?? 0)
-  if (row.stock_min != null && stockCurrent <= Number(row.stock_min)) {
-    return 'Crítico'
-  }
-  if (row.stock_max != null && stockCurrent < Math.max(1, Math.floor(Number(row.stock_max) / 4))) {
-    return 'Bajo'
-  }
+  const level = getStockAlertLevel(row)
+  if (level === 'critical') return 'Crítico'
+  if (level === 'low') return 'Bajo'
   return 'Óptimo'
 }
 
