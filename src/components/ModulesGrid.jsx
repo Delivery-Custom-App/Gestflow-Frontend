@@ -66,6 +66,11 @@ function ModulesGrid({ localId, localName, userRole }) {
   ]
 
   const handleModuleClick = (moduleId) => {
+    if (moduleId === 'inventario') {
+      navigate(`/local/${localId}/inventario`, { state: { local: { id: localId, name: localName } } })
+      return
+    }
+
     navigate(`/local/${localId}/administrativo/${moduleId}`)
   }
 

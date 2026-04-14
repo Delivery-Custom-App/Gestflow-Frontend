@@ -1,13 +1,22 @@
 import { useState, useEffect } from 'react'
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
+import { BrowserRouter as Router, Routes, Route, Navigate, useParams, useLocation } from 'react-router-dom'
 import './App.css'
 import AdminDashboard from './components/AdminDashboard'
 import OrderSummary from './components/OrderSummary'
 import ChangeLocal from './components/ChangeLocal'
 import LocalDashboard from './components/LocalDashboard'
 import AdministrativeModule from './components/AdministrativeModule'
+import InventoryModuleHub from './components/inventory/InventoryModuleHub'
+import StockControlDashboard from './components/inventory/StockControlDashboard'
 import { isSupabaseConfigured, supabase } from './lib/supabaseClient'
 import { getUserRole } from './utils/jwt'
+
+/** Antigua ruta `/inventario/kpis` → misma vista de control de stock (KPIs + tabla). */
+function RedirectInventoryKpisToStock() {
+  const { localId } = useParams()
+  const location = useLocation()
+  return <Navigate to={`/local/${localId}/inventario/stock`} replace state={location.state} />
+}
 
 function formatRoleLabel(role) {
   if (!role) return 'Usuario'
@@ -265,6 +274,15 @@ function App() {
           path="/local/:localId/administrativo/:sectionId?"
           element={<AdministrativeModule user={user} userRole={userRole} onLogout={handleLogout} />}
         />
+        <Route
+          path="/local/:localId/inventario"
+          element={<InventoryModuleHub user={user} userRole={userRole} onLogout={handleLogout} />}
+        />
+        <Route
+          path="/local/:localId/inventario/stock"
+          element={<StockControlDashboard user={user} userRole={userRole} onLogout={handleLogout} />}
+        />
+        <Route path="/local/:localId/inventario/kpis" element={<RedirectInventoryKpisToStock />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Router>
