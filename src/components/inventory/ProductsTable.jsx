@@ -14,7 +14,15 @@ function getStockStatus(row) {
   return 'Óptimo'
 }
 
-function ProductsTable({ items, loading, error, currentPage, totalPages, onPageChange }) {
+function ProductsTable({
+  items,
+  loading,
+  error,
+  currentPage,
+  totalPages,
+  onPageChange,
+  onEmptyAction,
+}) {
   const showPagination = !error && !loading && totalPages > 1
 
   return (
@@ -51,7 +59,15 @@ function ProductsTable({ items, loading, error, currentPage, totalPages, onPageC
           {!error && !loading && items.length === 0 ? (
             <tr>
               <td colSpan={9} className="scd-table-empty">
-                No hay productos registrados en este local.
+                <div className="scd-empty-state">
+                  <p className="scd-empty-title">No hay productos registrados en este local.</p>
+                  <p className="scd-empty-subtitle">Crea el primer producto para comenzar a gestionar inventario.</p>
+                  {onEmptyAction ? (
+                    <button type="button" className="scd-empty-btn" onClick={onEmptyAction}>
+                      Crear primer producto
+                    </button>
+                  ) : null}
+                </div>
               </td>
             </tr>
           ) : null}

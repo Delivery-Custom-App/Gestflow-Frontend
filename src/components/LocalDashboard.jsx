@@ -95,6 +95,10 @@ function LocalDashboard({ user, userRole, onLogout }) {
       navigate(`/local/${selectedLocal.id}/pos`, { state: { local: selectedLocal } })
       return
     }
+
+    if (moduleId === 'inventario') {
+      navigate(`/local/${selectedLocal.id}/inventario/stock`, { state: { local: selectedLocal } })
+    }
   }
 
   return (

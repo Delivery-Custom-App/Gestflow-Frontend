@@ -266,6 +266,45 @@
   font-style: italic;
 }
 
+.scd-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0;
+}
+
+.scd-empty-title {
+  margin: 0;
+  color: #334155;
+  font-size: 0.9rem;
+  font-style: normal;
+  font-weight: 600;
+}
+
+.scd-empty-subtitle {
+  margin: 0;
+  color: #64748b;
+  font-size: 0.82rem;
+  font-style: normal;
+}
+
+.scd-empty-btn {
+  margin-top: 4px;
+  border: 1px solid #047857;
+  background: #047857;
+  color: #fff;
+  border-radius: 8px;
+  padding: 7px 12px;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.scd-empty-btn:hover {
+  background: #065f46;
+  border-color: #065f46;
+}
+
 .scd-pagination {
   display: flex;
   align-items: center;

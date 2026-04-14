@@ -194,6 +194,7 @@ function StockControlDashboard({ user, userRole, onLogout }) {
           currentPage={safeCurrentPage}
           totalPages={totalPages}
           onPageChange={setCurrentPage}
+          onEmptyAction={() => setModalOpen(true)}
         />
       </section>
 
