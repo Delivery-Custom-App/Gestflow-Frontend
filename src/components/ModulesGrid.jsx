@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import '../styles/ModulesGrid.css'
 
-function ModulesGrid({ localId, localName, userRole }) {
+function ModulesGrid({ localId, userRole }) {
   const navigate = useNavigate()
   const [hoveredModule, setHoveredModule] = useState(null)
 
@@ -66,6 +66,14 @@ function ModulesGrid({ localId, localName, userRole }) {
   ]
 
   const handleModuleClick = (moduleId) => {
+    if (moduleId === 'administrativo') {
+      navigate(`/local/${localId}/administrativo/dashboard`)
+      return
+    }
+    if (moduleId === 'pos') {
+      navigate(`/local/${localId}/pos`)
+      return
+    }
     navigate(`/local/${localId}/administrativo/${moduleId}`)
   }
 
