@@ -14,6 +14,7 @@ import {
   getTransfersByLocal,
 } from '../lib/administrativeApi'
 import { getAuthContext } from '../lib/apiClient'
+import { enrichDashboardWithChartData, generateIncomeTrendFromOrders, generateExpenseBreakdownFromData } from '../utils/chartDataHelpers'
 import '../styles/AdministrativeModule.css'
 import '../styles/charts.css'
 
@@ -686,7 +687,20 @@ function BonosContent({ dashboard, loading, error }) {
 function renderSectionContent(activeSection, payload) {
   switch (activeSection) {
     case 'dashboard':
-      return <DashboardContent dashboard={payload.dashboard} loading={payload.loading} error={payload.error} />
+      const enrichedDashboard = enrichDashboardWithChartData(payload.dashboard)
+      const incomeData = generateIncomeTrendFromOrders(payload.orders)
+      const expenseData = generateExpenseBreakdownFromData(payload.expenses)
+      return (
+        <DashboardContent
+          dashboard={{
+            ...enrichedDashboard,
+            daily_income_trend: incomeData,
+            expenses_breakdown: expenseData,
+          }}
+          loading={payload.loading}
+          error={payload.error}
+        />
+      )
     case 'ventas':
       return <VentasContent orders={payload.orders} loading={payload.loading} error={payload.error} />
     case 'rendiciones':
@@ -702,13 +716,38 @@ function renderSectionContent(activeSection, payload) {
     case 'reportes':
       return <ReportesContent consolidated={payload.consolidated} loading={payload.loading} error={payload.error} />
     case 'flujo-caja':
-      return <FlujoCajaContent dashboard={payload.dashboard} cajas={payload.cajas} loading={payload.loading} error={payload.error} />
+      const flujoDashboard = enrichDashboardWithChartData(payload.dashboard)
+      const flujoExpenseData = generateExpenseBreakdownFromData(payload.expenses)
+      return (
+        <FlujoCajaContent
+          dashboard={{
+            ...flujoDashboard,
+            expenses_breakdown: flujoExpenseData,
+          }}
+          cajas={payload.cajas}
+          loading={payload.loading}
+          error={payload.error}
+        />
+      )
     case 'alertas':
       return <AlertasContent dashboard={payload.dashboard} loading={payload.loading} error={payload.error} />
     case 'bonos':
       return <BonosContent dashboard={payload.dashboard} loading={payload.loading} error={payload.error} />
     default:
-      return <DashboardContent dashboard={payload.dashboard} loading={payload.loading} error={payload.error} />
+      const defaultDashboard = enrichDashboardWithChartData(payload.dashboard)
+      const defaultIncomeData = generateIncomeTrendFromOrders(payload.orders)
+      const defaultExpenseData = generateExpenseBreakdownFromData(payload.expenses)
+      return (
+        <DashboardContent
+          dashboard={{
+            ...defaultDashboard,
+            daily_income_trend: defaultIncomeData,
+            expenses_breakdown: defaultExpenseData,
+          }}
+          loading={payload.loading}
+          error={payload.error}
+        />
+      )
   }
 }
 
