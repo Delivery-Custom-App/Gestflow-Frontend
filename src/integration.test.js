@@ -4,7 +4,7 @@ import { BrowserRouter } from 'react-router-dom'
 
 // Tests simplificados para validar que los componentes existen y son importables
 
-describe('HU-19 Components & Hooks Integration Tests', () => {
+describe('Order summary and related integration', () => {
   describe('Componentes Existen', () => {
     it('debería importar exitosamente OrderSummary', async () => {
       const { default: OrderSummary } = await import('./components/OrderSummary.jsx')

@@ -36,9 +36,7 @@ function applyFilters(mesas, filters) {
 }
 
 /**
- * HU-63: Filtro de mesas
- * SCRUM-497/498/499/500
- * 
+ * Filtros de mesas por nombre/número, estado y zona.
  * Permite filtrar mesas por:
  * - Nombre/número
  * - Estado (libre, ocupada, en_cobro)

@@ -2,7 +2,7 @@ import { useState, useCallback } from 'react'
 import { apiRequest } from '../lib/apiClient'
 
 /**
- * HU-64 SCRUM-468/504: Hook para obtener reportes básicos del POS.
+ * Reportes básicos del POS.
  * Lazy — solo carga cuando se llama a `fetch()`.
  */
 export function useReportesPOS(localId) {

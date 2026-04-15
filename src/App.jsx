@@ -184,7 +184,7 @@ function App() {
             element={<MesaDetail user={user} userRole={userRole} onLogout={handleLogout} />}
           />
           <Route path="/local/:localId" element={<LocalModulesHomeRedirect />} />
-          {/* HU-19 Routes */}
+          {/* Resumen de pedido y cambio de local */}
           <Route path="/order/:orderId/summary" element={<OrderSummary />} />
           <Route path="/order/:orderId/change-local" element={<ChangeLocal />} />
           {/* Default redirect */}
@@ -323,6 +323,14 @@ function App() {
           element={<InventoryHub user={user} userRole={userRole} onLogout={handleLogout} />}
         />
         <Route
+          path="/local/:localId/inventario"
+          element={<InventoryHub user={user} userRole={userRole} onLogout={handleLogout} />}
+        />
+        <Route
+          path="/local/:localId/inventario/stock"
+          element={<StockControlDashboard user={user} userRole={userRole} onLogout={handleLogout} />}
+        />
+        <Route
           path="/local/:localId/administrativo/:sectionId?"
           element={<AdministrativeModule user={user} userRole={userRole} onLogout={handleLogout} />}
         />
@@ -330,7 +338,7 @@ function App() {
           path="/local/:localId/pos"
           element={<POSModule user={user} userRole={userRole} onLogout={handleLogout} />}
         />
-        {/* HU-60 SCRUM-486: Ruta para detalle de mesa */}
+        {/* Detalle de mesa en POS */}
         <Route
           path="/local/:localId/pos/mesa/:mesaId"
           element={<MesaDetail user={user} userRole={userRole} onLogout={handleLogout} />}

@@ -1,4 +1,4 @@
-/* HU-62: Modal de detalle de producto — SCRUM-493/494/495/496 */
+/* Modal de detalle de producto */
 
 .product-detail-backdrop {
   position: fixed;
@@ -96,7 +96,7 @@
   line-height: 1.5;
 }
 
-/* Añadidos — SCRUM-494 */
+/* Añadidos */
 .product-detail-anyadidos {
   list-style: none;
   padding: 0;
@@ -128,7 +128,7 @@
   flex-shrink: 0;
 }
 
-/* Estado vacío de añadidos — SCRUM-496 */
+/* Sin añadidos */
 .product-detail-sin-anyadidos {
   margin: 0;
   font-size: 0.875rem;
@@ -136,7 +136,7 @@
   font-style: italic;
 }
 
-/* Precios — SCRUM-495 */
+/* Precios */
 .product-detail-prices {
   background: #f9fafb;
   border: 1px solid #e5e7eb;

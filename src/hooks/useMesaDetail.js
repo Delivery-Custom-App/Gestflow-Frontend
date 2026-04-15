@@ -1,10 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { getAuthContext } from '../lib/apiClient'
 
-/**
- * Hook para obtener detalles de una mesa con sus órdenes activas
- * Implementa SCRUM-487: Crear endpoint de detalle de mesa
- */
+/** Detalle de mesa y órdenes activas vía GET /mesas/:id/detail. */
 export function useMesaDetail(mesaId) {
   const [detail, setDetail] = useState(null)
   const [loading, setLoading] = useState(true)
