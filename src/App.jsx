@@ -10,8 +10,6 @@ import StockControlDashboard from './components/inventory/StockControlDashboard'
 import POSModule from './components/pos/POSModule'
 import MesaDetail from './components/pos/MesaDetail'
 import WorkerLocalSelector from './components/WorkerLocalSelector'
-import InventoryHub from './components/inventory/InventoryHub'
-import StockControlDashboard from './components/inventory/StockControlDashboard'
 
 const WORKER_ROLES = ['Empleado', 'Cajero']
 import { isSupabaseConfigured, supabase } from './lib/supabaseClient'
