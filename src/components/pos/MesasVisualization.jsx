@@ -1,7 +1,7 @@
 import '../../styles/MesasVisualization.css'
 
 /**
- * HU-59: Visualización de listado de mesas en formato gráfico
+ * Listado de mesas en vista gráfica (tarjetas)
  */
 export default function MesasVisualization({ mesas = [], loading = false, onMesaSelect = null, onEditMesa = null, onDeleteMesa = null }) {
 

@@ -40,28 +40,28 @@ export default function POSModule({ user, userRole, onLogout }) {
 
   const handleSubmitMesa = async (formData) => {
     await createMesa(formData)
-    // Refresh KPIs after creation (SCRUM-481)
+    // Refrescar KPIs tras crear mesa
     if (kpiRefreshRef.current) kpiRefreshRef.current()
   }
 
   const handleMesaSelect = (mesa) => {
-    // HU-60 SCRUM-486: Navegar a detalle de mesa
+    // Ir al detalle de la mesa
     navigate(`/local/${localId}/pos/mesa/${mesa.id}`)
   }
 
   const handleFilteredMesasChange = (filtered, activeFilters) => {
-    // HU-63: Actualizar mesas filtradas cuando cambian los filtros
+    // Sincronizar lista cuando cambian los filtros
     setFilteredMesas(filtered)
   }
 
   const handleEditMesa = (mesa) => {
-    // HU-64 SCRUM-519: Abrir modal para editar mesa
+    // Abrir modal de edición
     setEditingMesa(mesa)
     setShowEditModal(true)
   }
 
   const handleUpdateMesa = async (formData) => {
-    // HU-64 SCRUM-520: Actualizar mesa desde el modal
+    // Persistir cambios de la mesa
     try {
       setIsUpdating(true)
       await updateMesa({
@@ -83,14 +83,14 @@ export default function POSModule({ user, userRole, onLogout }) {
   }
 
   const handleDeleteMesa = (mesa) => {
-    // HU-64 SCRUM-521: Abrir modal de confirmación para eliminar
+    // Abrir confirmación de borrado
     setDeleteError(null)
     setDeletingMesa(mesa)
     setShowDeleteModal(true)
   }
 
   const handleConfirmDelete = async () => {
-    // HU-64 SCRUM-521: Confirmar eliminación de mesa
+    // Ejecutar borrado de mesa
     if (!deletingMesa) return
     try {
       setIsDeleting(true)
@@ -152,7 +152,7 @@ export default function POSModule({ user, userRole, onLogout }) {
         {/* KPIs — le pasamos ref para poder triggerear refresh desde fuera */}
         <MesasKPICards localId={localId} onRefreshReady={(fn) => { kpiRefreshRef.current = fn }} />
 
-        {/* HU-59/HU-63: Visualización de listado de mesas en formato gráfico con filtros */}
+        {/* Listado gráfico de mesas y filtros */}
         <section className="mesas-section">
           <div className="mesas-section-header">
             <h3>Visualización de Mesas</h3>
@@ -185,7 +185,7 @@ export default function POSModule({ user, userRole, onLogout }) {
             </div>
           </div>
           
-          {/* HU-63 SCRUM-497: UI de filtros */}
+          {/* Filtros de mesas */}
           <MesasFilters 
             mesas={mesas}
             onFilteredMesasChange={handleFilteredMesasChange}

@@ -2,9 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { apiRequest } from '../lib/apiClient'
 
 /**
- * Fetches mesas with computed state by calling GET /mesas/{id}/detail per active mesa.
- * Uses the existing detail endpoint (no Pydantic enum issues) to derive state.
- * SCRUM-482/483/484/485
+ * Mesas con estado (libre/ocupada/en_cobro) consultando detalle por mesa activa.
  */
 export function useMesasConEstado(localId) {
   const [mesas, setMesas] = useState([])

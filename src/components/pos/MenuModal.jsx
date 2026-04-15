@@ -4,11 +4,7 @@ import { formatCLP } from '../../lib/formatCLP'
 import '../../styles/MenuModal.css'
 
 /**
- * HU-65 SCRUM-469
- * SCRUM-505: KPIs por categoría
- * SCRUM-506: Filtros por nombre y categoría
- * SCRUM-507: Lista de productos renderizada
- * HU-46 / SCRUM-429: búsqueda por texto vía API (`?search=`) con debounce; categoría sigue filtrándose en cliente.
+ * Modal del menú: KPIs por categoría, búsqueda con debounce y filtro de categoría en cliente.
  */
 export default function MenuModal({ localId, onClose }) {
   const { data, loading, error, fetch } = useMenuPOS(localId)
@@ -29,7 +25,7 @@ export default function MenuModal({ localId, onClose }) {
     if (e.target === e.currentTarget) onClose()
   }
 
-  // SCRUM-506: filtrar por categoría (la búsqueda por texto la aplica el backend, HU-46)
+  // Categoría en cliente; el texto va al backend
   const filteredCategories = useMemo(() => {
     if (!data?.categories) return []
 
@@ -58,7 +54,7 @@ export default function MenuModal({ localId, onClose }) {
           <button className="menu-close" onClick={onClose} aria-label="Cerrar menú">✕</button>
         </header>
 
-        {/* SCRUM-505: KPIs por categoría */}
+        {/* Chips por categoría (conteos) */}
         {data?.categories?.length > 0 && (
           <div className="menu-kpis" role="list" aria-label="Filtrar por categoría">
             <button
@@ -81,7 +77,7 @@ export default function MenuModal({ localId, onClose }) {
           </div>
         )}
 
-        {/* SCRUM-506: Filtros */}
+        {/* Búsqueda y filtro por categoría */}
         {data && !loading && !error && (
           <div className="menu-filters">
             <div className="menu-search-wrapper">
@@ -130,7 +126,7 @@ export default function MenuModal({ localId, onClose }) {
             </div>
           )}
 
-          {/* SCRUM-507: Lista de productos */}
+          {/* Listado por categoría */}
           {!loading && !error && data && (
             <>
               {filteredCategories.length === 0 ? (

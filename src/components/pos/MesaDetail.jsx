@@ -30,7 +30,7 @@ export default function MesaDetail({ user, userRole, onLogout }) {
     fetchMenu()
   }, [fetchMenu])
 
-  // HU-46: búsqueda en picker vía mismo endpoint que el menú POS (`?search=`), con debounce
+  // Búsqueda en picker con el mismo endpoint que el menú (`?search=`) y debounce
   useEffect(() => {
     if (!showPicker) return
     const id = setTimeout(() => {
@@ -103,7 +103,7 @@ export default function MesaDetail({ user, userRole, onLogout }) {
     }
   }, [pickerOrderId, localId, mesaId, refresh, fetchMenu])
 
-  // Menú del picker: el backend ya filtra por `search` (HU-46)
+  // El backend filtra por `search`
   const pickerMenu = (menuData?.categories || []).filter((cat) => (cat.products?.length || 0) > 0)
 
   const handleGoBack = () => navigate(`/local/${localId}/pos`)

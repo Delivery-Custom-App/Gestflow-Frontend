@@ -2,9 +2,8 @@ import { useState, useCallback } from 'react'
 import { apiRequest } from '../lib/apiClient'
 
 /**
- * HU-65 SCRUM-469: Hook para obtener el menú completo del local.
- * HU-46 / SCRUM-429: búsqueda opcional (`search` → `?search=`) contra `/dashboard/menu`.
- * Lazy — solo carga cuando se llama a `fetch()`.
+ * Menú del local vía `/dashboard/menu`; búsqueda opcional con `?search=`.
+ * Solo carga cuando se llama a `fetch()`.
  */
 export function useMenuPOS(localId) {
   const [data, setData] = useState(null)
