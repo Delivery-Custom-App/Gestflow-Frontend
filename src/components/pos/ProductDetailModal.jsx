@@ -1,24 +1,11 @@
 import { formatCLP } from '../../lib/formatCLP'
 import '../../styles/ProductDetailModal.css'
 
-/**
- * HU-62: Visualización de detalle de producto
- * SCRUM-493: Modal/vista de detalle
- * SCRUM-494: Lógica de añadidos
- * SCRUM-495: Cálculo de precio total
- * SCRUM-496: Estado vacío de añadidos
- *
- * Muestra al hacer click en un producto:
- * - Descripción base
- * - Añadidos (o "Sin añadidos")
- * - Precio base (unit_price)
- * - Precio total (total_price = cantidad × precio base)
- */
+/** Modal de detalle: descripción, añadidos parseados desde el texto y precios. */
 export default function ProductDetailModal({ product, onClose }) {
   if (!product) return null
 
-  // SCRUM-494: Lógica de añadidos — se extraen de la descripción
-  // Formato esperado en description: "Texto base. Añadidos: Item1, Item2."
+  // Añadidos extraídos de la descripción: "Texto base. Añadidos: Item1, Item2."
   const { baseDescription, anyadidos } = parseDescription(product.product_description || '')
 
   const handleBackdropClick = (e) => {
@@ -36,7 +23,7 @@ export default function ProductDetailModal({ product, onClose }) {
 
         <div className="product-detail-body">
 
-          {/* Descripción — SCRUM-493 */}
+          {/* Descripción */}
           <section className="product-detail-section">
             <h3 className="product-detail-section-title">Descripción</h3>
             <p className="product-detail-description">
@@ -44,7 +31,7 @@ export default function ProductDetailModal({ product, onClose }) {
             </p>
           </section>
 
-          {/* Añadidos — SCRUM-494 + SCRUM-496 */}
+          {/* Añadidos */}
           <section className="product-detail-section">
             <h3 className="product-detail-section-title">Añadidos</h3>
             {anyadidos.length > 0 ? (
@@ -61,7 +48,7 @@ export default function ProductDetailModal({ product, onClose }) {
             )}
           </section>
 
-          {/* Precios — SCRUM-495 */}
+          {/* Precios */}
           <section className="product-detail-section product-detail-prices">
             <div className="price-row">
               <span className="price-label">Precio unitario</span>
@@ -91,12 +78,8 @@ export default function ProductDetailModal({ product, onClose }) {
 }
 
 /**
- * SCRUM-494: Parsea la descripción del producto para separar
- * la descripción base de los añadidos.
- *
- * Ejemplo: "Hamburguesa doble. Añadidos: Tocino, Extra Queso."
- *   → baseDescription: "Hamburguesa doble."
- *   → anyadidos: ["Tocino", "Extra Queso"]
+ * Separa descripción base y lista de añadidos tras "Añadidos:".
+ * Ej.: "Hamburguesa doble. Añadidos: Tocino, Extra Queso."
  */
 function parseDescription(description) {
   if (!description) return { baseDescription: '', anyadidos: [] }

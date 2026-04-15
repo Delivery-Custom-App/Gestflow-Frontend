@@ -60,7 +60,7 @@
   font-weight: 600;
 }
 
-/* Items Section - SCRUM-136 */
+/* Productos */
 .items-section .items-list {
   display: flex;
   flex-direction: column;
@@ -130,7 +130,7 @@
   font-style: italic;
 }
 
-/* Local Section - SCRUM-137 */
+/* Punto de retiro */
 .local-section .local-info-card {
   background: #f0f7ff;
   padding: 15px;
@@ -194,7 +194,7 @@
   margin-bottom: 4px;
 }
 
-/* Pricing Section - SCRUM-138 */
+/* Desglose de costos */
 .pricing-section .pricing-breakdown {
   background: #fafafa;
   padding: 15px;

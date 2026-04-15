@@ -3,17 +3,7 @@ import { useReportesPOS } from '../../hooks/useReportesPOS'
 import { formatCLP } from '../../lib/formatCLP'
 import '../../styles/ReportesModal.css'
 
-/**
- * HU-64 SCRUM-468
- * SCRUM-501: Vista/modal de reportes
- * SCRUM-503: Cálculo top productos (delegado al backend)
- * SCRUM-504: Integración frontend
- *
- * Muestra:
- * - Producto más vendido
- * - Bebida más vendida
- * - Top 5 productos del local
- */
+/** Modal de reportes POS: top producto, bebida y top 5 (datos del backend). */
 export default function ReportesModal({ localId, onClose }) {
   const { data, loading, error, fetch } = useReportesPOS(localId)
 

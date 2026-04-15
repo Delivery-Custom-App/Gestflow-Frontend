@@ -4,7 +4,7 @@ import '../../styles/DeleteMesaModal.css'
 /**
  * Modal de confirmación para borrar una mesa
  * Solo superadmin puede borrar mesas
- * HU-64 SCRUM-521: Muestra error si hay órdenes activas
+ * Muestra error del backend si hay órdenes activas
  */
 export default function DeleteMesaModal({ mesa, onClose, onConfirm, isDeleting = false, error = null }) {
   const [showError, setShowError] = useState(error)

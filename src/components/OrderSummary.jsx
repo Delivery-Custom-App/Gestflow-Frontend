@@ -58,7 +58,7 @@ export default function OrderSummary() {
         <p className="order-id">Pedido: {orderIdFromSummary}</p>
       </header>
 
-      {/* SCRUM-136: Items Section */}
+      {/* Productos */}
       <section className="order-summary-section items-section">
         <h2>📦 Productos</h2>
         <div className="items-list">
@@ -86,7 +86,7 @@ export default function OrderSummary() {
         </div>
       </section>
 
-      {/* SCRUM-137: Local Info Section */}
+      {/* Punto de retiro */}
       <section className="order-summary-section local-section">
         <h2>📍 Punto de Retiro</h2>
         {local_info ? (
@@ -115,7 +115,7 @@ export default function OrderSummary() {
         </section>
       )}
 
-      {/* SCRUM-138: Pricing Section */}
+      {/* Desglose de costos */}
       <section className="order-summary-section pricing-section">
         <h2>💰 Desglose de Costos</h2>
         <div className="pricing-breakdown">

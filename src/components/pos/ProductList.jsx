@@ -4,12 +4,7 @@ import { formatCLP } from '../../lib/formatCLP'
 import ProductDetailModal from './ProductDetailModal'
 import '../../styles/ProductList.css'
 
-/**
- * HU-61: Visualización de productos en mesa
- * SCRUM-490: Diseñar componente de lista de productos
- * SCRUM-491: Integrar datos desde backend
- * SCRUM-492: Validar consistencia de precios y cantidades
- */
+/** Lista de productos de la orden con edición de cantidad/precio y detalle. */
 export default function ProductList({ products = [], orderId = null, onProductsChanged = null, className = '' }) {
   const { updateItem, deleteItem, loading, error } = useOrderItems(orderId)
   const [editingId, setEditingId] = useState(null)
@@ -219,7 +214,7 @@ export default function ProductList({ products = [], orderId = null, onProductsC
         </div>
       )}
 
-      {/* HU-62: Modal de detalle de producto — SCRUM-493/494/495/496 */}
+      {/* Detalle de producto */}
       {selectedProduct && (
         <ProductDetailModal
           product={selectedProduct}
