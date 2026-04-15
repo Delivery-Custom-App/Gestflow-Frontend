@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { getAuthContext } from '../../lib/apiClient'
 import { getInventoryKpisByLocal, getInventoryStockList } from '../../lib/inventoryApi'
+import { getStockAlertLevel } from './stockAlertUtils'
 import InventoryShell from './InventoryShell'
 import NuevoProductoModal from './NuevoProductoModal'
 import ProductsTable from './ProductsTable'
@@ -16,7 +17,7 @@ function formatMoney(value) {
   return `$${n}`
 }
 
-/** HU-42: visualizacion de listado de productos en inventario */
+/** HU-42: listado de inventario. HU-46: búsqueda por nombre (parcial), categoría y estado en cliente. */
 function StockControlDashboard({ user, userRole, onLogout }) {
   const { localId } = useParams()
 
@@ -28,7 +29,39 @@ function StockControlDashboard({ user, userRole, onLogout }) {
   const [itemsLoading, setItemsLoading] = useState(true)
   const [itemsError, setItemsError] = useState('')
   const [currentPage, setCurrentPage] = useState(1)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [categoryFilter, setCategoryFilter] = useState('')
+  const [statusFilter, setStatusFilter] = useState('')
   const pageSize = 10
+
+  const categoryOptions = useMemo(() => {
+    const names = new Set()
+    for (const row of items) {
+      const n = row.category_name
+      if (n && String(n).trim()) names.add(String(n).trim())
+    }
+    return [...names].sort((a, b) => a.localeCompare(b, 'es'))
+  }, [items])
+
+  const filteredItems = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase()
+    return items.filter((row) => {
+      if (q) {
+        const name = String(row.product_name || row.name || '').toLowerCase()
+        if (!name.includes(q)) return false
+      }
+      if (categoryFilter) {
+        const cat = String(row.category_name || '').trim()
+        if (cat !== categoryFilter) return false
+      }
+      if (statusFilter) {
+        const level = getStockAlertLevel(row)
+        const effective = level === 'critical' ? 'critical' : level === 'low' ? 'low' : 'optimal'
+        if (effective !== statusFilter) return false
+      }
+      return true
+    })
+  }, [items, searchQuery, categoryFilter, statusFilter])
 
   const load = useCallback(async () => {
     if (!localId) {
@@ -75,14 +108,20 @@ function StockControlDashboard({ user, userRole, onLogout }) {
 
   useEffect(() => {
     setCurrentPage(1)
-  }, [items])
+  }, [items, searchQuery, categoryFilter, statusFilter])
 
-  const totalPages = Math.max(1, Math.ceil(items.length / pageSize))
+  useEffect(() => {
+    if (categoryFilter && !categoryOptions.includes(categoryFilter)) {
+      setCategoryFilter('')
+    }
+  }, [categoryFilter, categoryOptions])
+
+  const totalPages = Math.max(1, Math.ceil(filteredItems.length / pageSize))
   const safeCurrentPage = Math.min(currentPage, totalPages)
   const pagedItems = useMemo(() => {
     const start = (safeCurrentPage - 1) * pageSize
-    return items.slice(start, start + pageSize)
-  }, [items, safeCurrentPage, pageSize])
+    return filteredItems.slice(start, start + pageSize)
+  }, [filteredItems, safeCurrentPage, pageSize])
 
   return (
     <InventoryShell user={user} userRole={userRole} onLogout={onLogout} active="stock">
@@ -159,7 +198,7 @@ function StockControlDashboard({ user, userRole, onLogout }) {
           </button>
         </div>
 
-        <div className="scd-filters">
+        <div className="scd-filters" role="search" aria-label="Filtrar inventario">
           <div className="scd-search">
             <span className="scd-search-icon" aria-hidden="true">
               <svg viewBox="0 0 24 24" fill="none">
@@ -167,13 +206,38 @@ function StockControlDashboard({ user, userRole, onLogout }) {
                 <path d="M16 16l5 5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
               </svg>
             </span>
-            <input type="search" placeholder="Buscar productos…" disabled aria-disabled="true" />
+            <input
+              type="search"
+              placeholder="Buscar por nombre de producto…"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              aria-label="Buscar productos por nombre"
+              autoComplete="off"
+            />
           </div>
-          <select className="scd-select" disabled aria-disabled="true">
-            <option>Todas las categorías</option>
+          <select
+            className="scd-select"
+            value={categoryFilter}
+            onChange={(e) => setCategoryFilter(e.target.value)}
+            aria-label="Filtrar por categoría"
+          >
+            <option value="">Todas las categorías</option>
+            {categoryOptions.map((name) => (
+              <option key={name} value={name}>
+                {name}
+              </option>
+            ))}
           </select>
-          <select className="scd-select" disabled aria-disabled="true">
-            <option>Todos los estados</option>
+          <select
+            className="scd-select"
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            aria-label="Filtrar por estado de stock"
+          >
+            <option value="">Todos los estados</option>
+            <option value="critical">Crítico</option>
+            <option value="low">Bajo</option>
+            <option value="optimal">Óptimo</option>
           </select>
         </div>
 
