@@ -8,7 +8,7 @@ import '../../styles/MenuModal.css'
  * SCRUM-505: KPIs por categoría
  * SCRUM-506: Filtros por nombre y categoría
  * SCRUM-507: Lista de productos renderizada
- * HU-46: búsqueda por texto vía API (`q`) con debounce; categoría sigue filtrándose en cliente.
+ * HU-46 / SCRUM-429: búsqueda por texto vía API (`?search=`) con debounce; categoría sigue filtrándose en cliente.
  */
 export default function MenuModal({ localId, onClose }) {
   const { data, loading, error, fetch } = useMenuPOS(localId)
@@ -22,7 +22,7 @@ export default function MenuModal({ localId, onClose }) {
   }, [search])
 
   useEffect(() => {
-    fetch({ q: debouncedSearch })
+    fetch({ search: debouncedSearch })
   }, [fetch, debouncedSearch])
 
   const handleBackdropClick = (e) => {
@@ -124,7 +124,7 @@ export default function MenuModal({ localId, onClose }) {
           {error && (
             <div className="menu-error">
               <p>Error al cargar el menú: {error}</p>
-              <button type="button" onClick={() => fetch({ q: debouncedSearch })} style={{ marginTop: '0.75rem', padding: '0.5rem 1.25rem', background: '#ef4444', color: 'white', border: 'none', borderRadius: '0.5rem', fontWeight: 600, cursor: 'pointer' }}>
+              <button type="button" onClick={() => fetch({ search: debouncedSearch })} style={{ marginTop: '0.75rem', padding: '0.5rem 1.25rem', background: '#ef4444', color: 'white', border: 'none', borderRadius: '0.5rem', fontWeight: 600, cursor: 'pointer' }}>
                 Reintentar
               </button>
             </div>

@@ -3,7 +3,7 @@ import { apiRequest } from '../lib/apiClient'
 
 /**
  * HU-65 SCRUM-469: Hook para obtener el menú completo del local.
- * HU-46: búsqueda opcional (`q`) contra el endpoint `/dashboard/menu`.
+ * HU-46 / SCRUM-429: búsqueda opcional (`search` → `?search=`) contra `/dashboard/menu`.
  * Lazy — solo carga cuando se llama a `fetch()`.
  */
 export function useMenuPOS(localId) {
@@ -11,14 +11,14 @@ export function useMenuPOS(localId) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
 
-  const fetch = useCallback(async ({ q } = {}) => {
+  const fetch = useCallback(async ({ search: searchTerm } = {}) => {
     if (!localId) return
     try {
       setLoading(true)
       setError(null)
       const params = new URLSearchParams({ local_id: String(localId) })
-      if (q != null && String(q).trim()) {
-        params.set('q', String(q).trim())
+      if (searchTerm != null && String(searchTerm).trim()) {
+        params.set('search', String(searchTerm).trim())
       }
       const result = await apiRequest(`/dashboard/menu?${params}`)
       setData(result)
