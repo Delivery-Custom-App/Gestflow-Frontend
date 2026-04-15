@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react'
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
+import { BrowserRouter as Router, Routes, Route, Navigate, useParams, useLocation } from 'react-router-dom'
 import './App.css'
 import AdminDashboard from './components/AdminDashboard'
 import OrderSummary from './components/OrderSummary'
 import ChangeLocal from './components/ChangeLocal'
-import LocalDashboard from './components/LocalDashboard'
 import AdministrativeModule from './components/AdministrativeModule'
+import InventoryHub from './components/inventory/InventoryHub'
+import StockControlDashboard from './components/inventory/StockControlDashboard'
 import POSModule from './components/pos/POSModule'
 import MesaDetail from './components/pos/MesaDetail'
 import WorkerLocalSelector from './components/WorkerLocalSelector'
@@ -13,6 +14,15 @@ import WorkerLocalSelector from './components/WorkerLocalSelector'
 const WORKER_ROLES = ['Empleado', 'Cajero']
 import { isSupabaseConfigured, supabase } from './lib/supabaseClient'
 import { getUserRole } from './utils/jwt'
+
+/** /local/:id ya no es pantalla propia: vuelve a /admin y reabre módulos del local */
+function LocalModulesHomeRedirect() {
+  const { localId } = useParams()
+  const { state } = useLocation()
+  const merged =
+    typeof state === 'object' && state !== null ? { ...state, focusLocalId: localId } : { focusLocalId: localId }
+  return <Navigate to="/admin" replace state={merged} />
+}
 
 function formatRoleLabel(role) {
   if (!role) return 'Usuario'
@@ -155,7 +165,25 @@ function App() {
     return (
       <Router>
         <Routes>
-          <Route path="/admin" element={<AdminDashboard user={user} onLogout={handleLogout} />} />
+          <Route path="/admin" element={<AdminDashboard user={user} userRole={userRole} onLogout={handleLogout} />} />
+          <Route
+            path="/local/:localId/inventario/stock"
+            element={<StockControlDashboard user={user} userRole={userRole} onLogout={handleLogout} />}
+          />
+          <Route
+            path="/local/:localId/inventario"
+            element={<InventoryHub user={user} userRole={userRole} onLogout={handleLogout} />}
+          />
+          <Route
+            path="/local/:localId/administrativo/:sectionId?"
+            element={<AdministrativeModule user={user} userRole={userRole} onLogout={handleLogout} />}
+          />
+          <Route path="/local/:localId/pos" element={<POSModule user={user} userRole={userRole} onLogout={handleLogout} />} />
+          <Route
+            path="/local/:localId/pos/mesa/:mesaId"
+            element={<MesaDetail user={user} userRole={userRole} onLogout={handleLogout} />}
+          />
+          <Route path="/local/:localId" element={<LocalModulesHomeRedirect />} />
           {/* HU-19 Routes */}
           <Route path="/order/:orderId/summary" element={<OrderSummary />} />
           <Route path="/order/:orderId/change-local" element={<ChangeLocal />} />
@@ -285,7 +313,15 @@ function App() {
       <Routes>
         <Route path="/" element={<AdminDashboard user={user} userRole={userRole} onLogout={handleLogout} />} />
         <Route path="/admin" element={<AdminDashboard user={user} userRole={userRole} onLogout={handleLogout} />} />
-        <Route path="/local/:localId" element={<LocalDashboard user={user} userRole={userRole} onLogout={handleLogout} />} />
+        <Route path="/local/:localId" element={<LocalModulesHomeRedirect />} />
+        <Route
+          path="/local/:localId/inventario/stock"
+          element={<StockControlDashboard user={user} userRole={userRole} onLogout={handleLogout} />}
+        />
+        <Route
+          path="/local/:localId/inventario"
+          element={<InventoryHub user={user} userRole={userRole} onLogout={handleLogout} />}
+        />
         <Route
           path="/local/:localId/administrativo/:sectionId?"
           element={<AdministrativeModule user={user} userRole={userRole} onLogout={handleLogout} />}

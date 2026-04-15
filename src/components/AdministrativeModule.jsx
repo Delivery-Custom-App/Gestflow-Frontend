@@ -824,7 +824,7 @@ function AdministrativeModule({ user, userRole, onLogout }) {
 
   const handleGoModules = () => {
     setIsMobileNavOpen(false)
-    navigate(`/local/${localId}`, { state: { local: selectedLocal } })
+    navigate('/admin', { state: { local: selectedLocal, focusLocalId: localId } })
   }
 
   const handleBackToLocals = () => {

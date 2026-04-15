@@ -206,7 +206,9 @@ export default function POSModule({ user, userRole, onLogout }) {
         <button
           className="pos-back-btn"
           type="button"
-          onClick={() => navigate(isWorker ? '/' : `/local/${localId}`)}
+          onClick={() =>
+            navigate(isWorker ? '/' : '/admin', { state: { focusLocalId: localId } })
+          }
         >
           {isWorker ? '← Cambiar Local' : '← Volver a Módulos'}
         </button>
