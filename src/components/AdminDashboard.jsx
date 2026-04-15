@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useState, useEffect } from 'react'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { useLocals } from '../hooks/useLocals'
 import CreateLocalModal from './CreateLocalModal'
 import ModulesGrid from './ModulesGrid'
@@ -8,11 +8,35 @@ import '../styles/AdminDashboard.css'
 
 function AdminDashboard({ user, userRole, onLogout }) {
   const navigate = useNavigate()
+  const location = useLocation()
   const [selectedLocal, setSelectedLocal] = useState(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const { locales, loading, error, refetch } = useLocals()
 
   const currentLocal = selectedLocal !== null ? locales[selectedLocal] : null
+
+  useEffect(() => {
+    if (loading) return
+    const st = location.state
+    const fid = st?.focusLocalId
+    const loc = st?.local
+    if (!fid && !loc?.id) return
+    if (!locales?.length) return
+
+    let idx = -1
+    if (loc?.id) {
+      idx = locales.findIndex((l) => String(l.id) === String(loc.id))
+    } else if (fid) {
+      idx = locales.findIndex((l) => String(l.id) === String(fid))
+    }
+
+    const path = location.pathname === '/' ? '/admin' : location.pathname
+    if (idx >= 0) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- sincronizar con react-router al volver desde módulos
+      setSelectedLocal(idx)
+    }
+    navigate(path, { replace: true, state: {} })
+  }, [loading, locales, location.state, location.pathname, navigate])
 
   const handleCreateSuccess = () => {
     refetch()

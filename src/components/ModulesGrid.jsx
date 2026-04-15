@@ -1,10 +1,15 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import '../styles/ModulesGrid.css'
 
 function ModulesGrid({ localId, localName, userRole }) {
   const navigate = useNavigate()
   const [hoveredModule, setHoveredModule] = useState(null)
+
+  const moduleNavState = useMemo(
+    () => ({ local: { id: localId, name: localName || 'Local' } }),
+    [localId, localName],
+  )
 
   const modules = [
     {
@@ -66,7 +71,19 @@ function ModulesGrid({ localId, localName, userRole }) {
   ]
 
   const handleModuleClick = (moduleId) => {
-    navigate(`/local/${localId}/administrativo/${moduleId}`)
+    if (moduleId === 'administrativo') {
+      navigate(`/local/${localId}/administrativo/dashboard`, { state: moduleNavState })
+      return
+    }
+    if (moduleId === 'pos') {
+      navigate(`/local/${localId}/pos`, { state: moduleNavState })
+      return
+    }
+    if (moduleId === 'inventario') {
+      navigate(`/local/${localId}/inventario`, { state: moduleNavState })
+      return
+    }
+    navigate(`/local/${localId}/administrativo/${moduleId}`, { state: moduleNavState })
   }
 
   return (

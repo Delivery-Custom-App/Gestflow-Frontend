@@ -1,0 +1,147 @@
+/* Panel de filtros de mesas */
+
+.mesas-filters-container {
+  background: #f8f9fa;
+  border: 1px solid #e0e4e8;
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 20px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.mesas-filters-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.mesas-filters-header h3 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #333;
+}
+
+.btn-limpiar-filtros {
+  padding: 6px 12px;
+  background: #f0f0f0;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  color: #666;
+}
+
+.btn-limpiar-filtros:hover {
+  background: #e8e8e8;
+  border-color: #bbb;
+  color: #333;
+}
+
+/* Filtros Grid */
+.mesas-filters-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.filter-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.filter-group label {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #333;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.filter-badge {
+  display: inline-flex;
+  background: #007bff;
+  color: white;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.filter-input,
+.filter-select {
+  padding: 8px 12px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 0.875rem;
+  font-family: inherit;
+  background: white;
+  color: #333;
+  transition: all 0.2s ease;
+}
+
+.filter-input:focus,
+.filter-select:focus {
+  outline: none;
+  border-color: #007bff;
+  box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
+}
+
+.filter-input::placeholder {
+  color: #999;
+}
+
+/* Resultado del filtrado */
+.mesas-filters-result {
+  padding: 8px 0;
+  border-top: 1px solid #e0e4e8;
+}
+
+.result-text {
+  margin: 0;
+  font-size: 0.875rem;
+  color: #666;
+}
+
+.result-text strong {
+  color: #333;
+  font-weight: 600;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .mesas-filters-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .mesas-filters-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .btn-limpiar-filtros {
+    width: 100%;
+  }
+}
+
+@media (max-width: 480px) {
+  .mesas-filters-container {
+    padding: 12px;
+    margin-bottom: 16px;
+  }
+
+  .mesas-filters-header h3 {
+    font-size: 0.95rem;
+  }
+
+  .filter-input,
+  .filter-select {
+    font-size: 16px; /* Evita zoom en iOS */
+  }
+}
