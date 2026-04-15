@@ -16,7 +16,6 @@ import {
 import { getAuthContext } from '../lib/apiClient'
 import { enrichDashboardWithChartData, generateIncomeTrendFromOrders, generateExpenseBreakdownFromData } from '../utils/chartDataHelpers'
 import '../styles/AdministrativeModule.css'
-import '../styles/charts.css'
 
 const sections = [
   {
