@@ -1,4 +1,4 @@
-import { getStockAlertLevel } from './stockAlertUtils'
+import StockStatusBadge from './StockStatusBadge'
 
 function formatClp(value) {
   if (value == null || Number.isNaN(Number(value))) return '—'
@@ -6,13 +6,6 @@ function formatClp(value) {
     maximumFractionDigits: 0,
     minimumFractionDigits: 0,
   }).format(Math.round(Number(value)))
-}
-
-function getStockStatus(row) {
-  const level = getStockAlertLevel(row)
-  if (level === 'critical') return 'Crítico'
-  if (level === 'low') return 'Bajo'
-  return 'Óptimo'
 }
 
 function ProductsTable({
@@ -97,7 +90,9 @@ function ProductsTable({
                     <td>{stockMax}</td>
                     <td>{formatClp(unitCost)}</td>
                     <td>{formatClp(total)}</td>
-                    <td>{getStockStatus(row)}</td>
+                    <td>
+                      <StockStatusBadge row={row} />
+                    </td>
                     <td>—</td>
                   </tr>
                 )
