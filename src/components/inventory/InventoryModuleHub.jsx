@@ -18,6 +18,10 @@ function InventoryModuleHub({ user, userRole, onLogout }) {
     navigate(`/local/${localId}/inventario/stock`, { state: { local: selectedLocal } })
   }
 
+  const goRecipes = () => {
+    navigate(`/local/${localId}/inventario/recipes`, { state: { local: selectedLocal } })
+  }
+
   return (
     <InventoryShell user={user} userRole={userRole} onLogout={onLogout} active="hub">
       <button
@@ -64,7 +68,7 @@ function InventoryModuleHub({ user, userRole, onLogout }) {
       </section>
 
       <section className="inv-hub__cards" aria-label="Accesos inventario">
-        <article className="inv-hub__feature">
+        <article className="inv-hub__feature inv-hub__feature--recipes">
           <h2>Recetas</h2>
           <p className="inv-hub__feature-sub">Gestión de recetas del menú</p>
           <ul className="inv-hub__feature-list">
@@ -72,7 +76,7 @@ function InventoryModuleHub({ user, userRole, onLogout }) {
             <li>Ingredientes</li>
             <li>Costos</li>
           </ul>
-          <button type="button" className="inv-hub__feature-btn" disabled>
+          <button type="button" className="inv-hub__feature-btn inv-hub__feature-btn--primary" onClick={goRecipes}>
             Gestionar recetas →
           </button>
         </article>

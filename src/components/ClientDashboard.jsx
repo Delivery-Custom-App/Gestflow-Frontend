@@ -1,5 +1,6 @@
 import { useNavigate } from 'react-router-dom'
 import { useLocals } from '../hooks/useLocals'
+import LoadingSpinner from './LoadingSpinner'
 import '../styles/ClientDashboard.css'
 
 /**
@@ -23,28 +24,7 @@ function ClientDashboard({ user, onLogout }) {
       <header className="client-header">
         <div className="header-content">
           <div className="brand-section">
-            <div className="brand-icon-small" aria-hidden="true">
-              <svg viewBox="0 0 24 24" fill="none" role="presentation">
-                <rect
-                  x="5"
-                  y="3"
-                  width="10"
-                  height="18"
-                  rx="1.5"
-                  stroke="currentColor"
-                  strokeWidth="1.8"
-                />
-                <rect
-                  x="9"
-                  y="7"
-                  width="10"
-                  height="14"
-                  rx="1.5"
-                  stroke="currentColor"
-                  strokeWidth="1.8"
-                />
-              </svg>
-            </div>
+            <img src="/sibaritco-logo.svg" alt="Sibarítco" className="brand-logo-small" />
             <div>
               <h1>¡Bienvenido, Cliente!</h1>
               <p className="header-subtitle">Realiza tu pedido ahora</p>
@@ -75,57 +55,62 @@ function ClientDashboard({ user, onLogout }) {
 
       <section className="client-content">
         {/* Locales disponibles */}
-        <div className="locales-section">
-          <h2>Selecciona tu Sucursal</h2>
-          {loading && <p className="loading-text">Cargando sucursales...</p>}
-          {error && <p className="error-text">Error: {error}</p>}
+        {loading ? (
+          <LoadingSpinner message="Cargando sucursales..." />
+        ) : (
+          <>
+            <div className="locales-section">
+              <h2>Selecciona tu Sucursal</h2>
+              {error && <p className="error-text">Error: {error}</p>}
 
-          {!loading && !error && locales.length === 0 && (
-            <p className="empty-text">No hay sucursales disponibles</p>
-          )}
+              {!error && locales.length === 0 && (
+                <p className="empty-text">No hay sucursales disponibles</p>
+              )}
 
-          {!loading && !error && locales.length > 0 && (
-            <div className="locales-grid">
-              {locales.map((local) => (
-                <div key={local.id} className="local-card">
-                  <div className="local-info">
-                    <h3>{local.name}</h3>
-                    {local.address && <p className="local-address">{local.address}</p>}
-                  </div>
+              {!error && locales.length > 0 && (
+                <div className="locales-grid">
+                  {locales.map((local) => (
+                    <div key={local.id} className="local-card">
+                      <div className="local-info">
+                        <h3>{local.name}</h3>
+                        {local.address && <p className="local-address">{local.address}</p>}
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              ))}
+              )}
             </div>
-          )}
-        </div>
 
-        {/* Acciones principales */}
-        <div className="actions-section">
-          <button
-            className="btn-primary btn-large"
-            onClick={handleGoToCart}
-            aria-label="Ir al carrito"
-          >
-            <span className="btn-icon">🛒</span>
-            <span>Mi Carrito</span>
-          </button>
+            {/* Acciones principales */}
+            <div className="actions-section">
+              <button
+                className="btn-primary btn-large"
+                onClick={handleGoToCart}
+                aria-label="Ir al carrito"
+              >
+                <span className="btn-icon">🛒</span>
+                <span>Mi Carrito</span>
+              </button>
 
-          <button
-            className="btn-secondary btn-large"
-            onClick={handleGoToCart}
-            aria-label="Ver menú"
-          >
-            <span className="btn-icon">📋</span>
-            <span>Ver Menú</span>
-          </button>
-        </div>
+              <button
+                className="btn-secondary btn-large"
+                onClick={handleGoToCart}
+                aria-label="Ver menú"
+              >
+                <span className="btn-icon">📋</span>
+                <span>Ver Menú</span>
+              </button>
+            </div>
 
-        {/* Info de bienvenida */}
-        <div className="welcome-info">
-          <p>
-            Selecciona una sucursal, explora nuestro menú y agrega productos a tu
-            carrito. ¡Tu pedido te espera! 
-          </p>
-        </div>
+            {/* Info de bienvenida */}
+            <div className="welcome-info">
+              <p>
+                Selecciona una sucursal, explora nuestro menú y agrega productos a tu
+                carrito. ¡Tu pedido te espera! 
+              </p>
+            </div>
+          </>
+        )}
       </section>
     </main>
   )

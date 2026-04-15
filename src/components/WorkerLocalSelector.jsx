@@ -18,20 +18,37 @@ export default function WorkerLocalSelector({ user, userRole, onLogout }) {
   return (
     <main className="worker-selector">
       <header className="worker-selector-header">
-        <div className="worker-brand">
-          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-            <path d="M4 3V11" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" />
-            <path d="M7 3V11" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" />
-            <path d="M10 3V11" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" />
-            <path d="M7 11V21" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" />
-            <path d="M16 3V11C16 12.7 17.3 14 19 14V21" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-          <span>POS Restaurante</span>
-        </div>
-        <div className="worker-header-user">
-          <span className="worker-email">{user?.email}</span>
-          <span className="worker-role-badge">{userRole}</span>
-          <button className="worker-logout-btn" onClick={onLogout} type="button">Salir</button>
+        <div className="header-content">
+          <div className="worker-brand-section">
+            <img src="/sibaritco-logo.svg" alt="Sibarítco" className="worker-brand-logo" />
+            <div className="worker-brand-text">
+              <h1>POS - Selecciona tu Local</h1>
+              <p className="worker-header-subtitle">Acceso rápido al sistema</p>
+            </div>
+          </div>
+
+          <div className="worker-user-section">
+            <div className="worker-info-stack">
+              <span className="worker-user-email">{user?.email}</span>
+              <span className="worker-user-badge">{userRole || 'Empleado'}</span>
+            </div>
+            <button
+              className="worker-logout-button"
+              onClick={onLogout}
+              aria-label="Cerrar sesión"
+              title="Cerrar sesión"
+            >
+              <svg viewBox="0 0 24 24" fill="none" role="presentation">
+                <path
+                  d="M17 16L21 12M21 12L17 8M21 12H9M13 16V17C13 18.1 12.1 19 11 19H5C3.9 19 3 18.1 3 17V7C3 5.9 3.9 5 5 5H11C12.1 5 13 5.9 13 7V8"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            </button>
+          </div>
         </div>
       </header>
 

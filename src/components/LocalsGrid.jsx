@@ -13,17 +13,17 @@ function LocalsGrid({ locales, onLocalSelect, onCreateLocal }) {
 
   return (
     <div className="locales-grid-container">
-      <div className="locales-header">
-        <div className="locales-header-content">
-          <h2>Tus Locales</h2>
-          <p className="locales-subtitle">Selecciona un local para gestionar sus módulos</p>
-        </div>
-        <button className="btn-create-local-header" onClick={onCreateLocal} aria-label="Crear nuevo local">
-          <span aria-hidden="true">+</span> Crear Local
-        </button>
-      </div>
-
       <div className="locales-wrapper">
+        <div className="locales-page-title">
+          <div>
+            <h2>Tus Locales</h2>
+            <p className="locales-subtitle">Selecciona un local para gestionar sus módulos</p>
+          </div>
+          <button className="btn-create-local-header" onClick={onCreateLocal} aria-label="Crear nuevo local">
+            <span aria-hidden="true">+</span> Crear Local
+          </button>
+        </div>
+
         {locales.length === 0 ? (
           <div className="empty-state">
             <div className="empty-icon" aria-hidden="true">

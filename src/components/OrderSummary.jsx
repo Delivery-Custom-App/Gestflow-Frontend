@@ -1,5 +1,6 @@
 import { useParams, useNavigate } from 'react-router-dom'
 import { useOrderSummary } from '../hooks/useOrderSummary'
+import LoadingSpinner from './LoadingSpinner'
 import '../styles/OrderSummary.css'
 
 export default function OrderSummary() {
@@ -8,7 +9,11 @@ export default function OrderSummary() {
   const { summary, loading, error } = useOrderSummary(orderId)
 
   if (loading) {
-    return <div className="order-summary-loading">Cargando resumen del pedido...</div>
+    return (
+      <main className="loading-page-minimal">
+        <LoadingSpinner message="Cargando resumen del pedido..." />
+      </main>
+    )
   }
 
   if (error) {

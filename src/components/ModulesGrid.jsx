@@ -27,6 +27,7 @@ function ModulesGrid({ localId, localName, userRole }) {
         'Reportes',
       ],
       color: '#059669',
+      disabled: false,
     },
     {
       id: 'pos',
@@ -41,6 +42,7 @@ function ModulesGrid({ localId, localName, userRole }) {
         'Toma de Pedidos',
       ],
       color: '#047857',
+      disabled: false,
     },
     {
       id: 'inventario',
@@ -54,6 +56,7 @@ function ModulesGrid({ localId, localName, userRole }) {
         'Órdenes de Compra',
       ],
       color: '#059669',
+      disabled: false,
     },
     {
       id: 'configuracion',
@@ -67,6 +70,7 @@ function ModulesGrid({ localId, localName, userRole }) {
         'Auditoría',
       ],
       color: '#047857',
+      disabled: true,
     },
   ]
 
@@ -88,22 +92,31 @@ function ModulesGrid({ localId, localName, userRole }) {
 
   return (
     <div className="modules-grid-container">
-      <div className="modules-header">
-        <div className="modules-header-content">
+      <div className="modules-wrapper">
+        <div className="modules-page-title">
           <h2>Módulos Disponibles</h2>
           <p className="modules-subtitle">Selecciona un módulo para continuar</p>
         </div>
-      </div>
 
-      <div className="modules-wrapper">
         <div className="modules-grid">
           {modules.map((module) => (
             <div
               key={module.id}
-              className="module-card"
+              className={`module-card ${module.disabled ? 'disabled' : ''}`}
               onMouseEnter={() => setHoveredModule(module.id)}
               onMouseLeave={() => setHoveredModule(null)}
             >
+              {module.disabled && (
+                <div className="module-badge-overlay">
+                  <div className="module-development-badge">
+                    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                      <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm3.5-9c.83 0 1.5-.67 1.5-1.5S16.33 8 15.5 8 14 8.67 14 9.5s.67 1.5 1.5 1.5zm-7 0c.83 0 1.5-.67 1.5-1.5S9.33 8 8.5 8 7 8.67 7 9.5 7.67 11 8.5 11zm3.5 6.5c2.33 0 4.31-1.46 5.11-3.5H6.89c.8 2.04 2.78 3.5 5.11 3.5z" fill="currentColor"/>
+                    </svg>
+                    En desarrollo
+                  </div>
+                </div>
+              )}
+              
               <div className="module-header" style={{ backgroundColor: module.color }}>
                 <div className="module-icon" aria-hidden="true">
                   {module.icon === 'grid' && (
@@ -158,8 +171,9 @@ function ModulesGrid({ localId, localName, userRole }) {
                   className={`module-button ${hoveredModule === module.id ? 'hovered' : ''}`}
                   onClick={() => handleModuleClick(module.id)}
                   style={{ backgroundColor: module.color }}
+                  disabled={module.disabled}
                 >
-                  Acceder al Módulo
+                  {module.disabled ? 'Próximamente' : 'Acceder al Módulo'}
                   <span className="button-arrow">→</span>
                 </button>
               </div>

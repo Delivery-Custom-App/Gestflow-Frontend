@@ -1,0 +1,181 @@
+.loading-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #f0fdf4 0%, #e1f5eb 100%);
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 9999;
+  animation: fadeInLoading 0.4s ease-in-out;
+}
+
+@keyframes fadeInLoading {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.loading-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2rem;
+  padding: 2rem;
+  text-align: center;
+}
+
+.loading-logo {
+  width: 80px;
+  height: 80px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: scaleInLogo 0.6s ease-out;
+}
+
+@keyframes scaleInLogo {
+  from {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.loading-logo-image {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.loading-spinner {
+  position: relative;
+  width: 50px;
+  height: 50px;
+  animation: spinnerFade 0.6s ease-out 0.3s backwards;
+}
+
+@keyframes spinnerFade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.spinner-ring {
+  width: 100%;
+  height: 100%;
+  border: 3px solid rgba(5, 150, 105, 0.1);
+  border-top: 3px solid #10b981;
+  border-right: 3px solid #059669;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+.loading-title {
+  margin: 0;
+  font-size: clamp(1.5rem, 5vw, 2.5rem);
+  font-weight: 700;
+  color: #065f46;
+  letter-spacing: -0.02em;
+  animation: slideInTitle 0.6s ease-out 0.2s backwards;
+}
+
+@keyframes slideInTitle {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.loading-subtitle {
+  margin: 0;
+  font-size: clamp(0.9rem, 3vw, 1.1rem);
+  color: #10b981;
+  font-weight: 500;
+  letter-spacing: 0.05em;
+  animation: slideInSubtitle 0.6s ease-out 0.3s backwards;
+}
+
+@keyframes slideInSubtitle {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .loading-container {
+    gap: 1.5rem;
+  }
+
+  .loading-logo {
+    width: 60px;
+    height: 60px;
+  }
+
+  .loading-title {
+    font-size: 1.75rem;
+  }
+
+  .loading-subtitle {
+    font-size: 1rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .loading-page {
+    padding: 1rem;
+  }
+
+  .loading-container {
+    gap: 1rem;
+  }
+
+  .loading-logo {
+    width: 50px;
+    height: 50px;
+  }
+
+  .spinner-ring {
+    border-width: 2px;
+  }
+
+  .loading-title {
+    font-size: 1.5rem;
+  }
+
+  .loading-subtitle {
+    font-size: 0.9rem;
+  }
+}

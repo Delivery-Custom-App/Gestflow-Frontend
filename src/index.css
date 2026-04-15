@@ -1,24 +1,115 @@
+/* ============================================================
+   DESIGN TOKENS — fuente única de verdad para todo el sistema
+   ============================================================ */
 :root {
+  /* --- Paleta de marca (verde) --- */
+  --color-primary:         #065f46;
+  --color-primary-dark:    #054035;
+  --color-primary-mid:     #047857;
+  --color-primary-light:   #059669;
+  --color-primary-surface: #ecfdf5;
+  --color-primary-border:  #a7f3d0;
+
+  /* --- Neutros --- */
+  --color-bg:          #f0fdf4;
+  --color-surface:     #ffffff;
+  --color-surface-alt: #f8faf9;
+  --color-border:      #e2e8f0;
+  --color-border-mid:  #cbd5e1;
+
+  /* --- Texto --- */
+  --color-text:             #1f2937;
+  --color-text-muted:       #6b7280;
+  --color-text-light:       #9ca3af;
+  --color-text-on-primary:  #ecfdf5;
+
+  /* --- Sidebar (compartida por todos los módulos) --- */
+  --sidebar-width:             260px;
+  --sidebar-bg:                var(--color-surface);
+  --sidebar-header-bg:         var(--color-primary);
+  --sidebar-border:            var(--color-border);
+  --sidebar-nav-active-bg:     var(--color-primary);
+  --sidebar-nav-active-text:   var(--color-text-on-primary);
+  --sidebar-nav-hover-bg:      var(--color-primary-surface);
+  --sidebar-nav-text:          var(--color-primary);
+
+  /* --- Semánticos --- */
+  --color-danger:      #dc2626;
+  --color-danger-bg:   #fef2f2;
+  --color-warning:     #d97706;
+  --color-warning-bg:  #fffbeb;
+  --color-info:        #2563eb;
+  --color-info-bg:     #eff6ff;
+
+  /* --- Espaciado --- */
+  --space-1:  0.25rem;
+  --space-2:  0.5rem;
+  --space-3:  0.75rem;
+  --space-4:  1rem;
+  --space-5:  1.25rem;
+  --space-6:  1.5rem;
+  --space-8:  2rem;
+  --space-10: 2.5rem;
+  --space-12: 3rem;
+
+  /* --- Radios --- */
+  --radius-sm:   6px;
+  --radius-md:   10px;
+  --radius-lg:   14px;
+  --radius-xl:   20px;
+  --radius-full: 9999px;
+
+  /* --- Sombras --- */
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.07);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.09);
+  --shadow-lg: 0 8px 24px rgba(0,0,0,0.11);
+  --shadow-xl: 0 16px 40px rgba(0,0,0,0.13);
+
+  /* --- Escalas de fuente --- */
+  --text-xs:   0.75rem;
+  --text-sm:   0.825rem;
+  --text-base: 0.9375rem;
+  --text-md:   1rem;
+  --text-lg:   1.125rem;
+  --text-xl:   1.375rem;
+  --text-2xl:  1.75rem;
+  --text-3xl:  2.25rem;
+
+  /* --- Transiciones --- */
+  --transition-fast: 120ms ease;
+  --transition-base: 200ms ease;
+  --transition-slow: 300ms ease;
+
+  /* --- Base tipográfica --- */
   font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-  color: #1f2937;
-  background: #edf8f1;
+  color: var(--color-text);
+  background: var(--color-bg);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
-* {
-  box-sizing: border-box;
-}
+/* ============================================================
+   RESET & BASE
+   ============================================================ */
+* { box-sizing: border-box; }
 
 body {
   margin: 0;
   min-height: 100vh;
-  background: radial-gradient(circle at 20% 10%, #f5fcf8 0%, #ebf7f0 45%, #e0f2e7 100%);
+  background: var(--color-bg);
 }
 
-button,
-input {
-  font: inherit;
+button, input { font: inherit; }
+
+/* ============================================================
+   LOADING STATES
+   ============================================================ */
+.loading-page-minimal {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #f0fdf4 0%, #e1f5eb 100%);
 }

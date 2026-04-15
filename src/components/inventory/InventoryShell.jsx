@@ -19,6 +19,7 @@ function InventoryShell({ user, userRole, onLogout, active, children }) {
 
   const goHub = () => navigate(`/local/${localId}/inventario`, { state })
   const goStock = () => navigate(`/local/${localId}/inventario/stock`, { state })
+  const goRecipes = () => navigate(`/local/${localId}/inventario/recipes`, { state })
   const goLocalModules = () =>
     navigate('/admin', { state: { ...(typeof state === 'object' && state !== null ? state : {}), focusLocalId: localId } })
   const goAppHome = () => navigate('/')
@@ -72,6 +73,19 @@ function InventoryShell({ user, userRole, onLogout, active, children }) {
             </span>
             Control de stock
           </button>
+          <button
+            type="button"
+            className={active === 'recipes' ? 'inv-nav-link is-active' : 'inv-nav-link'}
+            onClick={goRecipes}
+          >
+            <span className="inv-nav-link__icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none">
+                <path d="M12 5c-2 3-6 4-6 8a6 6 0 1012 0c0-4-4-5-6-8z" stroke="currentColor" strokeWidth="1.5" />
+                <path d="M9 18h6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+              </svg>
+            </span>
+            Gestión de recetas
+          </button>
         </nav>
 
         <div className="inv-sidebar__footer">
@@ -86,15 +100,44 @@ function InventoryShell({ user, userRole, onLogout, active, children }) {
             Inicio / administración
           </button>
         </div>
-
-        {onLogout ? (
-          <button type="button" className="inv-sidebar__logout" onClick={onLogout}>
-            Cerrar sesión
-          </button>
-        ) : null}
       </aside>
 
       <div className="inv-main-column">
+        <header className="inv-topbar">
+          <div className="inv-brand-section">
+            <img src="/sibaritco-logo.svg" alt="Sibarítco" className="inv-brand-logo" />
+            <div className="inv-brand-text">
+              <h1>Centro de Inventario</h1>
+              <p className="inv-header-subtitle">Gestión integral de stock</p>
+            </div>
+          </div>
+
+          <div className="inv-user-section">
+            <div className="inv-info-stack">
+              <span className="inv-user-email">{user?.email}</span>
+              <span className="inv-user-badge">{userRole || 'Usuario'}</span>
+            </div>
+            {onLogout && (
+              <button
+                className="inv-logout-button"
+                onClick={onLogout}
+                aria-label="Cerrar sesión"
+                title="Cerrar sesión"
+              >
+                <svg viewBox="0 0 24 24" fill="none" role="presentation">
+                  <path
+                    d="M17 16L21 12M21 12L17 8M21 12H9M13 16V17C13 18.1 12.1 19 11 19H5C3.9 19 3 18.1 3 17V7C3 5.9 3.9 5 5 5H11C12.1 5 13 5.9 13 7V8"
+                    stroke="currentColor"
+                    strokeWidth="1.8"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              </button>
+            )}
+          </div>
+        </header>
+
         <main className="inv-main">{children}</main>
       </div>
     </div>
