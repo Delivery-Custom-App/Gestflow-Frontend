@@ -8,35 +8,35 @@ import '../../styles/MenuModal.css'
  * SCRUM-505: KPIs por categoría
  * SCRUM-506: Filtros por nombre y categoría
  * SCRUM-507: Lista de productos renderizada
+ * HU-46: búsqueda por texto vía API (`q`) con debounce; categoría sigue filtrándose en cliente.
  */
 export default function MenuModal({ localId, onClose }) {
   const { data, loading, error, fetch } = useMenuPOS(localId)
   const [search, setSearch] = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
   const [selectedCat, setSelectedCat] = useState('all')
 
   useEffect(() => {
-    fetch()
-  }, [fetch])
+    const id = setTimeout(() => setDebouncedSearch(search.trim()), 300)
+    return () => clearTimeout(id)
+  }, [search])
+
+  useEffect(() => {
+    fetch({ q: debouncedSearch })
+  }, [fetch, debouncedSearch])
 
   const handleBackdropClick = (e) => {
     if (e.target === e.currentTarget) onClose()
   }
 
-  // SCRUM-506: filtrar productos por búsqueda y categoría
+  // SCRUM-506: filtrar por categoría (la búsqueda por texto la aplica el backend, HU-46)
   const filteredCategories = useMemo(() => {
     if (!data?.categories) return []
-    const q = search.trim().toLowerCase()
 
     return data.categories
       .filter((cat) => selectedCat === 'all' || cat.id === selectedCat)
-      .map((cat) => ({
-        ...cat,
-        products: cat.products.filter((p) =>
-          !q || p.name.toLowerCase().includes(q) || (p.description || '').toLowerCase().includes(q)
-        ),
-      }))
-      .filter((cat) => cat.products.length > 0)
-  }, [data, search, selectedCat])
+      .filter((cat) => (cat.products?.length || 0) > 0)
+  }, [data, selectedCat])
 
   const totalVisible = filteredCategories.reduce((sum, c) => sum + c.products.length, 0)
 
@@ -124,7 +124,7 @@ export default function MenuModal({ localId, onClose }) {
           {error && (
             <div className="menu-error">
               <p>Error al cargar el menú: {error}</p>
-              <button onClick={fetch} style={{ marginTop: '0.75rem', padding: '0.5rem 1.25rem', background: '#ef4444', color: 'white', border: 'none', borderRadius: '0.5rem', fontWeight: 600, cursor: 'pointer' }}>
+              <button type="button" onClick={() => fetch({ q: debouncedSearch })} style={{ marginTop: '0.75rem', padding: '0.5rem 1.25rem', background: '#ef4444', color: 'white', border: 'none', borderRadius: '0.5rem', fontWeight: 600, cursor: 'pointer' }}>
                 Reintentar
               </button>
             </div>

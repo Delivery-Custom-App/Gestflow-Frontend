@@ -26,7 +26,18 @@ export default function MesaDetail({ user, userRole, onLogout }) {
   const [addingProduct, setAddingProduct] = useState(false)
   const [addError, setAddError] = useState(null)
 
-  useEffect(() => { fetchMenu() }, [fetchMenu])
+  useEffect(() => {
+    fetchMenu()
+  }, [fetchMenu])
+
+  // HU-46: búsqueda en picker vía mismo endpoint que el menú POS (`q`), con debounce
+  useEffect(() => {
+    if (!showPicker) return
+    const id = setTimeout(() => {
+      fetchMenu({ q: pickerSearch.trim() || undefined })
+    }, 300)
+    return () => clearTimeout(id)
+  }, [pickerSearch, showPicker, fetchMenu])
 
   // ── Agregados helpers ──────────────────────────────────────
   const agregarExtra = (nombre) =>
@@ -44,6 +55,8 @@ export default function MesaDetail({ user, userRole, onLogout }) {
   const handleOpenPicker = (orderId = null) => {
     setPickerOrderId(orderId)
     setAddError(null)
+    setPickerSearch('')
+    fetchMenu()
     setShowPicker(true)
   }
 
@@ -81,23 +94,17 @@ export default function MesaDetail({ user, userRole, onLogout }) {
 
       setShowPicker(false)
       setPickerSearch('')
+      fetchMenu()
       await refresh()
     } catch (err) {
       setAddError(err.message || 'Error al agregar producto')
     } finally {
       setAddingProduct(false)
     }
-  }, [pickerOrderId, localId, mesaId, refresh])
+  }, [pickerOrderId, localId, mesaId, refresh, fetchMenu])
 
-  // ── Filtrado del menú en el picker ────────────────────────
-  const filteredMenu = menuData?.categories
-    ?.map((cat) => ({
-      ...cat,
-      products: cat.products.filter((p) =>
-        !pickerSearch || p.name.toLowerCase().includes(pickerSearch.toLowerCase())
-      ),
-    }))
-    .filter((cat) => cat.products.length > 0) || []
+  // Menú del picker: el backend ya filtra por `q` (HU-46)
+  const pickerMenu = (menuData?.categories || []).filter((cat) => (cat.products?.length || 0) > 0)
 
   const handleGoBack = () => navigate(`/local/${localId}/pos`)
 
@@ -271,11 +278,28 @@ export default function MesaDetail({ user, userRole, onLogout }) {
 
       {/* ── Product Picker Modal ── */}
       {showPicker && (
-        <div className="picker-backdrop" onClick={() => setShowPicker(false)}>
+        <div
+          className="picker-backdrop"
+          onClick={() => {
+            setShowPicker(false)
+            setPickerSearch('')
+            fetchMenu()
+          }}
+        >
           <div className="picker-modal" onClick={(e) => e.stopPropagation()}>
             <div className="picker-header">
               <h3>Seleccionar Producto</h3>
-              <button className="picker-close" onClick={() => setShowPicker(false)}>✕</button>
+              <button
+                type="button"
+                className="picker-close"
+                onClick={() => {
+                  setShowPicker(false)
+                  setPickerSearch('')
+                  fetchMenu()
+                }}
+              >
+                ✕
+              </button>
             </div>
 
             <input
@@ -290,10 +314,10 @@ export default function MesaDetail({ user, userRole, onLogout }) {
             {addError && <p className="picker-error">{addError}</p>}
 
             <div className="picker-list">
-              {filteredMenu.length === 0 && (
+              {pickerMenu.length === 0 && (
                 <p className="picker-empty">Sin resultados</p>
               )}
-              {filteredMenu.map((cat) => (
+              {pickerMenu.map((cat) => (
                 <div key={cat.id}>
                   <p className="picker-cat-label">{cat.name}</p>
                   {cat.products.map((product) => (
