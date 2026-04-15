@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from 'react'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { useLocals } from '../hooks/useLocals'
 import LoadingSpinner from './LoadingSpinner'
+import IncomeChart from './charts/IncomeChart'
+import ExpenseBreakdown from './charts/ExpenseBreakdown'
 import {
   getCajasByLocal,
   getConsolidatedDashboard,
@@ -13,6 +15,7 @@ import {
 } from '../lib/administrativeApi'
 import { getAuthContext } from '../lib/apiClient'
 import '../styles/AdministrativeModule.css'
+import '../styles/charts.css'
 
 const sections = [
   {
@@ -555,14 +558,14 @@ function FlujoCajaContent({ dashboard, cajas, loading, error }) {
       <section className="am-panels am-two-columns">
         <article className="am-panel">
           <h3>Tendencia de Ingresos</h3>
-          <p className="am-muted">Analisis visual pendiente segun referencia final</p>
-          <div className="am-chart-placeholder">Placeholder de grafico de ingresos por periodo</div>
+          <p className="am-muted">Análisis de ingresos diarios del período actual</p>
+          <IncomeChart data={dashboard?.daily_income_trend || []} />
         </article>
 
         <article className="am-panel am-red">
           <h3>Desglose de Gastos</h3>
-          <p className="am-muted">Analisis visual pendiente segun referencia final</p>
-          <div className="am-chart-placeholder">Placeholder de distribucion de gastos</div>
+          <p className="am-muted">Distribución de gastos por categoría</p>
+          <ExpenseBreakdown data={dashboard?.expenses_breakdown || []} />
         </article>
       </section>
 
