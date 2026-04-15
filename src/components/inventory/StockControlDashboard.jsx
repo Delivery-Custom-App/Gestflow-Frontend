@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom'
 import { getAuthContext } from '../../lib/apiClient'
 import { getInventoryKpisByLocal, getInventoryStockList } from '../../lib/inventoryApi'
 import { getStockAlertLevel } from './stockAlertUtils'
+import CategoryFilterSelect from './CategoryFilterSelect'
 import InventoryShell from './InventoryShell'
 import NuevoProductoModal from './NuevoProductoModal'
 import ProductsTable from './ProductsTable'
@@ -17,7 +18,7 @@ function formatMoney(value) {
   return `$${n}`
 }
 
-/** HU-42: listado de inventario. HU-46: búsqueda por nombre (parcial), categoría y estado en cliente. */
+/** HU-42: listado. HU-46/47: búsqueda y categoría vía API; estado de stock solo en cliente. */
 function StockControlDashboard({ user, userRole, onLogout }) {
   const { localId } = useParams()
 
@@ -30,30 +31,19 @@ function StockControlDashboard({ user, userRole, onLogout }) {
   const [itemsError, setItemsError] = useState('')
   const [currentPage, setCurrentPage] = useState(1)
   const [searchQuery, setSearchQuery] = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
   const [categoryFilter, setCategoryFilter] = useState('')
+  const [categoriesCatalog, setCategoriesCatalog] = useState([])
   const [statusFilter, setStatusFilter] = useState('')
   const pageSize = 10
 
-  const categoryOptions = useMemo(() => {
-    const names = new Set()
-    for (const row of items) {
-      const n = row.category_name
-      if (n && String(n).trim()) names.add(String(n).trim())
-    }
-    return [...names].sort((a, b) => a.localeCompare(b, 'es'))
-  }, [items])
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(searchQuery.trim()), 320)
+    return () => clearTimeout(t)
+  }, [searchQuery])
 
   const filteredItems = useMemo(() => {
-    const q = searchQuery.trim().toLowerCase()
     return items.filter((row) => {
-      if (q) {
-        const name = String(row.product_name || row.name || '').toLowerCase()
-        if (!name.includes(q)) return false
-      }
-      if (categoryFilter) {
-        const cat = String(row.category_name || '').trim()
-        if (cat !== categoryFilter) return false
-      }
       if (statusFilter) {
         const level = getStockAlertLevel(row)
         const effective = level === 'critical' ? 'critical' : level === 'low' ? 'low' : 'optimal'
@@ -61,7 +51,7 @@ function StockControlDashboard({ user, userRole, onLogout }) {
       }
       return true
     })
-  }, [items, searchQuery, categoryFilter, statusFilter])
+  }, [items, statusFilter])
 
   const load = useCallback(async () => {
     if (!localId) {
@@ -82,39 +72,62 @@ function StockControlDashboard({ user, userRole, onLogout }) {
     }
   }, [localId])
 
-  const loadItems = useCallback(async () => {
-    if (!localId) {
-      setItemsError('No se indicó un local.')
-      setItemsLoading(false)
-      return
-    }
-    setItemsError('')
-    try {
-      const { token } = await getAuthContext()
-      const payload = await getInventoryStockList(localId, token)
-      setItems(Array.isArray(payload) ? payload : [])
-    } catch (e) {
-      setItemsError(e?.message || 'No se pudo cargar el listado de productos.')
-      setItems([])
-    } finally {
-      setItemsLoading(false)
-    }
-  }, [localId])
+  const loadItems = useCallback(
+    async (filters = {}) => {
+      if (!localId) {
+        setItemsError('No se indicó un local.')
+        setItemsLoading(false)
+        return
+      }
+      setItemsError('')
+      setItemsLoading(true)
+      try {
+        const { token } = await getAuthContext()
+        const payload = await getInventoryStockList(localId, token, filters)
+        const arr = Array.isArray(payload) ? payload : []
+        setItems(arr)
+        setCategoriesCatalog((prev) => {
+          const m = new Map(prev.map((c) => [c.id, c.name]))
+          for (const row of arr) {
+            const id = row.category_id != null ? String(row.category_id) : ''
+            const name = row.category_name != null ? String(row.category_name).trim() : ''
+            if (id && name) m.set(id, name)
+          }
+          return [...m.entries()]
+            .map(([id, name]) => ({ id, name }))
+            .sort((a, b) => a.name.localeCompare(b.name, 'es'))
+        })
+      } catch (e) {
+        setItemsError(e?.message || 'No se pudo cargar el listado de productos.')
+        setItems([])
+      } finally {
+        setItemsLoading(false)
+      }
+    },
+    [localId],
+  )
 
   useEffect(() => {
     load()
-    loadItems()
-  }, [load, loadItems])
+  }, [load])
+
+  useEffect(() => {
+    if (!localId) return
+    loadItems({
+      category: categoryFilter || undefined,
+      search: debouncedSearch || undefined,
+    })
+  }, [localId, categoryFilter, debouncedSearch, loadItems])
 
   useEffect(() => {
     setCurrentPage(1)
-  }, [items, searchQuery, categoryFilter, statusFilter])
+  }, [items, statusFilter])
 
   useEffect(() => {
-    if (categoryFilter && !categoryOptions.includes(categoryFilter)) {
+    if (categoryFilter && !categoriesCatalog.some((c) => c.id === categoryFilter)) {
       setCategoryFilter('')
     }
-  }, [categoryFilter, categoryOptions])
+  }, [categoryFilter, categoriesCatalog])
 
   const totalPages = Math.max(1, Math.ceil(filteredItems.length / pageSize))
   const safeCurrentPage = Math.min(currentPage, totalPages)
@@ -215,19 +228,7 @@ function StockControlDashboard({ user, userRole, onLogout }) {
               autoComplete="off"
             />
           </div>
-          <select
-            className="scd-select"
-            value={categoryFilter}
-            onChange={(e) => setCategoryFilter(e.target.value)}
-            aria-label="Filtrar por categoría"
-          >
-            <option value="">Todas las categorías</option>
-            {categoryOptions.map((name) => (
-              <option key={name} value={name}>
-                {name}
-              </option>
-            ))}
-          </select>
+          <CategoryFilterSelect value={categoryFilter} onChange={setCategoryFilter} options={categoriesCatalog} />
           <select
             className="scd-select"
             value={statusFilter}
@@ -258,7 +259,10 @@ function StockControlDashboard({ user, userRole, onLogout }) {
         onClose={() => setModalOpen(false)}
         onSuccess={() => {
           load()
-          loadItems()
+          loadItems({
+            category: categoryFilter || undefined,
+            search: debouncedSearch || undefined,
+          })
         }}
       />
       </div>
