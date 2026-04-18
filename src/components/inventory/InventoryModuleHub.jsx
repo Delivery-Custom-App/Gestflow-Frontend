@@ -95,7 +95,7 @@ function InventoryModuleHub({ user, userRole, onLogout }) {
             <li>Control de productos</li>
             <li>Entradas y salidas</li>
             <li>Alertas de stock mínimo</li>
-            <li>Valorización de inventario (HU-49)</li>
+            <li>Valorización de inventario</li>
           </ul>
           <button type="button" className="inv-hub__feature-btn inv-hub__feature-btn--primary" onClick={goStock}>
             Gestionar stock →

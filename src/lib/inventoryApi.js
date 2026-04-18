@@ -26,6 +26,19 @@ export function getInventoryStockList(localId, token, filters = {}) {
   return apiRequest(buildInventoryStockListPath(localId, filters), { token })
 }
 
+/** Proveedores activos del negocio asociado al local. */
+export function getInventorySuppliersForLocal(localId, token) {
+  return apiRequest(`/inventory/locals/${localId}/suppliers`, { token })
+}
+
+/**
+ * Crea un proveedor en el negocio. `business_id` opcional: el backend usa el del usuario si es admin.
+ * @param {object} body - { name: string, business_id?: string }
+ */
+export function postSupplier(token, body) {
+  return apiRequest('/suppliers', { method: 'POST', token, body })
+}
+
 export function postInventoryNewProduct(localId, token, body) {
   return apiRequest(`/inventory/locals/${localId}/new-product`, {
     method: 'POST',

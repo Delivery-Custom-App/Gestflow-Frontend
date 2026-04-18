@@ -26,6 +26,7 @@ function ProductsTable({
           <tr>
             <th>Producto</th>
             <th>Categoría</th>
+            <th>Proveedor</th>
             <th>Stock actual</th>
             <th>Stock mín.</th>
             <th>Stock máx.</th>
@@ -38,21 +39,21 @@ function ProductsTable({
         <tbody>
           {error ? (
             <tr>
-              <td colSpan={9} className="scd-table-empty">
+              <td colSpan={10} className="scd-table-empty">
                 {error}
               </td>
             </tr>
           ) : null}
           {!error && loading ? (
             <tr>
-              <td colSpan={9} className="scd-table-empty">
+              <td colSpan={10} className="scd-table-empty">
                 Cargando productos…
               </td>
             </tr>
           ) : null}
           {!error && !loading && items.length === 0 ? (
             <tr>
-              <td colSpan={9} className="scd-table-empty">
+              <td colSpan={10} className="scd-table-empty">
                 <div className="scd-empty-state">
                   <p className="scd-empty-title">No hay productos registrados en este local.</p>
                   <p className="scd-empty-subtitle">Crea el primer producto para comenzar a gestionar inventario.</p>
@@ -80,11 +81,9 @@ function ProductsTable({
                   <tr key={row.inventory_id ?? row.product_id}>
                     <td>
                       <div style={{ fontWeight: 700 }}>{row.product_name || row.name || '—'}</div>
-                      {row.supplier_name ? (
-                        <div style={{ color: '#64748b', fontSize: '0.78rem' }}>{row.supplier_name}</div>
-                      ) : null}
                     </td>
                     <td>{row.category_name || '—'}</td>
+                    <td className="scd-table-supplier">{row.supplier_name?.trim() || '—'}</td>
                     <td>{stockCurrent}</td>
                     <td>{stockMin}</td>
                     <td>{stockMax}</td>

@@ -12,9 +12,6 @@ function RecipesPage({ user, userRole, onLogout }) {
   const navigate = useNavigate()
   const { localId } = useParams()
   
-  // Debug
-  console.log('RecipesPage mounted - localId:', localId, 'user:', user?.email, 'userRole:', userRole)
-  
   const { recipes, kpis, loading, error, fetchRecipes, getRecipe, createRecipe, updateRecipe, toggleRecipeStatus, deleteRecipe, fetchKpis } = useRecipes(localId)
 
   const [showCreateModal, setShowCreateModal] = useState(false)

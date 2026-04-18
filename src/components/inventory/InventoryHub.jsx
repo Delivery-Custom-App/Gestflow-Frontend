@@ -11,8 +11,6 @@ function InventoryHub({ user, userRole, onLogout }) {
   const location = useLocation()
   const { localId } = useParams()
   
-  console.log('InventoryHub - localId:', localId, 'location.pathname:', location.pathname)
-
   const selectedLocal = useMemo(() => {
     if (location.state?.local) return location.state.local
     return { id: localId, name: `Local ${localId ?? ''}` }

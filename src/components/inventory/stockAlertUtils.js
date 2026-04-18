@@ -1,24 +1,42 @@
 /**
- * HU-44: si el API envía `stock_status` (OPTIMO | BAJO | CRITICO), se usa tal cual.
- * Si no, regla previa por compatibilidad.
+ * % dispuesto = stock_actual / stock_máximo (qué fracción del tope tienes; ej. máx 100, actual 30 → 30%).
+ * Umbrales sobre ese ratio: ≤25% crítico, ≤50% bajo, >50% óptimo.
+ * Sin stock_máximo en la fila: no hay ratio; stock 0 → crítico, si no → óptimo.
+ * Si el API envía `stock_status`, se respeta tal cual.
  */
+const REF_CRIT_PCT = 0.25
+const REF_LOW_PCT = 0.5
+
+/** @returns {'critical' | 'low' | 'optimal'} */
+export function stockLevelFromRow(row) {
+  const sc = Number(row.stock_current ?? 0)
+  const smaxRaw = row.stock_max
+  const smax = smaxRaw != null && Number(smaxRaw) > 0 ? Number(smaxRaw) : null
+
+  if (smax == null) {
+    return sc <= 0 ? 'critical' : 'optimal'
+  }
+
+  // Ocupación: stock_actual / stock_máximo
+  const ratio = sc / smax
+  if (ratio <= REF_CRIT_PCT) return 'critical'
+  if (ratio <= REF_LOW_PCT) return 'low'
+  return 'optimal'
+}
+
 export function getStockAlertLevel(row) {
   const api = row.stock_status
   if (api === 'CRITICO') return 'critical'
   if (api === 'BAJO') return 'low'
   if (api === 'OPTIMO') return null
 
-  const stockCurrent = Number(row.stock_current ?? 0)
-  if (row.stock_min != null && stockCurrent <= Number(row.stock_min)) {
-    return 'critical'
-  }
-  if (row.stock_max != null && stockCurrent < Math.max(1, Math.floor(Number(row.stock_max) / 4))) {
-    return 'low'
-  }
+  const level = stockLevelFromRow(row)
+  if (level === 'critical') return 'critical'
+  if (level === 'low') return 'low'
   return null
 }
 
-/** Etiqueta en español + variante visual para badges (HU-44). */
+/** Etiqueta en español y variante visual para badges de estado. */
 export function getStockStatusMeta(row) {
   const level = getStockAlertLevel(row)
   if (level === 'critical') return { label: 'Crítico', variant: 'critical' }
