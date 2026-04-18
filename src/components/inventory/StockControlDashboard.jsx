@@ -1,12 +1,19 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { getAuthContext } from '../../lib/apiClient'
-import { getInventoryKpisByLocal, getInventoryStockList } from '../../lib/inventoryApi'
+import {
+  getInventoryKpisByLocal,
+  getInventoryProductsPage,
+  getInventoryStockList,
+  patchInventoryProductUnitCost,
+  patchInventoryStock,
+} from '../../lib/inventoryApi'
 import InventoryShell from './InventoryShell'
 import LoadingSpinner from '../LoadingSpinner'
 import NuevoProductoModal from './NuevoProductoModal'
 import ProductsTable from './ProductsTable'
 import StatusFilterCheckboxes from './StatusFilterCheckboxes'
+import CategoryFilterSelect from './CategoryFilterSelect'
 import '../../styles/inventory/StockControlDashboard.css'
 
 function formatMoney(value) {
@@ -26,8 +33,10 @@ function StockControlDashboard({ user, userRole, onLogout }) {
   const [error, setError] = useState('')
   const [modalOpen, setModalOpen] = useState(false)
   const [items, setItems] = useState([])
+  const [totalCount, setTotalCount] = useState(0)
   const [itemsLoading, setItemsLoading] = useState(true)
   const [itemsError, setItemsError] = useState('')
+  const [actionError, setActionError] = useState('')
   const [currentPage, setCurrentPage] = useState(1)
   const [searchQuery, setSearchQuery] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
@@ -60,8 +69,40 @@ function StockControlDashboard({ user, userRole, onLogout }) {
     }
   }, [localId])
 
+  /** Catálogo de categorías: listado completo del local (sin filtros) para llenar el selector (HU-47). */
+  const loadCategoriesCatalog = useCallback(async () => {
+    if (!localId) return
+    try {
+      const { token } = await getAuthContext()
+      const rows = await getInventoryStockList(localId, token, {})
+      const arr = Array.isArray(rows) ? rows : []
+      const m = new Map()
+      for (const row of arr) {
+        const id = row.category_id != null ? String(row.category_id) : ''
+        const name = row.category_name != null ? String(row.category_name).trim() : ''
+        if (id && name) m.set(id, name)
+      }
+      setCategoriesCatalog(
+        [...m.entries()]
+          .map(([id, name]) => ({ id, name }))
+          .sort((a, b) => a.name.localeCompare(b.name, 'es')),
+      )
+    } catch {
+      /* mantener opciones previas */
+    }
+  }, [localId])
+
+  const currentFilters = useMemo(
+    () => ({
+      category: categoryFilter || undefined,
+      search: debouncedSearch || undefined,
+      status: statusFilters.length ? statusFilters : undefined,
+    }),
+    [categoryFilter, debouncedSearch, statusFilters],
+  )
+
   const loadItems = useCallback(
-    async (filters = {}) => {
+    async (filters, page) => {
       if (!localId) {
         setItemsError('No se indicó un local.')
         setItemsLoading(false)
@@ -71,28 +112,23 @@ function StockControlDashboard({ user, userRole, onLogout }) {
       setItemsLoading(true)
       try {
         const { token } = await getAuthContext()
-        const payload = await getInventoryStockList(localId, token, filters)
-        const arr = Array.isArray(payload) ? payload : []
-        setItems(arr)
-        setCategoriesCatalog((prev) => {
-          const m = new Map(prev.map((c) => [c.id, c.name]))
-          for (const row of arr) {
-            const id = row.category_id != null ? String(row.category_id) : ''
-            const name = row.category_name != null ? String(row.category_name).trim() : ''
-            if (id && name) m.set(id, name)
-          }
-          return [...m.entries()]
-            .map(([id, name]) => ({ id, name }))
-            .sort((a, b) => a.name.localeCompare(b.name, 'es'))
+        const offset = (page - 1) * pageSize
+        const { items: pageItems, total } = await getInventoryProductsPage(localId, token, {
+          ...filters,
+          limit: pageSize,
+          offset,
         })
+        setItems(pageItems)
+        setTotalCount(total)
       } catch (e) {
         setItemsError(e?.message || 'No se pudo cargar el listado de productos.')
         setItems([])
+        setTotalCount(0)
       } finally {
         setItemsLoading(false)
       }
     },
-    [localId],
+    [localId, pageSize],
   )
 
   useEffect(() => {
@@ -100,17 +136,17 @@ function StockControlDashboard({ user, userRole, onLogout }) {
   }, [load])
 
   useEffect(() => {
-    if (!localId) return
-    loadItems({
-      category: categoryFilter || undefined,
-      search: debouncedSearch || undefined,
-      status: statusFilters.length ? statusFilters : undefined,
-    })
-  }, [localId, categoryFilter, debouncedSearch, statusFilters, loadItems])
+    loadCategoriesCatalog()
+  }, [loadCategoriesCatalog])
 
   useEffect(() => {
     setCurrentPage(1)
-  }, [items])
+  }, [categoryFilter, debouncedSearch, statusFilters])
+
+  useEffect(() => {
+    if (!localId) return
+    loadItems(currentFilters, currentPage)
+  }, [localId, currentFilters, currentPage, loadItems])
 
   useEffect(() => {
     if (categoryFilter && !categoriesCatalog.some((c) => c.id === categoryFilter)) {
@@ -118,20 +154,41 @@ function StockControlDashboard({ user, userRole, onLogout }) {
     }
   }, [categoryFilter, categoriesCatalog])
 
-  const totalPages = Math.max(1, Math.ceil(items.length / pageSize))
+  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize))
   const safeCurrentPage = Math.min(currentPage, totalPages)
-  const pagedItems = useMemo(() => {
-    const start = (safeCurrentPage - 1) * pageSize
-    return items.slice(start, start + pageSize)
-  }, [items, safeCurrentPage, pageSize])
 
-  const currentFilters = useMemo(
-    () => ({
-      category: categoryFilter || undefined,
-      search: debouncedSearch || undefined,
-      status: statusFilters.length ? statusFilters : undefined,
-    }),
-    [categoryFilter, debouncedSearch, statusFilters],
+  const handlePatchStock = useCallback(
+    async (row, body) => {
+      if (!localId) return
+      setActionError('')
+      try {
+        const { token } = await getAuthContext()
+        await patchInventoryStock(localId, row.inventory_id, token, body)
+        await load()
+        await loadItems(currentFilters, currentPage)
+      } catch (e) {
+        setActionError(e?.message || 'No se pudo actualizar el stock.')
+        throw e
+      }
+    },
+    [localId, load, loadItems, currentFilters, currentPage],
+  )
+
+  const handlePatchUnitCost = useCallback(
+    async (row, unitCostClp) => {
+      if (!localId) return
+      setActionError('')
+      try {
+        const { token } = await getAuthContext()
+        await patchInventoryProductUnitCost(localId, row.product_id, token, { unitCost: unitCostClp })
+        await load()
+        await loadItems(currentFilters, currentPage)
+      } catch (e) {
+        setActionError(e?.message || 'No se pudo actualizar el costo.')
+        throw e
+      }
+    },
+    [localId, load, loadItems, currentFilters, currentPage],
   )
 
   return (
@@ -214,6 +271,12 @@ function StockControlDashboard({ user, userRole, onLogout }) {
             </button>
           </div>
 
+          {actionError ? (
+            <div className="scd-status scd-status--error scd-status--compact" role="alert">
+              {actionError}
+            </div>
+          ) : null}
+
           <div className="scd-filters" role="search" aria-label="Filtrar inventario">
             <div className="scd-search">
               <span className="scd-search-icon" aria-hidden="true">
@@ -231,30 +294,22 @@ function StockControlDashboard({ user, userRole, onLogout }) {
                 autoComplete="off"
               />
             </div>
-            <select
-              className="scd-select"
-              value={categoryFilter}
-              onChange={(e) => setCategoryFilter(e.target.value)}
-              aria-label="Filtrar por categoría"
-            >
-              <option value="">Todas las categorías</option>
-              {categoriesCatalog.map(({ id, name }) => (
-                <option key={id} value={id}>
-                  {name}
-                </option>
-              ))}
-            </select>
+            <CategoryFilterSelect value={categoryFilter} onChange={setCategoryFilter} options={categoriesCatalog} />
             <StatusFilterCheckboxes value={statusFilters} onChange={setStatusFilters} />
           </div>
 
           <ProductsTable
-            items={pagedItems}
+            items={items}
             loading={itemsLoading}
             error={itemsError}
             currentPage={safeCurrentPage}
             totalPages={totalPages}
+            totalCount={totalCount}
+            pageSize={pageSize}
             onPageChange={setCurrentPage}
             onEmptyAction={() => setModalOpen(true)}
+            onPatchStock={handlePatchStock}
+            onPatchUnitCost={handlePatchUnitCost}
           />
         </section>
 
@@ -263,8 +318,10 @@ function StockControlDashboard({ user, userRole, onLogout }) {
           localId={localId}
           onClose={() => setModalOpen(false)}
           onSuccess={() => {
+            setCurrentPage(1)
             load()
-            loadItems(currentFilters)
+            loadCategoriesCatalog()
+            loadItems(currentFilters, 1).catch(() => {})
           }}
         />
       </div>

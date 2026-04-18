@@ -9,6 +9,8 @@ export function getInventoryKpisByLocal(localId, token) {
  * @param {string} [filters.category] - UUID categoría
  * @param {string} [filters.search] - texto parcial nombre
  * @param {string[]} [filters.status] - uno o más: CRITICO, BAJO, OPTIMO
+ * @param {number} [filters.limit] - paginación servidor (opcional)
+ * @param {number} [filters.offset] - paginación servidor (opcional)
  */
 export function buildInventoryStockListPath(localId, filters = {}) {
   const params = new URLSearchParams()
@@ -19,11 +21,54 @@ export function buildInventoryStockListPath(localId, filters = {}) {
       if (s) params.append('status', String(s).toUpperCase())
     }
   }
+  if (filters.limit != null && Number.isFinite(Number(filters.limit))) {
+    params.set('limit', String(Math.max(1, Math.min(500, Math.floor(Number(filters.limit))))))
+  }
+  if (filters.offset != null && Number.isFinite(Number(filters.offset)) && Number(filters.offset) > 0) {
+    params.set('offset', String(Math.max(0, Math.floor(Number(filters.offset)))))
+  }
   const qs = params.toString()
   return `/inventory/locals/${localId}/stock${qs ? `?${qs}` : ''}`
 }
+
 export function getInventoryStockList(localId, token, filters = {}) {
   return apiRequest(buildInventoryStockListPath(localId, filters), { token })
+}
+
+/**
+ * Listado paginado (HU-42 /products): body { items, total, limit, offset }.
+ * @param {object} [filters]
+ * @param {number} [filters.limit] default 50
+ * @param {number} [filters.offset] default 0
+ */
+export function buildInventoryProductsPath(localId, filters = {}) {
+  const params = new URLSearchParams()
+  if (filters.category) params.set('category', String(filters.category))
+  if (filters.search && String(filters.search).trim()) params.set('search', String(filters.search).trim())
+  if (Array.isArray(filters.status) && filters.status.length) {
+    for (const s of filters.status) {
+      if (s) params.append('status', String(s).toUpperCase())
+    }
+  }
+  const limit = filters.limit != null ? Math.max(1, Math.min(500, Math.floor(Number(filters.limit)))) : 50
+  const offset = filters.offset != null ? Math.max(0, Math.floor(Number(filters.offset))) : 0
+  params.set('limit', String(limit))
+  params.set('offset', String(offset))
+  return `/inventory/locals/${localId}/products?${params.toString()}`
+}
+
+export async function getInventoryProductsPage(localId, token, filters = {}) {
+  const path = buildInventoryProductsPath(localId, filters)
+  const data = await apiRequest(path, { token })
+  if (!data || typeof data !== 'object') {
+    return { items: [], total: 0, limit: filters.limit ?? 50, offset: filters.offset ?? 0 }
+  }
+  return {
+    items: Array.isArray(data.items) ? data.items : [],
+    total: Number(data.total) || 0,
+    limit: Number(data.limit) || 50,
+    offset: Number(data.offset) || 0,
+  }
 }
 
 /** Proveedores activos del negocio asociado al local. */
@@ -50,6 +95,15 @@ export function postInventoryNewProduct(localId, token, body) {
 /** Actualiza stock o mínimo; la API devuelve la fila con total_value recalculado (stock × costo). */
 export function patchInventoryStock(localId, inventoryId, token, body) {
   return apiRequest(`/inventory/locals/${localId}/stock/${inventoryId}`, {
+    method: 'PATCH',
+    token,
+    body,
+  })
+}
+
+/** Actualiza costo unitario (products.price); respuesta con total_value recalculado. */
+export function patchInventoryProductUnitCost(localId, productId, token, body) {
+  return apiRequest(`/inventory/locals/${localId}/products/${productId}/unit-cost`, {
     method: 'PATCH',
     token,
     body,
