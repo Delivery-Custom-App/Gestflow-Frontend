@@ -116,36 +116,87 @@ function InventoryKpiDashboard({ user, userRole, onLogout }) {
 
   return (
     <main className="inventory-kpi-page">
-      <div className="inventory-kpi-shell">
-        <header className="inventory-kpi-header">
-          <div>
-            <h1>Inventario · KPIs</h1>
-            <p className="inventory-kpi-header__subtitle">
-              {selectedLocal?.name ? `${selectedLocal.name} · ` : ''}
-              {userRole ? `${userRole}` : 'Usuario'}
-              {user?.email ? ` · ${user.email}` : ''}
-            </p>
-            {data?.generated_at && (
-              <p className="inventory-kpi-meta">Actualizado: {formatDate(data.generated_at)}</p>
-            )}
-            {pollMs > 0 ? (
-              <p className="inventory-kpi-meta inventory-kpi-meta--poll">
-                Actualización automática cada {Math.round(pollMs / 1000)} s (HU-49)
+      <header className="inventory-kpi-header">
+        <div className="header-content">
+          <div className="kpi-brand-section">
+            <img src="/sibaritco-logo.svg" alt="Sibarítco" className="kpi-brand-logo" />
+            <div className="kpi-brand-text">
+              <h1>Inventario · KPIs</h1>
+              <p className="kpi-header-subtitle">
+                {selectedLocal?.name || 'Local'}
               </p>
-            ) : null}
+            </div>
           </div>
-          <div className="inventory-kpi-actions">
-            <button type="button" className="inventory-btn" onClick={handleBack}>
-              Volver al local
+
+          <div className="kpi-user-section">
+            <div className="kpi-info-stack">
+              <span className="kpi-user-email">{user?.email}</span>
+              <span className="kpi-user-badge">{userRole || 'Usuario'}</span>
+              {data?.generated_at && (
+                <span className="kpi-meta-info">Últim. act: {formatDate(data.generated_at)}</span>
+              )}
+              {pollMs > 0 ? (
+                <span className="kpi-meta-info kpi-meta-poll">
+                  Refresco: {Math.round(pollMs / 1000)}s
+                </span>
+              ) : null}
+            </div>
+            <button
+              type="button"
+              className="kpi-action-btn"
+              onClick={load}
+              disabled={loading}
+              title={loading ? 'Actualizando…' : 'Actualizar datos'}
+              aria-label="Actualizar KPIs"
+            >
+              <svg viewBox="0 0 24 24" fill="none" role="presentation">
+                <path
+                  d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
             </button>
-            <button type="button" className="inventory-btn primary" onClick={load} disabled={loading}>
-              {loading ? 'Actualizando…' : 'Actualizar'}
+            <button
+              type="button"
+              className="kpi-nav-btn"
+              onClick={handleBack}
+              aria-label="Volver al local"
+              title="Volver al panel del local"
+            >
+              <svg viewBox="0 0 24 24" fill="none" role="presentation">
+                <path
+                  d="M19 12H5M12 5L5 12L12 19"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
             </button>
-            <button type="button" className="inventory-btn" onClick={handleLogoutClick}>
-              Salir
+            <button
+              className="kpi-logout-btn"
+              onClick={handleLogoutClick}
+              aria-label="Cerrar sesión"
+              title="Cerrar sesión"
+            >
+              <svg viewBox="0 0 24 24" fill="none" role="presentation">
+                <path
+                  d="M17 16L21 12M21 12L17 8M21 12H9M13 16V17C13 18.1 12.1 19 11 19H5C3.9 19 3 18.1 3 17V7C3 5.9 3.9 5 5 5H11C12.1 5 13 5.9 13 7V8"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
             </button>
           </div>
-        </header>
+        </div>
+      </header>
+
+      <div className="inventory-kpi-shell">
 
         {error ? <div className="inventory-status error">{error}</div> : null}
         {!error && loading && !data ? (

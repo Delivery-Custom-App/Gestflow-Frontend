@@ -11,6 +11,29 @@
   gap: 1.75rem;
   padding: 2rem 1rem 1.5rem;
   color: #064e3b;
+  background-image: url('/sibaritco-logo.svg');
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 40%;
+  background-attachment: fixed;
+  position: relative;
+}
+
+.login-page::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(255, 255, 255, 0.92);
+  z-index: 0;
+  pointer-events: none;
+}
+
+.login-page > * {
+  position: relative;
+  z-index: 1;
 }
 
 .brand-header {
@@ -192,10 +215,10 @@
   justify-content: center;
   gap: 0.65rem;
   cursor: pointer;
-  transition: transform 0.18s ease, box-shadow 0.18s ease;
+  transition: transform 0.18s ease, box-shadow 0.18s ease, opacity 0.2s ease;
 }
 
-.login-button:hover {
+.login-button:hover:not(:disabled) {
   transform: translateY(-1px);
   box-shadow: 0 12px 20px -16px rgba(5, 150, 105, 0.95);
 }
@@ -206,8 +229,8 @@
 }
 
 .login-button:disabled {
-  opacity: 0.75;
-  cursor: progress;
+  opacity: 0.45;
+  cursor: not-allowed;
   transform: none;
   box-shadow: none;
 }

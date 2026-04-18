@@ -2,6 +2,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { useState } from 'react'
 import { useOrderSummary } from '../hooks/useOrderSummary'
 import { useAvailableLocals } from '../hooks/useAvailableLocals'
+import LoadingSpinner from './LoadingSpinner'
 import '../styles/ChangeLocal.css'
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
@@ -64,7 +65,11 @@ export default function ChangeLocal() {
   }
 
   if (summaryLoading || localsLoading) {
-    return <div className="change-local-loading">Cargando locales disponibles...</div>
+    return (
+      <main className="loading-page-minimal">
+        <LoadingSpinner message="Cargando locales..." />
+      </main>
+    )
   }
 
   if (!summary) {

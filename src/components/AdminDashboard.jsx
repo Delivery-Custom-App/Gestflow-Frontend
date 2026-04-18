@@ -4,6 +4,7 @@ import { useLocals } from '../hooks/useLocals'
 import CreateLocalModal from './CreateLocalModal'
 import ModulesGrid from './ModulesGrid'
 import LocalsGrid from './LocalsGrid'
+import LoadingSpinner from './LoadingSpinner'
 import '../styles/AdminDashboard.css'
 
 function AdminDashboard({ user, userRole, onLogout }) {
@@ -54,14 +55,12 @@ function AdminDashboard({ user, userRole, onLogout }) {
         <header className="admin-header">
           <div className="header-content">
             <div className="brand-section">
-              <div className="brand-icon-small" aria-hidden="true">
-                <svg viewBox="0 0 24 24" fill="none" role="presentation">
-                  <rect x="5" y="3" width="10" height="18" rx="1.5" stroke="currentColor" strokeWidth="1.8" />
-                  <rect x="9" y="7" width="10" height="14" rx="1.5" stroke="currentColor" strokeWidth="1.8" />
-                </svg>
-              </div>
+              <img src="/sibaritco-logo.svg" alt="Sibarítco" className="brand-logo-small" />
               <div>
-                <h1>SibaGestion</h1>
+                <h1>
+                  SibaGestion
+                  <span className="demo-badge">DEMO</span>
+                </h1>
                 <p className="header-subtitle">{currentLocal.name}</p>
               </div>
             </div>
@@ -81,9 +80,7 @@ function AdminDashboard({ user, userRole, onLogout }) {
                 title="Volver a seleccionar un local"
               >
                 <svg viewBox="0 0 24 24" fill="none">
-                  <path d="M12 2C6.48 2 2 6.48 2 12C2 17.52 6.48 22 12 22C17.52 22 22 17.52 22 12C22 6.48 17.52 2 12 2ZM12 20C7.59 20 4 16.41 4 12C4 7.59 7.59 4 12 4C16.41 4 20 7.59 20 12C20 16.41 16.41 20 12 20Z" fill="currentColor" />
-                  <path d="M12 6C10.34 6 9 7.34 9 9H11C11 8.45 11.45 8 12 8C12.55 8 13 8.45 13 9C13 10 12 10.5 12 12H14C14 10.67 15 9.5 15 9C15 7.34 13.66 6 12 6Z" fill="currentColor" />
-                  <path d="M13 18H11V16H13Z" fill="currentColor" />
+                  <path d="M19 12H5M12 5L5 12L12 19" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
               </button>
               <button className="logout-button" onClick={onLogout} aria-label="Cerrar sesión">
@@ -112,18 +109,12 @@ function AdminDashboard({ user, userRole, onLogout }) {
         <header className="admin-header">
           <div className="header-content">
             <div className="brand-section">
-              <div className="brand-icon-small" aria-hidden="true">
-                <svg viewBox="0 0 24 24" fill="none" role="presentation">
-                  <rect x="5" y="3" width="10" height="18" rx="1.5" stroke="currentColor" strokeWidth="1.8" />
-                  <rect x="9" y="7" width="10" height="14" rx="1.5" stroke="currentColor" strokeWidth="1.8" />
-                </svg>
-              </div>
+              <img src="/sibaritco-logo.svg" alt="Sibarítco" className="brand-logo-small" />
               <div>
                 <h1>SibaGestion</h1>
                 <p className="header-subtitle">Panel Administrativo</p>
               </div>
             </div>
-
             <div className="user-section">
               <span className="user-email">{user?.email}</span>
               <span className="user-badge">{userRole || 'Usuario'}</span>
@@ -141,7 +132,9 @@ function AdminDashboard({ user, userRole, onLogout }) {
             </div>
           </div>
         </header>
-        <p className="loading-text">Cargando locales...</p>
+        <main className="admin-main">
+          <LoadingSpinner message="Cargando locales..." />
+        </main>
       </main>
     )
   }

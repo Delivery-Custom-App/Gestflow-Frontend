@@ -3,12 +3,15 @@ import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { getAuthContext } from '../../lib/apiClient'
 import { getInventoryStockList } from '../../lib/inventoryApi'
 import InventoryShell from './InventoryShell'
+import LoadingSpinner from '../LoadingSpinner'
 import { getStockAlertLevel } from './stockAlertUtils'
 
 function InventoryHub({ user, userRole, onLogout }) {
   const navigate = useNavigate()
   const location = useLocation()
   const { localId } = useParams()
+  
+  console.log('InventoryHub - localId:', localId, 'location.pathname:', location.pathname)
 
   const selectedLocal = useMemo(() => {
     if (location.state?.local) return location.state.local
@@ -62,6 +65,10 @@ function InventoryHub({ user, userRole, onLogout }) {
     navigate(`/local/${localId}/inventario/stock`, { state: { local: selectedLocal } })
   }
 
+  const openRecipes = () => {
+    navigate(`/local/${localId}/inventario/recipes`, { state: { local: selectedLocal } })
+  }
+
   return (
     <InventoryShell user={user} userRole={userRole} onLogout={onLogout} active="hub">
       <Fragment>
@@ -99,8 +106,8 @@ function InventoryHub({ user, userRole, onLogout }) {
                 <li>Cálculo automático de costos</li>
                 <li>Análisis de rentabilidad</li>
               </ul>
-              <button type="button" className="inv-feature-card__btn" disabled aria-disabled="true">
-                Próximamente →
+              <button type="button" className="inv-feature-card__btn inv-feature-card__btn--primary" onClick={openRecipes}>
+                Gestionar Recetas →
               </button>
             </div>
           </article>
@@ -173,7 +180,7 @@ function InventoryHub({ user, userRole, onLogout }) {
             <p>Productos que requieren atención en este local</p>
           </div>
           {alertsLoading ? (
-            <p className="inv-alerts__empty">Cargando alertas…</p>
+            <LoadingSpinner message="Cargando alertas..." />
           ) : alerts.length === 0 ? (
             <p className="inv-alerts__empty">No hay productos en alerta. Todo se ve en orden.</p>
           ) : (

@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { useLocals } from '../hooks/useLocals'
+import LoadingSpinner from './LoadingSpinner'
+import IncomeChart from './charts/IncomeChart'
+import ExpenseBreakdown from './charts/ExpenseBreakdown'
 import {
   getCajasByLocal,
   getConsolidatedDashboard,
@@ -11,6 +14,7 @@ import {
   getTransfersByLocal,
 } from '../lib/administrativeApi'
 import { getAuthContext } from '../lib/apiClient'
+import { enrichDashboardWithChartData, generateIncomeTrendFromOrders, generateExpenseBreakdownFromData } from '../utils/chartDataHelpers'
 import '../styles/AdministrativeModule.css'
 
 const sections = [
@@ -158,7 +162,7 @@ function SectionState({ loading, error, isEmpty, emptyMessage }) {
 
   return (
     <section className={`am-state-card ${error ? 'am-error' : ''}`}>
-      {loading && <p>Cargando datos del backend...</p>}
+      {loading && <LoadingSpinner message="Cargando..." />}
       {!loading && error && <p>Error al cargar seccion: {error}</p>}
       {!loading && !error && isEmpty && <p>{emptyMessage}</p>}
     </section>
@@ -554,14 +558,14 @@ function FlujoCajaContent({ dashboard, cajas, loading, error }) {
       <section className="am-panels am-two-columns">
         <article className="am-panel">
           <h3>Tendencia de Ingresos</h3>
-          <p className="am-muted">Analisis visual pendiente segun referencia final</p>
-          <div className="am-chart-placeholder">Placeholder de grafico de ingresos por periodo</div>
+          <p className="am-muted">Análisis de ingresos diarios del período actual</p>
+          <IncomeChart data={dashboard?.daily_income_trend || []} />
         </article>
 
         <article className="am-panel am-red">
           <h3>Desglose de Gastos</h3>
-          <p className="am-muted">Analisis visual pendiente segun referencia final</p>
-          <div className="am-chart-placeholder">Placeholder de distribucion de gastos</div>
+          <p className="am-muted">Distribución de gastos por categoría</p>
+          <ExpenseBreakdown data={dashboard?.expenses_breakdown || []} />
         </article>
       </section>
 
@@ -682,7 +686,20 @@ function BonosContent({ dashboard, loading, error }) {
 function renderSectionContent(activeSection, payload) {
   switch (activeSection) {
     case 'dashboard':
-      return <DashboardContent dashboard={payload.dashboard} loading={payload.loading} error={payload.error} />
+      const enrichedDashboard = enrichDashboardWithChartData(payload.dashboard)
+      const incomeData = generateIncomeTrendFromOrders(payload.orders)
+      const expenseData = generateExpenseBreakdownFromData(payload.expenses)
+      return (
+        <DashboardContent
+          dashboard={{
+            ...enrichedDashboard,
+            daily_income_trend: incomeData,
+            expenses_breakdown: expenseData,
+          }}
+          loading={payload.loading}
+          error={payload.error}
+        />
+      )
     case 'ventas':
       return <VentasContent orders={payload.orders} loading={payload.loading} error={payload.error} />
     case 'rendiciones':
@@ -698,13 +715,38 @@ function renderSectionContent(activeSection, payload) {
     case 'reportes':
       return <ReportesContent consolidated={payload.consolidated} loading={payload.loading} error={payload.error} />
     case 'flujo-caja':
-      return <FlujoCajaContent dashboard={payload.dashboard} cajas={payload.cajas} loading={payload.loading} error={payload.error} />
+      const flujoDashboard = enrichDashboardWithChartData(payload.dashboard)
+      const flujoExpenseData = generateExpenseBreakdownFromData(payload.expenses)
+      return (
+        <FlujoCajaContent
+          dashboard={{
+            ...flujoDashboard,
+            expenses_breakdown: flujoExpenseData,
+          }}
+          cajas={payload.cajas}
+          loading={payload.loading}
+          error={payload.error}
+        />
+      )
     case 'alertas':
       return <AlertasContent dashboard={payload.dashboard} loading={payload.loading} error={payload.error} />
     case 'bonos':
       return <BonosContent dashboard={payload.dashboard} loading={payload.loading} error={payload.error} />
     default:
-      return <DashboardContent dashboard={payload.dashboard} loading={payload.loading} error={payload.error} />
+      const defaultDashboard = enrichDashboardWithChartData(payload.dashboard)
+      const defaultIncomeData = generateIncomeTrendFromOrders(payload.orders)
+      const defaultExpenseData = generateExpenseBreakdownFromData(payload.expenses)
+      return (
+        <DashboardContent
+          dashboard={{
+            ...defaultDashboard,
+            daily_income_trend: defaultIncomeData,
+            expenses_breakdown: defaultExpenseData,
+          }}
+          loading={payload.loading}
+          error={payload.error}
+        />
+      )
   }
 }
 
@@ -901,6 +943,7 @@ function AdministrativeModule({ user, userRole, onLogout }) {
       <div className="am-main-wrapper">
         <header className="am-topbar">
           <div className="am-topbar-left">
+            <img src="/sibaritco-logo.svg" alt="Sibarítco" className="am-topbar-logo" />
             <button
               type="button"
               className="am-nav-toggle"
@@ -910,7 +953,10 @@ function AdministrativeModule({ user, userRole, onLogout }) {
             >
               {isMobileNavOpen ? 'Cerrar menu' : 'Menu'}
             </button>
-            <h1>SibaGestion - Sistema Comercial Integral</h1>
+            <h1>
+              SibaGestion
+              <span className="demo-badge">DEMO</span>
+            </h1>
             <button type="button" className="am-action" onClick={handleGoModules}>
               Modulos
             </button>
@@ -922,8 +968,22 @@ function AdministrativeModule({ user, userRole, onLogout }) {
               <strong>{userRole || 'Administrador Demo'}</strong>
               <span>{selectedLocal?.name || 'Sin local asignado'}</span>
             </div>
-            <button type="button" className="am-action" onClick={handleLogoutClick}>
-              Salir
+            <button 
+              type="button" 
+              className="am-logout-button"
+              onClick={handleLogoutClick}
+              aria-label="Cerrar sesión"
+              title="Cerrar sesión"
+            >
+              <svg viewBox="0 0 24 24" fill="none" role="presentation">
+                <path
+                  d="M17 16L21 12M21 12L17 8M21 12H9M13 16V17C13 18.1 12.1 19 11 19H5C3.9 19 3 18.1 3 17V7C3 5.9 3.9 5 5 5H11C12.1 5 13 5.9 13 7V8"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
             </button>
           </div>
         </header>

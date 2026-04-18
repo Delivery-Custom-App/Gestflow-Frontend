@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom'
 import { getAuthContext } from '../../lib/apiClient'
 import { getInventoryKpisByLocal, getInventoryStockList } from '../../lib/inventoryApi'
 import InventoryShell from './InventoryShell'
+import LoadingSpinner from '../LoadingSpinner'
 import NuevoProductoModal from './NuevoProductoModal'
 import ProductsTable from './ProductsTable'
 import StatusFilterCheckboxes from './StatusFilterCheckboxes'
@@ -149,7 +150,7 @@ function StockControlDashboard({ user, userRole, onLogout }) {
         </header>
 
         {error ? <div className="scd-status scd-status--error">{error}</div> : null}
-        {!error && loading && !data ? <div className="scd-status">Cargando indicadores…</div> : null}
+        {!error && loading && !data ? <LoadingSpinner message="Cargando indicadores..." /> : null}
 
         {data ? (
           <section className="scd-kpis" aria-label="KPIs de inventario">
