@@ -222,6 +222,34 @@ function StockControlDashboard({ user, userRole, onLogout }) {
                 <p className="scd-kpi-value">{data.total_products ?? 0}</p>
               </div>
             </article>
+            <article className="scd-kpi scd-kpi--optimal">
+              <span className="scd-kpi-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none">
+                  <path
+                    d="M9 12l2 2 4-4M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              </span>
+              <div>
+                <p className="scd-kpi-label">Stock óptimo</p>
+                <p className="scd-kpi-value">{data.optimal_stock_count ?? 0}</p>
+              </div>
+            </article>
+            <article className="scd-kpi scd-kpi--low">
+              <span className="scd-kpi-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none">
+                  <path d="M4 18V6M8 18V10M12 18V14M16 18V8M20 18V4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                </svg>
+              </span>
+              <div>
+                <p className="scd-kpi-label">Stock bajo</p>
+                <p className="scd-kpi-value">{data.low_stock_count ?? 0}</p>
+              </div>
+            </article>
             <article className="scd-kpi scd-kpi--critical">
               <span className="scd-kpi-icon" aria-hidden="true">
                 <svg viewBox="0 0 24 24" fill="none">
@@ -236,17 +264,6 @@ function StockControlDashboard({ user, userRole, onLogout }) {
               <div>
                 <p className="scd-kpi-label">Stock crítico</p>
                 <p className="scd-kpi-value">{data.critical_stock_count ?? 0}</p>
-              </div>
-            </article>
-            <article className="scd-kpi scd-kpi--low">
-              <span className="scd-kpi-icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24" fill="none">
-                  <path d="M4 18V6M8 18V10M12 18V14M16 18V8M20 18V4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-                </svg>
-              </span>
-              <div>
-                <p className="scd-kpi-label">Stock bajo</p>
-                <p className="scd-kpi-value">{data.low_stock_count ?? 0}</p>
               </div>
             </article>
             <article className="scd-kpi scd-kpi--value">

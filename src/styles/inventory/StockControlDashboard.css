@@ -644,7 +644,7 @@
 /* KPIs */
 .scd-kpis {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
   gap: var(--space-4);
   margin-bottom: var(--space-6);
 }
@@ -662,6 +662,7 @@
 
 .scd-kpi-icon         { width: 40px; height: 40px; color: var(--color-primary-mid); flex-shrink: 0; }
 .scd-kpi-icon--box    { color: var(--color-info); }
+.scd-kpi--optimal .scd-kpi-icon { color: #059669; }
 .scd-kpi--critical .scd-kpi-icon { color: var(--color-danger); }
 .scd-kpi--low      .scd-kpi-icon { color: var(--color-warning); }
 .scd-kpi--value .scd-kpi-icon--green { color: var(--color-primary-mid); }
