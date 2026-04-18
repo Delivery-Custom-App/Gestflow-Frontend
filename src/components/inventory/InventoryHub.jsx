@@ -67,6 +67,10 @@ function InventoryHub({ user, userRole, onLogout }) {
     navigate(`/local/${localId}/inventario/recipes`, { state: { local: selectedLocal } })
   }
 
+  const openSuppliers = () => {
+    navigate(`/local/${localId}/inventario/proveedores`, { state: { local: selectedLocal } })
+  }
+
   return (
     <InventoryShell user={user} userRole={userRole} onLogout={onLogout} active="hub">
       <Fragment>
@@ -161,12 +165,12 @@ function InventoryHub({ user, userRole, onLogout }) {
             <div className="inv-feature-card__body">
               <p className="inv-feature-card__label">Funcionalidades:</p>
               <ul className="inv-feature-card__list">
-                <li>Directorio y contactos</li>
-                <li>Historial de compras</li>
-                <li>Evaluación de proveedores</li>
+                <li>KPIs de proveedores y compras del mes</li>
+                <li>Totales y proveedores activos</li>
+                <li>Compras de insumos aprobadas (CLP)</li>
               </ul>
-              <button type="button" className="inv-feature-card__btn" disabled aria-disabled="true">
-                Próximamente →
+              <button type="button" className="inv-feature-card__btn inv-feature-card__btn--primary" onClick={openSuppliers}>
+                Ver KPIs de proveedores →
               </button>
             </div>
           </article>

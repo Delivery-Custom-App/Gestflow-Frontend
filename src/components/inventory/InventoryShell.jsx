@@ -20,6 +20,7 @@ function InventoryShell({ user, userRole, onLogout, active, children }) {
   const goHub = () => navigate(`/local/${localId}/inventario`, { state })
   const goStock = () => navigate(`/local/${localId}/inventario/stock`, { state })
   const goRecipes = () => navigate(`/local/${localId}/inventario/recipes`, { state })
+  const goSuppliers = () => navigate(`/local/${localId}/inventario/proveedores`, { state })
   const goLocalModules = () =>
     navigate('/admin', { state: { ...(typeof state === 'object' && state !== null ? state : {}), focusLocalId: localId } })
   const goAppHome = () => navigate('/')
@@ -85,6 +86,19 @@ function InventoryShell({ user, userRole, onLogout, active, children }) {
               </svg>
             </span>
             Gestión de recetas
+          </button>
+          <button
+            type="button"
+            className={active === 'suppliers' ? 'inv-nav-link is-active' : 'inv-nav-link'}
+            onClick={goSuppliers}
+          >
+            <span className="inv-nav-link__icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none">
+                <path d="M4 10h3l2-4h6l2 4h3v8H4V10z" stroke="currentColor" strokeWidth="1.5" />
+                <path d="M9 18v-4h6v4" stroke="currentColor" strokeWidth="1.5" />
+              </svg>
+            </span>
+            Proveedores y KPIs
           </button>
         </nav>
 

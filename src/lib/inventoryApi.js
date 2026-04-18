@@ -84,6 +84,27 @@ export function postSupplier(token, body) {
   return apiRequest('/suppliers', { method: 'POST', token, body })
 }
 
+/**
+ * KPIs de proveedores y compras (insumos aprobados) por mes. Requiere Admin/Superadmin.
+ * @param {string} localId - UUID del local (el backend resuelve el negocio).
+ * @param {string} token
+ * @param {{ year?: number, month?: number }} [opts] - mes calendario; por defecto mes actual en servidor.
+ */
+export function buildSupplierKpisPath(localId, opts = {}) {
+  const params = new URLSearchParams()
+  params.set('local_id', String(localId))
+  if (opts.year != null && Number.isFinite(Number(opts.year))) params.set('year', String(Math.floor(Number(opts.year))))
+  if (opts.month != null && Number.isFinite(Number(opts.month))) {
+    const m = Math.min(12, Math.max(1, Math.floor(Number(opts.month))))
+    params.set('month', String(m))
+  }
+  return `/suppliers/kpis?${params.toString()}`
+}
+
+export function getSupplierKpisByLocal(localId, token, opts = {}) {
+  return apiRequest(buildSupplierKpisPath(localId, opts), { token })
+}
+
 export function postInventoryNewProduct(localId, token, body) {
   return apiRequest(`/inventory/locals/${localId}/new-product`, {
     method: 'POST',
