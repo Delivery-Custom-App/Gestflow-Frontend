@@ -1081,6 +1081,11 @@
   line-height: 1.4;
 }
 
+.scd-register-supplier-hint--inline {
+  display: block;
+  margin-top: 0.35rem;
+}
+
 .npmodal-actions {
   display: flex;
   justify-content: flex-end;

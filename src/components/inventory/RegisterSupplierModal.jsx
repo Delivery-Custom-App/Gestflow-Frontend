@@ -1,7 +1,12 @@
 import { useEffect, useState } from 'react'
 import { getAuthContext } from '../../lib/apiClient'
 import { postSupplier } from '../../lib/inventoryApi'
-import { validateChilePhoneMessage, validateChileRutMessage } from '../../utils/chileRut'
+import {
+  formatRutForDisplay,
+  normalizeRutInput,
+  validateChilePhoneMessage,
+  validateChileRutMessage,
+} from '../../utils/chileRut'
 
 const INITIAL = {
   name: '',
@@ -120,7 +125,9 @@ function RegisterSupplierModal({ open, onClose, onSuccess, businessId }) {
         </div>
         <form className="npmodal-form" onSubmit={handleSubmit}>
           <p className="scd-register-supplier-hint">
-            Completa todos los campos. El RUT se validará con dígito verificador chileno.
+            Completa todos los campos. Escribe el RUT <strong>solo con números</strong> y el verificador (0-9 o{' '}
+            <strong>K</strong>); no hace falta puntos ni guion: se muestran solos. El sistema valida el dígito
+            verificador (incluida la K).
           </p>
           {error ? <p className="npmodal-error">{error}</p> : null}
 
@@ -143,12 +150,18 @@ function RegisterSupplierModal({ open, onClose, onSuccess, businessId }) {
           <label className="npmodal-field">
             <span>RUT</span>
             <input
-              value={form.rut}
-              onChange={(ev) => setField('rut', ev.target.value)}
-              placeholder="12.345.678-5"
+              value={formatRutForDisplay(form.rut)}
+              onChange={(ev) => setField('rut', normalizeRutInput(ev.target.value))}
+              placeholder="Ej. 207279463 o 1000005K"
               autoComplete="off"
+              inputMode="text"
               aria-invalid={!!fe('rut')}
+              aria-describedby="rut-format-hint"
             />
+            <span id="rut-format-hint" className="scd-register-supplier-hint scd-register-supplier-hint--inline">
+              Opcional: puedes pegar 12.345.678-5; se guarda normalizado. K es verificador válido cuando corresponde al
+              número.
+            </span>
             {fe('rut') ? (
               <span className="npmodal-field-error" role="alert">
                 {fe('rut')}
