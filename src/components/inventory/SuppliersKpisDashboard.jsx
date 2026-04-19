@@ -8,6 +8,7 @@ import {
 } from '../../lib/inventoryApi'
 import { isInventoryAdminRole } from '../../utils/inventoryAccess'
 import InventoryShell from './InventoryShell'
+import SuppliersSubNav from './SuppliersSubNav'
 import LoadingSpinner from '../LoadingSpinner'
 import RegisterSupplierModal from './RegisterSupplierModal'
 import SupplierDetailModal from './SupplierDetailModal'
@@ -54,7 +55,8 @@ function SuppliersKpisDashboard({ user, userRole, onLogout }) {
 
   const canAccess = isInventoryAdminRole(userRole)
 
-  const [{ year, month }, setPeriod] = useState(() => currentYearMonth())
+  /** Solo mes: el año es siempre el calendario actual (sin lista de años fija). */
+  const [month, setMonth] = useState(() => currentYearMonth().month)
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -82,6 +84,7 @@ function SuppliersKpisDashboard({ user, userRole, onLogout }) {
     setLoading(true)
     try {
       const { token } = await getAuthContext()
+      const year = new Date().getFullYear()
       const payload = await getSupplierKpisByLocal(localId, token, { year, month })
       setData(payload)
     } catch (e) {
@@ -90,7 +93,7 @@ function SuppliersKpisDashboard({ user, userRole, onLogout }) {
     } finally {
       setLoading(false)
     }
-  }, [localId, year, month, canAccess])
+  }, [localId, month, canAccess])
 
   const loadSuppliersList = useCallback(async () => {
     if (!canAccess || !localId) {
@@ -135,12 +138,8 @@ function SuppliersKpisDashboard({ user, userRole, onLogout }) {
     loadSuppliersList()
   }, [loadSuppliersList])
 
-  const periodLabel = `${MONTH_NAMES[(month || 1) - 1] ?? ''} ${year}`
-
-  const yearOptions = useMemo(() => {
-    const y0 = new Date().getFullYear()
-    return [y0 - 1, y0, y0 + 1]
-  }, [])
+  const calendarYear = new Date().getFullYear()
+  const periodLabel = `${MONTH_NAMES[(month || 1) - 1] ?? ''} ${calendarYear}`
 
   return (
     <InventoryShell user={user} userRole={userRole} onLogout={onLogout} active="suppliers">
@@ -153,6 +152,8 @@ function SuppliersKpisDashboard({ user, userRole, onLogout }) {
           ← Volver al centro de inventario
         </button>
 
+        <SuppliersSubNav navState={{ local: selectedLocal }} />
+
         <div className="scd-suppliers-head">
           <header className="scd-header scd-header--compact">
             <span className="scd-header-icon" aria-hidden="true">
@@ -163,30 +164,23 @@ function SuppliersKpisDashboard({ user, userRole, onLogout }) {
             </span>
             <div>
               <h1 className="scd-title">Proveedores</h1>
-              <p className="scd-subtitle">KPIs del mes y listado con inventario y valor estimado por proveedor</p>
+              <p className="scd-subtitle">
+                Indicadores por período y listado con inventario y valor estimado por proveedor
+              </p>
             </div>
           </header>
 
           {canAccess ? (
             <div className="scd-period-toolbar" role="group" aria-label="Período">
-              <span className="scd-period-label">Mes</span>
+              <span className="scd-period-label">Período</span>
+              <span className="scd-period-year-now" title="Siempre año calendario actual">
+                {calendarYear}
+              </span>
               <select
                 className="scd-period-select"
-                aria-label="Año"
-                value={year}
-                onChange={(ev) => setPeriod({ year: Number(ev.target.value), month })}
-              >
-                {yearOptions.map((y) => (
-                  <option key={y} value={y}>
-                    {y}
-                  </option>
-                ))}
-              </select>
-              <select
-                className="scd-period-select"
-                aria-label="Mes"
+                aria-label="Mes del año en curso"
                 value={month}
-                onChange={(ev) => setPeriod({ year, month: Number(ev.target.value) })}
+                onChange={(ev) => setMonth(Number(ev.target.value))}
               >
                 {MONTH_NAMES.map((name, i) => (
                   <option key={name} value={i + 1}>
@@ -264,7 +258,7 @@ function SuppliersKpisDashboard({ user, userRole, onLogout }) {
                   </svg>
                 </span>
                 <div>
-                  <p className="scd-kpi-label">Compras del mes (CLP)</p>
+                  <p className="scd-kpi-label">Compras del período (CLP)</p>
                   <p className="scd-kpi-value scd-kpi-value--money">{formatMoneyClp(data.month_purchases_clp)}</p>
                 </div>
               </article>

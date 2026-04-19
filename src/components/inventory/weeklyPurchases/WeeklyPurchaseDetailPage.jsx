@@ -11,6 +11,7 @@ import {
 } from '../../../lib/weeklyPurchasesApi'
 import { isInventoryAdminRole } from '../../../utils/inventoryAccess'
 import InventoryShell from '../InventoryShell'
+import SuppliersSubNav from '../SuppliersSubNav'
 import LoadingSpinner from '../../LoadingSpinner'
 import '../../../styles/inventory/WeeklyPurchases.css'
 
@@ -195,7 +196,7 @@ function WeeklyPurchaseDetailPage({ user, userRole, onLogout }) {
     try {
       const { token } = await getAuthContext()
       await deleteWeeklyPurchaseOrder(token, orderId, businessId)
-      navigate(`/local/${localId}/inventario/compras-semanales`, { state: { local: selectedLocal } })
+      navigate(`/local/${localId}/inventario/proveedores/compras-semanales`, { state: { local: selectedLocal } })
     } catch (e) {
       setActionError(e?.message || 'No se pudo eliminar.')
     }
@@ -235,17 +236,19 @@ function WeeklyPurchaseDetailPage({ user, userRole, onLogout }) {
   }
 
   return (
-    <InventoryShell user={user} userRole={userRole} onLogout={onLogout} active="weekly-purchases">
+    <InventoryShell user={user} userRole={userRole} onLogout={onLogout} active="suppliers">
       <div className="inv-stock-page">
         <button
           type="button"
           className="scd-back-link"
           onClick={() =>
-            navigate(`/local/${localId}/inventario/compras-semanales`, { state: { local: selectedLocal } })
+            navigate(`/local/${localId}/inventario/proveedores/compras-semanales`, { state: { local: selectedLocal } })
           }
         >
           ← Volver a compras semanales
         </button>
+
+        <SuppliersSubNav navState={{ local: selectedLocal }} />
 
         <header className="scd-header scd-header--compact">
           <div>

@@ -110,9 +110,9 @@ function InventoryModuleHub({ user, userRole, onLogout }) {
           <h2>Proveedores</h2>
           <p className="inv-hub__feature-sub">Gestión de proveedores</p>
           <ul className="inv-hub__feature-list">
-            <li>Base de datos</li>
-            <li>Contacto</li>
-            <li>Historial de compras</li>
+            <li>KPIs y directorio</li>
+            <li>Compras semanales</li>
+            <li>Contacto e historial</li>
           </ul>
           <button
             type="button"

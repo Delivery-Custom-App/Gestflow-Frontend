@@ -13,6 +13,7 @@ import {
 } from '../../../lib/weeklyPurchasesApi'
 import { isInventoryAdminRole } from '../../../utils/inventoryAccess'
 import InventoryShell from '../InventoryShell'
+import SuppliersSubNav from '../SuppliersSubNav'
 import LoadingSpinner from '../../LoadingSpinner'
 import '../../../styles/inventory/WeeklyPurchases.css'
 
@@ -161,86 +162,156 @@ function NewWeeklyOrderModal({ open, businessId, localId, onClose, onCreated }) 
   if (!open) return null
 
   return (
-    <div className="npmodal-backdrop" role="presentation" onClick={onClose}>
+    <div className="npmodal-backdrop wp-new-order-backdrop" role="presentation" onClick={onClose}>
       <div
-        className="npmodal npmodal--wide"
+        className="npmodal npmodal--wide wp-new-order-modal"
         role="dialog"
         aria-modal="true"
         aria-labelledby="wp-new-title"
         onClick={(ev) => ev.stopPropagation()}
       >
-        <div className="npmodal-head">
-          <h2 id="wp-new-title">Nueva orden semanal</h2>
-          <button type="button" className="npmodal-close" onClick={onClose} aria-label="Cerrar">
-            ×
+        <div className="npmodal-head wp-new-order-head">
+          <div className="wp-new-order-head__main">
+            <div className="wp-new-order-head__icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none">
+                <path
+                  d="M8 7V3h8v4M8 7h8M6 21h12a2 2 0 002-2V9a2 2 0 00-2-2H6a2 2 0 00-2 2v10a2 2 0 002 2z"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  strokeLinecap="round"
+                />
+                <path d="M9 14h6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+              </svg>
+            </div>
+            <div className="wp-new-order-head__titles">
+              <h2 id="wp-new-title">Nueva orden semanal</h2>
+              <p className="wp-new-order-head__subtitle">Planificá la compra por semana y proveedor en un solo paso.</p>
+            </div>
+          </div>
+          <button type="button" className="npmodal-close wp-new-order-close" onClick={onClose} aria-label="Cerrar">
+            <span aria-hidden="true">×</span>
           </button>
         </div>
-        <form className="npmodal-body wp-modal-grid" onSubmit={handleSubmit}>
-          {error ? <p className="npmodal-error">{error}</p> : null}
-          <label>
-            Semana (cualquier día; se usará el lunes de esa semana)
-            <input
-              type="date"
-              value={weekDate}
-              onChange={(ev) => setWeekDate(ev.target.value)}
-              required
-            />
-          </label>
-          <label>
-            Proveedor
-            <select
-              value={supplierId}
-              onChange={(ev) => setSupplierId(ev.target.value)}
-              required
-              disabled={loadingSup}
-            >
-              <option value="">— Seleccionar —</option>
-              {suppliers.map((s) => (
-                <option key={String(s.id)} value={String(s.id)}>
-                  {s.name || s.id}
-                </option>
-              ))}
-            </select>
-          </label>
 
-          {loadingProducts ? <p className="supplier-detail-loading">Cargando productos…</p> : null}
-
-          {supplierId && lines.length === 0 && !loadingProducts ? (
-            <p className="npmodal-error">
-              Este proveedor no tiene productos con stock en inventario. Asocia productos al proveedor o usa otro.
-            </p>
+        <form className="npmodal-form wp-new-order-form" onSubmit={handleSubmit}>
+          {error ? (
+            <div className="wp-new-order-alert wp-new-order-alert--error" role="alert">
+              <span className="wp-new-order-alert__icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none">
+                  <path
+                    d="M12 9v4m0 4h.01M10.3 3.6L2.2 18.4A1 1 0 003.1 20h17.8a1 1 0 00.9-1.6L13.7 3.6a1 1 0 00-1.8 0z"
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                  />
+                </svg>
+              </span>
+              <p>{error}</p>
+            </div>
           ) : null}
 
-          {lines.map((line, idx) => (
-            <div key={String(line.product_id)} className="wp-line-row">
-              <label>
-                Producto
-                <input type="text" readOnly value={line.product_name || line.product_id} title={String(line.product_id)} />
-              </label>
-              <label>
-                Cant.
-                <input
-                  type="number"
-                  min="0.01"
-                  step="any"
-                  value={line.quantity_ordered}
-                  onChange={(ev) => updateLine(idx, 'quantity_ordered', ev.target.value)}
-                />
-              </label>
-              <label>
-                Precio unit. CLP
-                <input
-                  type="number"
-                  min="0"
-                  value={line.unit_price_clp}
-                  onChange={(ev) => updateLine(idx, 'unit_price_clp', ev.target.value)}
-                />
-              </label>
-            </div>
-          ))}
+          <div className="npmodal-row npmodal-row--2 wp-new-order-row">
+            <label className="npmodal-field">
+              <span>Semana de compra</span>
+              <span className="wp-new-order-field-hint">Cualquier día del calendario; se usará el lunes de esa semana.</span>
+              <input
+                type="date"
+                value={weekDate}
+                onChange={(ev) => setWeekDate(ev.target.value)}
+                required
+              />
+            </label>
+            <label className="npmodal-field">
+              <span>Proveedor</span>
+              <span className="wp-new-order-field-hint">Solo aparecen proveedores del negocio.</span>
+              <select
+                value={supplierId}
+                onChange={(ev) => setSupplierId(ev.target.value)}
+                required
+                disabled={loadingSup}
+              >
+                <option value="">{loadingSup ? 'Cargando…' : '— Seleccionar —'}</option>
+                {suppliers.map((s) => (
+                  <option key={String(s.id)} value={String(s.id)}>
+                    {s.name || s.id}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
 
-          <div className="npmodal-actions">
-            <button type="button" className="npmodal-btn" onClick={onClose}>
+          {loadingProducts ? (
+            <div className="wp-new-order-loading" aria-live="polite">
+              <span className="wp-new-order-loading__pulse" />
+              <span>Cargando productos del proveedor…</span>
+            </div>
+          ) : null}
+
+          {supplierId && lines.length === 0 && !loadingProducts ? (
+            <div className="wp-new-order-callout" role="status">
+              <span className="wp-new-order-callout__icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" width="22" height="22" fill="none">
+                  <path
+                    d="M12 16v-4m0-4h.01M12 2a10 10 0 100 20 10 10 0 000-20z"
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                  />
+                </svg>
+              </span>
+              <div>
+                <strong>Sin productos para este proveedor</strong>
+                <p>
+                  No hay ítems con stock asociados en inventario. Asociá productos al proveedor o elegí otro
+                  proveedor.
+                </p>
+              </div>
+            </div>
+          ) : null}
+
+          {lines.length > 0 ? (
+            <div className="wp-new-order-lines">
+              <div className="wp-new-order-lines__head">
+                <h3 className="wp-new-order-lines__title">Líneas del pedido</h3>
+                <span className="wp-new-order-lines__badge">{lines.length} producto{lines.length === 1 ? '' : 's'}</span>
+              </div>
+              {lines.map((line, idx) => (
+                <div key={String(line.product_id)} className="wp-line-row wp-new-order-line">
+                  <label className="npmodal-field wp-new-order-line__product">
+                    <span>Producto</span>
+                    <input
+                      type="text"
+                      readOnly
+                      value={line.product_name || line.product_id}
+                      title={String(line.product_id)}
+                    />
+                  </label>
+                  <label className="npmodal-field">
+                    <span>Cantidad</span>
+                    <input
+                      type="number"
+                      min="0.01"
+                      step="any"
+                      value={line.quantity_ordered}
+                      onChange={(ev) => updateLine(idx, 'quantity_ordered', ev.target.value)}
+                    />
+                  </label>
+                  <label className="npmodal-field">
+                    <span>Precio unit. CLP</span>
+                    <input
+                      type="number"
+                      min="0"
+                      value={line.unit_price_clp}
+                      onChange={(ev) => updateLine(idx, 'unit_price_clp', ev.target.value)}
+                    />
+                  </label>
+                </div>
+              ))}
+            </div>
+          ) : null}
+
+          <div className="npmodal-actions wp-new-order-actions">
+            <button type="button" className="npmodal-btn npmodal-btn--ghost" onClick={onClose}>
               Cancelar
             </button>
             <button type="submit" className="npmodal-btn npmodal-btn--primary" disabled={submitting || !supplierId}>
@@ -389,13 +460,13 @@ function WeeklyPurchasesPage({ user, userRole, onLogout }) {
   }
 
   const openDetail = (orderId) => {
-    navigate(`/local/${localId}/inventario/compras-semanales/${orderId}`, {
+    navigate(`/local/${localId}/inventario/proveedores/compras-semanales/${orderId}`, {
       state: { local: selectedLocal },
     })
   }
 
   return (
-    <InventoryShell user={user} userRole={userRole} onLogout={onLogout} active="weekly-purchases">
+    <InventoryShell user={user} userRole={userRole} onLogout={onLogout} active="suppliers">
       <div className="inv-stock-page">
         <button
           type="button"
@@ -405,6 +476,8 @@ function WeeklyPurchasesPage({ user, userRole, onLogout }) {
           ← Volver al centro de inventario
         </button>
 
+        <SuppliersSubNav navState={{ local: selectedLocal }} />
+
         <header className="scd-header scd-header--compact">
           <span className="scd-header-icon" aria-hidden="true">
             <svg viewBox="0 0 24 24" fill="none">
@@ -412,8 +485,10 @@ function WeeklyPurchasesPage({ user, userRole, onLogout }) {
             </svg>
           </span>
           <div>
-            <h1 className="scd-title">Compras semanales (HU-34)</h1>
-            <p className="scd-subtitle">Órdenes de compra por proveedor y semana; reporte comparativo</p>
+            <h1 className="scd-title">Compras semanales</h1>
+            <p className="scd-subtitle">
+              Dentro de Proveedores · órdenes por proveedor y semana; reporte comparativo (HU-34)
+            </p>
           </div>
         </header>
 
