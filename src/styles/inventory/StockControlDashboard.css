@@ -1163,6 +1163,87 @@
   background: var(--color-surface);
 }
 
+/* HU-87: categoría con typeahead en Nuevo producto */
+.npmodal-field--category {
+  position: relative;
+}
+
+.npmodal-category-typeahead {
+  position: relative;
+  width: 100%;
+}
+
+.npmodal-category-typeahead input {
+  width: 100%;
+  border: 1.5px solid var(--color-border-mid);
+  border-radius: var(--radius-md);
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--text-base);
+  background: var(--color-surface);
+  color: var(--color-text);
+}
+
+.npmodal-category-typeahead input:focus {
+  outline: none;
+  border-color: var(--color-primary-mid);
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.15);
+}
+
+.npmodal-category-typeahead__hint {
+  margin: 4px 0 0;
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+  line-height: 1.35;
+}
+
+.npmodal-category-typeahead__hint--error {
+  color: #b91c1c;
+}
+
+.npmodal-category-typeahead__list {
+  position: absolute;
+  left: 0;
+  right: 0;
+  z-index: 20;
+  margin: 4px 0 0;
+  padding: 4px 0;
+  list-style: none;
+  max-height: 220px;
+  overflow: auto;
+  background: var(--color-surface);
+  border: 1.5px solid var(--color-border-mid);
+  border-radius: var(--radius-md);
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.12);
+}
+
+.npmodal-category-typeahead__item {
+  padding: 8px 12px;
+  font-size: var(--text-sm);
+}
+
+.npmodal-category-typeahead__item--muted {
+  color: var(--color-text-muted);
+}
+
+.npmodal-category-typeahead__option {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: transparent;
+  padding: 8px 12px;
+  font-size: inherit;
+  color: var(--color-text);
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+}
+
+.npmodal-category-typeahead__option:hover,
+.npmodal-category-typeahead__option:focus-visible {
+  background: var(--color-surface-alt);
+  outline: none;
+}
+
 .scd-table-meta {
   margin: 0 0 var(--space-3);
   font-size: var(--text-sm);

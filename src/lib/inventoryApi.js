@@ -1,4 +1,9 @@
 import { apiRequest } from './apiClient'
+import {
+  getCachedCategories,
+  mergeCategoryIntoCache,
+  setCachedCategories,
+} from './categoryCatalogCache'
 
 export function getInventoryKpisByLocal(localId, token) {
   return apiRequest(`/inventory/kpis/${localId}`, { token })
@@ -191,6 +196,68 @@ export function buildSupplierKpisPath(localId, opts = {}) {
 
 export function getSupplierKpisByLocal(localId, token, opts = {}) {
   return apiRequest(buildSupplierKpisPath(localId, opts), { token })
+}
+
+/** GET /categories?local_id= — listado del local (HU-87). */
+export function buildCategoriesListPath(localId) {
+  const params = new URLSearchParams()
+  params.set('local_id', String(localId))
+  return `/categories?${params.toString()}`
+}
+
+export function getCategoriesForLocal(localId, token) {
+  return apiRequest(buildCategoriesListPath(localId), { token })
+}
+
+/** Lista categorías usando caché en memoria (HU-87). */
+export async function loadCategoriesForLocalCached(localId, token) {
+  const cached = getCachedCategories(localId)
+  if (cached) return cached
+  const data = await getCategoriesForLocal(localId, token)
+  const rows = Array.isArray(data) ? data : []
+  setCachedCategories(localId, rows)
+  return rows
+}
+
+/** POST /categories — ADMIN+; body { local_id, name, is_active }. */
+export function postCategory(token, body) {
+  return apiRequest('/categories', { method: 'POST', token, body })
+}
+
+/**
+ * Resuelve el nombre canónico: reutiliza categoría existente (comparación sin distinguir mayúsculas)
+ * o crea una nueva vía POST y actualiza la caché (HU-87).
+ */
+export async function resolveCategoryNameForLocal(localId, token, rawName) {
+  const trimmed = String(rawName || '').trim()
+  if (!trimmed) {
+    throw new Error('Indica una categoría.')
+  }
+
+  let rows = getCachedCategories(localId)
+  if (!rows) {
+    const data = await getCategoriesForLocal(localId, token)
+    rows = Array.isArray(data) ? data : []
+    setCachedCategories(localId, rows)
+  }
+
+  const hit = rows.find((r) => String(r.name || '').toLowerCase() === trimmed.toLowerCase())
+  if (hit) {
+    return String(hit.name).trim()
+  }
+
+  const created = await postCategory(token, {
+    local_id: localId,
+    name: trimmed,
+    is_active: true,
+  })
+  const row = created && typeof created === 'object' ? created : null
+  if (row?.id != null && row?.name != null) {
+    mergeCategoryIntoCache(localId, row)
+    return String(row.name).trim()
+  }
+  mergeCategoryIntoCache(localId, { id: row?.id, name: trimmed, is_active: true })
+  return trimmed
 }
 
 export function postInventoryNewProduct(localId, token, body) {

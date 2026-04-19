@@ -1,6 +1,12 @@
 import { useCallback, useEffect, useState } from 'react'
 import { getAuthContext } from '../../lib/apiClient'
-import { getInventorySuppliersForLocal, postInventoryNewProduct, postSupplier } from '../../lib/inventoryApi'
+import {
+  getInventorySuppliersForLocal,
+  postInventoryNewProduct,
+  postSupplier,
+  resolveCategoryNameForLocal,
+} from '../../lib/inventoryApi'
+import CategoryTypeahead from './CategoryTypeahead'
 
 const UNITS = [
   { value: 'unidad', label: 'Unidad' },
@@ -112,9 +118,11 @@ function NuevoProductoModal({ open, localId, onClose, onSuccess }) {
     setSubmitting(true)
     try {
       const { token } = await getAuthContext()
+      const resolvedCategory = await resolveCategoryNameForLocal(localId, token, category)
+      setCategory(resolvedCategory)
       await postInventoryNewProduct(localId, token, {
         productName: productName.trim(),
-        category: category.trim(),
+        category: resolvedCategory,
         unit,
         currentStock: Number(currentStock) || 0,
         minStock: Number(minStock) || 0,
@@ -163,9 +171,14 @@ function NuevoProductoModal({ open, localId, onClose, onSuccess }) {
             <span>Nombre</span>
             <input value={productName} onChange={(ev) => setProductName(ev.target.value)} required />
           </label>
-          <label className="npmodal-field">
+          <label className="npmodal-field npmodal-field--category">
             <span>Categoría</span>
-            <input value={category} onChange={(ev) => setCategory(ev.target.value)} required />
+            <CategoryTypeahead
+              localId={localId}
+              value={category}
+              onChange={setCategory}
+              disabled={submitting}
+            />
           </label>
           <label className="npmodal-field">
             <span>Formato de medida</span>

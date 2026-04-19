@@ -5,6 +5,7 @@ import {
   buildSuppliersWithMetricsPath,
   buildSupplierDetailPath,
   buildSupplierPurchaseHistoryPath,
+  buildCategoriesListPath,
 } from './inventoryApi'
 
 describe('buildInventoryStockListPath (HU-47/HU-48 filtros)', () => {
@@ -110,6 +111,14 @@ describe('buildSupplierDetailPath (HU-69)', () => {
     expect(buildSupplierDetailPath(sid, bid)).toBe(
       `/suppliers/${encodeURIComponent(sid)}?business_id=${encodeURIComponent(bid)}`,
     )
+  })
+})
+
+describe('buildCategoriesListPath (HU-87)', () => {
+  const local = '11111111-1111-1111-1111-111111111111'
+
+  it('incluye local_id en query', () => {
+    expect(buildCategoriesListPath(local)).toBe(`/categories?local_id=${encodeURIComponent(local)}`)
   })
 })
 
