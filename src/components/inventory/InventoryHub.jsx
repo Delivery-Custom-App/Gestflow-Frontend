@@ -78,7 +78,8 @@ function InventoryHub({ user, userRole, onLogout }) {
         <header className="inv-hub-page__intro">
           <h2 className="inv-hub-page__title">Centro de gestión de inventario</h2>
           <p className="inv-hub-page__lead">
-            Selecciona un área para trabajar. El control de stock incluye KPIs, listado y alta de productos.
+            Selecciona un área para trabajar: recetas, stock operativo o{' '}
+            <strong>proveedores</strong> (KPIs, listado y registro de proveedores).
           </p>
         </header>
 
@@ -144,7 +145,7 @@ function InventoryHub({ user, userRole, onLogout }) {
             </div>
           </article>
 
-          <article className="inv-feature-card">
+          <article className="inv-feature-card inv-feature-card--emphasis">
             <div className="inv-feature-card__head">
               <span className="inv-feature-card__head-icon" aria-hidden="true">
                 <svg viewBox="0 0 24 24" fill="none">
@@ -154,7 +155,7 @@ function InventoryHub({ user, userRole, onLogout }) {
               </span>
               <div className="inv-feature-card__head-text">
                 <h3>Proveedores</h3>
-                <p>Red de compras</p>
+                <p>KPIs, listado y registro</p>
               </div>
               <span className="inv-feature-card__chev" aria-hidden="true">
                 <svg viewBox="0 0 24 24" width="20" height="20" fill="none">
@@ -173,9 +174,9 @@ function InventoryHub({ user, userRole, onLogout }) {
                 type="button"
                 className="inv-feature-card__btn inv-feature-card__btn--primary"
                 onClick={openSuppliers}
-                aria-label="Abrir gestión de proveedores"
+                aria-label="Abrir módulo de proveedores: KPIs y listado"
               >
-                Gestionar Proveedores →
+                Ir a Proveedores y KPIs →
               </button>
             </div>
           </article>

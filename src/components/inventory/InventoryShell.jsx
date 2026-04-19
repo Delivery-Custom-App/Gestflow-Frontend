@@ -91,6 +91,7 @@ function InventoryShell({ user, userRole, onLogout, active, children }) {
             type="button"
             className={active === 'suppliers' ? 'inv-nav-link is-active' : 'inv-nav-link'}
             onClick={goSuppliers}
+            title="KPIs del mes, listado con métricas y registro de proveedores"
           >
             <span className="inv-nav-link__icon" aria-hidden="true">
               <svg viewBox="0 0 24 24" fill="none">
@@ -98,7 +99,7 @@ function InventoryShell({ user, userRole, onLogout, active, children }) {
                 <path d="M9 18v-4h6v4" stroke="currentColor" strokeWidth="1.5" />
               </svg>
             </span>
-            Proveedores y KPIs
+            Proveedores
           </button>
         </nav>
 

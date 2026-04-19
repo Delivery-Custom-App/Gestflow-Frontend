@@ -9,6 +9,7 @@ import {
 import { isInventoryAdminRole } from '../../utils/inventoryAccess'
 import InventoryShell from './InventoryShell'
 import LoadingSpinner from '../LoadingSpinner'
+import RegisterSupplierModal from './RegisterSupplierModal'
 import '../../styles/inventory/StockControlDashboard.css'
 
 const MONTH_NAMES = [
@@ -60,6 +61,8 @@ function SuppliersKpisDashboard({ user, userRole, onLogout }) {
   const [suppliersRows, setSuppliersRows] = useState([])
   const [suppliersLoading, setSuppliersLoading] = useState(true)
   const [suppliersError, setSuppliersError] = useState('')
+  const [resolvedBusinessId, setResolvedBusinessId] = useState(null)
+  const [registerSupplierOpen, setRegisterSupplierOpen] = useState(false)
 
   const load = useCallback(async () => {
     if (!canAccess) {
@@ -92,26 +95,30 @@ function SuppliersKpisDashboard({ user, userRole, onLogout }) {
       setSuppliersRows([])
       setSuppliersLoading(false)
       setSuppliersError('')
+      setResolvedBusinessId(null)
       return
     }
     setSuppliersError('')
     setSuppliersLoading(true)
     try {
       const { token, businessId: bidFromToken } = await getAuthContext()
-      let businessId = bidFromToken
-      if (!businessId) {
-        const loc = await getLocalById(localId, token)
-        businessId = loc?.business_id ?? null
-      }
+      // Siempre derivar el negocio del local en la URL. Si el JWT trae otro business_id
+      // (p. ej. Superadmin), usarlo primero rompía el listado y el alta de proveedores.
+      const loc = await getLocalById(localId, token)
+      const businessId =
+        loc?.business_id != null ? String(loc.business_id) : bidFromToken != null ? String(bidFromToken) : null
       if (!businessId) {
         setSuppliersRows([])
         setSuppliersError('No se pudo determinar el negocio del local.')
+        setResolvedBusinessId(null)
         return
       }
+      setResolvedBusinessId(businessId)
       const rows = await getSuppliersWithMetricsForBusiness(token, businessId)
       setSuppliersRows(Array.isArray(rows) ? rows : [])
     } catch (e) {
       setSuppliersRows([])
+      setResolvedBusinessId(null)
       setSuppliersError(e?.message || 'No se pudo cargar el listado de proveedores.')
     } finally {
       setSuppliersLoading(false)
@@ -265,13 +272,25 @@ function SuppliersKpisDashboard({ user, userRole, onLogout }) {
 
         {canAccess ? (
           <section className="scd-suppliers-list-section" aria-labelledby="scd-suppliers-list-title">
-            <div className="scd-table-meta">
-              <h2 id="scd-suppliers-list-title" className="scd-section-title">
-                Listado de proveedores
-              </h2>
-              <p className="scd-table-actions-hint">
-                Unidades = stock actual de productos del proveedor; valor = stock × costo unitario registrado.
-              </p>
+            <div className="scd-table-meta scd-table-meta--with-action">
+              <div>
+                <h2 id="scd-suppliers-list-title" className="scd-section-title">
+                  Listado de proveedores
+                </h2>
+                <p className="scd-table-actions-hint">
+                  Unidades = stock actual de productos del proveedor; valor = stock × costo unitario registrado.
+                </p>
+              </div>
+              {resolvedBusinessId ? (
+                <button
+                  type="button"
+                  className="scd-btn-register-supplier"
+                  onClick={() => setRegisterSupplierOpen(true)}
+                  disabled={suppliersLoading}
+                >
+                  Registrar proveedor
+                </button>
+              ) : null}
             </div>
             {suppliersError ? <div className="scd-status scd-status--error">{suppliersError}</div> : null}
             {suppliersLoading ? (
@@ -310,6 +329,16 @@ function SuppliersKpisDashboard({ user, userRole, onLogout }) {
             )}
           </section>
         ) : null}
+
+        <RegisterSupplierModal
+          open={registerSupplierOpen}
+          onClose={() => setRegisterSupplierOpen(false)}
+          businessId={resolvedBusinessId}
+          onSuccess={() => {
+            load()
+            loadSuppliersList()
+          }}
+        />
       </div>
     </InventoryShell>
   )

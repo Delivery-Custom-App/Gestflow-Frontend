@@ -97,7 +97,8 @@ export function getSuppliersWithMetricsForBusiness(token, businessId) {
 
 /**
  * Crea un proveedor en el negocio. `business_id` opcional: el backend usa el del usuario si es admin.
- * @param {object} body - { name: string, business_id?: string }
+ * Alta rápida: `{ name }`. Registro completo (HU-86): también `rut`, `address`, `category`, `contact_name`, `phone`, `email`.
+ * @param {object} body
  */
 export function postSupplier(token, body) {
   return apiRequest('/suppliers', { method: 'POST', token, body })

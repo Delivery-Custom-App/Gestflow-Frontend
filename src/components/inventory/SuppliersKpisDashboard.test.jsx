@@ -74,6 +74,8 @@ describe('SuppliersKpisDashboard', () => {
     expect(screen.getByText('Proveedor Demo')).toBeInTheDocument()
     expect(screen.getByText('12')).toBeInTheDocument()
     expect(screen.getByText('$48.000')).toBeInTheDocument()
+
+    expect(screen.getByRole('button', { name: /Registrar proveedor/i })).toBeInTheDocument()
   })
 
   it('sin rol admin muestra mensaje de permisos', async () => {
