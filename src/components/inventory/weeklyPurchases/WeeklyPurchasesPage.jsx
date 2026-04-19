@@ -4,6 +4,7 @@ import { getAuthContext } from '../../../lib/apiClient'
 import {
   getLocalById,
   getSupplierDetailForBusiness,
+  getSupplierPurchaseHistoryForBusiness,
   getSuppliersWithMetricsForBusiness,
 } from '../../../lib/inventoryApi'
 import {
@@ -24,6 +25,37 @@ function formatMoneyClp(value) {
     minimumFractionDigits: 0,
   }).format(Math.round(Number(value)))
   return `$${n}`
+}
+
+/** Líneas iniciales del borrador desde catálogo/inventario (HU-69). */
+function linesFromSupplierDetail(detail) {
+  const products = Array.isArray(detail?.purchased_products) ? detail.purchased_products : []
+  return products.map((p) => ({
+    product_id: p.product_id,
+    product_name: p.name || String(p.product_id),
+    quantity_ordered: 1,
+    unit_price_clp: Math.max(0, Math.round(Number(p.unit_price_clp) || 0)),
+    line_notes: null,
+  }))
+}
+
+/**
+ * HU-84: si no hay filas en inventario, sugerir productos desde histórico de órdenes semanales (precio medio recibido).
+ */
+function linesFromPurchaseHistory(history) {
+  const products = Array.isArray(history?.products) ? history.products : []
+  return products.map((p) => {
+    const qty = Number(p.total_quantity_received) || 0
+    const total = Number(p.total_amount_received_clp) || 0
+    const avg = qty > 0 ? Math.round(total / qty) : 0
+    return {
+      product_id: p.product_id,
+      product_name: p.product_name || String(p.product_id),
+      quantity_ordered: 1,
+      unit_price_clp: Math.max(0, avg),
+      line_notes: null,
+    }
+  })
 }
 
 /** Lunes ISO de la semana que contiene la fecha YYYY-MM-DD */
@@ -54,6 +86,7 @@ function NewWeeklyOrderModal({ open, businessId, localId, onClose, onCreated }) 
   const [supplierId, setSupplierId] = useState('')
   const [weekDate, setWeekDate] = useState(() => mondayOfWeekContaining(new Date().toISOString().slice(0, 10)))
   const [lines, setLines] = useState([])
+  const [purchaseHistory, setPurchaseHistory] = useState(null)
   const [loadingSup, setLoadingSup] = useState(false)
   const [loadingProducts, setLoadingProducts] = useState(false)
   const [submitting, setSubmitting] = useState(false)
@@ -83,27 +116,32 @@ function NewWeeklyOrderModal({ open, businessId, localId, onClose, onCreated }) 
   useEffect(() => {
     if (!open || !supplierId || !businessId) {
       setLines([])
+      setPurchaseHistory(null)
       return
     }
     let cancelled = false
     ;(async () => {
       setLoadingProducts(true)
       setError('')
+      setPurchaseHistory(null)
       try {
         const { token } = await getAuthContext()
-        const detail = await getSupplierDetailForBusiness(token, supplierId, businessId)
-        const products = Array.isArray(detail?.purchased_products) ? detail.purchased_products : []
-        const next = products.map((p) => ({
-          product_id: p.product_id,
-          product_name: p.name || String(p.product_id),
-          quantity_ordered: 1,
-          unit_price_clp: Math.max(0, Math.round(Number(p.unit_price_clp) || 0)),
-          line_notes: null,
-        }))
-        if (!cancelled) setLines(next)
+        const [detail, history] = await Promise.all([
+          getSupplierDetailForBusiness(token, supplierId, businessId).catch(() => null),
+          getSupplierPurchaseHistoryForBusiness(token, supplierId, businessId).catch(() => null),
+        ])
+        if (cancelled) return
+        setPurchaseHistory(history && typeof history === 'object' ? history : null)
+        const fromDetail = linesFromSupplierDetail(detail)
+        if (fromDetail.length > 0) {
+          setLines(fromDetail)
+        } else {
+          setLines(linesFromPurchaseHistory(history))
+        }
       } catch (e) {
         if (!cancelled) {
           setLines([])
+          setPurchaseHistory(null)
           setError(e?.message || 'No se pudieron cargar productos del proveedor.')
         }
       } finally {
@@ -243,7 +281,53 @@ function NewWeeklyOrderModal({ open, businessId, localId, onClose, onCreated }) 
           {loadingProducts ? (
             <div className="wp-new-order-loading" aria-live="polite">
               <span className="wp-new-order-loading__pulse" />
-              <span>Cargando productos del proveedor…</span>
+              <span>Cargando catálogo e historial de compras…</span>
+            </div>
+          ) : null}
+
+          {supplierId && !loadingProducts && Array.isArray(purchaseHistory?.products) && purchaseHistory.products.length > 0 ? (
+            <div className="wp-new-order-history" aria-labelledby="wp-history-title">
+              <div className="wp-new-order-history__head">
+                <h3 id="wp-history-title">Productos comprados (historial)</h3>
+                <span className="wp-new-order-history__badge">HU-84 · órdenes semanales recibidas</span>
+              </div>
+              <p className="wp-new-order-history__hint">
+                Referencia por producto: última semana con actividad, cantidad total recibida y monto en compras ya
+                recepcionadas.
+              </p>
+              <div className="wp-new-order-history__table-wrap">
+                <table className="wp-new-order-history__table">
+                  <thead>
+                    <tr>
+                      <th>Producto</th>
+                      <th>Última compra (lunes)</th>
+                      <th>Cant. recibida</th>
+                      <th>Valor unit. (prom.)</th>
+                      <th>Valor total</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {purchaseHistory.products.map((row) => {
+                      const qty = Number(row.total_quantity_received) || 0
+                      const total = Number(row.total_amount_received_clp) || 0
+                      const unitAvg = qty > 0 ? Math.round(total / qty) : null
+                      return (
+                      <tr key={String(row.product_id)}>
+                        <td>{row.product_name || row.product_id}</td>
+                        <td>{row.last_purchase_week_start_date || '—'}</td>
+                        <td>
+                          {row.total_quantity_received != null
+                            ? Number(row.total_quantity_received).toLocaleString('es-CL', { maximumFractionDigits: 2 })
+                            : '—'}
+                        </td>
+                        <td>{unitAvg != null ? formatMoneyClp(unitAvg) : '—'}</td>
+                        <td>{formatMoneyClp(row.total_amount_received_clp)}</td>
+                      </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
             </div>
           ) : null}
 
@@ -260,10 +344,10 @@ function NewWeeklyOrderModal({ open, businessId, localId, onClose, onCreated }) 
                 </svg>
               </span>
               <div>
-                <strong>Sin productos para este proveedor</strong>
+                <strong>Sin líneas para el borrador</strong>
                 <p>
-                  No hay ítems con stock asociados en inventario. Asociá productos al proveedor o elegí otro
-                  proveedor.
+                  No hay productos con stock en inventario ni historial de compras semanales para este proveedor.
+                  Asociá productos al proveedor, registrá recepciones en órdenes previas o elegí otro proveedor.
                 </p>
               </div>
             </div>

@@ -4,6 +4,7 @@ import {
   buildInventoryProductsPath,
   buildSuppliersWithMetricsPath,
   buildSupplierDetailPath,
+  buildSupplierPurchaseHistoryPath,
 } from './inventoryApi'
 
 describe('buildInventoryStockListPath (HU-47/HU-48 filtros)', () => {
@@ -101,5 +102,26 @@ describe('buildSupplierDetailPath (HU-69)', () => {
     expect(buildSupplierDetailPath(sid, bid)).toBe(
       `/suppliers/${encodeURIComponent(sid)}?business_id=${encodeURIComponent(bid)}`,
     )
+  })
+})
+
+describe('buildSupplierPurchaseHistoryPath (HU-84)', () => {
+  const sid = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'
+  const bid = '33333333-3333-3333-3333-333333333333'
+
+  it('incluye business_id', () => {
+    expect(buildSupplierPurchaseHistoryPath(sid, bid)).toBe(
+      `/suppliers/${encodeURIComponent(sid)}/purchase-history?business_id=${encodeURIComponent(bid)}`,
+    )
+  })
+
+  it('incluye week_from y week_to cuando se pasan', () => {
+    const path = buildSupplierPurchaseHistoryPath(sid, bid, {
+      weekFrom: '2026-04-06',
+      weekTo: '2026-04-20',
+    })
+    expect(path).toContain(`business_id=${encodeURIComponent(bid)}`)
+    expect(path).toContain('week_from=2026-04-06')
+    expect(path).toContain('week_to=2026-04-20')
   })
 })

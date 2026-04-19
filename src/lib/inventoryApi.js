@@ -110,6 +110,27 @@ export function getSupplierDetailForBusiness(token, supplierId, businessId) {
 }
 
 /**
+ * HU-84: histórico de compras por producto desde órdenes semanales (cantidades recibidas, totales CLP).
+ * GET /suppliers/{supplier_id}/purchase-history?business_id=&week_from=&week_to=
+ * @param {{ weekFrom?: string, weekTo?: string }} [opts] - lunes YYYY-MM-DD opcional
+ */
+export function buildSupplierPurchaseHistoryPath(supplierId, businessId, opts = {}) {
+  const params = new URLSearchParams()
+  params.set('business_id', String(businessId))
+  if (opts.weekFrom && String(opts.weekFrom).trim()) {
+    params.set('week_from', String(opts.weekFrom).trim())
+  }
+  if (opts.weekTo && String(opts.weekTo).trim()) {
+    params.set('week_to', String(opts.weekTo).trim())
+  }
+  return `/suppliers/${encodeURIComponent(String(supplierId))}/purchase-history?${params.toString()}`
+}
+
+export function getSupplierPurchaseHistoryForBusiness(token, supplierId, businessId, opts = {}) {
+  return apiRequest(buildSupplierPurchaseHistoryPath(supplierId, businessId, opts), { token })
+}
+
+/**
  * Crea un proveedor en el negocio. `business_id` opcional: el backend usa el del usuario si es admin.
  * Alta rápida: `{ name }`. Registro completo (HU-86): también `rut`, `address`, `category`, `contact_name`, `phone`, `email`.
  * @param {object} body
