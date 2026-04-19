@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useNavigate, useParams, useLocation } from 'react-router-dom'
+import { useNavigate, useParams, useLocation, useSearchParams } from 'react-router-dom'
 import { getAuthContext } from '../../../lib/apiClient'
 import {
   getLocalById,
@@ -17,6 +17,9 @@ import InventoryShell from '../InventoryShell'
 import SuppliersSubNav from '../SuppliersSubNav'
 import LoadingSpinner from '../../LoadingSpinner'
 import '../../../styles/inventory/WeeklyPurchases.css'
+
+/** HU-85: espera antes de consultar API al escribir nombre de proveedor */
+const SUPPLIER_SEARCH_DEBOUNCE_MS = 350
 
 function formatMoneyClp(value) {
   if (value == null || Number.isNaN(Number(value))) return '—'
@@ -81,7 +84,15 @@ function statusBadgeClass(status) {
   return `wp-badge wp-badge--${s.replace(/[^a-z_]/g, '_')}`
 }
 
-function NewWeeklyOrderModal({ open, businessId, localId, onClose, onCreated }) {
+function NewWeeklyOrderModal({
+  open,
+  businessId,
+  localId,
+  onClose,
+  onCreated,
+  supplierSearchDebounced = '',
+  supplierCategoryFilter = '',
+}) {
   const [suppliers, setSuppliers] = useState([])
   const [supplierId, setSupplierId] = useState('')
   const [weekDate, setWeekDate] = useState(() => mondayOfWeekContaining(new Date().toISOString().slice(0, 10)))
@@ -100,7 +111,14 @@ function NewWeeklyOrderModal({ open, businessId, localId, onClose, onCreated }) 
       setError('')
       try {
         const { token } = await getAuthContext()
-        const rows = await getSuppliersWithMetricsForBusiness(token, businessId)
+        const filters = {}
+        if (supplierSearchDebounced && String(supplierSearchDebounced).trim()) {
+          filters.search = String(supplierSearchDebounced).trim()
+        }
+        if (supplierCategoryFilter && String(supplierCategoryFilter).trim()) {
+          filters.category = String(supplierCategoryFilter).trim()
+        }
+        const rows = await getSuppliersWithMetricsForBusiness(token, businessId, filters)
         if (!cancelled) setSuppliers(Array.isArray(rows) ? rows : [])
       } catch (e) {
         if (!cancelled) setError(e?.message || 'No se pudieron cargar proveedores.')
@@ -111,7 +129,13 @@ function NewWeeklyOrderModal({ open, businessId, localId, onClose, onCreated }) 
     return () => {
       cancelled = true
     }
-  }, [open, businessId])
+  }, [open, businessId, supplierSearchDebounced, supplierCategoryFilter])
+
+  useEffect(() => {
+    if (!supplierId) return
+    const ok = suppliers.some((s) => String(s.id) === String(supplierId))
+    if (!ok) setSupplierId('')
+  }, [suppliers, supplierId])
 
   useEffect(() => {
     if (!open || !supplierId || !businessId) {
@@ -261,7 +285,9 @@ function NewWeeklyOrderModal({ open, businessId, localId, onClose, onCreated }) 
             </label>
             <label className="npmodal-field">
               <span>Proveedor</span>
-              <span className="wp-new-order-field-hint">Solo aparecen proveedores del negocio.</span>
+              <span className="wp-new-order-field-hint">
+                Mismo criterio que arriba: búsqueda por nombre y categoría en la página.
+              </span>
               <select
                 value={supplierId}
                 onChange={(ev) => setSupplierId(ev.target.value)}
@@ -412,6 +438,7 @@ function WeeklyPurchasesPage({ user, userRole, onLogout }) {
   const navigate = useNavigate()
   const { localId } = useParams()
   const location = useLocation()
+  const [searchParams, setSearchParams] = useSearchParams()
 
   const selectedLocal = useMemo(() => {
     if (location.state?.local) return location.state.local
@@ -439,6 +466,32 @@ function WeeklyPurchasesPage({ user, userRole, onLogout }) {
   const [reportError, setReportError] = useState('')
 
   const [newModalOpen, setNewModalOpen] = useState(false)
+
+  const [supplierSearchInput, setSupplierSearchInput] = useState(() => searchParams.get('search') || '')
+  const [supplierSearchDebounced, setSupplierSearchDebounced] = useState(() => searchParams.get('search') || '')
+  const [supplierCategoryFilter, setSupplierCategoryFilter] = useState(() => searchParams.get('category') || '')
+  const [supplierCategoryOptions, setSupplierCategoryOptions] = useState([])
+
+  useEffect(() => {
+    const id = setTimeout(() => {
+      setSupplierSearchDebounced(String(supplierSearchInput || '').trim())
+    }, SUPPLIER_SEARCH_DEBOUNCE_MS)
+    return () => clearTimeout(id)
+  }, [supplierSearchInput])
+
+  useEffect(() => {
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev)
+        if (supplierSearchDebounced) next.set('search', supplierSearchDebounced)
+        else next.delete('search')
+        if (supplierCategoryFilter) next.set('category', supplierCategoryFilter)
+        else next.delete('category')
+        return next
+      },
+      { replace: true },
+    )
+  }, [supplierSearchDebounced, supplierCategoryFilter, setSearchParams])
 
   const resolveBusiness = useCallback(async () => {
     if (!localId) return null
@@ -496,6 +549,36 @@ function WeeklyPurchasesPage({ user, userRole, onLogout }) {
 
   useEffect(() => {
     if (!businessId || !canAccess) {
+      setSupplierCategoryOptions([])
+      return
+    }
+    let cancelled = false
+    ;(async () => {
+      try {
+        const { token } = await getAuthContext()
+        const rows = await getSuppliersWithMetricsForBusiness(token, businessId)
+        if (cancelled) return
+        const set = new Set()
+        for (const r of Array.isArray(rows) ? rows : []) {
+          const c = r.category && String(r.category).trim()
+          if (c) set.add(c)
+        }
+        setSupplierCategoryOptions([...set].sort((a, b) => a.localeCompare(b, 'es')))
+      } catch {
+        if (!cancelled) setSupplierCategoryOptions([])
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [businessId, canAccess])
+
+  useEffect(() => {
+    if (businessId) setSupplierNames({})
+  }, [businessId])
+
+  useEffect(() => {
+    if (!businessId || !canAccess) {
       setSuppliers([])
       setSupplierNames({})
       return
@@ -504,26 +587,36 @@ function WeeklyPurchasesPage({ user, userRole, onLogout }) {
     ;(async () => {
       try {
         const { token } = await getAuthContext()
-        const rows = await getSuppliersWithMetricsForBusiness(token, businessId)
+        const filters = {}
+        if (supplierSearchDebounced) filters.search = supplierSearchDebounced
+        if (supplierCategoryFilter) filters.category = supplierCategoryFilter
+        const rows = await getSuppliersWithMetricsForBusiness(token, businessId, filters)
         const list = Array.isArray(rows) ? rows : []
         if (cancelled) return
         setSuppliers(list)
-        const map = {}
-        for (const r of list) {
-          if (r.id) map[String(r.id)] = r.name || String(r.id)
-        }
-        setSupplierNames(map)
+        setSupplierNames((prev) => {
+          const next = { ...prev }
+          for (const r of list) {
+            if (r.id) next[String(r.id)] = r.name || String(r.id)
+          }
+          return next
+        })
       } catch {
         if (!cancelled) {
           setSuppliers([])
-          setSupplierNames({})
         }
       }
     })()
     return () => {
       cancelled = true
     }
-  }, [businessId, canAccess])
+  }, [businessId, canAccess, supplierSearchDebounced, supplierCategoryFilter])
+
+  useEffect(() => {
+    if (!filterSupplier) return
+    const ok = suppliers.some((s) => String(s.id) === String(filterSupplier))
+    if (!ok) setFilterSupplier('')
+  }, [suppliers, filterSupplier])
 
   const loadReport = async () => {
     if (!businessId) return
@@ -595,13 +688,40 @@ function WeeklyPurchasesPage({ user, userRole, onLogout }) {
               </button>
             </div>
 
+            <div className="wp-toolbar wp-toolbar--supplier-filters" aria-label="Filtro del catálogo de proveedores">
+              <label>
+                Buscar proveedor
+                <input
+                  type="search"
+                  value={supplierSearchInput}
+                  onChange={(ev) => setSupplierSearchInput(ev.target.value)}
+                  placeholder="Nombre (coincidencia parcial)"
+                  autoComplete="off"
+                />
+              </label>
+              <label>
+                Categoría (proveedor)
+                <select
+                  value={supplierCategoryFilter}
+                  onChange={(ev) => setSupplierCategoryFilter(ev.target.value)}
+                >
+                  <option value="">Todas</option>
+                  {supplierCategoryOptions.map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+
             <div className="wp-toolbar">
               <label>
                 Filtrar por semana (lunes)
                 <input type="date" value={filterWeek} onChange={(ev) => setFilterWeek(ev.target.value)} />
               </label>
               <label>
-                Proveedor
+                Proveedor (orden)
                 <select value={filterSupplier} onChange={(ev) => setFilterSupplier(ev.target.value)}>
                   <option value="">Todos</option>
                   {suppliers.map((s) => (
@@ -737,6 +857,8 @@ function WeeklyPurchasesPage({ user, userRole, onLogout }) {
               localId={localId}
               onClose={() => setNewModalOpen(false)}
               onCreated={() => loadOrders()}
+              supplierSearchDebounced={supplierSearchDebounced}
+              supplierCategoryFilter={supplierCategoryFilter}
             />
           </>
         ) : null}

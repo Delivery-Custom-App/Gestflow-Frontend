@@ -93,6 +93,14 @@ describe('buildSuppliersWithMetricsPath (HU-68)', () => {
     const bid = '33333333-3333-3333-3333-333333333333'
     expect(buildSuppliersWithMetricsPath(bid)).toBe(`/suppliers?business_id=${encodeURIComponent(bid)}`)
   })
+
+  it('HU-85: añade search y category cuando vienen en filters', () => {
+    const bid = '33333333-3333-3333-3333-333333333333'
+    const path = buildSuppliersWithMetricsPath(bid, { search: '  acme ', category: ' Insumos ' })
+    expect(path).toContain(`business_id=${encodeURIComponent(bid)}`)
+    expect(path).toContain(`search=${encodeURIComponent('acme')}`)
+    expect(path).toContain(`category=${encodeURIComponent('Insumos')}`)
+  })
 })
 
 describe('buildSupplierDetailPath (HU-69)', () => {

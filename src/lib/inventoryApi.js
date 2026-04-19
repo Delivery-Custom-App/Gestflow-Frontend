@@ -71,9 +71,24 @@ export async function getInventoryProductsPage(localId, token, filters = {}) {
   }
 }
 
-/** Proveedores activos del negocio asociado al local. */
-export function getInventorySuppliersForLocal(localId, token) {
-  return apiRequest(`/inventory/locals/${localId}/suppliers`, { token })
+/**
+ * Proveedores activos del negocio asociado al local.
+ * @param {{ search?: string, category?: string }} [filters] - HU-85
+ */
+export function buildInventorySuppliersForLocalPath(localId, filters = {}) {
+  const params = new URLSearchParams()
+  if (filters.search && String(filters.search).trim()) {
+    params.set('search', String(filters.search).trim())
+  }
+  if (filters.category && String(filters.category).trim()) {
+    params.set('category', String(filters.category).trim())
+  }
+  const qs = params.toString()
+  return `/inventory/locals/${localId}/suppliers${qs ? `?${qs}` : ''}`
+}
+
+export function getInventorySuppliersForLocal(localId, token, filters = {}) {
+  return apiRequest(buildInventorySuppliersForLocalPath(localId, filters), { token })
 }
 
 /** Local por id (incluye business_id). */
@@ -84,15 +99,22 @@ export function getLocalById(localId, token) {
 /**
  * Listado de proveedores con métricas agregadas (HU-68): unidades en inventario y valor estimado (CLP).
  * GET /suppliers?business_id=
+ * @param {{ search?: string, category?: string }} [filters] - HU-85: nombre y categoría (combinables)
  */
-export function buildSuppliersWithMetricsPath(businessId) {
+export function buildSuppliersWithMetricsPath(businessId, filters = {}) {
   const params = new URLSearchParams()
   params.set('business_id', String(businessId))
+  if (filters.search && String(filters.search).trim()) {
+    params.set('search', String(filters.search).trim())
+  }
+  if (filters.category && String(filters.category).trim()) {
+    params.set('category', String(filters.category).trim())
+  }
   return `/suppliers?${params.toString()}`
 }
 
-export function getSuppliersWithMetricsForBusiness(token, businessId) {
-  return apiRequest(buildSuppliersWithMetricsPath(businessId), { token })
+export function getSuppliersWithMetricsForBusiness(token, businessId, filters = {}) {
+  return apiRequest(buildSuppliersWithMetricsPath(businessId, filters), { token })
 }
 
 /**
