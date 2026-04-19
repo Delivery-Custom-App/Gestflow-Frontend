@@ -32,15 +32,15 @@ function LocalModulesHomeRedirect() {
   return <Navigate to="/admin" replace state={merged} />
 }
 
-/** Rutas antiguas /inventario/compras-semanales → unificadas bajo /inventario/proveedores/… */
-function LegacyComprasSemanalesToSuppliersRedirect() {
+/** Rutas antiguas bajo /proveedores/compras-semanales → URL canónica /inventario/compras-semanales */
+function LegacyProveedoresComprasSemanalesRedirect() {
   const { localId } = useParams()
-  return <Navigate to={`/local/${localId}/inventario/proveedores/compras-semanales`} replace />
+  return <Navigate to={`/local/${localId}/inventario/compras-semanales`} replace />
 }
 
-function LegacyComprasSemanalesDetailToSuppliersRedirect() {
+function LegacyProveedoresComprasSemanalesDetailRedirect() {
   const { localId, orderId } = useParams()
-  return <Navigate to={`/local/${localId}/inventario/proveedores/compras-semanales/${orderId}`} replace />
+  return <Navigate to={`/local/${localId}/inventario/compras-semanales/${orderId}`} replace />
 }
 
 function formatRoleLabel(role) {
@@ -212,24 +212,24 @@ function App() {
             element={<RecipesPage user={user} userRole={userRole} onLogout={handleLogout} />}
           />
           <Route
-            path="/local/:localId/inventario/proveedores/compras-semanales/:orderId"
+            path="/local/:localId/inventario/compras-semanales/:orderId"
             element={<WeeklyPurchaseDetailPage user={user} userRole={userRole} onLogout={handleLogout} />}
           />
           <Route
-            path="/local/:localId/inventario/proveedores/compras-semanales"
+            path="/local/:localId/inventario/compras-semanales"
             element={<WeeklyPurchasesPage user={user} userRole={userRole} onLogout={handleLogout} />}
+          />
+          <Route
+            path="/local/:localId/inventario/proveedores/compras-semanales/:orderId"
+            element={<LegacyProveedoresComprasSemanalesDetailRedirect />}
+          />
+          <Route
+            path="/local/:localId/inventario/proveedores/compras-semanales"
+            element={<LegacyProveedoresComprasSemanalesRedirect />}
           />
           <Route
             path="/local/:localId/inventario/proveedores"
             element={<SuppliersKpisDashboard user={user} userRole={userRole} onLogout={handleLogout} />}
-          />
-          <Route
-            path="/local/:localId/inventario/compras-semanales/:orderId"
-            element={<LegacyComprasSemanalesDetailToSuppliersRedirect />}
-          />
-          <Route
-            path="/local/:localId/inventario/compras-semanales"
-            element={<LegacyComprasSemanalesToSuppliersRedirect />}
           />
           <Route
             path="/local/:localId/inventario"
@@ -384,24 +384,24 @@ function App() {
           element={<RecipesPage user={user} userRole={userRole} onLogout={handleLogout} />}
         />
         <Route
-          path="/local/:localId/inventario/proveedores/compras-semanales/:orderId"
+          path="/local/:localId/inventario/compras-semanales/:orderId"
           element={<WeeklyPurchaseDetailPage user={user} userRole={userRole} onLogout={handleLogout} />}
         />
         <Route
-          path="/local/:localId/inventario/proveedores/compras-semanales"
+          path="/local/:localId/inventario/compras-semanales"
           element={<WeeklyPurchasesPage user={user} userRole={userRole} onLogout={handleLogout} />}
+        />
+        <Route
+          path="/local/:localId/inventario/proveedores/compras-semanales/:orderId"
+          element={<LegacyProveedoresComprasSemanalesDetailRedirect />}
+        />
+        <Route
+          path="/local/:localId/inventario/proveedores/compras-semanales"
+          element={<LegacyProveedoresComprasSemanalesRedirect />}
         />
         <Route
           path="/local/:localId/inventario/proveedores"
           element={<SuppliersKpisDashboard user={user} userRole={userRole} onLogout={handleLogout} />}
-        />
-        <Route
-          path="/local/:localId/inventario/compras-semanales/:orderId"
-          element={<LegacyComprasSemanalesDetailToSuppliersRedirect />}
-        />
-        <Route
-          path="/local/:localId/inventario/compras-semanales"
-          element={<LegacyComprasSemanalesToSuppliersRedirect />}
         />
         <Route
           path="/local/:localId/inventario"

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { getAuthContext } from '../../lib/apiClient'
 import {
   getInventorySuppliersForLocal,
+  getLocalById,
   postInventoryNewProduct,
   postSupplier,
   resolveCategoryNameForLocal,
@@ -82,9 +83,17 @@ function NuevoProductoModal({ open, localId, onClose, onSuccess }) {
     setAddingSupplier(true)
     setError('')
     try {
-      const { token, businessId } = await getAuthContext()
-      const body = { name }
-      if (businessId) body.business_id = businessId
+      const { token, businessId: bidFromToken } = await getAuthContext()
+      let businessId = bidFromToken != null ? String(bidFromToken) : null
+      if (!businessId && localId) {
+        const loc = await getLocalById(localId, token)
+        if (loc?.business_id != null) businessId = String(loc.business_id)
+      }
+      if (!businessId) {
+        setError('No se pudo determinar el negocio del local. No se puede crear el proveedor.')
+        return
+      }
+      const body = { name, business_id: businessId }
       const created = await postSupplier(token, body)
       setNewSupplierName('')
       await loadSuppliers()
@@ -152,7 +161,7 @@ function NuevoProductoModal({ open, localId, onClose, onSuccess }) {
   return (
     <div className="npmodal-backdrop" role="presentation" onClick={onClose}>
       <div
-        className="npmodal"
+        className="npmodal npmodal--wide"
         role="dialog"
         aria-modal="true"
         aria-labelledby="npmodal-title"
@@ -190,20 +199,23 @@ function NuevoProductoModal({ open, localId, onClose, onSuccess }) {
               ))}
             </select>
           </label>
-          <div className="npmodal-row">
-            <label className="npmodal-field">
-              <span>Stock actual</span>
-              <input type="number" min={0} value={currentStock} onChange={(ev) => setCurrentStock(ev.target.value)} />
-            </label>
-            <label className="npmodal-field">
-              <span>Stock mín.</span>
-              <input type="number" min={0} value={minStock} onChange={(ev) => setMinStock(ev.target.value)} />
-            </label>
-            <label className="npmodal-field">
-              <span>Stock máx.</span>
-              <input type="number" min={0} value={maxStock} onChange={(ev) => setMaxStock(ev.target.value)} />
-            </label>
-          </div>
+          <fieldset className="npmodal-fieldset-stock">
+            <legend className="npmodal-fieldset-stock__legend">Niveles de stock</legend>
+            <div className="npmodal-row npmodal-row--stock">
+              <label className="npmodal-field">
+                <span>Stock actual</span>
+                <input type="number" min={0} value={currentStock} onChange={(ev) => setCurrentStock(ev.target.value)} />
+              </label>
+              <label className="npmodal-field">
+                <span>Stock mínimo</span>
+                <input type="number" min={0} value={minStock} onChange={(ev) => setMinStock(ev.target.value)} />
+              </label>
+              <label className="npmodal-field">
+                <span>Stock máximo</span>
+                <input type="number" min={0} value={maxStock} onChange={(ev) => setMaxStock(ev.target.value)} />
+              </label>
+            </div>
+          </fieldset>
           <label className="npmodal-field">
             <span>Costo unitario (CLP)</span>
             <input type="number" min={1} step={1} value={unitCost} onChange={(ev) => setUnitCost(ev.target.value)} required />

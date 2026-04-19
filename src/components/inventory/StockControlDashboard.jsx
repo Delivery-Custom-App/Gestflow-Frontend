@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { useParams, useLocation } from 'react-router-dom'
 import { getAuthContext } from '../../lib/apiClient'
 import {
   getInventoryKpisByLocal,
@@ -9,6 +9,7 @@ import {
   patchInventoryStock,
 } from '../../lib/inventoryApi'
 import InventoryShell from './InventoryShell'
+import BackToInventoryHubButton from './BackToInventoryHubButton'
 import LoadingSpinner from '../LoadingSpinner'
 import NuevoProductoModal from './NuevoProductoModal'
 import ProductsTable from './ProductsTable'
@@ -27,6 +28,11 @@ function formatMoney(value) {
 
 function StockControlDashboard({ user, userRole, onLogout }) {
   const { localId } = useParams()
+  const location = useLocation()
+  const selectedLocal = useMemo(() => {
+    if (location.state?.local) return location.state.local
+    return { id: localId, name: `Local ${localId ?? ''}` }
+  }, [location.state, localId])
 
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -194,6 +200,8 @@ function StockControlDashboard({ user, userRole, onLogout }) {
   return (
     <InventoryShell user={user} userRole={userRole} onLogout={onLogout} active="stock">
       <div className="inv-stock-page">
+        <BackToInventoryHubButton navState={{ local: selectedLocal }} />
+
         <header className="scd-header scd-header--compact">
           <span className="scd-header-icon" aria-hidden="true">
             <svg viewBox="0 0 24 24" fill="none">
@@ -201,8 +209,8 @@ function StockControlDashboard({ user, userRole, onLogout }) {
             </svg>
           </span>
           <div>
-            <h1 className="scd-title">Control de stock</h1>
-            <p className="scd-subtitle">Inventario de productos · KPIs y movimientos</p>
+            <h1 className="scd-title">Stock producto</h1>
+            <p className="scd-subtitle">Gestiona existencias y costos para decisiones de reposición</p>
           </div>
         </header>
 

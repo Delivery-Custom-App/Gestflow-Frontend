@@ -3,7 +3,7 @@ import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import InventoryShell from './InventoryShell'
 import '../../styles/inventory/InventoryModuleHub.css'
 
-/** Hub Módulo de Inventario: KPIs resumen + tarjetas Recetas / Stock / Proveedores */
+/** Hub Módulo de Inventario: KPIs resumen + tarjetas Proveedores / Stock / Recetas */
 function InventoryModuleHub({ user, userRole, onLogout }) {
   const navigate = useNavigate()
   const { localId } = useParams()
@@ -44,7 +44,7 @@ function InventoryModuleHub({ user, userRole, onLogout }) {
         </span>
         <div>
           <h1 className="inv-hub__title">Módulo de Inventario</h1>
-          <p className="inv-hub__subtitle">Control de recetas, stock y proveedores</p>
+          <p className="inv-hub__subtitle">Proveedores, stock de producto y recetas en un solo módulo</p>
         </div>
       </header>
 
@@ -72,40 +72,6 @@ function InventoryModuleHub({ user, userRole, onLogout }) {
       </section>
 
       <section className="inv-hub__cards" aria-label="Accesos inventario">
-        <article className="inv-hub__feature inv-hub__feature--recipes">
-          <h2>Recetas</h2>
-          <p className="inv-hub__feature-sub">Gestión de recetas del menú</p>
-          <ul className="inv-hub__feature-list">
-            <li>CRUD de recetas</li>
-            <li>Ingredientes</li>
-            <li>Costos</li>
-          </ul>
-          <button type="button" className="inv-hub__feature-btn inv-hub__feature-btn--primary" onClick={goRecipes}>
-            Gestionar recetas →
-          </button>
-        </article>
-
-        <article className="inv-hub__feature inv-hub__feature--stock">
-          <div className="inv-hub__feature-stock-head">
-            <span className="inv-hub__feature-stock-icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24" fill="none">
-                <path d="M12 3L20 7.5V16.5L12 21L4 16.5V7.5L12 3Z" stroke="currentColor" strokeWidth="1.6" />
-              </svg>
-            </span>
-            <h2>Stock</h2>
-          </div>
-          <p className="inv-hub__feature-sub">Control de inventario</p>
-          <ul className="inv-hub__feature-list">
-            <li>Control de productos</li>
-            <li>Entradas y salidas</li>
-            <li>Alertas de stock mínimo</li>
-            <li>Valorización de inventario</li>
-          </ul>
-          <button type="button" className="inv-hub__feature-btn inv-hub__feature-btn--primary" onClick={goStock}>
-            Gestionar stock →
-          </button>
-        </article>
-
         <article className="inv-hub__feature inv-hub__feature--suppliers">
           <h2>Proveedores</h2>
           <p className="inv-hub__feature-sub">Gestión de proveedores</p>
@@ -120,6 +86,40 @@ function InventoryModuleHub({ user, userRole, onLogout }) {
             onClick={goProveedores}
           >
             Gestionar proveedores →
+          </button>
+        </article>
+
+        <article className="inv-hub__feature inv-hub__feature--stock">
+          <div className="inv-hub__feature-stock-head">
+            <span className="inv-hub__feature-stock-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none">
+                <path d="M12 3L20 7.5V16.5L12 21L4 16.5V7.5L12 3Z" stroke="currentColor" strokeWidth="1.6" />
+              </svg>
+            </span>
+            <h2>Stock producto</h2>
+          </div>
+          <p className="inv-hub__feature-sub">Inventario y alertas del local</p>
+          <ul className="inv-hub__feature-list">
+            <li>Control de productos</li>
+            <li>Entradas y salidas</li>
+            <li>Alertas de stock mínimo</li>
+            <li>Valorización de inventario</li>
+          </ul>
+          <button type="button" className="inv-hub__feature-btn inv-hub__feature-btn--primary" onClick={goStock}>
+            Gestionar stock de productos →
+          </button>
+        </article>
+
+        <article className="inv-hub__feature inv-hub__feature--recipes">
+          <h2>Recetas</h2>
+          <p className="inv-hub__feature-sub">Gestión de recetas del menú</p>
+          <ul className="inv-hub__feature-list">
+            <li>CRUD de recetas</li>
+            <li>Ingredientes</li>
+            <li>Costos</li>
+          </ul>
+          <button type="button" className="inv-hub__feature-btn inv-hub__feature-btn--primary" onClick={goRecipes}>
+            Gestionar recetas →
           </button>
         </article>
       </section>

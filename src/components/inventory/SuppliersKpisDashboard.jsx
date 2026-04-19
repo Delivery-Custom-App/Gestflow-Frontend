@@ -1,14 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useNavigate, useParams, useLocation } from 'react-router-dom'
+import { useParams, useLocation } from 'react-router-dom'
 import { getAuthContext } from '../../lib/apiClient'
 import {
   getLocalById,
   getSupplierKpisByLocal,
   getSuppliersWithMetricsForBusiness,
-} from '../../lib/inventoryApi'
+} from '../../lib/providersApi'
 import { isInventoryAdminRole } from '../../utils/inventoryAccess'
 import InventoryShell from './InventoryShell'
-import SuppliersSubNav from './SuppliersSubNav'
+import BackToInventoryHubButton from './BackToInventoryHubButton'
 import LoadingSpinner from '../LoadingSpinner'
 import RegisterSupplierModal from './RegisterSupplierModal'
 import SupplierDetailModal from './SupplierDetailModal'
@@ -38,13 +38,20 @@ function formatMoneyClp(value) {
   return `$${n}`
 }
 
+function formatRequestDateTime(value) {
+  if (!value) return '—'
+  return new Intl.DateTimeFormat('es-CL', {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  }).format(value)
+}
+
 function currentYearMonth() {
   const d = new Date()
   return { year: d.getFullYear(), month: d.getMonth() + 1 }
 }
 
 function SuppliersKpisDashboard({ user, userRole, onLogout }) {
-  const navigate = useNavigate()
   const { localId } = useParams()
   const location = useLocation()
 
@@ -67,6 +74,7 @@ function SuppliersKpisDashboard({ user, userRole, onLogout }) {
   const [resolvedBusinessId, setResolvedBusinessId] = useState(null)
   const [registerSupplierOpen, setRegisterSupplierOpen] = useState(false)
   const [detailSupplierId, setDetailSupplierId] = useState(null)
+  const [requestedAt, setRequestedAt] = useState(null)
 
   const load = useCallback(async () => {
     if (!canAccess) {
@@ -82,6 +90,7 @@ function SuppliersKpisDashboard({ user, userRole, onLogout }) {
     }
     setError('')
     setLoading(true)
+    setRequestedAt(new Date())
     try {
       const { token } = await getAuthContext()
       const year = new Date().getFullYear()
@@ -139,20 +148,11 @@ function SuppliersKpisDashboard({ user, userRole, onLogout }) {
   }, [loadSuppliersList])
 
   const calendarYear = new Date().getFullYear()
-  const periodLabel = `${MONTH_NAMES[(month || 1) - 1] ?? ''} ${calendarYear}`
 
   return (
     <InventoryShell user={user} userRole={userRole} onLogout={onLogout} active="suppliers">
-      <div className="inv-stock-page">
-        <button
-          type="button"
-          className="scd-back-link"
-          onClick={() => navigate(`/local/${localId}/inventario`, { state: { local: selectedLocal } })}
-        >
-          ← Volver al centro de inventario
-        </button>
-
-        <SuppliersSubNav navState={{ local: selectedLocal }} />
+      <div className="inv-stock-page providers-layout providers-layout--kpis">
+        <BackToInventoryHubButton navState={{ local: selectedLocal }} />
 
         <div className="scd-suppliers-head">
           <header className="scd-header scd-header--compact">
@@ -164,9 +164,7 @@ function SuppliersKpisDashboard({ user, userRole, onLogout }) {
             </span>
             <div>
               <h1 className="scd-title">Proveedores</h1>
-              <p className="scd-subtitle">
-                Indicadores por período y listado con inventario y valor estimado por proveedor
-              </p>
+              <p className="scd-subtitle">Gestiona proveedores activos y monitorea su impacto en compras</p>
             </div>
           </header>
 
@@ -212,16 +210,10 @@ function SuppliersKpisDashboard({ user, userRole, onLogout }) {
 
         {canAccess && data ? (
           <>
-            <p className="scd-period-meta">
-              Período: <strong>{periodLabel}</strong>
-              {data.period_start && data.period_end ? (
-                <>
-                  {' '}
-                  ({data.period_start} — {data.period_end})
-                </>
-              ) : null}
+            <p className="scd-period-meta scd-period-meta--plain">
+              Fecha de solicitud: <strong>{formatRequestDateTime(requestedAt)}</strong>
             </p>
-            <section className="scd-kpis" aria-label="KPIs de proveedores">
+            <section className="scd-kpis providers-kpi-grid" aria-label="KPIs de proveedores">
               <article className="scd-kpi">
                 <span className="scd-kpi-icon scd-kpi-icon--box" aria-hidden="true">
                   <svg viewBox="0 0 24 24" fill="none">
@@ -258,7 +250,7 @@ function SuppliersKpisDashboard({ user, userRole, onLogout }) {
                   </svg>
                 </span>
                 <div>
-                  <p className="scd-kpi-label">Compras del período (CLP)</p>
+                  <p className="scd-kpi-label">Compras del mes (CLP)</p>
                   <p className="scd-kpi-value scd-kpi-value--money">{formatMoneyClp(data.month_purchases_clp)}</p>
                 </div>
               </article>
@@ -267,15 +259,15 @@ function SuppliersKpisDashboard({ user, userRole, onLogout }) {
         ) : null}
 
         {canAccess ? (
-          <section className="scd-suppliers-list-section" aria-labelledby="scd-suppliers-list-title">
+          <section
+            className="scd-suppliers-list-section providers-section-card"
+            aria-labelledby="scd-suppliers-list-title"
+          >
             <div className="scd-table-meta scd-table-meta--with-action">
               <div>
                 <h2 id="scd-suppliers-list-title" className="scd-section-title">
                   Listado de proveedores
                 </h2>
-                <p className="scd-table-actions-hint">
-                  Unidades = stock actual de productos del proveedor; valor = stock × costo unitario registrado.
-                </p>
               </div>
               {resolvedBusinessId ? (
                 <button

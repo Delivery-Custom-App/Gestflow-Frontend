@@ -6,16 +6,15 @@ import {
   getSupplierDetailForBusiness,
   getSupplierPurchaseHistoryForBusiness,
   getSuppliersWithMetricsForBusiness,
-} from '../../../lib/inventoryApi'
-import {
   getWeeklyPurchaseComparisonReport,
   getWeeklyPurchaseOrders,
   postWeeklyPurchaseOrder,
-} from '../../../lib/weeklyPurchasesApi'
+} from '../../../lib/providersApi'
 import { isInventoryAdminRole } from '../../../utils/inventoryAccess'
 import InventoryShell from '../InventoryShell'
-import SuppliersSubNav from '../SuppliersSubNav'
+import BackToInventoryHubButton from '../BackToInventoryHubButton'
 import LoadingSpinner from '../../LoadingSpinner'
+import ModernDateField from '../ModernDateField'
 import '../../../styles/inventory/WeeklyPurchases.css'
 
 /** HU-85: espera antes de consultar API al escribir nombre de proveedor */
@@ -28,6 +27,29 @@ function formatMoneyClp(value) {
     minimumFractionDigits: 0,
   }).format(Math.round(Number(value)))
   return `$${n}`
+}
+
+/** Fecha de semana (ISO) en texto largo para listados. */
+function formatWeekLong(iso) {
+  if (!iso || typeof iso !== 'string' || iso.length < 10) return '—'
+  const d = new Date(`${iso.slice(0, 10)}T12:00:00`)
+  if (Number.isNaN(d.getTime())) return iso
+  try {
+    return new Intl.DateTimeFormat('es-CL', {
+      weekday: 'long',
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+    }).format(d)
+  } catch {
+    return iso
+  }
+}
+
+function formatReceivedCell(order) {
+  const t = Number(order?.total_received_clp)
+  if (Number.isFinite(t) && t > 0) return formatMoneyClp(t)
+  return '—'
 }
 
 /** Líneas iniciales del borrador desde catálogo/inventario (HU-69). */
@@ -273,16 +295,18 @@ function NewWeeklyOrderModal({
           ) : null}
 
           <div className="npmodal-row npmodal-row--2 wp-new-order-row">
-            <label className="npmodal-field">
-              <span>Semana de compra</span>
-              <span className="wp-new-order-field-hint">Cualquier día del calendario; se usará el lunes de esa semana.</span>
-              <input
-                type="date"
+            <div className="npmodal-field">
+              <ModernDateField
+                id="wp-new-order-week"
+                label="Semana de compra"
                 value={weekDate}
-                onChange={(ev) => setWeekDate(ev.target.value)}
-                required
+                onChange={(iso) => setWeekDate(iso ? mondayOfWeekContaining(iso) : weekDate)}
+                aria-label="Semana de compra (se usa el lunes de esa semana)"
               />
-            </label>
+              <span className="wp-new-order-field-hint npmodal-field-hint-after-mdate">
+                Cualquier día del calendario; se usará el lunes de esa semana.
+              </span>
+            </div>
             <label className="npmodal-field">
               <span>Proveedor</span>
               <span className="wp-new-order-field-hint">
@@ -448,6 +472,8 @@ function WeeklyPurchasesPage({ user, userRole, onLogout }) {
   const canAccess = isInventoryAdminRole(userRole)
 
   const [businessId, setBusinessId] = useState(null)
+  /** Evita mostrar error de negocio mientras aún se resuelve getLocalById. */
+  const [businessIdLoading, setBusinessIdLoading] = useState(true)
   const [orders, setOrders] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -527,8 +553,10 @@ function WeeklyPurchasesPage({ user, userRole, onLogout }) {
   useEffect(() => {
     if (!canAccess || !localId) {
       setBusinessId(null)
+      setBusinessIdLoading(false)
       return
     }
+    setBusinessIdLoading(true)
     let cancelled = false
     ;(async () => {
       try {
@@ -536,6 +564,8 @@ function WeeklyPurchasesPage({ user, userRole, onLogout }) {
         if (!cancelled) setBusinessId(bid)
       } catch {
         if (!cancelled) setBusinessId(null)
+      } finally {
+        if (!cancelled) setBusinessIdLoading(false)
       }
     })()
     return () => {
@@ -637,34 +667,27 @@ function WeeklyPurchasesPage({ user, userRole, onLogout }) {
   }
 
   const openDetail = (orderId) => {
-    navigate(`/local/${localId}/inventario/proveedores/compras-semanales/${orderId}`, {
+    navigate(`/local/${localId}/inventario/compras-semanales/${orderId}`, {
       state: { local: selectedLocal },
     })
   }
 
   return (
-    <InventoryShell user={user} userRole={userRole} onLogout={onLogout} active="suppliers">
-      <div className="inv-stock-page">
-        <button
-          type="button"
-          className="scd-back-link"
-          onClick={() => navigate(`/local/${localId}/inventario`, { state: { local: selectedLocal } })}
-        >
-          ← Volver al centro de inventario
-        </button>
+    <InventoryShell user={user} userRole={userRole} onLogout={onLogout} active="weekly-purchases">
+      <div className="inv-stock-page providers-layout providers-layout--weekly">
+        <BackToInventoryHubButton navState={{ local: selectedLocal }} />
 
-        <SuppliersSubNav navState={{ local: selectedLocal }} />
-
-        <header className="scd-header scd-header--compact">
+        <header className="scd-header scd-header--compact wp-weekly-header">
           <span className="scd-header-icon" aria-hidden="true">
             <svg viewBox="0 0 24 24" fill="none">
               <path d="M8 7V3h8v4M8 7h8M6 21h12a2 2 0 002-2V9a2 2 0 00-2-2H6a2 2 0 00-2 2v10a2 2 0 002 2z" stroke="currentColor" strokeWidth="1.5" />
             </svg>
           </span>
-          <div>
-            <h1 className="scd-title">Compras semanales</h1>
-            <p className="scd-subtitle">
-              Dentro de Proveedores · órdenes por proveedor y semana; reporte comparativo (HU-34)
+          <div className="wp-weekly-header__text">
+            <h1 className="scd-title">Órdenes de compra semanales</h1>
+            <p className="scd-subtitle wp-weekly-lede">
+              Planificá la compra por semana y proveedor, seguí el estado de cada orden y compará totales entre fechas en
+              el reporte de abajo.
             </p>
           </div>
         </header>
@@ -673,133 +696,178 @@ function WeeklyPurchasesPage({ user, userRole, onLogout }) {
           <p className="npmodal-error">No tienes permisos para acceder a esta sección.</p>
         ) : null}
 
-        {canAccess && !businessId ? (
-          <p className="npmodal-error">No se pudo determinar el negocio del local.</p>
+        {canAccess && businessIdLoading ? (
+          <div className="wp-business-loading" aria-live="polite">
+            <LoadingSpinner message="Cargando datos del local…" />
+          </div>
         ) : null}
 
-        {canAccess && businessId ? (
+        {canAccess && !businessIdLoading && !businessId ? (
+          <p className="npmodal-error" role="alert">
+            No se pudo determinar el negocio del local. Revisá la conexión o volvé a entrar al módulo.
+          </p>
+        ) : null}
+
+        {canAccess && !businessIdLoading && businessId ? (
           <>
-            <div className="wp-actions">
+            <div className="wp-actions providers-section-card">
               <button type="button" className="wp-btn wp-btn--primary" onClick={() => setNewModalOpen(true)}>
                 + Nueva orden semanal
               </button>
-              <button type="button" className="wp-btn" onClick={() => loadOrders()}>
+              <button type="button" className="wp-btn wp-btn--icon" onClick={() => loadOrders()} aria-label="Actualizar listado">
+                <svg className="wp-btn__icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path
+                    d="M4 12a8 8 0 0113.657-5.657M20 12a8 8 0 01-13.657 5.657M20 12H12M4 12h4"
+                    stroke="currentColor"
+                    strokeWidth="1.6"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
                 Actualizar listado
               </button>
             </div>
 
-            <div className="wp-toolbar wp-toolbar--supplier-filters" aria-label="Filtro del catálogo de proveedores">
-              <label>
-                Buscar proveedor
-                <input
-                  type="search"
-                  value={supplierSearchInput}
-                  onChange={(ev) => setSupplierSearchInput(ev.target.value)}
-                  placeholder="Nombre (coincidencia parcial)"
-                  autoComplete="off"
-                />
-              </label>
-              <label>
-                Categoría (proveedor)
-                <select
-                  value={supplierCategoryFilter}
-                  onChange={(ev) => setSupplierCategoryFilter(ev.target.value)}
-                >
-                  <option value="">Todas</option>
-                  {supplierCategoryOptions.map((c) => (
-                    <option key={c} value={c}>
-                      {c}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
-
-            <div className="wp-toolbar">
-              <label>
-                Filtrar por semana (lunes)
-                <input type="date" value={filterWeek} onChange={(ev) => setFilterWeek(ev.target.value)} />
-              </label>
-              <label>
-                Proveedor (orden)
-                <select value={filterSupplier} onChange={(ev) => setFilterSupplier(ev.target.value)}>
-                  <option value="">Todos</option>
-                  {suppliers.map((s) => (
-                    <option key={String(s.id)} value={String(s.id)}>
-                      {s.name || s.id}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                Estado
-                <select value={filterStatus} onChange={(ev) => setFilterStatus(ev.target.value)}>
-                  <option value="">Todos</option>
-                  {Object.entries(STATUS_LABELS).map(([k, v]) => (
-                    <option key={k} value={k}>
-                      {v}
-                    </option>
-                  ))}
-                </select>
-              </label>
+            <div className="wp-filters-panel providers-section-card" aria-label="Filtros de compras semanales">
+              <div className="wp-filters-panel__rows">
+                <div className="wp-filters-panel__row wp-filters-panel__row--primary">
+                  <label>
+                    Buscar proveedor
+                    <input
+                      type="search"
+                      value={supplierSearchInput}
+                      onChange={(ev) => setSupplierSearchInput(ev.target.value)}
+                      placeholder="Nombre (coincidencia parcial)"
+                      autoComplete="off"
+                    />
+                  </label>
+                  <div className="wp-filters-panel__mdate">
+                    <ModernDateField
+                      id="wp-filter-week"
+                      label="Filtrar por semana (lunes)"
+                      value={filterWeek}
+                      onChange={(iso) => setFilterWeek(iso ? mondayOfWeekContaining(iso) : '')}
+                    />
+                  </div>
+                  <label>
+                    Proveedor (orden)
+                    <select value={filterSupplier} onChange={(ev) => setFilterSupplier(ev.target.value)}>
+                      <option value="">Todos</option>
+                      {suppliers.map((s) => (
+                        <option key={String(s.id)} value={String(s.id)}>
+                          {s.name || s.id}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    Estado
+                    <select value={filterStatus} onChange={(ev) => setFilterStatus(ev.target.value)}>
+                      <option value="">Todos</option>
+                      {Object.entries(STATUS_LABELS).map(([k, v]) => (
+                        <option key={k} value={k}>
+                          {v}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+                <div className="wp-filters-panel__row wp-filters-panel__row--secondary">
+                  <label>
+                    Categoría (proveedor)
+                    <select value={supplierCategoryFilter} onChange={(ev) => setSupplierCategoryFilter(ev.target.value)}>
+                      <option value="">Todas</option>
+                      {supplierCategoryOptions.map((c) => (
+                        <option key={c} value={c}>
+                          {c}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+              </div>
             </div>
 
             {error ? <p className="npmodal-error">{error}</p> : null}
 
             {loading ? (
-              <LoadingSpinner message="Cargando órdenes…" />
+              <div className="wp-orders-loading" aria-live="polite">
+                <LoadingSpinner message="Cargando órdenes…" />
+              </div>
             ) : (
-              <div className="wp-table-wrap">
-                <table className="wp-table">
-                  <thead>
-                    <tr>
-                      <th>Semana (lunes)</th>
-                      <th>Proveedor</th>
-                      <th>Estado</th>
-                      <th>Total estimado</th>
-                      <th />
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {orders.length === 0 ? (
+              <div className="wp-orders-card providers-section-card providers-table-wrap">
+                <div className="wp-orders-card__head">
+                  <h2 className="wp-orders-card__title">Órdenes de compra semanales</h2>
+                  <p className="wp-orders-card__meta">{`${orders.length} orden(es) encontrada(s)`}</p>
+                </div>
+                <div className="wp-table-wrap wp-table-wrap--in-card">
+                  <table className="wp-table wp-table--orders">
+                    <thead>
                       <tr>
-                        <td colSpan={5}>
-                          No hay órdenes con los filtros actuales.
-                        </td>
+                        <th>Semana (lunes)</th>
+                        <th>Proveedor</th>
+                        <th>Estado</th>
+                        <th>Total estimado</th>
+                        <th>Total recibido</th>
+                        <th />
                       </tr>
-                    ) : (
-                      orders.map((o) => (
-                        <tr key={String(o.id)}>
-                          <td>{o.week_start_date || '—'}</td>
-                          <td>{supplierNames[String(o.supplier_id)] || o.supplier_id || '—'}</td>
-                          <td>
-                            <span className={statusBadgeClass(o.status)}>{STATUS_LABELS[o.status] || o.status}</span>
-                          </td>
-                          <td>{formatMoneyClp(o.total_estimated_clp)}</td>
-                          <td>
-                            <button type="button" className="wp-btn" onClick={() => openDetail(o.id)}>
-                              Ver / editar
-                            </button>
+                    </thead>
+                    <tbody>
+                      {orders.length === 0 ? (
+                        <tr>
+                          <td colSpan={6} className="wp-table-empty">
+                            No hay órdenes con los filtros actuales.
                           </td>
                         </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
+                      ) : (
+                        orders.map((o) => (
+                          <tr key={String(o.id)}>
+                            <td>{formatWeekLong(o.week_start_date)}</td>
+                            <td>{supplierNames[String(o.supplier_id)] || o.supplier_id || '—'}</td>
+                            <td>
+                              <span className={statusBadgeClass(o.status)}>{STATUS_LABELS[o.status] || o.status}</span>
+                            </td>
+                            <td>{formatMoneyClp(o.total_estimated_clp)}</td>
+                            <td>{formatReceivedCell(o)}</td>
+                            <td>
+                              <button type="button" className="wp-btn" onClick={() => openDetail(o.id)}>
+                                Ver / editar
+                              </button>
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             )}
 
-            <section className="wp-section" aria-labelledby="wp-report-title">
-              <h3 id="wp-report-title">Reporte comparativo</h3>
-              <div className="wp-toolbar">
-                <label>
-                  Desde (lunes)
-                  <input type="date" value={reportFrom} onChange={(ev) => setReportFrom(ev.target.value)} />
-                </label>
-                <label>
-                  Hasta (lunes)
-                  <input type="date" value={reportTo} onChange={(ev) => setReportTo(ev.target.value)} />
-                </label>
+            <section className="wp-section providers-section-card wp-section--report" aria-labelledby="wp-report-title">
+              <div className="wp-section__head">
+                <span className="wp-section__icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" width="22" height="22" fill="none">
+                    <path d="M4 19V5M9 19V9M14 19v-6M19 19V11" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+                  </svg>
+                </span>
+                <div>
+                  <h3 id="wp-report-title">Reporte comparativo</h3>
+                  <p className="wp-section__lede">Comparación de órdenes entre rangos de semanas</p>
+                </div>
+              </div>
+              <div className="wp-toolbar wp-toolbar--report">
+                <ModernDateField
+                  id="wp-report-from"
+                  label="Desde (lunes)"
+                  value={reportFrom}
+                  onChange={(iso) => setReportFrom(iso ? mondayOfWeekContaining(iso) : '')}
+                />
+                <ModernDateField
+                  id="wp-report-to"
+                  label="Hasta (lunes)"
+                  value={reportTo}
+                  onChange={(iso) => setReportTo(iso ? mondayOfWeekContaining(iso) : '')}
+                />
                 <button type="button" className="wp-btn wp-btn--primary" onClick={() => loadReport()} disabled={reportLoading}>
                   {reportLoading ? 'Generando…' : 'Generar'}
                 </button>

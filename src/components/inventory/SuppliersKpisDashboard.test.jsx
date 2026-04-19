@@ -3,7 +3,7 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import SuppliersKpisDashboard from './SuppliersKpisDashboard'
-import * as inventoryApi from '../../lib/inventoryApi'
+import * as providersApi from '../../lib/providersApi'
 
 vi.mock('../../lib/apiClient', () => ({
   getAuthContext: vi.fn(() => Promise.resolve({ token: 'test-token', businessId: 'biz-1' })),
@@ -34,7 +34,7 @@ const mockSupplierDetail = {
   purchased_products: [{ product_id: 'p-1', name: 'Item A', quantity: 12, unit_price_clp: 4000, line_total_clp: 48000 }],
 }
 
-vi.mock('../../lib/inventoryApi', () => ({
+vi.mock('../../lib/providersApi', () => ({
   getSupplierKpisByLocal: vi.fn(() => Promise.resolve(mockKpis)),
   getSuppliersWithMetricsForBusiness: vi.fn(() =>
     Promise.resolve([
@@ -131,7 +131,7 @@ describe('SuppliersKpisDashboard', () => {
     await user.click(screen.getByRole('button', { name: /Ver detalle de Proveedor Demo/i }))
 
     await waitFor(() => {
-      expect(inventoryApi.getSupplierDetailForBusiness).toHaveBeenCalledWith('test-token', 's-1', 'biz-1')
+      expect(providersApi.getSupplierDetailForBusiness).toHaveBeenCalledWith('test-token', 's-1', 'biz-1')
     })
 
     expect(await screen.findByRole('heading', { name: /Detalle del proveedor/i })).toBeInTheDocument()

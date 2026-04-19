@@ -3,49 +3,48 @@ import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import CategoryTypeahead from './CategoryTypeahead'
 
-const loadCategoriesForLocalCached = vi.fn()
+const resolveCategoryNameForLocal = vi.fn()
 
 vi.mock('../../lib/apiClient', () => ({
   getAuthContext: vi.fn(() => Promise.resolve({ token: 't' })),
 }))
 
 vi.mock('../../lib/inventoryApi', () => ({
-  loadCategoriesForLocalCached: (...args) => loadCategoriesForLocalCached(...args),
+  resolveCategoryNameForLocal: (...args) => resolveCategoryNameForLocal(...args),
 }))
 
 describe('CategoryTypeahead (HU-87)', () => {
   const localId = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'
 
   beforeEach(() => {
-    loadCategoriesForLocalCached.mockReset()
-    loadCategoriesForLocalCached.mockResolvedValue([
-      { id: '1', name: 'Bebidas', is_active: true },
-      { id: '2', name: 'Verduras', is_active: true },
-    ])
+    resolveCategoryNameForLocal.mockReset()
+    resolveCategoryNameForLocal.mockResolvedValue('Bebidas')
   })
 
-  it('carga sugerencias y permite elegir una categoría existente', async () => {
+  it('al pulsar Enter guarda la categoría vía API y actualiza el valor', async () => {
     const user = userEvent.setup()
     const onChange = vi.fn()
     render(
-      <CategoryTypeahead localId={localId} value="" onChange={onChange} disabled={false} />,
+      <CategoryTypeahead localId={localId} value="bebidas" onChange={onChange} disabled={false} />,
     )
 
-    const input = screen.getByPlaceholderText(/Escribe o elige/i)
-    await user.click(input)
+    const input = screen.getByPlaceholderText(/Enter para guardarla/i)
+    input.focus()
+    await user.keyboard('{Enter}')
 
-    expect(await screen.findByRole('button', { name: 'Bebidas' })).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: 'Verduras' }))
-    expect(onChange).toHaveBeenCalledWith('Verduras')
+    expect(resolveCategoryNameForLocal).toHaveBeenCalledWith(localId, 't', 'bebidas')
+    await vi.waitFor(() => {
+      expect(onChange).toHaveBeenCalledWith('Bebidas')
+    })
   })
 
-  it('filtra por texto (typeahead)', async () => {
+  it('no muestra listado de sugerencias al enfocar', async () => {
     const user = userEvent.setup()
-    render(<CategoryTypeahead localId={localId} value="ver" onChange={() => {}} disabled={false} />)
+    render(<CategoryTypeahead localId={localId} value="" onChange={() => {}} disabled={false} />)
 
-    await user.click(screen.getByPlaceholderText(/Escribe o elige/i))
+    await user.click(screen.getByPlaceholderText(/Enter para guardarla/i))
 
-    expect(await screen.findByRole('button', { name: 'Verduras' })).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Bebidas' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
+    expect(screen.queryByRole('option')).not.toBeInTheDocument()
   })
 })

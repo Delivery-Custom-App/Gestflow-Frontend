@@ -9,7 +9,7 @@ vi.mock('../../lib/apiClient', () => ({
 
 const postSupplier = vi.fn(() => Promise.resolve({ id: 's-new' }))
 
-vi.mock('../../lib/inventoryApi', () => ({
+vi.mock('../../lib/providersApi', () => ({
   postSupplier: (...args) => postSupplier(...args),
 }))
 
@@ -76,7 +76,7 @@ describe('RegisterSupplierModal', () => {
     expect(token).toBe('tok')
     expect(body.business_id).toBe('biz-99')
     expect(body.name).toBe(validForm.name)
-    expect(body.rut).toBe(validForm.rut)
+    expect(body.rut).toBe('123456785')
     expect(onSuccess).toHaveBeenCalled()
     expect(onClose).toHaveBeenCalled()
   })

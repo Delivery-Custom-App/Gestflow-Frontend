@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react'
 import { getAuthContext } from '../../lib/apiClient'
-import { postSupplier } from '../../lib/inventoryApi'
+import { postSupplier } from '../../lib/providersApi'
+import ModernDateField from './ModernDateField'
 import {
   formatRutForDisplay,
   normalizeRutInput,
-  validateChilePhoneMessage,
   validateChileRutMessage,
 } from '../../utils/chileRut'
 
@@ -16,6 +16,18 @@ const INITIAL = {
   contact_name: '',
   phone: '',
   email: '',
+  start_date: '',
+}
+
+const CL_PHONE_PREFIX = '+56 9'
+const CL_PHONE_DIGITS = 8
+
+function normalizeChileMobileDigits(value) {
+  const rawDigits = String(value ?? '').replace(/\D/g, '')
+  let digits = rawDigits
+  if (digits.startsWith('56')) digits = digits.slice(2)
+  if (digits.startsWith('9')) digits = digits.slice(1)
+  return digits.slice(0, CL_PHONE_DIGITS)
 }
 
 function RegisterSupplierModal({ open, onClose, onSuccess, businessId }) {
@@ -65,8 +77,10 @@ function RegisterSupplierModal({ open, onClose, onSuccess, businessId }) {
       if (rutErr) next.rut = rutErr
     }
     if (!next.phone) {
-      const ph = validateChilePhoneMessage(form.phone)
-      if (ph) next.phone = ph
+      const normalizedPhone = normalizeChileMobileDigits(form.phone)
+      if (normalizedPhone.length !== CL_PHONE_DIGITS) {
+        next.phone = 'Ingresa 8 dígitos después de +56 9.'
+      }
     }
     if (!next.email && String(form.email).trim()) {
       const em = String(form.email).trim()
@@ -92,12 +106,24 @@ function RegisterSupplierModal({ open, onClose, onSuccess, businessId }) {
         address: form.address.trim(),
         category: form.category.trim(),
         contact_name: form.contact_name.trim(),
-        phone: form.phone.trim(),
+        phone: `${CL_PHONE_PREFIX}${normalizeChileMobileDigits(form.phone)}`,
         email: form.email.trim(),
       }
+      if (form.start_date) body.start_date = form.start_date
       if (bid) body.business_id = bid
       body.rut = normalizeRutInput(body.rut)
-      await postSupplier(token, body)
+      try {
+        await postSupplier(token, body)
+      } catch (apiErr) {
+        // Compatibilidad: si backend aún no soporta start_date, reintenta sin ese campo.
+        if (body.start_date) {
+          const fallbackBody = { ...body }
+          delete fallbackBody.start_date
+          await postSupplier(token, fallbackBody)
+        } else {
+          throw apiErr
+        }
+      }
       onSuccess?.()
       onClose?.()
     } catch (err) {
@@ -131,11 +157,7 @@ function RegisterSupplierModal({ open, onClose, onSuccess, businessId }) {
           </button>
         </div>
         <form className="npmodal-form" onSubmit={handleSubmit}>
-          <p className="scd-register-supplier-hint">
-            Completa todos los campos. Escribe el RUT <strong>solo con números</strong> y el verificador (0-9 o{' '}
-            <strong>K</strong>); no hace falta puntos ni guion: se muestran solos. El sistema valida el dígito
-            verificador (incluida la K).
-          </p>
+          <p className="scd-register-supplier-hint">Ingrese Datos de Nuevo proveedor</p>
           {error ? (
             <p className="npmodal-error npmodal-error--multiline" role="alert">
               {error}
@@ -147,6 +169,7 @@ function RegisterSupplierModal({ open, onClose, onSuccess, businessId }) {
             <input
               value={form.name}
               onChange={(ev) => setField('name', ev.target.value)}
+              placeholder="Ingrese datos"
               autoComplete="organization"
               aria-invalid={!!fe('name')}
               aria-describedby={fe('name') ? 'err-name' : undefined}
@@ -161,18 +184,14 @@ function RegisterSupplierModal({ open, onClose, onSuccess, businessId }) {
           <label className="npmodal-field">
             <span>RUT</span>
             <input
+              aria-label="RUT"
               value={formatRutForDisplay(form.rut)}
               onChange={(ev) => setField('rut', normalizeRutInput(ev.target.value))}
-              placeholder="Ej. 207279463 o 1000005K"
+              placeholder="Ingrese datos"
               autoComplete="off"
               inputMode="text"
               aria-invalid={!!fe('rut')}
-              aria-describedby="rut-format-hint"
             />
-            <span id="rut-format-hint" className="scd-register-supplier-hint scd-register-supplier-hint--inline">
-              Opcional: puedes pegar 12.345.678-5; se guarda normalizado. K es verificador válido cuando corresponde al
-              número.
-            </span>
             {fe('rut') ? (
               <span className="npmodal-field-error" role="alert">
                 {fe('rut')}
@@ -185,6 +204,7 @@ function RegisterSupplierModal({ open, onClose, onSuccess, businessId }) {
             <input
               value={form.address}
               onChange={(ev) => setField('address', ev.target.value)}
+              placeholder="Ingrese datos"
               autoComplete="street-address"
               aria-invalid={!!fe('address')}
             />
@@ -200,7 +220,7 @@ function RegisterSupplierModal({ open, onClose, onSuccess, businessId }) {
             <input
               value={form.category}
               onChange={(ev) => setField('category', ev.target.value)}
-              placeholder="Ej. Insumos, bebidas…"
+              placeholder="Ingrese datos"
               aria-invalid={!!fe('category')}
             />
             {fe('category') ? (
@@ -216,6 +236,7 @@ function RegisterSupplierModal({ open, onClose, onSuccess, businessId }) {
               <input
                 value={form.contact_name}
                 onChange={(ev) => setField('contact_name', ev.target.value)}
+                placeholder="Ingrese datos"
                 autoComplete="name"
                 aria-invalid={!!fe('contact_name')}
               />
@@ -227,14 +248,20 @@ function RegisterSupplierModal({ open, onClose, onSuccess, businessId }) {
             </label>
             <label className="npmodal-field">
               <span>Teléfono</span>
-              <input
-                type="tel"
-                value={form.phone}
-                onChange={(ev) => setField('phone', ev.target.value)}
-                placeholder="+56 9 1234 5678"
-                autoComplete="tel"
-                aria-invalid={!!fe('phone')}
-              />
+              <div className="npmodal-phone-input-wrap">
+                <span className="npmodal-phone-prefix">{CL_PHONE_PREFIX}</span>
+                <input
+                  type="tel"
+                  aria-label="Teléfono"
+                  value={normalizeChileMobileDigits(form.phone)}
+                  onChange={(ev) => setField('phone', normalizeChileMobileDigits(ev.target.value))}
+                  placeholder="Ingrese datos"
+                  autoComplete="tel"
+                  inputMode="numeric"
+                  maxLength={CL_PHONE_DIGITS}
+                  aria-invalid={!!fe('phone')}
+                />
+              </div>
               {fe('phone') ? (
                 <span className="npmodal-field-error" role="alert">
                   {fe('phone')}
@@ -249,6 +276,7 @@ function RegisterSupplierModal({ open, onClose, onSuccess, businessId }) {
               type="email"
               value={form.email}
               onChange={(ev) => setField('email', ev.target.value)}
+              placeholder="Ingrese datos"
               autoComplete="email"
               aria-invalid={!!fe('email')}
             />
@@ -258,6 +286,13 @@ function RegisterSupplierModal({ open, onClose, onSuccess, businessId }) {
               </span>
             ) : null}
           </label>
+
+          <ModernDateField
+            label="Fecha desde (histórico proveedor)"
+            value={form.start_date}
+            onChange={(iso) => setField('start_date', iso)}
+            disabled={submitting}
+          />
 
           <div className="npmodal-actions">
             <button type="button" className="npmodal-btn npmodal-btn--ghost" onClick={onClose} disabled={submitting}>

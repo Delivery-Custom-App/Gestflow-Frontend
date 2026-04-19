@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useState, useEffect, useMemo } from 'react'
+import { useParams, useLocation } from 'react-router-dom'
 import InventoryShell from '../InventoryShell'
+import BackToInventoryHubButton from '../BackToInventoryHubButton'
 import RecipesList from './RecipesList'
 import RecipeDetail from './RecipeDetail'
 import CreateRecipeModal from './CreateRecipeModal'
@@ -9,8 +10,12 @@ import { apiRequest } from '../../../lib/apiClient'
 import './recipes.css'
 
 function RecipesPage({ user, userRole, onLogout }) {
-  const navigate = useNavigate()
   const { localId } = useParams()
+  const location = useLocation()
+  const selectedLocal = useMemo(() => {
+    if (location.state?.local) return location.state.local
+    return { id: localId, name: `Local ${localId ?? ''}` }
+  }, [location.state, localId])
   
   const { recipes, kpis, loading, error, fetchRecipes, getRecipe, createRecipe, updateRecipe, toggleRecipeStatus, deleteRecipe, fetchKpis } = useRecipes(localId)
 
@@ -39,6 +44,14 @@ function RecipesPage({ user, userRole, onLogout }) {
       loadCategories()
     }
   }, [localId])
+
+  useEffect(() => {
+    fetchRecipes({
+      search: searchTerm || null,
+      categoryId: categoryFilter || null,
+      isActive: statusFilter === null ? null : statusFilter === 'active',
+    })
+  }, [searchTerm, categoryFilter, statusFilter, fetchRecipes])
 
   // Load recipe details when needed
   const handleViewDetail = async (recipeId) => {
@@ -97,13 +110,7 @@ function RecipesPage({ user, userRole, onLogout }) {
 
   return (
     <InventoryShell user={user} userRole={userRole} onLogout={onLogout} active="recipes">
-      <button
-        type="button"
-        className="recipes-page__back"
-        onClick={() => navigate(`/local/${localId}/inventario`)}
-      >
-        ← Volver al Inventario
-      </button>
+      <BackToInventoryHubButton navState={{ local: selectedLocal }} />
 
       <header className="recipes-page__header">
         <div>
@@ -155,6 +162,27 @@ function RecipesPage({ user, userRole, onLogout }) {
             className="recipes-page__search-input"
           />
         </div>
+        <select
+          className="recipes-page__search-input"
+          value={categoryFilter || ''}
+          onChange={(e) => setCategoryFilter(e.target.value || null)}
+        >
+          <option value="">Todas las categorías</option>
+          {categories.map((cat) => (
+            <option key={cat.id} value={cat.id}>
+              {cat.name}
+            </option>
+          ))}
+        </select>
+        <select
+          className="recipes-page__search-input"
+          value={statusFilter || ''}
+          onChange={(e) => setStatusFilter(e.target.value || null)}
+        >
+          <option value="">Todos los estados</option>
+          <option value="active">Activas</option>
+          <option value="inactive">Inactivas</option>
+        </select>
       </section>
 
       {/* Recipes List */}

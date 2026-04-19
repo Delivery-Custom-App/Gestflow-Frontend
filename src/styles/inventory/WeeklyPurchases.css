@@ -1,59 +1,84 @@
 /* HU-34 — compras semanales (reutiliza tokens de StockControlDashboard donde aplica) */
 
+.providers-layout--weekly .wp-weekly-header {
+  margin-bottom: 1.35rem;
+  align-items: flex-start;
+}
+
+.providers-layout--weekly .wp-weekly-header__text {
+  min-width: 0;
+}
+
+.providers-layout--weekly .wp-weekly-lede {
+  margin-top: 0.55rem;
+  margin-bottom: 0;
+  max-width: 40rem;
+  line-height: 1.55;
+  font-size: 0.92rem;
+  color: #475569;
+}
+
 .wp-section {
-  margin-top: 2rem;
-  padding-top: 1.5rem;
-  border-top: 1px solid rgba(15, 23, 42, 0.08);
+  margin-top: 0.75rem;
+  padding: 0.75rem 1rem;
+  border-top: 0;
 }
 
 .wp-section h3 {
-  margin: 0 0 0.75rem;
-  font-size: 1.05rem;
+  margin: 0 0 0.5rem;
+  font-size: 0.95rem;
+  font-weight: 700;
   color: #0f172a;
 }
 
 .wp-toolbar {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.75rem;
+  gap: 0.9rem;
   align-items: flex-end;
-  margin-bottom: 1rem;
+  margin-bottom: 0;
 }
 
 .wp-toolbar--supplier-filters {
-  margin-bottom: 0.5rem;
-  padding: 0.75rem 0.85rem;
+  margin-bottom: 0;
+  padding: 0.75rem 1rem;
   border-radius: 0.65rem;
-  background: rgba(14, 165, 233, 0.06);
-  border: 1px solid rgba(14, 165, 233, 0.15);
+  background: #fff;
+  border: 1px solid rgba(15, 23, 42, 0.08);
 }
 
 .wp-toolbar label {
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
-  font-size: 0.8rem;
+  gap: 0.35rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
   color: #475569;
 }
 
 .wp-toolbar input,
 .wp-toolbar select {
-  min-width: 10rem;
-  padding: 0.45rem 0.6rem;
+  min-width: 12rem;
+  padding: 0.5rem 0.65rem;
   border-radius: 0.5rem;
   border: 1px solid #cbd5e1;
   font-size: 0.9rem;
+  background: #fff;
 }
 
 .wp-actions {
   display: flex;
+  align-items: center;
+  justify-content: flex-start;
   gap: 0.5rem;
   flex-wrap: wrap;
-  margin-bottom: 1rem;
+  margin-bottom: 0.65rem;
+  padding: 0.55rem 0.85rem;
 }
 
 .wp-btn {
-  padding: 0.5rem 1rem;
+  padding: 0.52rem 0.95rem;
   border-radius: 0.5rem;
   border: 1px solid #cbd5e1;
   background: #fff;
@@ -63,9 +88,21 @@
 }
 
 .wp-btn--primary {
-  background: linear-gradient(135deg, #0ea5e9, #0284c7);
+  background: linear-gradient(135deg, #059669, #047857);
   color: #fff;
   border: none;
+}
+
+.wp-btn--icon {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.wp-btn__icon {
+  width: 1.05rem;
+  height: 1.05rem;
+  flex-shrink: 0;
 }
 
 .wp-btn--danger {
@@ -78,12 +115,18 @@
   overflow-x: auto;
   border-radius: 0.75rem;
   border: 1px solid rgba(15, 23, 42, 0.08);
+  background: #fff;
 }
 
 .wp-table {
   width: 100%;
   border-collapse: collapse;
   font-size: 0.9rem;
+  min-width: 920px;
+}
+
+.wp-table--orders {
+  min-width: 1020px;
 }
 
 .wp-table th,
@@ -97,10 +140,37 @@
   background: #f8fafc;
   font-weight: 600;
   color: #334155;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  font-size: 0.75rem;
 }
 
 .wp-table tr:hover td {
-  background: #fafafa;
+  background: #f8fffc;
+}
+
+.providers-actions-card {
+  border-color: rgba(15, 23, 42, 0.08);
+  background: #fff;
+}
+
+.providers-table-wrap {
+  margin-top: 0.35rem;
+}
+
+@media (max-width: 900px) {
+  .wp-toolbar input,
+  .wp-toolbar select {
+    min-width: 9rem;
+  }
+
+  .wp-actions {
+    justify-content: flex-start;
+  }
+
+  .wp-table {
+    min-width: 760px;
+  }
 }
 
 .wp-badge {
@@ -380,6 +450,11 @@
   margin-top: -0.1rem;
 }
 
+.npmodal-field-hint-after-mdate {
+  display: block;
+  margin-top: 0.3rem;
+}
+
 .wp-new-order-row.npmodal-row--2 {
   gap: var(--space-4, 1rem);
 }
@@ -557,4 +632,171 @@
     width: 46px;
     height: 46px;
   }
+}
+
+/* —— Compras semanales: panel de filtros unificado y estados de carga —— */
+.wp-business-loading,
+.wp-orders-loading {
+  padding: 1rem 0 1.25rem;
+}
+
+.wp-filters-panel {
+  margin-bottom: 0.65rem;
+  padding: 0.65rem 0.9rem;
+}
+
+.wp-filters-panel__rows {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.wp-filters-panel__row {
+  display: grid;
+  gap: 0.55rem 0.65rem;
+  align-items: end;
+}
+
+.wp-filters-panel__row--primary {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.wp-filters-panel__row--secondary {
+  grid-template-columns: minmax(0, 22rem);
+}
+
+.wp-filters-panel__mdate {
+  min-width: 0;
+}
+
+.wp-filters-panel__mdate .mdate {
+  width: 100%;
+}
+
+@media (max-width: 960px) {
+  .wp-filters-panel__row--primary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 520px) {
+  .wp-filters-panel__row--primary,
+  .wp-filters-panel__row--secondary {
+    grid-template-columns: 1fr;
+  }
+}
+
+.wp-filters-panel__row label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.28rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #475569;
+}
+
+.wp-filters-panel__row input,
+.wp-filters-panel__row select {
+  min-width: 0;
+  width: 100%;
+  padding: 0.42rem 0.55rem;
+  border-radius: 0.45rem;
+  border: 1px solid #cbd5e1;
+  font-size: 0.85rem;
+  background: #fff;
+}
+
+.wp-orders-card {
+  padding: 0.75rem 1rem 1rem;
+}
+
+.wp-orders-card__head {
+  margin-bottom: 0.55rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+}
+
+.wp-orders-card__title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.wp-orders-card__meta {
+  margin: 0.2rem 0 0;
+  font-size: 0.8rem;
+  color: #64748b;
+  font-weight: 600;
+}
+
+.wp-table-wrap--in-card {
+  border-radius: 0.5rem;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  margin-top: 0.15rem;
+}
+
+.wp-section--report .wp-section__head {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  margin-bottom: 0.55rem;
+}
+
+.wp-section__icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 0.5rem;
+  background: rgba(5, 150, 105, 0.1);
+  color: #047857;
+  flex-shrink: 0;
+}
+
+.wp-section--report h3 {
+  margin: 0;
+}
+
+.wp-section__lede {
+  margin: 0.2rem 0 0;
+  font-size: 0.78rem;
+  color: #64748b;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.wp-toolbar--report {
+  align-items: flex-end;
+  gap: 0.75rem;
+}
+
+.wp-toolbar--report .mdate {
+  flex: 1;
+  min-width: min(100%, 11rem);
+  max-width: 16rem;
+}
+
+.wp-toolbar--report .wp-btn--primary {
+  flex-shrink: 0;
+  align-self: flex-end;
+}
+
+.wp-table-empty {
+  text-align: center;
+  color: #64748b;
+  font-size: 0.88rem;
+  padding: 1.25rem 0.75rem !important;
+}
+
+.providers-layout--weekly .wp-section .wp-toolbar {
+  gap: 0.5rem;
+  margin-bottom: 0.35rem;
+}
+
+.providers-layout--weekly .wp-section .wp-toolbar input,
+.providers-layout--weekly .wp-section .wp-toolbar select {
+  padding: 0.42rem 0.55rem;
+  font-size: 0.85rem;
 }

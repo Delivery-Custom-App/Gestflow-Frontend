@@ -22,57 +22,60 @@ function ProductsTable({
   onPatchStock,
   onPatchUnitCost,
 }) {
-  const [stockEditId, setStockEditId] = useState(null)
+  const [editingRow, setEditingRow] = useState(null)
   const [stockDraft, setStockDraft] = useState('')
-  const [costEditId, setCostEditId] = useState(null)
   const [costDraft, setCostDraft] = useState('')
+  const [formError, setFormError] = useState('')
   const [saving, setSaving] = useState(false)
 
   const showPagination = !error && !loading && totalPages > 1
   const showCount = !error && !loading && totalCount > 0
 
-  const closeEdits = () => {
-    setStockEditId(null)
-    setCostEditId(null)
+  const closeEditModal = () => {
+    setEditingRow(null)
     setStockDraft('')
     setCostDraft('')
+    setFormError('')
   }
 
-  const startStockEdit = (row) => {
-    setCostEditId(null)
-    setCostDraft('')
-    setStockEditId(row.inventory_id != null ? String(row.inventory_id) : '')
+  const openEditModal = (row) => {
+    setEditingRow(row)
     setStockDraft(String(row.stock_current ?? 0))
-  }
-
-  const startCostEdit = (row) => {
-    setStockEditId(null)
-    setStockDraft('')
-    setCostEditId(row.inventory_id != null ? String(row.inventory_id) : '')
     setCostDraft(String(Math.round(Number(row.unit_cost_clp ?? 0))))
+    setFormError('')
   }
 
-  const submitStock = async (row) => {
-    if (!onPatchStock) return
-    const n = Number(stockDraft)
-    if (!Number.isFinite(n) || n < 0) return
-    setSaving(true)
-    try {
-      await onPatchStock(row, { stock: Math.floor(n) })
-      closeEdits()
-    } finally {
-      setSaving(false)
+  const submitRowUpdate = async () => {
+    if (!editingRow) return
+    const stockValue = Number(stockDraft)
+    const unitCostValue = Number(costDraft)
+
+    if (!Number.isFinite(stockValue) || stockValue < 0) {
+      setFormError('El stock actual debe ser un número válido mayor o igual a 0.')
+      return
     }
-  }
+    if (!Number.isFinite(unitCostValue) || unitCostValue <= 0) {
+      setFormError('El costo unitario debe ser un número válido mayor a 0.')
+      return
+    }
 
-  const submitCost = async (row) => {
-    if (!onPatchUnitCost) return
-    const n = Number(costDraft)
-    if (!Number.isFinite(n) || n <= 0) return
+    const nextStock = Math.floor(stockValue)
+    const nextUnitCost = Math.round(unitCostValue)
+    const currentStock = Number(editingRow.stock_current ?? 0)
+    const currentUnitCost = Math.round(Number(editingRow.unit_cost_clp ?? 0))
+
     setSaving(true)
+    setFormError('')
     try {
-      await onPatchUnitCost(row, Math.round(n))
-      closeEdits()
+      if (onPatchStock && nextStock !== currentStock) {
+        await onPatchStock(editingRow, { stock: nextStock })
+      }
+      if (onPatchUnitCost && nextUnitCost !== currentUnitCost) {
+        await onPatchUnitCost(editingRow, nextUnitCost)
+      }
+      closeEditModal()
+    } catch (e) {
+      setFormError(e?.message || 'No se pudieron guardar los cambios.')
     } finally {
       setSaving(false)
     }
@@ -144,10 +147,6 @@ function ProductsTable({
                     : stockCurrent * unitCost
                 const stockMin = row.stock_min == null ? '—' : String(row.stock_min)
                 const stockMax = row.stock_max == null ? '—' : String(row.stock_max)
-                const iid = row.inventory_id != null ? String(row.inventory_id) : ''
-                const editingStock = stockEditId === iid
-                const editingCost = costEditId === iid
-
                 return (
                   <tr key={row.inventory_id ?? row.product_id}>
                     <td>
@@ -156,84 +155,21 @@ function ProductsTable({
                     <td>{row.category_name || '—'}</td>
                     <td className="scd-table-supplier">{row.supplier_name?.trim() || '—'}</td>
                     <td>
-                      {editingStock ? (
-                        <div className="scd-inline-edit">
-                          <input
-                            type="number"
-                            min={0}
-                            className="scd-inline-edit-input"
-                            value={stockDraft}
-                            onChange={(e) => setStockDraft(e.target.value)}
-                            disabled={saving}
-                            aria-label="Nuevo stock"
-                          />
-                          <button
-                            type="button"
-                            className="scd-inline-edit-btn"
-                            disabled={saving}
-                            onClick={() => submitStock(row)}
-                          >
-                            Guardar
-                          </button>
-                          <button type="button" className="scd-inline-edit-btn scd-inline-edit-btn--ghost" disabled={saving} onClick={closeEdits}>
-                            Cancelar
-                          </button>
-                        </div>
-                      ) : (
-                        <span className="scd-cell-with-action">
-                          {stockCurrent}
-                          {onPatchStock ? (
-                            <button type="button" className="scd-cell-edit" onClick={() => startStockEdit(row)} aria-label="Editar stock">
-                              Editar
-                            </button>
-                          ) : null}
-                        </span>
-                      )}
+                      {stockCurrent}
                     </td>
                     <td>{stockMin}</td>
                     <td>{stockMax}</td>
                     <td>
-                      {editingCost ? (
-                        <div className="scd-inline-edit">
-                          <input
-                            type="number"
-                            min={1}
-                            step={1}
-                            className="scd-inline-edit-input"
-                            value={costDraft}
-                            onChange={(e) => setCostDraft(e.target.value)}
-                            disabled={saving}
-                            aria-label="Nuevo costo unitario"
-                          />
-                          <button
-                            type="button"
-                            className="scd-inline-edit-btn"
-                            disabled={saving}
-                            onClick={() => submitCost(row)}
-                          >
-                            Guardar
-                          </button>
-                          <button type="button" className="scd-inline-edit-btn scd-inline-edit-btn--ghost" disabled={saving} onClick={closeEdits}>
-                            Cancelar
-                          </button>
-                        </div>
-                      ) : (
-                        <span className="scd-cell-with-action">
-                          {formatClp(unitCost)}
-                          {onPatchUnitCost ? (
-                            <button type="button" className="scd-cell-edit" onClick={() => startCostEdit(row)} aria-label="Editar costo">
-                              Editar
-                            </button>
-                          ) : null}
-                        </span>
-                      )}
+                      {formatClp(unitCost)}
                     </td>
                     <td>{formatClp(total)}</td>
                     <td>
                       <StockStatusBadge row={row} />
                     </td>
                     <td className="scd-table-actions-hint">
-                      <span className="scd-actions-hint">Editar en columnas Stock / Costo</span>
+                      <button type="button" className="scd-inline-edit-btn" onClick={() => openEditModal(row)}>
+                        Editar stock/costo
+                      </button>
                     </td>
                   </tr>
                 )
@@ -241,6 +177,63 @@ function ProductsTable({
             : null}
         </tbody>
       </table>
+      {editingRow ? (
+        <div className="npmodal-backdrop" role="presentation" onClick={closeEditModal}>
+          <section
+            className="npmodal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="edit-stock-cost-title"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <header className="npmodal-head">
+              <h2 id="edit-stock-cost-title">Editar stock y costo</h2>
+              <button type="button" className="npmodal-close" onClick={closeEditModal} aria-label="Cerrar modal">
+                ×
+              </button>
+            </header>
+            <div className="npmodal-form">
+              <p className="scd-actions-hint">
+                {editingRow.product_name || editingRow.name || 'Producto'}
+              </p>
+              {formError ? <div className="npmodal-error">{formError}</div> : null}
+              <div className="npmodal-row npmodal-row--2">
+                <label className="npmodal-field">
+                  <span>Stock actual</span>
+                  <input
+                    type="number"
+                    min={0}
+                    value={stockDraft}
+                    onChange={(e) => setStockDraft(e.target.value)}
+                    disabled={saving}
+                    aria-label="Editar stock actual"
+                  />
+                </label>
+                <label className="npmodal-field">
+                  <span>Costo unitario (CLP)</span>
+                  <input
+                    type="number"
+                    min={1}
+                    step={1}
+                    value={costDraft}
+                    onChange={(e) => setCostDraft(e.target.value)}
+                    disabled={saving}
+                    aria-label="Editar costo unitario"
+                  />
+                </label>
+              </div>
+              <div className="npmodal-actions">
+                <button type="button" className="npmodal-btn npmodal-btn--ghost" onClick={closeEditModal} disabled={saving}>
+                  Cancelar
+                </button>
+                <button type="button" className="npmodal-btn npmodal-btn--primary" onClick={submitRowUpdate} disabled={saving}>
+                  {saving ? 'Guardando...' : 'Guardar cambios'}
+                </button>
+              </div>
+            </div>
+          </section>
+        </div>
+      ) : null}
       {showPagination ? (
         <div className="scd-pagination">
           <button

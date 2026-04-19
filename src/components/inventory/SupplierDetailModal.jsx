@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { getAuthContext } from '../../lib/apiClient'
-import { getSupplierDetailForBusiness, patchSupplier } from '../../lib/inventoryApi'
+import { getSupplierDetailForBusiness, patchSupplier } from '../../lib/providersApi'
 import '../../styles/inventory/WeeklyPurchases.css'
 
 function formatMoneyClp(value) {

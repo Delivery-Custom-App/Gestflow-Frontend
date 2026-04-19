@@ -99,11 +99,12 @@ function CreateRecipeModal({ isOpen, recipe, categories, onSave, onCancel, local
       return
     }
 
-    const product = products.find((p) => p.id === parseInt(newIngredient.product_id))
+    const selectedProductId = String(newIngredient.product_id)
+    const product = products.find((p) => String(p.id) === selectedProductId)
     if (!product) return
 
     const isDuplicate = ingredients.some(
-      (ing) => ing.product_id === parseInt(newIngredient.product_id)
+      (ing) => String(ing.product_id) === selectedProductId
     )
 
     if (isDuplicate) {
@@ -115,11 +116,11 @@ function CreateRecipeModal({ isOpen, recipe, categories, onSave, onCancel, local
     }
 
     const newIng = {
-      product_id: parseInt(newIngredient.product_id),
+      product_id: selectedProductId,
       product_name: product.name,
       quantity_required: parseFloat(newIngredient.quantity_required),
       unit: newIngredient.unit,
-      unit_cost_clp: product.price_per_unit || 0,
+      unit_cost_clp: Number(product.unit_cost_clp ?? product.price_per_unit ?? 0),
     }
 
     setIngredients((prev) => [...prev, newIng])
@@ -163,7 +164,7 @@ function CreateRecipeModal({ isOpen, recipe, categories, onSave, onCancel, local
     try {
       const totalCost = calculateTotalCost()
       const payload = {
-        category_id: parseInt(formData.category_id),
+        category_id: formData.category_id,
         name: formData.name.trim(),
         description: formData.description.trim(),
         price_sale: parseFloat(formData.price_sale),
@@ -316,7 +317,7 @@ function CreateRecipeModal({ isOpen, recipe, categories, onSave, onCancel, local
                       <option value="">Selecciona un producto</option>
                       {products.map((prod) => (
                         <option key={prod.id} value={prod.id}>
-                          {prod.name} (${prod.price_per_unit?.toFixed(0) || '0'}/u)
+                          {prod.name} (${Number(prod.unit_cost_clp ?? prod.price_per_unit ?? 0).toFixed(0)}/u)
                         </option>
                       ))}
                     </select>
