@@ -1012,6 +1012,11 @@
   border: 1px solid #fecaca;
 }
 
+.npmodal-error--multiline {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 .npmodal-field {
   display: flex;
   flex-direction: column;

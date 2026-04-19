@@ -13,10 +13,13 @@ import POSModule from './components/pos/POSModule'
 import MesaDetail from './components/pos/MesaDetail'
 import WorkerLocalSelector from './components/WorkerLocalSelector'
 import LoadingPage from './components/LoadingPage'
-
-const WORKER_ROLES = ['Empleado', 'Cajero']
 import { isSupabaseConfigured, supabase } from './lib/supabaseClient'
 import { getUserRole } from './utils/jwt'
+
+const WORKER_ROLES = ['Empleado', 'Cajero']
+
+/** Opt-in a banderas de React Router v7 (menos advertencias en consola durante el desarrollo). */
+const ROUTER_FUTURE_FLAGS = { v7_startTransition: true, v7_relativeSplatPath: true }
 
 /** /local/:id ya no es pantalla propia: vuelve a /admin y reabre módulos del local */
 function LocalModulesHomeRedirect() {
@@ -184,7 +187,7 @@ function App() {
   // Superadmin: mismas rutas que admin (la comparación estricta con 'SUPERADMIN' fallaba tras formatRoleLabel → 'Superadmin')
   if (user && isSuperAdminRole(userRole)) {
     return (
-      <Router>
+      <Router future={ROUTER_FUTURE_FLAGS}>
         <Routes>
           <Route path="/admin" element={<AdminDashboard user={user} userRole={userRole} onLogout={handleLogout} />} />
           <Route
@@ -226,7 +229,7 @@ function App() {
   // Roles de trabajador: solo acceso al POS
   if (user && WORKER_ROLES.includes(userRole)) {
     return (
-      <Router>
+      <Router future={ROUTER_FUTURE_FLAGS}>
         <Routes>
           <Route path="/" element={<WorkerLocalSelector user={user} userRole={userRole} onLogout={handleLogout} />} />
           <Route
@@ -338,7 +341,7 @@ function App() {
 
   // Si el usuario está logueado, mostrar las rutas
   return (
-    <Router>
+    <Router future={ROUTER_FUTURE_FLAGS}>
       <Routes>
         <Route path="/" element={<AdminDashboard user={user} userRole={userRole} onLogout={handleLogout} />} />
         <Route path="/admin" element={<AdminDashboard user={user} userRole={userRole} onLogout={handleLogout} />} />

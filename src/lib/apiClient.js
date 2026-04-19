@@ -39,16 +39,55 @@ function buildUrl(path) {
   return `${apiBaseUrl}/api${normalizedPath}`
 }
 
+/**
+ * FastAPI puede devolver detail como string, lista de errores Pydantic u objeto.
+ * @param {unknown} detail
+ * @returns {string}
+ */
+export function formatApiErrorDetail(detail) {
+  if (detail == null) return ''
+  if (typeof detail === 'string') return detail
+  if (Array.isArray(detail)) {
+    return detail
+      .map((item) => {
+        if (typeof item === 'string') return item
+        if (item && typeof item === 'object') {
+          const loc = Array.isArray(item.loc) ? item.loc.filter((x) => x !== 'body').join(' › ') : ''
+          const msg = item.msg || item.message || ''
+          if (loc && msg) return `${loc}: ${msg}`
+          if (msg) return msg
+        }
+        try {
+          return JSON.stringify(item)
+        } catch {
+          return String(item)
+        }
+      })
+      .filter(Boolean)
+      .join('\n')
+  }
+  if (typeof detail === 'object') {
+    try {
+      return JSON.stringify(detail)
+    } catch {
+      return String(detail)
+    }
+  }
+  return String(detail)
+}
+
 async function parseErrorResponse(response) {
   const contentType = response.headers.get('content-type') || ''
 
   if (contentType.includes('application/json')) {
     try {
       const json = await response.json()
-      const detail = json?.detail
-      if (detail == null) return JSON.stringify(json)
-      if (typeof detail === 'string') return detail
-      return JSON.stringify(detail)
+      const detail = formatApiErrorDetail(json?.detail)
+      if (detail) return detail
+      if (json && typeof json === 'object' && Object.keys(json).length) {
+        return JSON.stringify(json)
+      }
+      return response.statusText || 'Error desconocido'
     } catch {
       return response.statusText || 'Error desconocido'
     }
@@ -139,7 +178,11 @@ export async function apiRequest(path, options = {}) {
 
   if (!response.ok) {
     const detail = await parseErrorResponse(response)
-    throw new Error(`${response.status}: ${detail}`)
+    const message = detail ? `${response.status}: ${detail}` : `${response.status} ${response.statusText}`
+    const err = new Error(message)
+    err.status = response.status
+    err.detail = detail
+    throw err
   }
 
   if (response.status === 204) {

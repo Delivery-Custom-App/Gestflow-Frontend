@@ -96,10 +96,17 @@ function RegisterSupplierModal({ open, onClose, onSuccess, businessId }) {
         email: form.email.trim(),
       }
       if (bid) body.business_id = bid
+      body.rut = normalizeRutInput(body.rut)
       await postSupplier(token, body)
       onSuccess?.()
       onClose?.()
     } catch (err) {
+      console.warn('[Registrar proveedor] Error API', {
+        status: err?.status,
+        detail: err?.detail,
+        message: err?.message,
+        err,
+      })
       setError(err?.message || 'No se pudo registrar el proveedor.')
     } finally {
       setSubmitting(false)
@@ -129,7 +136,11 @@ function RegisterSupplierModal({ open, onClose, onSuccess, businessId }) {
             <strong>K</strong>); no hace falta puntos ni guion: se muestran solos. El sistema valida el dígito
             verificador (incluida la K).
           </p>
-          {error ? <p className="npmodal-error">{error}</p> : null}
+          {error ? (
+            <p className="npmodal-error npmodal-error--multiline" role="alert">
+              {error}
+            </p>
+          ) : null}
 
           <label className="npmodal-field">
             <span>Nombre comercial</span>
