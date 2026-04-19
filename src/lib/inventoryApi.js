@@ -76,6 +76,25 @@ export function getInventorySuppliersForLocal(localId, token) {
   return apiRequest(`/inventory/locals/${localId}/suppliers`, { token })
 }
 
+/** Local por id (incluye business_id). */
+export function getLocalById(localId, token) {
+  return apiRequest(`/locals/${localId}`, { token })
+}
+
+/**
+ * Listado de proveedores con métricas agregadas (HU-68): unidades en inventario y valor estimado (CLP).
+ * GET /suppliers?business_id=
+ */
+export function buildSuppliersWithMetricsPath(businessId) {
+  const params = new URLSearchParams()
+  params.set('business_id', String(businessId))
+  return `/suppliers?${params.toString()}`
+}
+
+export function getSuppliersWithMetricsForBusiness(token, businessId) {
+  return apiRequest(buildSuppliersWithMetricsPath(businessId), { token })
+}
+
 /**
  * Crea un proveedor en el negocio. `business_id` opcional: el backend usa el del usuario si es admin.
  * @param {object} body - { name: string, business_id?: string }

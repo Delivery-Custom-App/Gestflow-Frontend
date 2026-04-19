@@ -45,7 +45,10 @@ async function parseErrorResponse(response) {
   if (contentType.includes('application/json')) {
     try {
       const json = await response.json()
-      return json?.detail || JSON.stringify(json)
+      const detail = json?.detail
+      if (detail == null) return JSON.stringify(json)
+      if (typeof detail === 'string') return detail
+      return JSON.stringify(detail)
     } catch {
       return response.statusText || 'Error desconocido'
     }

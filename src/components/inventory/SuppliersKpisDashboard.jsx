@@ -1,7 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams, useLocation } from 'react-router-dom'
 import { getAuthContext } from '../../lib/apiClient'
-import { getSupplierKpisByLocal } from '../../lib/inventoryApi'
+import {
+  getLocalById,
+  getSupplierKpisByLocal,
+  getSuppliersWithMetricsForBusiness,
+} from '../../lib/inventoryApi'
 import { isInventoryAdminRole } from '../../utils/inventoryAccess'
 import InventoryShell from './InventoryShell'
 import LoadingSpinner from '../LoadingSpinner'
@@ -53,6 +57,10 @@ function SuppliersKpisDashboard({ user, userRole, onLogout }) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
+  const [suppliersRows, setSuppliersRows] = useState([])
+  const [suppliersLoading, setSuppliersLoading] = useState(true)
+  const [suppliersError, setSuppliersError] = useState('')
+
   const load = useCallback(async () => {
     if (!canAccess) {
       setLoading(false)
@@ -79,9 +87,44 @@ function SuppliersKpisDashboard({ user, userRole, onLogout }) {
     }
   }, [localId, year, month, canAccess])
 
+  const loadSuppliersList = useCallback(async () => {
+    if (!canAccess || !localId) {
+      setSuppliersRows([])
+      setSuppliersLoading(false)
+      setSuppliersError('')
+      return
+    }
+    setSuppliersError('')
+    setSuppliersLoading(true)
+    try {
+      const { token, businessId: bidFromToken } = await getAuthContext()
+      let businessId = bidFromToken
+      if (!businessId) {
+        const loc = await getLocalById(localId, token)
+        businessId = loc?.business_id ?? null
+      }
+      if (!businessId) {
+        setSuppliersRows([])
+        setSuppliersError('No se pudo determinar el negocio del local.')
+        return
+      }
+      const rows = await getSuppliersWithMetricsForBusiness(token, businessId)
+      setSuppliersRows(Array.isArray(rows) ? rows : [])
+    } catch (e) {
+      setSuppliersRows([])
+      setSuppliersError(e?.message || 'No se pudo cargar el listado de proveedores.')
+    } finally {
+      setSuppliersLoading(false)
+    }
+  }, [localId, canAccess])
+
   useEffect(() => {
     load()
   }, [load])
+
+  useEffect(() => {
+    loadSuppliersList()
+  }, [loadSuppliersList])
 
   const periodLabel = `${MONTH_NAMES[(month || 1) - 1] ?? ''} ${year}`
 
@@ -110,8 +153,8 @@ function SuppliersKpisDashboard({ user, userRole, onLogout }) {
               </svg>
             </span>
             <div>
-              <h1 className="scd-title">Proveedores · KPIs</h1>
-              <p className="scd-subtitle">Directorio y compras de insumos aprobadas por mes calendario</p>
+              <h1 className="scd-title">Proveedores</h1>
+              <p className="scd-subtitle">KPIs del mes y listado con inventario y valor estimado por proveedor</p>
             </div>
           </header>
 
@@ -218,6 +261,54 @@ function SuppliersKpisDashboard({ user, userRole, onLogout }) {
               </article>
             </section>
           </>
+        ) : null}
+
+        {canAccess ? (
+          <section className="scd-suppliers-list-section" aria-labelledby="scd-suppliers-list-title">
+            <div className="scd-table-meta">
+              <h2 id="scd-suppliers-list-title" className="scd-section-title">
+                Listado de proveedores
+              </h2>
+              <p className="scd-table-actions-hint">
+                Unidades = stock actual de productos del proveedor; valor = stock × costo unitario registrado.
+              </p>
+            </div>
+            {suppliersError ? <div className="scd-status scd-status--error">{suppliersError}</div> : null}
+            {suppliersLoading ? (
+              <LoadingSpinner message="Cargando proveedores…" />
+            ) : suppliersRows.length === 0 && !suppliersError ? (
+              <p className="scd-table-empty">No hay proveedores registrados para este negocio.</p>
+            ) : (
+              <div className="scd-table-wrap">
+                <table className="scd-table">
+                  <thead>
+                    <tr>
+                      <th scope="col">Proveedor</th>
+                      <th scope="col">Estado</th>
+                      <th scope="col" className="scd-table-num">
+                        Unidades en inventario
+                      </th>
+                      <th scope="col" className="scd-table-num">
+                        Valor inventario (CLP)
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {suppliersRows.map((row) => (
+                      <tr key={row.id}>
+                        <td className="scd-table-supplier">{row.name || '—'}</td>
+                        <td>{row.is_active === false ? 'Inactivo' : 'Activo'}</td>
+                        <td className="scd-table-num">{row.purchased_products_count ?? 0}</td>
+                        <td className="scd-table-num scd-kpi-value--money">
+                          {formatMoneyClp(row.supplier_purchases_total_clp)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
         ) : null}
       </div>
     </InventoryShell>

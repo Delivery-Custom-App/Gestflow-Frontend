@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
-import { apiRequest } from '../../../lib/apiClient'
+import { getAuthContext } from '../../../lib/apiClient'
+import { getInventoryProductsPage } from '../../../lib/inventoryApi'
 import './recipes.css'
 
 function CreateRecipeModal({ isOpen, recipe, categories, onSave, onCancel, localId }) {
@@ -19,7 +20,7 @@ function CreateRecipeModal({ isOpen, recipe, categories, onSave, onCancel, local
   const [newIngredient, setNewIngredient] = useState({
     product_id: '',
     quantity_required: '',
-    unit: 'kg',
+    unit: 'unidad',
   })
 
   useEffect(() => {
@@ -44,7 +45,7 @@ function CreateRecipeModal({ isOpen, recipe, categories, onSave, onCancel, local
       })
       setIngredients([])
     }
-    setNewIngredient({ product_id: '', quantity_required: '', unit: 'kg' })
+    setNewIngredient({ product_id: '', quantity_required: '', unit: 'unidad' })
     setErrors({})
 
     // Fetch products
@@ -54,8 +55,14 @@ function CreateRecipeModal({ isOpen, recipe, categories, onSave, onCancel, local
   const fetchProducts = async () => {
     setLoading(true)
     try {
-      const data = await apiRequest(`/products?local_id=${localId}`)
-      setProducts(data || [])
+      if (!localId) {
+        setProducts([])
+        return
+      }
+
+      const { token } = await getAuthContext()
+      const page = await getInventoryProductsPage(localId, token, { limit: 500, offset: 0 })
+      setProducts(page?.items || [])
     } catch (err) {
       console.error('Error fetching products:', err)
       setErrors((prev) => ({ ...prev, products: 'Error cargando productos' }))
@@ -116,7 +123,7 @@ function CreateRecipeModal({ isOpen, recipe, categories, onSave, onCancel, local
     }
 
     setIngredients((prev) => [...prev, newIng])
-    setNewIngredient({ product_id: '', quantity_required: '', unit: 'kg' })
+    setNewIngredient({ product_id: '', quantity_required: '', unit: 'unidad' })
     setErrors((prev) => ({ ...prev, ingredient: '' }))
   }
 
@@ -329,18 +336,18 @@ function CreateRecipeModal({ isOpen, recipe, categories, onSave, onCancel, local
                   </div>
 
                   <div className="recipe-modal__form-group">
-                    <label className="recipe-modal__label">Unidad</label>
+                    <label className="recipe-modal__label">Formato de medida</label>
                     <select
                       name="unit"
                       value={newIngredient.unit}
                       onChange={handleIngredientChange}
                       className="recipe-modal__input"
                     >
+                      <option value="unidad">unidad</option>
                       <option value="kg">kg</option>
                       <option value="g">g</option>
                       <option value="L">L</option>
                       <option value="ml">ml</option>
-                      <option value="unidad">unidad</option>
                       <option value="taza">taza</option>
                       <option value="cucharada">cucharada</option>
                       <option value="cucharadita">cucharadita</option>

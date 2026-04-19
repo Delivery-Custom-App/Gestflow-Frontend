@@ -36,6 +36,13 @@ function formatRoleLabel(role) {
     .replace(/\b\w/g, (char) => char.toUpperCase())
 }
 
+/** Coincide con rol superadmin tras formatRoleLabel ("Superadmin") o valor crudo del JWT. */
+function isSuperAdminRole(roleLabel) {
+  if (!roleLabel) return false
+  const n = String(roleLabel).toLowerCase().replace(/\s+/g, '')
+  return n === 'superadmin'
+}
+
 function App() {
   const [showPassword, setShowPassword] = useState(false)
   const [email, setEmail] = useState('')
@@ -174,8 +181,8 @@ function App() {
     return <LoadingPage />
   }
 
-  // Si el usuario está logueado como SUPERADMIN, mostrar el dashboard
-  if (user && userRole === 'SUPERADMIN') {
+  // Superadmin: mismas rutas que admin (la comparación estricta con 'SUPERADMIN' fallaba tras formatRoleLabel → 'Superadmin')
+  if (user && isSuperAdminRole(userRole)) {
     return (
       <Router>
         <Routes>

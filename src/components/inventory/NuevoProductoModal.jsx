@@ -3,6 +3,7 @@ import { getAuthContext } from '../../lib/apiClient'
 import { getInventorySuppliersForLocal, postInventoryNewProduct, postSupplier } from '../../lib/inventoryApi'
 
 const UNITS = [
+  { value: 'unidad', label: 'Unidad' },
   { value: 'kg', label: 'kg' },
   { value: 'g', label: 'g' },
   { value: 'L', label: 'L' },
@@ -14,7 +15,7 @@ function NuevoProductoModal({ open, localId, onClose, onSuccess }) {
   const [error, setError] = useState('')
   const [productName, setProductName] = useState('')
   const [category, setCategory] = useState('')
-  const [unit, setUnit] = useState('kg')
+  const [unit, setUnit] = useState('unidad')
   const [currentStock, setCurrentStock] = useState('0')
   const [minStock, setMinStock] = useState('0')
   const [maxStock, setMaxStock] = useState('0')
@@ -125,7 +126,7 @@ function NuevoProductoModal({ open, localId, onClose, onSuccess }) {
       onClose?.()
       setProductName('')
       setCategory('')
-      setUnit('kg')
+      setUnit('unidad')
       setCurrentStock('0')
       setMinStock('0')
       setMaxStock('0')
@@ -167,7 +168,7 @@ function NuevoProductoModal({ open, localId, onClose, onSuccess }) {
             <input value={category} onChange={(ev) => setCategory(ev.target.value)} required />
           </label>
           <label className="npmodal-field">
-            <span>Unidad</span>
+            <span>Formato de medida</span>
             <select value={unit} onChange={(ev) => setUnit(ev.target.value)}>
               {UNITS.map((u) => (
                 <option key={u.value} value={u.value}>

@@ -22,6 +22,10 @@ function InventoryModuleHub({ user, userRole, onLogout }) {
     navigate(`/local/${localId}/inventario/recipes`, { state: { local: selectedLocal } })
   }
 
+  const goProveedores = () => {
+    navigate(`/local/${localId}/inventario/proveedores`, { state: { local: selectedLocal } })
+  }
+
   return (
     <InventoryShell user={user} userRole={userRole} onLogout={onLogout} active="hub">
       <button
@@ -102,7 +106,7 @@ function InventoryModuleHub({ user, userRole, onLogout }) {
           </button>
         </article>
 
-        <article className="inv-hub__feature">
+        <article className="inv-hub__feature inv-hub__feature--suppliers">
           <h2>Proveedores</h2>
           <p className="inv-hub__feature-sub">Gestión de proveedores</p>
           <ul className="inv-hub__feature-list">
@@ -110,7 +114,11 @@ function InventoryModuleHub({ user, userRole, onLogout }) {
             <li>Contacto</li>
             <li>Historial de compras</li>
           </ul>
-          <button type="button" className="inv-hub__feature-btn" disabled>
+          <button
+            type="button"
+            className="inv-hub__feature-btn inv-hub__feature-btn--primary"
+            onClick={goProveedores}
+          >
             Gestionar proveedores →
           </button>
         </article>

@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest'
-import { buildInventoryStockListPath, buildInventoryProductsPath } from './inventoryApi'
+import {
+  buildInventoryStockListPath,
+  buildInventoryProductsPath,
+  buildSuppliersWithMetricsPath,
+} from './inventoryApi'
 
 describe('buildInventoryStockListPath (HU-47/HU-48 filtros)', () => {
   const local = '11111111-1111-1111-1111-111111111111'
@@ -79,5 +83,12 @@ describe('buildInventoryProductsPath (listado paginado /products)', () => {
     expect(path).toContain('status=BAJO')
     expect(path).toContain('limit=10')
     expect(path).toContain('offset=30')
+  })
+})
+
+describe('buildSuppliersWithMetricsPath (HU-68)', () => {
+  it('incluye business_id en query', () => {
+    const bid = '33333333-3333-3333-3333-333333333333'
+    expect(buildSuppliersWithMetricsPath(bid)).toBe(`/suppliers?business_id=${encodeURIComponent(bid)}`)
   })
 })

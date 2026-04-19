@@ -4,7 +4,7 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import SuppliersKpisDashboard from './SuppliersKpisDashboard'
 
 vi.mock('../../lib/apiClient', () => ({
-  getAuthContext: vi.fn(() => Promise.resolve({ token: 'test-token' })),
+  getAuthContext: vi.fn(() => Promise.resolve({ token: 'test-token', businessId: 'biz-1' })),
 }))
 
 const mockKpis = {
@@ -19,6 +19,18 @@ const mockKpis = {
 
 vi.mock('../../lib/inventoryApi', () => ({
   getSupplierKpisByLocal: vi.fn(() => Promise.resolve(mockKpis)),
+  getSuppliersWithMetricsForBusiness: vi.fn(() =>
+    Promise.resolve([
+      {
+        id: 's-1',
+        name: 'Proveedor Demo',
+        is_active: true,
+        purchased_products_count: 12,
+        supplier_purchases_total_clp: 48000,
+      },
+    ]),
+  ),
+  getLocalById: vi.fn(),
 }))
 
 const mockUser = { email: 'a@b.cl', user_metadata: {} }
@@ -55,6 +67,13 @@ describe('SuppliersKpisDashboard', () => {
 
     const values = [...region.querySelectorAll('.scd-kpi-value')].map((el) => el.textContent.trim())
     expect(values).toEqual(['4', '3', '$1.250.000'])
+
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: /Listado de proveedores/i })).toBeInTheDocument()
+    })
+    expect(screen.getByText('Proveedor Demo')).toBeInTheDocument()
+    expect(screen.getByText('12')).toBeInTheDocument()
+    expect(screen.getByText('$48.000')).toBeInTheDocument()
   })
 
   it('sin rol admin muestra mensaje de permisos', async () => {

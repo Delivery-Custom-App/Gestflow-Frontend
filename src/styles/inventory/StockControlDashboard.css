@@ -471,7 +471,12 @@
   color: var(--color-text-muted);
   font-weight: 600;
   font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+.inv-feature-card__btn:disabled {
   cursor: not-allowed;
+  opacity: 0.55;
 }
 
 .inv-feature-card__btn--primary {
@@ -481,7 +486,7 @@
   cursor: pointer;
   transition: background var(--transition-base), transform var(--transition-fast);
 }
-.inv-feature-card__btn--primary:hover {
+.inv-feature-card__btn--primary:hover:not(:disabled) {
   background: var(--color-primary-dark);
   transform: translateY(-1px);
 }
@@ -1019,6 +1024,15 @@
   background: var(--color-surface);
   transition: border-color var(--transition-fast);
 }
+
+/* Evita zoom automático en iOS y mejora legibilidad en móvil */
+@media (max-width: 560px) {
+  .npmodal-field input,
+  .npmodal-field select,
+  .npmodal-supplier-quickadd-input {
+    font-size: 16px;
+  }
+}
 .npmodal-field input:focus,
 .npmodal-field select:focus {
   outline: none;
@@ -1032,15 +1046,15 @@
   gap: var(--space-3);
 }
 
-@media (max-width: 520px) {
-  .npmodal-row { grid-template-columns: 1fr; }
-}
-
 .npmodal-actions {
   display: flex;
   justify-content: flex-end;
   gap: var(--space-3);
   margin-top: var(--space-2);
+}
+
+.npmodal-actions .npmodal-btn {
+  min-width: 120px;
 }
 
 .npmodal-btn {
@@ -1252,10 +1266,154 @@
   color: var(--color-text-muted);
 }
 
+.scd-suppliers-list-section {
+  margin-top: var(--space-6);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--color-border);
+}
+
+.scd-suppliers-list-section .scd-table-meta {
+  max-width: 100%;
+}
+
+.scd-suppliers-list-section .scd-table-actions-hint {
+  max-width: none;
+  margin-top: var(--space-1);
+}
+
+.scd-section-title {
+  margin: 0 0 var(--space-1);
+  font-size: var(--text-lg);
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.scd-table .scd-table-num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
 /* ---- RESPONSIVE ---- */
 @media (max-width: 1024px) {
   .inv-app       { flex-direction: column; }
   .inv-sidebar   { width: 100%; border-right: none; border-bottom: 1px solid var(--color-border); }
   .inv-feature-grid { grid-template-columns: 1fr; }
   .inv-main      { padding: var(--space-5) var(--space-5) var(--space-8); }
+}
+
+@media (max-width: 768px) {
+  .scd-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .scd-kpis {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .scd-panel {
+    padding: var(--space-4);
+  }
+
+  .scd-panel-head {
+    align-items: stretch;
+  }
+
+  .scd-btn-new {
+    width: 100%;
+  }
+
+  .scd-filters {
+    flex-direction: column;
+  }
+
+  .scd-search,
+  .scd-select,
+  .scd-status-filter {
+    width: 100%;
+  }
+
+  .scd-table th,
+  .scd-table td {
+    padding: var(--space-3) var(--space-2);
+  }
+}
+
+@media (max-width: 560px) {
+  .inv-main {
+    padding: var(--space-4) var(--space-3) var(--space-7);
+  }
+
+  .npmodal-backdrop {
+    align-items: flex-end;
+    padding: 0;
+  }
+
+  .npmodal {
+    max-width: none;
+    max-height: 92vh;
+    border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+  }
+
+  .npmodal-head,
+  .npmodal-form {
+    padding-left: var(--space-4);
+    padding-right: var(--space-4);
+  }
+
+  .npmodal-row {
+    grid-template-columns: 1fr;
+  }
+
+  .npmodal-supplier-quickadd {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .npmodal-supplier-quickadd-input,
+  .npmodal-supplier-quickadd .npmodal-btn,
+  .npmodal-actions .npmodal-btn {
+    width: 100%;
+  }
+
+  .npmodal-actions {
+    flex-direction: column-reverse;
+  }
+
+  .scd-header-icon {
+    width: 38px;
+    height: 38px;
+  }
+
+  .scd-title {
+    font-size: var(--text-xl);
+  }
+
+  .scd-subtitle,
+  .scd-table-meta,
+  .scd-pagination-info {
+    font-size: var(--text-xs);
+  }
+
+  .scd-kpis {
+    grid-template-columns: 1fr;
+  }
+
+  .scd-table-wrap {
+    margin: 0 calc(var(--space-3) * -1);
+    padding: 0 var(--space-3);
+  }
+
+  .scd-table {
+    min-width: 640px;
+  }
+
+  .scd-pagination {
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+
+  .scd-pagination-btn {
+    width: 100%;
+  }
 }
