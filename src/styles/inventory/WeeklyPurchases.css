@@ -1,0 +1,185 @@
+/* HU-34 — compras semanales (reutiliza tokens de StockControlDashboard donde aplica) */
+
+.wp-section {
+  margin-top: 2rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid rgba(15, 23, 42, 0.08);
+}
+
+.wp-section h3 {
+  margin: 0 0 0.75rem;
+  font-size: 1.05rem;
+  color: #0f172a;
+}
+
+.wp-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: flex-end;
+  margin-bottom: 1rem;
+}
+
+.wp-toolbar label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.8rem;
+  color: #475569;
+}
+
+.wp-toolbar input,
+.wp-toolbar select {
+  min-width: 10rem;
+  padding: 0.45rem 0.6rem;
+  border-radius: 0.5rem;
+  border: 1px solid #cbd5e1;
+  font-size: 0.9rem;
+}
+
+.wp-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+}
+
+.wp-btn {
+  padding: 0.5rem 1rem;
+  border-radius: 0.5rem;
+  border: 1px solid #cbd5e1;
+  background: #fff;
+  font-weight: 600;
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+
+.wp-btn--primary {
+  background: linear-gradient(135deg, #0ea5e9, #0284c7);
+  color: #fff;
+  border: none;
+}
+
+.wp-btn--danger {
+  background: #fef2f2;
+  color: #b91c1c;
+  border-color: #fecaca;
+}
+
+.wp-table-wrap {
+  overflow-x: auto;
+  border-radius: 0.75rem;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+}
+
+.wp-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.wp-table th,
+.wp-table td {
+  padding: 0.6rem 0.75rem;
+  text-align: left;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.06);
+}
+
+.wp-table th {
+  background: #f8fafc;
+  font-weight: 600;
+  color: #334155;
+}
+
+.wp-table tr:hover td {
+  background: #fafafa;
+}
+
+.wp-badge {
+  display: inline-block;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+.wp-badge--draft {
+  background: #f1f5f9;
+  color: #475569;
+}
+.wp-badge--sent {
+  background: #e0f2fe;
+  color: #0369a1;
+}
+.wp-badge--in_transit {
+  background: #fef3c7;
+  color: #b45309;
+}
+.wp-badge--partially_received {
+  background: #ffedd5;
+  color: #c2410c;
+}
+.wp-badge--received {
+  background: #dcfce7;
+  color: #15803d;
+}
+.wp-badge--cancelled {
+  background: #f3f4f6;
+  color: #6b7280;
+}
+
+.wp-modal-grid {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.wp-line-row {
+  display: grid;
+  grid-template-columns: 1fr 5rem 7rem;
+  gap: 0.5rem;
+  align-items: end;
+}
+
+@media (max-width: 640px) {
+  .wp-line-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+.supplier-detail-commercial {
+  margin-top: 1.25rem;
+  padding-top: 1rem;
+  border-top: 1px solid rgba(15, 23, 42, 0.08);
+}
+
+.supplier-detail-commercial h4 {
+  margin: 0 0 0.75rem;
+  font-size: 0.95rem;
+}
+
+.supplier-detail-commercial-form {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.supplier-detail-commercial-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  font-size: 0.8rem;
+  color: #475569;
+}
+
+.supplier-detail-commercial-form input,
+.supplier-detail-commercial-form textarea {
+  padding: 0.45rem 0.55rem;
+  border-radius: 0.45rem;
+  border: 1px solid #cbd5e1;
+  font-size: 0.9rem;
+}
+
+.supplier-detail-commercial-form textarea {
+  min-height: 4rem;
+  resize: vertical;
+}

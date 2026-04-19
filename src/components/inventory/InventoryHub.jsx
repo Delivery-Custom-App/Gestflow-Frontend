@@ -71,6 +71,10 @@ function InventoryHub({ user, userRole, onLogout }) {
     navigate(`/local/${localId}/inventario/proveedores`, { state: { local: selectedLocal } })
   }
 
+  const openWeeklyPurchases = () => {
+    navigate(`/local/${localId}/inventario/compras-semanales`, { state: { local: selectedLocal } })
+  }
+
   return (
     <InventoryShell user={user} userRole={userRole} onLogout={onLogout} active="hub">
       <Fragment>
@@ -84,6 +88,40 @@ function InventoryHub({ user, userRole, onLogout }) {
         </header>
 
         <div className="inv-feature-grid">
+          <article className="inv-feature-card inv-feature-card--emphasis">
+            <div className="inv-feature-card__head">
+              <span className="inv-feature-card__head-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none">
+                  <path d="M8 7V3h8v4M8 7h8M6 21h12a2 2 0 002-2V9a2 2 0 00-2-2H6a2 2 0 00-2 2v10a2 2 0 002 2z" stroke="currentColor" strokeWidth="1.5" />
+                </svg>
+              </span>
+              <div className="inv-feature-card__head-text">
+                <h3>Compras semanales</h3>
+                <p>Órdenes a proveedores por semana</p>
+              </div>
+              <span className="inv-feature-card__chev" aria-hidden="true">
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none">
+                  <path d="M9 6l6 6-6 6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+                </svg>
+              </span>
+            </div>
+            <div className="inv-feature-card__body">
+              <p className="inv-feature-card__label">Funcionalidades:</p>
+              <ul className="inv-feature-card__list">
+                <li>Planificación semanal por proveedor</li>
+                <li>Seguimiento de recepción</li>
+                <li>Reporte comparativo entre semanas</li>
+              </ul>
+              <button
+                type="button"
+                className="inv-feature-card__btn inv-feature-card__btn--primary"
+                onClick={openWeeklyPurchases}
+              >
+                Ir a compras semanales →
+              </button>
+            </div>
+          </article>
+
           <article className="inv-feature-card">
             <div className="inv-feature-card__head">
               <span className="inv-feature-card__head-icon" aria-hidden="true">

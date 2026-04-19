@@ -118,6 +118,17 @@ export function postSupplier(token, body) {
   return apiRequest('/suppliers', { method: 'POST', token, body })
 }
 
+/** HU-34: condiciones comerciales y datos de proveedor (PATCH parcial). */
+export function patchSupplier(token, supplierId, businessId, body) {
+  const params = new URLSearchParams()
+  params.set('business_id', String(businessId))
+  return apiRequest(`/suppliers/${encodeURIComponent(String(supplierId))}?${params.toString()}`, {
+    method: 'PATCH',
+    token,
+    body,
+  })
+}
+
 /**
  * KPIs de proveedores y compras (insumos aprobados) por mes. Requiere Admin/Superadmin.
  * @param {string} localId - UUID del local (el backend resuelve el negocio).

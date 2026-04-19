@@ -8,6 +8,8 @@ import AdministrativeModule from './components/AdministrativeModule'
 import InventoryHub from './components/inventory/InventoryHub'
 import StockControlDashboard from './components/inventory/StockControlDashboard'
 import SuppliersKpisDashboard from './components/inventory/SuppliersKpisDashboard'
+import WeeklyPurchasesPage from './components/inventory/weeklyPurchases/WeeklyPurchasesPage'
+import WeeklyPurchaseDetailPage from './components/inventory/weeklyPurchases/WeeklyPurchaseDetailPage'
 import RecipesPage from './components/inventory/recipes/RecipesPage'
 import POSModule from './components/pos/POSModule'
 import MesaDetail from './components/pos/MesaDetail'
@@ -203,6 +205,14 @@ function App() {
             element={<SuppliersKpisDashboard user={user} userRole={userRole} onLogout={handleLogout} />}
           />
           <Route
+            path="/local/:localId/inventario/compras-semanales/:orderId"
+            element={<WeeklyPurchaseDetailPage user={user} userRole={userRole} onLogout={handleLogout} />}
+          />
+          <Route
+            path="/local/:localId/inventario/compras-semanales"
+            element={<WeeklyPurchasesPage user={user} userRole={userRole} onLogout={handleLogout} />}
+          />
+          <Route
             path="/local/:localId/inventario"
             element={<InventoryHub user={user} userRole={userRole} onLogout={handleLogout} />}
           />
@@ -357,6 +367,14 @@ function App() {
         <Route
           path="/local/:localId/inventario/proveedores"
           element={<SuppliersKpisDashboard user={user} userRole={userRole} onLogout={handleLogout} />}
+        />
+        <Route
+          path="/local/:localId/inventario/compras-semanales/:orderId"
+          element={<WeeklyPurchaseDetailPage user={user} userRole={userRole} onLogout={handleLogout} />}
+        />
+        <Route
+          path="/local/:localId/inventario/compras-semanales"
+          element={<WeeklyPurchasesPage user={user} userRole={userRole} onLogout={handleLogout} />}
         />
         <Route
           path="/local/:localId/inventario"

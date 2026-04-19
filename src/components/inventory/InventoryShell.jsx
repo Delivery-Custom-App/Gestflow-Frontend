@@ -21,6 +21,7 @@ function InventoryShell({ user, userRole, onLogout, active, children }) {
   const goStock = () => navigate(`/local/${localId}/inventario/stock`, { state })
   const goRecipes = () => navigate(`/local/${localId}/inventario/recipes`, { state })
   const goSuppliers = () => navigate(`/local/${localId}/inventario/proveedores`, { state })
+  const goWeeklyPurchases = () => navigate(`/local/${localId}/inventario/compras-semanales`, { state })
   const goLocalModules = () =>
     navigate('/admin', { state: { ...(typeof state === 'object' && state !== null ? state : {}), focusLocalId: localId } })
   const goAppHome = () => navigate('/')
@@ -100,6 +101,19 @@ function InventoryShell({ user, userRole, onLogout, active, children }) {
               </svg>
             </span>
             Proveedores
+          </button>
+          <button
+            type="button"
+            className={active === 'weekly-purchases' ? 'inv-nav-link is-active' : 'inv-nav-link'}
+            onClick={goWeeklyPurchases}
+            title="Órdenes de compra semanales y reporte comparativo (HU-34)"
+          >
+            <span className="inv-nav-link__icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none">
+                <path d="M8 7V3h8v4M8 7h8M6 21h12a2 2 0 002-2V9a2 2 0 00-2-2H6a2 2 0 00-2 2v10a2 2 0 002 2z" stroke="currentColor" strokeWidth="1.5" />
+              </svg>
+            </span>
+            Compras semanales
           </button>
         </nav>
 

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { getAuthContext } from '../../lib/apiClient'
-import { getSupplierDetailForBusiness } from '../../lib/inventoryApi'
+import { getSupplierDetailForBusiness, patchSupplier } from '../../lib/inventoryApi'
+import '../../styles/inventory/WeeklyPurchases.css'
 
 function formatMoneyClp(value) {
   if (value == null || Number.isNaN(Number(value))) return '—'
@@ -23,6 +24,11 @@ function SupplierDetailModal({ open, supplierId, businessId, onClose }) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [detail, setDetail] = useState(null)
+  const [commercialSaving, setCommercialSaving] = useState(false)
+  const [commercialError, setCommercialError] = useState('')
+  const [paymentTerms, setPaymentTerms] = useState('')
+  const [leadTime, setLeadTime] = useState('')
+  const [commercialNotes, setCommercialNotes] = useState('')
 
   const load = useCallback(async () => {
     if (!supplierId || !businessId) return
@@ -33,6 +39,11 @@ function SupplierDetailModal({ open, supplierId, businessId, onClose }) {
       const { token } = await getAuthContext()
       const data = await getSupplierDetailForBusiness(token, supplierId, businessId)
       setDetail(data && typeof data === 'object' ? data : null)
+      if (data && typeof data === 'object') {
+        setPaymentTerms(data.payment_terms_days != null ? String(data.payment_terms_days) : '')
+        setLeadTime(data.delivery_lead_time_days != null ? String(data.delivery_lead_time_days) : '')
+        setCommercialNotes(data.commercial_notes != null ? String(data.commercial_notes) : '')
+      }
     } catch (e) {
       setDetail(null)
       setError(e?.message || 'No se pudo cargar el detalle del proveedor.')
@@ -63,6 +74,37 @@ function SupplierDetailModal({ open, supplierId, businessId, onClose }) {
   if (!open || !supplierId || !businessId) return null
 
   const products = Array.isArray(detail?.purchased_products) ? detail.purchased_products : []
+
+  const saveCommercial = async (ev) => {
+    ev.preventDefault()
+    setCommercialError('')
+    setCommercialSaving(true)
+    try {
+      const { token } = await getAuthContext()
+      const body = {}
+      if (paymentTerms.trim() !== '') {
+        const n = parseInt(paymentTerms, 10)
+        if (!Number.isFinite(n) || n < 0) throw new Error('Plazo de pago inválido.')
+        body.payment_terms_days = n
+      } else {
+        body.payment_terms_days = null
+      }
+      if (leadTime.trim() !== '') {
+        const n = parseInt(leadTime, 10)
+        if (!Number.isFinite(n) || n < 0) throw new Error('Plazo de entrega inválido.')
+        body.delivery_lead_time_days = n
+      } else {
+        body.delivery_lead_time_days = null
+      }
+      body.commercial_notes = commercialNotes.trim() || null
+      const updated = await patchSupplier(token, supplierId, businessId, body)
+      setDetail((prev) => (prev && typeof prev === 'object' ? { ...prev, ...updated } : updated))
+    } catch (e) {
+      setCommercialError(e?.message || 'No se pudieron guardar las condiciones.')
+    } finally {
+      setCommercialSaving(false)
+    }
+  }
 
   return (
     <div className="npmodal-backdrop" role="presentation" onClick={onClose}>
@@ -112,6 +154,38 @@ function SupplierDetailModal({ open, supplierId, businessId, onClose }) {
                 <dt>Categoría</dt>
                 <dd>{displayStr(detail.category)}</dd>
               </dl>
+
+              <form className="supplier-detail-commercial-form supplier-detail-commercial" onSubmit={saveCommercial}>
+                <h4>Condiciones comerciales (HU-34)</h4>
+                {commercialError ? <p className="npmodal-error">{commercialError}</p> : null}
+                <label>
+                  Plazo de pago (días)
+                  <input
+                    type="number"
+                    min="0"
+                    value={paymentTerms}
+                    onChange={(ev) => setPaymentTerms(ev.target.value)}
+                    placeholder="Ej. 30"
+                  />
+                </label>
+                <label>
+                  Plazo de entrega típico (días)
+                  <input
+                    type="number"
+                    min="0"
+                    value={leadTime}
+                    onChange={(ev) => setLeadTime(ev.target.value)}
+                    placeholder="Ej. 3"
+                  />
+                </label>
+                <label>
+                  Observaciones
+                  <textarea value={commercialNotes} onChange={(ev) => setCommercialNotes(ev.target.value)} placeholder="Condiciones u notas" />
+                </label>
+                <button type="submit" className="npmodal-btn npmodal-btn--primary" disabled={commercialSaving}>
+                  {commercialSaving ? 'Guardando…' : 'Guardar condiciones'}
+                </button>
+              </form>
 
               <div className="supplier-detail-kpis" aria-label="Indicadores">
                 <div className="supplier-detail-kpi">
