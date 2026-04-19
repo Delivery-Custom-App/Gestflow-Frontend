@@ -3,6 +3,7 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import SuppliersKpisDashboard from './SuppliersKpisDashboard'
+import * as inventoryApi from '../../lib/inventoryApi'
 
 vi.mock('../../lib/apiClient', () => ({
   getAuthContext: vi.fn(() => Promise.resolve({ token: 'test-token', businessId: 'biz-1' })),
@@ -16,6 +17,21 @@ const mockKpis = {
   month: 4,
   period_start: '2026-04-01',
   period_end: '2026-04-30',
+}
+
+const mockSupplierDetail = {
+  id: 's-1',
+  name: 'Proveedor Demo',
+  is_active: true,
+  rut: '12.345.678-5',
+  phone: '+56 9 1111 2222',
+  email: 'demo@example.com',
+  address: 'Calle 1',
+  contact_name: 'Ana',
+  category: 'Insumos',
+  purchased_products_count: 12,
+  supplier_purchases_total_clp: 48000,
+  purchased_products: [{ product_id: 'p-1', name: 'Item A', quantity: 12, unit_price_clp: 4000, line_total_clp: 48000 }],
 }
 
 vi.mock('../../lib/inventoryApi', () => ({
@@ -32,6 +48,7 @@ vi.mock('../../lib/inventoryApi', () => ({
     ]),
   ),
   getLocalById: vi.fn(() => Promise.resolve({ id: 'loc-1', business_id: 'biz-1' })),
+  getSupplierDetailForBusiness: vi.fn(() => Promise.resolve(mockSupplierDetail)),
 }))
 
 const mockUser = { email: 'a@b.cl', user_metadata: {} }
@@ -101,5 +118,24 @@ describe('SuppliersKpisDashboard', () => {
 
     expect(await screen.findByRole('heading', { name: /Registrar proveedor/i })).toBeInTheDocument()
     expect(screen.getByRole('textbox', { name: /Nombre comercial/i })).toBeInTheDocument()
+  })
+
+  it('abre el modal de detalle al pulsar Ver detalle (HU-69)', async () => {
+    const user = userEvent.setup()
+    renderSuppliers('Admin')
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /Ver detalle de Proveedor Demo/i })).toBeInTheDocument()
+    })
+
+    await user.click(screen.getByRole('button', { name: /Ver detalle de Proveedor Demo/i }))
+
+    await waitFor(() => {
+      expect(inventoryApi.getSupplierDetailForBusiness).toHaveBeenCalledWith('test-token', 's-1', 'biz-1')
+    })
+
+    expect(await screen.findByRole('heading', { name: /Detalle del proveedor/i })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: /^Proveedor Demo$/ })).toBeInTheDocument()
+    expect(screen.getByText('Item A')).toBeInTheDocument()
   })
 })

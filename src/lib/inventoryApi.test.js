@@ -3,6 +3,7 @@ import {
   buildInventoryStockListPath,
   buildInventoryProductsPath,
   buildSuppliersWithMetricsPath,
+  buildSupplierDetailPath,
 } from './inventoryApi'
 
 describe('buildInventoryStockListPath (HU-47/HU-48 filtros)', () => {
@@ -90,5 +91,15 @@ describe('buildSuppliersWithMetricsPath (HU-68)', () => {
   it('incluye business_id en query', () => {
     const bid = '33333333-3333-3333-3333-333333333333'
     expect(buildSuppliersWithMetricsPath(bid)).toBe(`/suppliers?business_id=${encodeURIComponent(bid)}`)
+  })
+})
+
+describe('buildSupplierDetailPath (HU-69)', () => {
+  it('incluye supplier id y business_id', () => {
+    const sid = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'
+    const bid = '33333333-3333-3333-3333-333333333333'
+    expect(buildSupplierDetailPath(sid, bid)).toBe(
+      `/suppliers/${encodeURIComponent(sid)}?business_id=${encodeURIComponent(bid)}`,
+    )
   })
 })

@@ -10,6 +10,7 @@ import { isInventoryAdminRole } from '../../utils/inventoryAccess'
 import InventoryShell from './InventoryShell'
 import LoadingSpinner from '../LoadingSpinner'
 import RegisterSupplierModal from './RegisterSupplierModal'
+import SupplierDetailModal from './SupplierDetailModal'
 import '../../styles/inventory/StockControlDashboard.css'
 
 const MONTH_NAMES = [
@@ -63,6 +64,7 @@ function SuppliersKpisDashboard({ user, userRole, onLogout }) {
   const [suppliersError, setSuppliersError] = useState('')
   const [resolvedBusinessId, setResolvedBusinessId] = useState(null)
   const [registerSupplierOpen, setRegisterSupplierOpen] = useState(false)
+  const [detailSupplierId, setDetailSupplierId] = useState(null)
 
   const load = useCallback(async () => {
     if (!canAccess) {
@@ -310,6 +312,9 @@ function SuppliersKpisDashboard({ user, userRole, onLogout }) {
                       <th scope="col" className="scd-table-num">
                         Valor inventario (CLP)
                       </th>
+                      <th scope="col" className="scd-table-actions-col">
+                        Acciones
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
@@ -320,6 +325,16 @@ function SuppliersKpisDashboard({ user, userRole, onLogout }) {
                         <td className="scd-table-num">{row.purchased_products_count ?? 0}</td>
                         <td className="scd-table-num scd-kpi-value--money">
                           {formatMoneyClp(row.supplier_purchases_total_clp)}
+                        </td>
+                        <td>
+                          <button
+                            type="button"
+                            className="scd-btn-supplier-detail"
+                            onClick={() => setDetailSupplierId(row.id != null ? String(row.id) : null)}
+                            aria-label={`Ver detalle de ${row.name || 'proveedor'}`}
+                          >
+                            Ver detalle
+                          </button>
                         </td>
                       </tr>
                     ))}
@@ -338,6 +353,13 @@ function SuppliersKpisDashboard({ user, userRole, onLogout }) {
             load()
             loadSuppliersList()
           }}
+        />
+
+        <SupplierDetailModal
+          open={detailSupplierId != null && detailSupplierId !== ''}
+          supplierId={detailSupplierId}
+          businessId={resolvedBusinessId}
+          onClose={() => setDetailSupplierId(null)}
         />
       </div>
     </InventoryShell>

@@ -96,6 +96,20 @@ export function getSuppliersWithMetricsForBusiness(token, businessId) {
 }
 
 /**
+ * Detalle de proveedor con KPIs y líneas de inventario (HU-69).
+ * GET /suppliers/{supplier_id}?business_id=
+ */
+export function buildSupplierDetailPath(supplierId, businessId) {
+  const params = new URLSearchParams()
+  params.set('business_id', String(businessId))
+  return `/suppliers/${encodeURIComponent(String(supplierId))}?${params.toString()}`
+}
+
+export function getSupplierDetailForBusiness(token, supplierId, businessId) {
+  return apiRequest(buildSupplierDetailPath(supplierId, businessId), { token })
+}
+
+/**
  * Crea un proveedor en el negocio. `business_id` opcional: el backend usa el del usuario si es admin.
  * Alta rápida: `{ name }`. Registro completo (HU-86): también `rut`, `address`, `category`, `contact_name`, `phone`, `email`.
  * @param {object} body
