@@ -1,5 +1,5 @@
 /**
- * Selector de categoría para inventario (HU-47).
+ * Selector de categoría para inventario.
  * `options`: { id: string (UUID), name: string }[] — id se envía al API como query `category`.
  */
 function CategoryFilterSelect({ value, onChange, options }) {

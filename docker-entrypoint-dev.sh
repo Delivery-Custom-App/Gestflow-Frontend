@@ -1,7 +1,8 @@
 #!/bin/sh
 set -e
-if [ ! -f /app/node_modules/.bin/vite ]; then
-  echo "delivery-frontend-dev: instalando dependencias (primer arranque o volumen vacio)..."
+# Volumen nombrado puede quedar a medias (p. ej. solo vite); npm ls valida el lockfile.
+if [ ! -f /app/node_modules/.bin/vite ] || ! (cd /app && npm ls --depth=0 >/dev/null 2>&1); then
+  echo "delivery-frontend-dev: instalando dependencias (primer arranque o node_modules incompleto)..."
   (cd /app && npm ci)
 fi
 # Con bind mount, caché vieja en node_modules/.vite provoca "Failed to resolve import" en imports nuevos.
