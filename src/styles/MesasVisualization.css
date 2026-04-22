@@ -1,0 +1,275 @@
+/* Vista gráfica de mesas — UI mejorada */
+
+.mesas-visualization-container {
+  width: 100%;
+  padding: 0.5rem 0;
+  flex: 1;
+  overflow-y: auto;
+}
+
+/* Grid de Mesas */
+.mesas-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 2rem;
+  animation: fadeIn 0.3s ease-out;
+  justify-items: center;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Tarjeta de Mesa */
+.mesa-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 1rem;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #ffffff 0%, #f9fdfb 100%);
+  border: 2px solid #e0f2f1;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 2px 8px rgba(6, 95, 70, 0.08), 0 4px 16px rgba(6, 95, 70, 0.04);
+  position: relative;
+  overflow: hidden;
+  cursor: pointer;
+  width: 100%;
+  max-width: 260px;
+}
+
+.mesa-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--color-primary-light), var(--color-primary-mid));
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.mesa-card:hover {
+  box-shadow: 0 8px 24px rgba(6, 95, 70, 0.15), 0 12px 32px rgba(6, 95, 70, 0.06);
+  transform: translateY(-2px);
+  border-color: var(--color-primary-light);
+}
+
+.mesa-card:hover::before {
+  opacity: 1;
+}
+
+/* Estados — borde izquierdo coloreado */
+.mesa-state-libre {
+  border-left: 5px solid #10b981;
+}
+
+.mesa-state-ocupada {
+  border-left: 5px solid #ef4444;
+}
+
+.mesa-state-en_cobro {
+  border-left: 5px solid #f59e0b;
+}
+
+.mesa-state-inactiva {
+  border-left: 5px solid #cbd5e1;
+  opacity: 0.65;
+}
+
+/* Header: nombre + badge */
+.mesa-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.mesa-card-name {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #065f46;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+}
+
+/* Badge de estado */
+.mesa-state-badge {
+  flex-shrink: 0;
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 0.35rem 0.75rem;
+  border-radius: 6px;
+  font-family: 'Segoe UI', sans-serif;
+}
+
+.mesa-state-badge-libre {
+  background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);
+  color: #065f46;
+  box-shadow: 0 2px 4px rgba(16, 185, 129, 0.2);
+}
+
+.mesa-state-badge-ocupada {
+  background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%);
+  color: #991b1b;
+  box-shadow: 0 2px 4px rgba(239, 68, 68, 0.2);
+}
+
+.mesa-state-badge-en_cobro {
+  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+  color: #92400e;
+  box-shadow: 0 2px 4px rgba(245, 158, 11, 0.2);
+}
+
+.mesa-state-badge-inactiva {
+  background: #f1f5f9;
+  color: #64748b;
+  box-shadow: 0 2px 4px rgba(203, 213, 225, 0.3);
+}
+
+/* Zona */
+.mesa-card-zone {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: #10b981;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+/* Capacidad */
+.mesa-card-capacity {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+  color: #374151;
+  font-weight: 500;
+  margin-top: 0.25rem;
+}
+
+.mesa-card-capacity svg {
+  width: 1.1rem;
+  height: 1.1rem;
+  stroke: currentColor;
+  flex-shrink: 0;
+  color: #059669;
+}
+
+/* Footer */
+.mesa-card-footer {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+/* Botón Abrir Mesa */
+.mesa-btn-abrir {
+  flex: 1;
+  padding: 0.55rem 0.75rem;
+  border: none;
+  border-radius: 0.5rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s, opacity 0.2s;
+}
+
+.mesa-btn-abrir:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.mesa-btn-abrir-libre    { background: #059669; color: white; }
+.mesa-btn-abrir-libre:hover:not(:disabled)    { background: #047857; }
+
+.mesa-btn-abrir-ocupada  { background: #dc2626; color: white; }
+.mesa-btn-abrir-ocupada:hover:not(:disabled)  { background: #b91c1c; }
+
+.mesa-btn-abrir-en_cobro { background: #d97706; color: white; }
+.mesa-btn-abrir-en_cobro:hover:not(:disabled) { background: #b45309; }
+
+.mesa-btn-abrir-inactiva { background: #e5e7eb; color: #9ca3af; }
+
+/* Botones de acción (editar / eliminar) */
+.mesa-card-actions {
+  display: flex;
+  gap: 0.35rem;
+  flex-shrink: 0;
+}
+
+.mesa-action-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.9rem;
+  height: 1.9rem;
+  border-radius: 0.375rem;
+  border: none;
+  cursor: pointer;
+  font-size: 0.875rem;
+  transition: background 0.15s, transform 0.15s;
+  padding: 0;
+}
+
+.mesa-action-btn:hover { transform: scale(1.1); }
+
+.mesa-action-edit   { background: rgba(59, 130, 246, 0.12); color: #2563eb; }
+.mesa-action-edit:hover   { background: rgba(59, 130, 246, 0.22); }
+
+.mesa-action-delete { background: rgba(220, 38, 38, 0.12); color: #dc2626; }
+.mesa-action-delete:hover { background: rgba(220, 38, 38, 0.22); }
+
+/* Loading / Empty */
+.mesas-visualization-loading,
+.mesas-visualization-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 200px;
+  gap: 1rem;
+  color: #9ca3af;
+}
+
+.mesas-visualization-empty svg {
+  width: 3.5rem;
+  height: 3.5rem;
+  opacity: 0.35;
+  stroke: currentColor;
+}
+
+/* Responsive */
+@media (max-width: 640px) {
+  .mesas-grid {
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 0.875rem;
+  }
+
+  .mesa-card {
+    padding: 1rem 1rem 0.875rem;
+  }
+
+  .mesa-card-name {
+    font-size: 1rem;
+  }
+}
+
+@media (max-width: 400px) {
+  .mesas-grid {
+    grid-template-columns: 1fr 1fr;
+    gap: 0.75rem;
+  }
+}

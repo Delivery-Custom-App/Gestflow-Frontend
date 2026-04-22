@@ -1,0 +1,344 @@
+/* ==========================================
+   Client Dashboard Styles
+   ========================================== */
+
+.client-dashboard {
+  min-height: 100vh;
+  background: #f5f5f5;
+}
+
+/* Header */
+.client-header {
+  background: linear-gradient(135deg, #1ba031 0%, #0f7a24 100%);
+  color: white;
+  padding: 25px;
+  box-shadow: 0 4px 12px rgba(27, 160, 49, 0.2);
+}
+
+.client-header .header-content {
+  max-width: 1200px;
+  margin: 0 auto;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 20px;
+}
+
+.client-header .brand-section {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  flex: 1;
+}
+
+.brand-logo-small {
+  width: 50px;
+  height: 50px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+.client-header h1 {
+  font-size: 1.8em;
+  margin: 0;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+  color: #ffffff;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.client-header .header-subtitle {
+  font-size: 0.9em;
+  margin: 5px 0 0 0;
+  opacity: 1;
+  color: rgba(255, 255, 255, 0.95);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
+}
+
+.brand-icon-small {
+  width: 50px;
+  height: 50px;
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.15));
+}
+
+.brand-icon-small svg {
+  width: 100%;
+  height: 100%;
+}
+
+.client-header .user-section {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  white-space: nowrap;
+}
+
+.user-email {
+  font-size: 0.95em;
+  opacity: 1;
+  color: #ffffff;
+  font-weight: 500;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
+}
+
+.user-badge {
+  background: rgba(255, 255, 255, 0.25);
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 0.85em;
+  font-weight: 600;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  color: #ffffff;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+.logout-button {
+  background: rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  color: #ffffff;
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s;
+  padding: 0;
+}
+
+.logout-button:hover {
+  background: rgba(255, 255, 255, 0.3);
+  border-color: rgba(255, 255, 255, 0.5);
+}
+
+.logout-button svg {
+  width: 20px;
+  height: 20px;
+}
+
+/* Content */
+.client-content {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 30px 20px;
+}
+
+/* Locales Section */
+.locales-section {
+  background: white;
+  padding: 30px;
+  border-radius: 12px;
+  margin-bottom: 30px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.locales-section h2 {
+  margin: 0 0 20px 0;
+  font-size: 1.5em;
+  color: #333;
+  font-weight: 700;
+}
+
+.loading-text {
+  text-align: center;
+  color: #666;
+  padding: 20px;
+}
+
+.error-text {
+  background: #fee;
+  color: #c33;
+  padding: 15px 20px;
+  border-radius: 8px;
+  border-left: 4px solid #c33;
+}
+
+.empty-text {
+  text-align: center;
+  color: #999;
+  padding: 20px;
+}
+
+.locales-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 20px;
+}
+
+.local-card {
+  background: #f8f9fa;
+  border: 2px solid #e0e0e0;
+  border-radius: 12px;
+  padding: 20px;
+  transition: all 0.3s;
+  cursor: pointer;
+}
+
+.local-card:hover {
+  border-color: #1ba031;
+  box-shadow: 0 4px 12px rgba(27, 160, 49, 0.1);
+  transform: translateY(-2px);
+}
+
+.local-info h3 {
+  margin: 0 0 10px 0;
+  font-size: 1.2em;
+  color: #333;
+  font-weight: 600;
+}
+
+.local-address {
+  margin: 0;
+  font-size: 0.9em;
+  color: #666;
+  line-height: 1.4;
+}
+
+/* Actions Section */
+.actions-section {
+  display: flex;
+  gap: 15px;
+  justify-content: center;
+  margin: 30px 0;
+  flex-wrap: wrap;
+}
+
+.btn-large {
+  padding: 18px 30px;
+  font-size: 1.1em;
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+  font-weight: 600;
+  transition: all 0.3s;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 200px;
+  justify-content: center;
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, #1ba031 0%, #0f7a24 100%);
+  color: white;
+  box-shadow: 0 4px 15px rgba(27, 160, 49, 0.3);
+}
+
+.btn-primary:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 6px 20px rgba(27, 160, 49, 0.4);
+}
+
+.btn-secondary {
+  background: white;
+  color: #1ba031;
+  border: 2px solid #1ba031;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.btn-secondary:hover {
+  background: #f0f9f0;
+  box-shadow: 0 4px 12px rgba(27, 160, 49, 0.2);
+}
+
+.btn-icon {
+  font-size: 1.3em;
+}
+
+/* Welcome Info */
+.welcome-info {
+  background: linear-gradient(135deg, #e8f5e9 0%, #f1f8f4 100%);
+  border-left: 4px solid #1ba031;
+  padding: 20px;
+  border-radius: 8px;
+  text-align: center;
+  color: #055a1a;
+  font-size: 1.05em;
+  line-height: 1.6;
+  font-weight: 500;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .client-header .header-content {
+    flex-direction: column;
+    gap: 15px;
+  }
+
+  .client-header .brand-section {
+    flex-direction: column;
+    align-items: flex-start;
+    width: 100%;
+  }
+
+  .client-header h1 {
+    font-size: 1.5em;
+  }
+
+  .client-header .user-section {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .locales-grid {
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  }
+
+  .actions-section {
+    flex-direction: column;
+  }
+
+  .btn-large {
+    width: 100%;
+    min-width: unset;
+  }
+
+  .client-content {
+    padding: 20px 15px;
+  }
+
+  .locales-section {
+    padding: 20px;
+  }
+}
+
+@media (max-width: 480px) {
+  .client-header {
+    padding: 15px;
+  }
+
+  .client-header h1 {
+    font-size: 1.3em;
+  }
+
+  .brand-icon-small {
+    width: 40px;
+    height: 40px;
+  }
+
+  .user-badge {
+    display: none;
+  }
+
+  .logout-button {
+    width: 36px;
+    height: 36px;
+  }
+
+  .locales-section h2 {
+    font-size: 1.2em;
+  }
+
+  .locales-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .welcome-info {
+    font-size: 0.95em;
+  }
+}

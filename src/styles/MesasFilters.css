@@ -1,0 +1,157 @@
+/* Panel de filtros de mesas — UI mejorada */
+
+.mesas-filters-container {
+  background: linear-gradient(135deg, #f0fdf4 0%, #e1f5eb 100%);
+  border: 1px solid #a7f3d0;
+  border-radius: 10px;
+  padding: 0.75rem;
+  margin-bottom: 0.75rem;
+  box-shadow: 0 2px 8px rgba(16, 185, 129, 0.08);
+  backdrop-filter: blur(8px);
+  flex-shrink: 0;
+}
+
+.mesas-filters-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.75rem;
+}
+
+.mesas-filters-header h3 {
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #065f46;
+  letter-spacing: -0.01em;
+}
+
+.btn-limpiar-filtros {
+  padding: 0.5rem 1rem;
+  background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%);
+  border: 1.5px solid #a7f3d0;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  color: #065f46;
+  letter-spacing: 0.02em;
+}
+
+.btn-limpiar-filtros:hover {
+  background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);
+  border-color: #6ee7b7;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.15);
+}
+
+.btn-limpiar-filtros:active {
+  transform: translateY(0);
+}
+
+/* Filtros Grid */
+.mesas-filters-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.625rem;
+  margin-bottom: 0.5rem;
+}
+
+.filter-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.filter-group label {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #333;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.filter-badge {
+  display: inline-flex;
+  background: #007bff;
+  color: white;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.filter-input,
+.filter-select {
+  padding: 8px 12px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 0.875rem;
+  font-family: inherit;
+  background: white;
+  color: #333;
+  transition: all 0.2s ease;
+}
+
+.filter-input:focus,
+.filter-select:focus {
+  outline: none;
+  border-color: #007bff;
+  box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
+}
+
+.filter-input::placeholder {
+  color: #999;
+}
+
+/* Resultado del filtrado */
+.mesas-filters-result {
+  padding: 8px 0;
+  border-top: 1px solid #e0e4e8;
+}
+
+.result-text {
+  margin: 0;
+  font-size: 0.875rem;
+  color: #666;
+}
+
+.result-text strong {
+  color: #333;
+  font-weight: 600;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .mesas-filters-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .mesas-filters-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .btn-limpiar-filtros {
+    width: 100%;
+  }
+}
+
+@media (max-width: 480px) {
+  .mesas-filters-container {
+    padding: 12px;
+    margin-bottom: 16px;
+  }
+
+  .mesas-filters-header h3 {
+    font-size: 0.95rem;
+  }
+
+  .filter-input,
+  .filter-select {
+    font-size: 16px; /* Evita zoom en iOS */
+  }
+}
