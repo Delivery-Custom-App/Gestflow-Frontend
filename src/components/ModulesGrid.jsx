@@ -47,11 +47,11 @@ function ModulesGrid({ localId, localName, userRole }) {
     {
       id: 'inventario',
       title: 'Inventario',
-      subtitle: 'Control de stock, recetas y proveedores',
+      subtitle: 'Recetas, stock de productos y proveedores',
       icon: 'package',
       features: [
         'Recetas',
-        'Control de Stock',
+        'Stock de productos',
         'Proveedores',
         'Órdenes de Compra',
       ],

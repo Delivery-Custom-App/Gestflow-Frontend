@@ -11,8 +11,6 @@ function InventoryHub({ user, userRole, onLogout }) {
   const location = useLocation()
   const { localId } = useParams()
   
-  console.log('InventoryHub - localId:', localId, 'location.pathname:', location.pathname)
-
   const selectedLocal = useMemo(() => {
     if (location.state?.local) return location.state.local
     return { id: localId, name: `Local ${localId ?? ''}` }
@@ -69,19 +67,128 @@ function InventoryHub({ user, userRole, onLogout }) {
     navigate(`/local/${localId}/inventario/recipes`, { state: { local: selectedLocal } })
   }
 
+  const openSuppliers = () => {
+    navigate(`/local/${localId}/inventario/proveedores`, { state: { local: selectedLocal } })
+  }
+
+  const openWeeklyPurchases = () => {
+    navigate(`/local/${localId}/inventario/compras-semanales`, { state: { local: selectedLocal } })
+  }
+
   return (
     <InventoryShell user={user} userRole={userRole} onLogout={onLogout} active="hub">
       <Fragment>
       <div className="inv-hub-page">
         <header className="inv-hub-page__intro">
           <h2 className="inv-hub-page__title">Centro de gestión de inventario</h2>
-          <p className="inv-hub-page__lead">
-            Selecciona un área para trabajar. El control de stock incluye KPIs, listado y alta de productos.
-          </p>
         </header>
 
-        <div className="inv-feature-grid">
-          <article className="inv-feature-card">
+        <div className="inv-feature-grid inv-feature-grid--hub">
+          <article className="inv-feature-card inv-feature-card--emphasis inv-feature-card--hub-suppliers">
+            <div className="inv-feature-card__head">
+              <span className="inv-feature-card__head-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none">
+                  <path d="M4 10h3l2-4h6l2 4h3v8H4V10z" stroke="currentColor" strokeWidth="1.5" />
+                  <path d="M9 18v-4h6v4" stroke="currentColor" strokeWidth="1.5" />
+                </svg>
+              </span>
+              <div className="inv-feature-card__head-text">
+                <h3>Proveedores</h3>
+                <p>Indicadores y directorio</p>
+              </div>
+              <span className="inv-feature-card__chev" aria-hidden="true">
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none">
+                  <path d="M9 6l6 6-6 6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+                </svg>
+              </span>
+            </div>
+            <div className="inv-feature-card__body">
+              <p className="inv-feature-card__label">Funcionalidades:</p>
+              <ul className="inv-feature-card__list">
+                <li>Directorio, contactos e indicadores por período</li>
+                <li>Órdenes y compras por proveedor</li>
+                <li>Recepción y reportes</li>
+              </ul>
+              <button
+                type="button"
+                className="inv-feature-card__btn inv-feature-card__btn--primary"
+                onClick={openSuppliers}
+                aria-label="Abrir proveedores: indicadores y listado"
+              >
+                KPIs y directorio →
+              </button>
+            </div>
+          </article>
+
+          <article className="inv-feature-card inv-feature-card--emphasis inv-feature-card--hub-stock">
+            <div className="inv-feature-card__head">
+              <span className="inv-feature-card__head-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none">
+                  <path d="M12 3l8 4v10l-8 4-8-4V7l8-4z" stroke="currentColor" strokeWidth="1.5" />
+                </svg>
+              </span>
+              <div className="inv-feature-card__head-text">
+                <h3>Stock producto</h3>
+                <p>Existencias y costos del local</p>
+              </div>
+              <span className="inv-feature-card__chev" aria-hidden="true">
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none">
+                  <path d="M9 6l6 6-6 6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+                </svg>
+              </span>
+            </div>
+            <div className="inv-feature-card__body">
+              <p className="inv-feature-card__label">Funcionalidades:</p>
+              <ul className="inv-feature-card__list">
+                <li>Listado y KPIs de inventario</li>
+                <li>Entradas, salidas y alertas</li>
+                <li>Valorización y productos nuevos</li>
+              </ul>
+              <button type="button" className="inv-feature-card__btn inv-feature-card__btn--primary" onClick={openStock}>
+                Gestionar stock de productos →
+              </button>
+            </div>
+          </article>
+
+          <article className="inv-feature-card inv-feature-card--emphasis inv-feature-card--hub-weekly">
+            <div className="inv-feature-card__head">
+              <span className="inv-feature-card__head-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none">
+                  <path
+                    d="M8 7V3h8v4M8 7h8M6 21h12a2 2 0 002-2V9a2 2 0 00-2-2H6a2 2 0 00-2 2v10a2 2 0 002 2z"
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                  />
+                </svg>
+              </span>
+              <div className="inv-feature-card__head-text">
+                <h3>Compras semanales</h3>
+                <p>Órdenes por semana y reporte comparativo</p>
+              </div>
+              <span className="inv-feature-card__chev" aria-hidden="true">
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none">
+                  <path d="M9 6l6 6-6 6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+                </svg>
+              </span>
+            </div>
+            <div className="inv-feature-card__body">
+              <p className="inv-feature-card__label">Funcionalidades:</p>
+              <ul className="inv-feature-card__list">
+                <li>Nueva orden y seguimiento por estado</li>
+                <li>Filtros por proveedor y semana</li>
+                <li>Reporte comparativo entre fechas</li>
+              </ul>
+              <button
+                type="button"
+                className="inv-feature-card__btn inv-feature-card__btn--primary"
+                onClick={openWeeklyPurchases}
+              >
+                Ir a compras semanales →
+              </button>
+            </div>
+          </article>
+
+          <article className="inv-feature-card inv-feature-card--hub-recipes">
             <div className="inv-feature-card__head">
               <span className="inv-feature-card__head-icon" aria-hidden="true">
                 <svg viewBox="0 0 24 24" fill="none">
@@ -111,73 +218,11 @@ function InventoryHub({ user, userRole, onLogout }) {
               </button>
             </div>
           </article>
-
-          <article className="inv-feature-card inv-feature-card--emphasis">
-            <div className="inv-feature-card__head">
-              <span className="inv-feature-card__head-icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24" fill="none">
-                  <path d="M12 3l8 4v10l-8 4-8-4V7l8-4z" stroke="currentColor" strokeWidth="1.5" />
-                </svg>
-              </span>
-              <div className="inv-feature-card__head-text">
-                <h3>Stock</h3>
-                <p>Control operativo del local</p>
-              </div>
-              <span className="inv-feature-card__chev" aria-hidden="true">
-                <svg viewBox="0 0 24 24" width="20" height="20" fill="none">
-                  <path d="M9 6l6 6-6 6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-                </svg>
-              </span>
-            </div>
-            <div className="inv-feature-card__body">
-              <p className="inv-feature-card__label">Funcionalidades:</p>
-              <ul className="inv-feature-card__list">
-                <li>Listado y KPIs de inventario</li>
-                <li>Entradas, salidas y alertas</li>
-                <li>Valorización y productos nuevos</li>
-              </ul>
-              <button type="button" className="inv-feature-card__btn inv-feature-card__btn--primary" onClick={openStock}>
-                Gestionar Stock →
-              </button>
-            </div>
-          </article>
-
-          <article className="inv-feature-card">
-            <div className="inv-feature-card__head">
-              <span className="inv-feature-card__head-icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24" fill="none">
-                  <path d="M4 10h3l2-4h6l2 4h3v8H4V10z" stroke="currentColor" strokeWidth="1.5" />
-                  <path d="M9 18v-4h6v4" stroke="currentColor" strokeWidth="1.5" />
-                </svg>
-              </span>
-              <div className="inv-feature-card__head-text">
-                <h3>Proveedores</h3>
-                <p>Red de compras</p>
-              </div>
-              <span className="inv-feature-card__chev" aria-hidden="true">
-                <svg viewBox="0 0 24 24" width="20" height="20" fill="none">
-                  <path d="M9 6l6 6-6 6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-                </svg>
-              </span>
-            </div>
-            <div className="inv-feature-card__body">
-              <p className="inv-feature-card__label">Funcionalidades:</p>
-              <ul className="inv-feature-card__list">
-                <li>Directorio y contactos</li>
-                <li>Historial de compras</li>
-                <li>Evaluación de proveedores</li>
-              </ul>
-              <button type="button" className="inv-feature-card__btn" disabled aria-disabled="true">
-                Próximamente →
-              </button>
-            </div>
-          </article>
         </div>
 
         <section className="inv-alerts" aria-labelledby="inv-alerts-title">
           <div className="inv-alerts__head">
             <h2 id="inv-alerts-title">Alertas recientes</h2>
-            <p>Productos que requieren atención en este local</p>
           </div>
           {alertsLoading ? (
             <LoadingSpinner message="Cargando alertas..." />

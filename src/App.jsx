@@ -7,15 +7,21 @@ import ChangeLocal from './components/ChangeLocal'
 import AdministrativeModule from './components/AdministrativeModule'
 import InventoryHub from './components/inventory/InventoryHub'
 import StockControlDashboard from './components/inventory/StockControlDashboard'
+import SuppliersKpisDashboard from './components/inventory/SuppliersKpisDashboard'
+import WeeklyPurchasesPage from './components/inventory/weeklyPurchases/WeeklyPurchasesPage'
+import WeeklyPurchaseDetailPage from './components/inventory/weeklyPurchases/WeeklyPurchaseDetailPage'
 import RecipesPage from './components/inventory/recipes/RecipesPage'
 import POSModule from './components/pos/POSModule'
 import MesaDetail from './components/pos/MesaDetail'
 import WorkerLocalSelector from './components/WorkerLocalSelector'
 import LoadingPage from './components/LoadingPage'
-
-const WORKER_ROLES = ['Empleado', 'Cajero']
 import { isSupabaseConfigured, supabase } from './lib/supabaseClient'
 import { getUserRole } from './utils/jwt'
+
+const WORKER_ROLES = ['Empleado', 'Cajero']
+
+/** Opt-in a banderas de React Router v7 (menos advertencias en consola durante el desarrollo). */
+const ROUTER_FUTURE_FLAGS = { v7_startTransition: true, v7_relativeSplatPath: true }
 
 /** /local/:id ya no es pantalla propia: vuelve a /admin y reabre módulos del local */
 function LocalModulesHomeRedirect() {
@@ -26,6 +32,17 @@ function LocalModulesHomeRedirect() {
   return <Navigate to="/admin" replace state={merged} />
 }
 
+/** Rutas antiguas bajo /proveedores/compras-semanales → URL canónica /inventario/compras-semanales */
+function LegacyProveedoresComprasSemanalesRedirect() {
+  const { localId } = useParams()
+  return <Navigate to={`/local/${localId}/inventario/compras-semanales`} replace />
+}
+
+function LegacyProveedoresComprasSemanalesDetailRedirect() {
+  const { localId, orderId } = useParams()
+  return <Navigate to={`/local/${localId}/inventario/compras-semanales/${orderId}`} replace />
+}
+
 function formatRoleLabel(role) {
   if (!role) return 'Usuario'
   return role
@@ -33,6 +50,13 @@ function formatRoleLabel(role) {
     .replace(/[_-]+/g, ' ')
     .toLowerCase()
     .replace(/\b\w/g, (char) => char.toUpperCase())
+}
+
+/** Coincide con rol superadmin tras formatRoleLabel ("Superadmin") o valor crudo del JWT. */
+function isSuperAdminRole(roleLabel) {
+  if (!roleLabel) return false
+  const n = String(roleLabel).toLowerCase().replace(/\s+/g, '')
+  return n === 'superadmin'
 }
 
 function App() {
@@ -173,10 +197,10 @@ function App() {
     return <LoadingPage />
   }
 
-  // Si el usuario está logueado como SUPERADMIN, mostrar el dashboard
-  if (user && userRole === 'SUPERADMIN') {
+  // Superadmin: mismas rutas que admin (la comparación estricta con 'SUPERADMIN' fallaba tras formatRoleLabel → 'Superadmin')
+  if (user && isSuperAdminRole(userRole)) {
     return (
-      <Router>
+      <Router future={ROUTER_FUTURE_FLAGS}>
         <Routes>
           <Route path="/admin" element={<AdminDashboard user={user} userRole={userRole} onLogout={handleLogout} />} />
           <Route
@@ -186,6 +210,26 @@ function App() {
           <Route
             path="/local/:localId/inventario/recipes"
             element={<RecipesPage user={user} userRole={userRole} onLogout={handleLogout} />}
+          />
+          <Route
+            path="/local/:localId/inventario/compras-semanales/:orderId"
+            element={<WeeklyPurchaseDetailPage user={user} userRole={userRole} onLogout={handleLogout} />}
+          />
+          <Route
+            path="/local/:localId/inventario/compras-semanales"
+            element={<WeeklyPurchasesPage user={user} userRole={userRole} onLogout={handleLogout} />}
+          />
+          <Route
+            path="/local/:localId/inventario/proveedores/compras-semanales/:orderId"
+            element={<LegacyProveedoresComprasSemanalesDetailRedirect />}
+          />
+          <Route
+            path="/local/:localId/inventario/proveedores/compras-semanales"
+            element={<LegacyProveedoresComprasSemanalesRedirect />}
+          />
+          <Route
+            path="/local/:localId/inventario/proveedores"
+            element={<SuppliersKpisDashboard user={user} userRole={userRole} onLogout={handleLogout} />}
           />
           <Route
             path="/local/:localId/inventario"
@@ -214,7 +258,7 @@ function App() {
   // Roles de trabajador: solo acceso al POS
   if (user && WORKER_ROLES.includes(userRole)) {
     return (
-      <Router>
+      <Router future={ROUTER_FUTURE_FLAGS}>
         <Routes>
           <Route path="/" element={<WorkerLocalSelector user={user} userRole={userRole} onLogout={handleLogout} />} />
           <Route
@@ -326,7 +370,7 @@ function App() {
 
   // Si el usuario está logueado, mostrar las rutas
   return (
-    <Router>
+    <Router future={ROUTER_FUTURE_FLAGS}>
       <Routes>
         <Route path="/" element={<AdminDashboard user={user} userRole={userRole} onLogout={handleLogout} />} />
         <Route path="/admin" element={<AdminDashboard user={user} userRole={userRole} onLogout={handleLogout} />} />
@@ -338,6 +382,26 @@ function App() {
         <Route
           path="/local/:localId/inventario/recipes"
           element={<RecipesPage user={user} userRole={userRole} onLogout={handleLogout} />}
+        />
+        <Route
+          path="/local/:localId/inventario/compras-semanales/:orderId"
+          element={<WeeklyPurchaseDetailPage user={user} userRole={userRole} onLogout={handleLogout} />}
+        />
+        <Route
+          path="/local/:localId/inventario/compras-semanales"
+          element={<WeeklyPurchasesPage user={user} userRole={userRole} onLogout={handleLogout} />}
+        />
+        <Route
+          path="/local/:localId/inventario/proveedores/compras-semanales/:orderId"
+          element={<LegacyProveedoresComprasSemanalesDetailRedirect />}
+        />
+        <Route
+          path="/local/:localId/inventario/proveedores/compras-semanales"
+          element={<LegacyProveedoresComprasSemanalesRedirect />}
+        />
+        <Route
+          path="/local/:localId/inventario/proveedores"
+          element={<SuppliersKpisDashboard user={user} userRole={userRole} onLogout={handleLogout} />}
         />
         <Route
           path="/local/:localId/inventario"

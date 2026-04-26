@@ -172,3 +172,8 @@
   background: #065f46;
   border-color: #065f46;
 }
+
+.inv-hub__feature--suppliers {
+  border-color: #a7f3d0;
+  box-shadow: 0 2px 12px rgba(4, 120, 87, 0.12);
+}

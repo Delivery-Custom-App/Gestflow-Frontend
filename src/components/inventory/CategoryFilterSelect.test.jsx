@@ -3,7 +3,7 @@ import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import CategoryFilterSelect from './CategoryFilterSelect'
 
-describe('CategoryFilterSelect (HU-47)', () => {
+describe('CategoryFilterSelect', () => {
   const options = [
     { id: 'aaa', name: 'Bebidas' },
     { id: 'bbb', name: 'Granos' },

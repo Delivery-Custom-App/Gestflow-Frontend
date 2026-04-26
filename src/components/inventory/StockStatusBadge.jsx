@@ -1,6 +1,6 @@
 import { getStockStatusMeta } from './stockAlertUtils'
 
-/** HU-44: badge de estado de stock (colores diferenciados). */
+/** Badge de estado de stock (variantes de color por nivel). */
 function StockStatusBadge({ row }) {
   const { label, variant } = getStockStatusMeta(row)
   return (
