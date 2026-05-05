@@ -67,6 +67,8 @@ describe('ChangeLocal Component', () => {
       removeItem: vi.fn(),
       clear: vi.fn(),
     }
+    // Provide a default so tests that don't configure this mock don't crash on destructuring
+    useAvailableLocals.mockReturnValue({ locals: [], loading: false, error: null })
   })
 
   it('debería mostrar estado de carga', () => {
@@ -122,7 +124,8 @@ describe('ChangeLocal Component', () => {
 
     // Verificar que se muestra el local actual
     expect(screen.getByText('Local Actual')).toBeInTheDocument()
-    expect(screen.getByText('Local Centro')).toBeInTheDocument()
+    // 'Local Centro' aparece en la sección de local actual y en la lista de locales disponibles
+    expect(screen.getAllByText('Local Centro').length).toBe(2)
   })
 
   it('debería mostrar lista de locales disponibles', () => {
@@ -145,7 +148,8 @@ describe('ChangeLocal Component', () => {
     )
 
     // Verificar que todos los locales se muestran
-    expect(screen.getByText('Local Centro')).toBeInTheDocument()
+    // 'Local Centro' aparece dos veces: en la sección actual y en la lista de locales
+    expect(screen.getAllByText('Local Centro').length).toBe(2)
     expect(screen.getByText('Local Norte')).toBeInTheDocument()
     expect(screen.getByText('Local Sur')).toBeInTheDocument()
   })

@@ -120,8 +120,8 @@ describe('OrderSummary Component', () => {
     expect(screen.getByText('Hamburguesa Clásica')).toBeInTheDocument()
     expect(screen.getByText('Refresco Grande')).toBeInTheDocument()
 
-    // Verificar cantidades
-    expect(screen.getByText(/×2/)).toBeInTheDocument()
+    // Verificar cantidades (ambos items tienen cantidad 2, por lo que aparecen dos spans ×2)
+    expect(screen.getAllByText(/×2/).length).toBe(2)
 
     // Verificar cliente
     expect(screen.getByText('Juan Pérez')).toBeInTheDocument()
@@ -186,7 +186,8 @@ describe('OrderSummary Component', () => {
     )
 
     expect(screen.getByText('juan@example.com')).toBeInTheDocument()
-    expect(screen.getByText('+56912345678')).toBeInTheDocument()
+    // El número aparece dos veces: en el teléfono del local y en el teléfono del cliente
+    expect(screen.getAllByText('+56912345678').length).toBe(2)
   })
 
   it('debería mostrar la información del local correctamente', () => {
