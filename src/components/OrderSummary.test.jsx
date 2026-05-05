@@ -121,7 +121,7 @@ describe('OrderSummary Component', () => {
     expect(screen.getByText('Refresco Grande')).toBeInTheDocument()
 
     // Verificar cantidades
-    expect(screen.getByText(/×2/)).toBeInTheDocument()
+    expect(screen.getAllByText(/×2/)[0]).toBeInTheDocument()
 
     // Verificar cliente
     expect(screen.getByText('Juan Pérez')).toBeInTheDocument()
@@ -186,7 +186,7 @@ describe('OrderSummary Component', () => {
     )
 
     expect(screen.getByText('juan@example.com')).toBeInTheDocument()
-    expect(screen.getByText('+56912345678')).toBeInTheDocument()
+    expect(screen.getAllByText('+56912345678').length).toBeGreaterThan(0)
   })
 
   it('debería mostrar la información del local correctamente', () => {

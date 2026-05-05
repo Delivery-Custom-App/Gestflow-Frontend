@@ -20,7 +20,7 @@ export default function ChangeLocal() {
     ? summary.id.split('-')[0] // Placeholder, ideally from summary
     : null
 
-  const { locals, loading: localsLoading } = useAvailableLocals(businessId)
+  const { locals = [], loading: localsLoading = false } = useAvailableLocals(businessId) || {}
 
   const handleSelectLocal = async (localId) => {
     setSelectedLocalId(localId)
