@@ -3,6 +3,8 @@ import { useOrderItems } from '../../hooks/useOrderItems'
 import { getAuthContext } from '../../lib/apiClient'
 import '../../styles/AddProductModal.css'
 
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+
 /**
  * Modal para agregar productos extras a una orden
  * (pan, aceite, sal, etc. que se solicitan durante la espera)
@@ -33,7 +35,7 @@ export default function AddProductModal({ orderId, mesaId, localId, onClose, onP
 
     try {
       const { token } = await getAuthContext()
-      const response = await fetch(`http://localhost:8000/api/orders`, {
+      const response = await fetch(`${API_URL}/api/orders`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

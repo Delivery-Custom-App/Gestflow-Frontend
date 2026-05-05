@@ -1,6 +1,8 @@
 import { useState, useCallback } from 'react'
 import { getAuthContext } from '../lib/apiClient'
 
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+
 /**
  * Hook para manejar orden de productos
  * CRUD para order_items
@@ -22,7 +24,7 @@ export function useOrderItems(orderId) {
       setError(null)
 
       try {
-        const response = await fetch(`http://localhost:8000/api/orders/${orderId}/items`, {
+        const response = await fetch(`${API_URL}/api/orders/${orderId}/items`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -65,7 +67,7 @@ export function useOrderItems(orderId) {
       setError(null)
 
       try {
-        const response = await fetch(`http://localhost:8000/api/orders/${orderId}/items/${itemId}`, {
+        const response = await fetch(`${API_URL}/api/orders/${orderId}/items/${itemId}`, {
           method: 'PATCH',
           headers: {
             'Content-Type': 'application/json',
@@ -107,7 +109,7 @@ export function useOrderItems(orderId) {
       setError(null)
 
       try {
-        const response = await fetch(`http://localhost:8000/api/orders/${orderId}/items/${itemId}`, {
+        const response = await fetch(`${API_URL}/api/orders/${orderId}/items/${itemId}`, {
           method: 'DELETE',
           headers: {
             Authorization: `Bearer ${token}`,
