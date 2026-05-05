@@ -186,7 +186,7 @@ describe('OrderSummary Component', () => {
     )
 
     expect(screen.getByText('juan@example.com')).toBeInTheDocument()
-    expect(screen.getAllByText('+56912345678').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('+56912345678')).toHaveLength(2)
   })
 
   it('debería mostrar la información del local correctamente', () => {

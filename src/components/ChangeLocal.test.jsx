@@ -122,7 +122,7 @@ describe('ChangeLocal Component', () => {
 
     // Verificar que se muestra el local actual
     expect(screen.getByText('Local Actual')).toBeInTheDocument()
-    expect(screen.getAllByText('Local Centro').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('Local Centro')).toHaveLength(2)
   })
 
   it('debería mostrar lista de locales disponibles', () => {
@@ -145,7 +145,7 @@ describe('ChangeLocal Component', () => {
     )
 
     // Verificar que todos los locales se muestran
-    expect(screen.getAllByText('Local Centro').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('Local Centro')).toHaveLength(2)
     expect(screen.getByText('Local Norte')).toBeInTheDocument()
     expect(screen.getByText('Local Sur')).toBeInTheDocument()
   })
