@@ -1,9 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useOrderItems } from '../../hooks/useOrderItems'
-import { getAuthContext } from '../../lib/apiClient'
+import { apiRequest } from '../../lib/apiClient'
 import '../../styles/AddProductModal.css'
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
 /**
  * Modal para agregar productos extras a una orden
@@ -34,28 +32,16 @@ export default function AddProductModal({ orderId, mesaId, localId, onClose, onP
     setLocalError(null)
 
     try {
-      const { token } = await getAuthContext()
-      const response = await fetch(`${API_URL}/api/orders`, {
+      const newOrder = await apiRequest('/orders', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
+        body: {
           local_id: localId,
           mesa_id: mesaId,
           source: 'dine-in',
-          payment_method: 'cash',
+          payment_method: 'CASH',
           items: [],
-        }),
+        },
       })
-
-      if (!response.ok) {
-        const data = await response.json()
-        throw new Error(data.detail || 'Error al crear orden')
-      }
-
-      const newOrder = await response.json()
       setActualOrderId(newOrder.id)
       return true
     } catch (err) {

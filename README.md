@@ -1,16 +1,96 @@
-# React + Vite
+# SibaGestion — Frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Sistema de gestión para restaurantes. Frontend React que consume la [API FastAPI](../Delivery-Custom-App-INGSW2).
 
-Currently, two official plugins are available:
+## Stack
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+| | |
+|---|---|
+| Framework | React 19 + Vite 8 |
+| Router | React Router 6 |
+| Auth | Supabase Auth (JWT) |
+| Charts | Recharts |
+| Tests | Vitest + Testing Library |
 
-## React Compiler
+## Módulos
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+| Módulo | Ruta | Roles |
+|--------|------|-------|
+| POS | `/local/:id/pos` | Cajero, Empleado, Admin, Superadmin |
+| Inventario | `/local/:id/inventario` | Admin, Superadmin |
+| Administrativo | `/local/:id/administrativo` | Admin, Superadmin |
+| Gestión de Locales | `/admin` | Admin, Superadmin |
 
-## Expanding the ESLint configuration
+## Roles
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+- **Superadmin** — acceso total, gestión de negocios y locales
+- **Admin** — gestión de su negocio (inventario, reportes, staff)
+- **Cajero** — POS, órdenes, caja
+- **Empleado** — POS, órdenes
+
+## Desarrollo local
+
+### Con Docker (recomendado)
+
+Desde el repo backend:
+
+```bash
+.\scripts\docker-dev-up.ps1
+# Frontend: http://localhost:5173
+# API:      http://localhost:8000
+# Docs API: http://localhost:8000/api/docs
+```
+
+### Sin Docker
+
+```bash
+# Requiere backend corriendo en :8000
+npm install
+cp .env.example .env   # configurar VITE_API_URL y VITE_SUPABASE_*
+npm run dev
+```
+
+Variables de entorno requeridas:
+
+```env
+VITE_API_URL=http://localhost:8000
+VITE_SUPABASE_URL=https://<project>.supabase.co
+VITE_SUPABASE_ANON_KEY=<anon_key>
+```
+
+## Tests
+
+```bash
+npm test              # watch mode
+npm run test:ui       # UI visual (Vitest)
+npm run test:coverage # cobertura
+```
+
+## Estructura
+
+```
+src/
+├── components/
+│   ├── pos/          # POS, mesas, órdenes
+│   ├── inventory/    # Stock, recetas, proveedores, compras
+│   └── charts/       # Recharts wrappers
+├── hooks/            # Data fetching (useEffect + apiClient)
+├── lib/
+│   ├── apiClient.js  # Fetch wrapper: auth, retry 401, error parsing
+│   ├── supabaseClient.js
+│   ├── inventoryApi.js
+│   ├── administrativeApi.js
+│   └── weeklyPurchasesApi.js
+└── styles/           # CSS por módulo
+```
+
+## Auth flow
+
+1. Login vía Supabase Auth → JWT con `user_metadata.role` y `user_metadata.business_id`
+2. `apiClient.js` inyecta el token en cada request (`Authorization: Bearer ...`)
+3. En 401, refresca sesión automáticamente y reintenta
+4. Backend (`deps.py`) extrae rol del JWT y aplica RBAC
+
+## Seed data para pruebas
+
+Ver [docs/SEED_DATA.md](./docs/SEED_DATA.md) para instrucciones de carga de datos de prueba en Supabase.

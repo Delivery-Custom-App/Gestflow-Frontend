@@ -92,9 +92,8 @@ function SuppliersKpisDashboard({ user, userRole, onLogout }) {
     setLoading(true)
     setRequestedAt(new Date())
     try {
-      const { token } = await getAuthContext()
       const year = new Date().getFullYear()
-      const payload = await getSupplierKpisByLocal(localId, token, { year, month })
+      const payload = await getSupplierKpisByLocal(localId, { year, month })
       setData(payload)
     } catch (e) {
       setData(null)
@@ -115,10 +114,10 @@ function SuppliersKpisDashboard({ user, userRole, onLogout }) {
     setSuppliersError('')
     setSuppliersLoading(true)
     try {
-      const { token, businessId: bidFromToken } = await getAuthContext()
+      const { businessId: bidFromToken } = await getAuthContext()
       // Siempre derivar el negocio del local en la URL. Si el JWT trae otro business_id
       // (p. ej. Superadmin), usarlo primero rompía el listado y el alta de proveedores.
-      const loc = await getLocalById(localId, token)
+      const loc = await getLocalById(localId)
       const businessId =
         loc?.business_id != null ? String(loc.business_id) : bidFromToken != null ? String(bidFromToken) : null
       if (!businessId) {
@@ -128,7 +127,7 @@ function SuppliersKpisDashboard({ user, userRole, onLogout }) {
         return
       }
       setResolvedBusinessId(businessId)
-      const rows = await getSuppliersWithMetricsForBusiness(token, businessId)
+      const rows = await getSuppliersWithMetricsForBusiness(businessId)
       setSuppliersRows(Array.isArray(rows) ? rows : [])
     } catch (e) {
       setSuppliersRows([])

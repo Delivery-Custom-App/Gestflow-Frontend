@@ -2,7 +2,8 @@ import { useState, useEffect, useCallback } from 'react'
 import { apiRequest } from '../lib/apiClient'
 
 /**
- * Mesas con estado (libre/ocupada/en_cobro) consultando detalle por mesa activa.
+ * Mesas con estado (libre/ocupada/en_cobro). Usa GET /mesas?with_state=true para
+ * resolver todos los estados en una sola consulta (sin N+1).
  */
 export function useMesasConEstado(localId) {
   const [mesas, setMesas] = useState([])
@@ -15,37 +16,15 @@ export function useMesasConEstado(localId) {
       setLoading(true)
       setError(null)
 
-      // 1. Fetch base mesa list
-      const baseMesas = await apiRequest(`/mesas?local_id=${localId}`)
-      const mesas = baseMesas || []
+      const data = await apiRequest(`/mesas?local_id=${localId}&with_state=true`)
+      const mesas = data || []
 
-      // 2. Fetch detail for each active mesa in parallel to get computed state
-      const activeIds = mesas
-        .filter((m) => m.is_active)
-        .map((m) => m.id)
-
-      const detailResults = await Promise.allSettled(
-        activeIds.map((id) =>
-          apiRequest(`/mesas/${id}/detail`).catch(() => null)
-        )
+      setMesas(
+        mesas.map((mesa) => ({
+          ...mesa,
+          state: mesa.state || (mesa.is_active ? 'libre' : 'inactiva'),
+        })),
       )
-
-      // Build state map: mesa_id → state
-      const stateMap = {}
-      detailResults.forEach((result, idx) => {
-        const detail = result.status === 'fulfilled' ? result.value : null
-        if (detail?.mesa?.state) {
-          stateMap[activeIds[idx]] = detail.mesa.state
-        }
-      })
-
-      // 3. Merge state into each mesa
-      const mesasWithState = mesas.map((mesa) => ({
-        ...mesa,
-        state: mesa.is_active ? (stateMap[mesa.id] || 'libre') : 'inactiva',
-      }))
-
-      setMesas(mesasWithState)
     } catch (err) {
       setError(err.message || 'Error al cargar mesas')
     } finally {

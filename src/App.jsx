@@ -1,9 +1,8 @@
 import { useState, useEffect } from 'react'
 import { BrowserRouter as Router, Routes, Route, Navigate, useParams, useLocation } from 'react-router-dom'
 import './App.css'
+import ErrorBoundary from './components/ErrorBoundary'
 import AdminDashboard from './components/AdminDashboard'
-import OrderSummary from './components/OrderSummary'
-import ChangeLocal from './components/ChangeLocal'
 import AdministrativeModule from './components/AdministrativeModule'
 import InventoryHub from './components/inventory/InventoryHub'
 import StockControlDashboard from './components/inventory/StockControlDashboard'
@@ -17,8 +16,7 @@ import WorkerLocalSelector from './components/WorkerLocalSelector'
 import LoadingPage from './components/LoadingPage'
 import { isSupabaseConfigured, supabase } from './lib/supabaseClient'
 import { getUserRole } from './utils/jwt'
-
-const WORKER_ROLES = ['Empleado', 'Cajero']
+import { WORKER_ROLES } from './constants/roles'
 
 /** Opt-in a banderas de React Router v7 (menos advertencias en consola durante el desarrollo). */
 const ROUTER_FUTURE_FLAGS = { v7_startTransition: true, v7_relativeSplatPath: true }
@@ -200,6 +198,7 @@ function App() {
   // Superadmin: mismas rutas que admin (la comparación estricta con 'SUPERADMIN' fallaba tras formatRoleLabel → 'Superadmin')
   if (user && isSuperAdminRole(userRole)) {
     return (
+      <ErrorBoundary>
       <Router future={ROUTER_FUTURE_FLAGS}>
         <Routes>
           <Route path="/admin" element={<AdminDashboard user={user} userRole={userRole} onLogout={handleLogout} />} />
@@ -245,19 +244,18 @@ function App() {
             element={<MesaDetail user={user} userRole={userRole} onLogout={handleLogout} />}
           />
           <Route path="/local/:localId" element={<LocalModulesHomeRedirect />} />
-          {/* Resumen de pedido y cambio de local */}
-          <Route path="/order/:orderId/summary" element={<OrderSummary />} />
-          <Route path="/order/:orderId/change-local" element={<ChangeLocal />} />
-          {/* Default redirect */}
+{/* Default redirect */}
           <Route path="/" element={<Navigate to="/admin" replace />} />
         </Routes>
       </Router>
+      </ErrorBoundary>
     )
   }
 
   // Roles de trabajador: solo acceso al POS
   if (user && WORKER_ROLES.includes(userRole)) {
     return (
+      <ErrorBoundary>
       <Router future={ROUTER_FUTURE_FLAGS}>
         <Routes>
           <Route path="/" element={<WorkerLocalSelector user={user} userRole={userRole} onLogout={handleLogout} />} />
@@ -272,6 +270,7 @@ function App() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Router>
+      </ErrorBoundary>
     )
   }
 
@@ -370,6 +369,7 @@ function App() {
 
   // Si el usuario está logueado, mostrar las rutas
   return (
+    <ErrorBoundary>
     <Router future={ROUTER_FUTURE_FLAGS}>
       <Routes>
         <Route path="/" element={<AdminDashboard user={user} userRole={userRole} onLogout={handleLogout} />} />
@@ -426,6 +426,7 @@ function App() {
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Router>
+    </ErrorBoundary>
   )
 }
 

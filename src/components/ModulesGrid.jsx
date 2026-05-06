@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import '../styles/ModulesGrid.css'
 
-function ModulesGrid({ localId, localName, userRole }) {
+function ModulesGrid({ localId, localName }) {
   const navigate = useNavigate()
   const [hoveredModule, setHoveredModule] = useState(null)
 
@@ -181,24 +181,6 @@ function ModulesGrid({ localId, localName, userRole }) {
           ))}
         </div>
 
-        <div className="modules-stats">
-          <div className="stat-card">
-            <div className="stat-number">4</div>
-            <div className="stat-label">Módulos Disponibles</div>
-          </div>
-          <div className="stat-card">
-            <div className="stat-number">{userRole}</div>
-            <div className="stat-label">Tu Rol</div>
-          </div>
-          <div className="stat-card">
-            <div className="stat-number">95%</div>
-            <div className="stat-label">Sistema Funcional</div>
-          </div>
-          <div className="stat-card">
-            <div className="stat-number">v1</div>
-            <div className="stat-label">Versión Modular</div>
-          </div>
-        </div>
       </div>
     </div>
   )

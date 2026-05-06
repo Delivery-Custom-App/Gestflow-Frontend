@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useParams, useLocation } from 'react-router-dom'
-import { getAuthContext } from '../../lib/apiClient'
 import {
   getInventoryKpisByLocal,
   getInventoryProductsPage,
@@ -64,8 +63,7 @@ function StockControlDashboard({ user, userRole, onLogout }) {
     }
     setError('')
     try {
-      const { token } = await getAuthContext()
-      const payload = await getInventoryKpisByLocal(localId, token)
+      const payload = await getInventoryKpisByLocal(localId)
       setData(payload)
     } catch (e) {
       setError(e?.message || 'No se pudieron cargar los KPIs de inventario.')
@@ -79,8 +77,7 @@ function StockControlDashboard({ user, userRole, onLogout }) {
   const loadCategoriesCatalog = useCallback(async () => {
     if (!localId) return
     try {
-      const { token } = await getAuthContext()
-      const rows = await getInventoryStockList(localId, token, {})
+      const rows = await getInventoryStockList(localId, {})
       const arr = Array.isArray(rows) ? rows : []
       const m = new Map()
       for (const row of arr) {
@@ -117,9 +114,8 @@ function StockControlDashboard({ user, userRole, onLogout }) {
       setItemsError('')
       setItemsLoading(true)
       try {
-        const { token } = await getAuthContext()
         const offset = (page - 1) * pageSize
-        const { items: pageItems, total } = await getInventoryProductsPage(localId, token, {
+        const { items: pageItems, total } = await getInventoryProductsPage(localId, {
           ...filters,
           limit: pageSize,
           offset,
@@ -168,8 +164,7 @@ function StockControlDashboard({ user, userRole, onLogout }) {
       if (!localId) return
       setActionError('')
       try {
-        const { token } = await getAuthContext()
-        await patchInventoryStock(localId, row.inventory_id, token, body)
+        await patchInventoryStock(localId, row.inventory_id, body)
         await load()
         await loadItems(currentFilters, currentPage)
       } catch (e) {
@@ -185,8 +180,7 @@ function StockControlDashboard({ user, userRole, onLogout }) {
       if (!localId) return
       setActionError('')
       try {
-        const { token } = await getAuthContext()
-        await patchInventoryProductUnitCost(localId, row.product_id, token, { unitCost: unitCostClp })
+        await patchInventoryProductUnitCost(localId, row.product_id, { unitCost: unitCostClp })
         await load()
         await loadItems(currentFilters, currentPage)
       } catch (e) {

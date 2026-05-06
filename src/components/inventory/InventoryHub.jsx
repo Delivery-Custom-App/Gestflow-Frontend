@@ -1,6 +1,5 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
-import { getAuthContext } from '../../lib/apiClient'
 import { getInventoryStockList } from '../../lib/inventoryApi'
 import InventoryShell from './InventoryShell'
 import LoadingSpinner from '../LoadingSpinner'
@@ -27,8 +26,7 @@ function InventoryHub({ user, userRole, onLogout }) {
     }
     setAlertsLoading(true)
     try {
-      const { token } = await getAuthContext()
-      const payload = await getInventoryStockList(localId, token)
+      const payload = await getInventoryStockList(localId)
       setItems(Array.isArray(payload) ? payload : [])
     } catch {
       setItems([])

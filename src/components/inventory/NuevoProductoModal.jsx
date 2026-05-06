@@ -39,8 +39,7 @@ function NuevoProductoModal({ open, localId, onClose, onSuccess }) {
     setSuppliersLoading(true)
     setSuppliersError('')
     try {
-      const { token } = await getAuthContext()
-      const rows = await getInventorySuppliersForLocal(localId, token)
+      const rows = await getInventorySuppliersForLocal(localId)
       const list = Array.isArray(rows) ? rows : []
       setSuppliers(list)
       setSupplierId((prev) => {
@@ -83,10 +82,10 @@ function NuevoProductoModal({ open, localId, onClose, onSuccess }) {
     setAddingSupplier(true)
     setError('')
     try {
-      const { token, businessId: bidFromToken } = await getAuthContext()
+      const { businessId: bidFromToken } = await getAuthContext()
       let businessId = bidFromToken != null ? String(bidFromToken) : null
       if (!businessId && localId) {
-        const loc = await getLocalById(localId, token)
+        const loc = await getLocalById(localId)
         if (loc?.business_id != null) businessId = String(loc.business_id)
       }
       if (!businessId) {
@@ -94,7 +93,7 @@ function NuevoProductoModal({ open, localId, onClose, onSuccess }) {
         return
       }
       const body = { name, business_id: businessId }
-      const created = await postSupplier(token, body)
+      const created = await postSupplier(body)
       setNewSupplierName('')
       await loadSuppliers()
       if (created?.id) setSupplierId(String(created.id))
@@ -126,10 +125,9 @@ function NuevoProductoModal({ open, localId, onClose, onSuccess }) {
 
     setSubmitting(true)
     try {
-      const { token } = await getAuthContext()
-      const resolvedCategory = await resolveCategoryNameForLocal(localId, token, category)
+      const resolvedCategory = await resolveCategoryNameForLocal(localId, category)
       setCategory(resolvedCategory)
-      await postInventoryNewProduct(localId, token, {
+      await postInventoryNewProduct(localId, {
         productName: productName.trim(),
         category: resolvedCategory,
         unit,

@@ -74,7 +74,7 @@ export default function MesaDetailModal({ mesa, localId, onClose, onTableUpdated
         local_id: localId,
         mesa_id: mesa.id,
         source: 'dine-in',
-        payment_method: 'cash',
+        payment_method: 'CASH',
         items,
       }
 
