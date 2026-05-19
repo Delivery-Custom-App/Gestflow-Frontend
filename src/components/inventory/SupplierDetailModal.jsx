@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useState } from 'react'
-import { getAuthContext } from '../../lib/apiClient'
 import { getSupplierDetailForBusiness, patchSupplier } from '../../lib/providersApi'
 import '../../styles/inventory/WeeklyPurchases.css'
 
@@ -36,8 +35,7 @@ function SupplierDetailModal({ open, supplierId, businessId, onClose }) {
     setLoading(true)
     setDetail(null)
     try {
-      const { token } = await getAuthContext()
-      const data = await getSupplierDetailForBusiness(token, supplierId, businessId)
+      const data = await getSupplierDetailForBusiness(supplierId, businessId)
       setDetail(data && typeof data === 'object' ? data : null)
       if (data && typeof data === 'object') {
         setPaymentTerms(data.payment_terms_days != null ? String(data.payment_terms_days) : '')
@@ -80,7 +78,6 @@ function SupplierDetailModal({ open, supplierId, businessId, onClose }) {
     setCommercialError('')
     setCommercialSaving(true)
     try {
-      const { token } = await getAuthContext()
       const body = {}
       if (paymentTerms.trim() !== '') {
         const n = parseInt(paymentTerms, 10)
@@ -97,7 +94,7 @@ function SupplierDetailModal({ open, supplierId, businessId, onClose }) {
         body.delivery_lead_time_days = null
       }
       body.commercial_notes = commercialNotes.trim() || null
-      const updated = await patchSupplier(token, supplierId, businessId, body)
+      const updated = await patchSupplier(supplierId, businessId, body)
       setDetail((prev) => (prev && typeof prev === 'object' ? { ...prev, ...updated } : updated))
     } catch (e) {
       setCommercialError(e?.message || 'No se pudieron guardar las condiciones.')
@@ -156,7 +153,7 @@ function SupplierDetailModal({ open, supplierId, businessId, onClose }) {
               </dl>
 
               <form className="supplier-detail-commercial-form supplier-detail-commercial" onSubmit={saveCommercial}>
-                <h4>Condiciones comerciales (HU-34)</h4>
+                <h4>Condiciones comerciales</h4>
                 {commercialError ? <p className="npmodal-error">{commercialError}</p> : null}
                 <label>
                   Plazo de pago (días)

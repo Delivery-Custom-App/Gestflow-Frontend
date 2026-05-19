@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useId, useRef, useState } from 'react'
-import { getAuthContext } from '../../lib/apiClient'
 import { resolveCategoryNameForLocal } from '../../lib/inventoryApi'
 
 /**
@@ -28,8 +27,7 @@ function CategoryTypeahead({ localId, value, onChange, disabled, 'aria-invalid':
     setOkHint(false)
     if (okTimerRef.current) clearTimeout(okTimerRef.current)
     try {
-      const { token } = await getAuthContext()
-      const name = await resolveCategoryNameForLocal(localId, token, trimmed)
+      const name = await resolveCategoryNameForLocal(localId, trimmed)
       onChange(name)
       setOkHint(true)
       okTimerRef.current = setTimeout(() => setOkHint(false), 2200)

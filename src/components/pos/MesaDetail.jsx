@@ -136,6 +136,15 @@ export default function MesaDetail({ user, userRole, onLogout }) {
   )
 
   const { mesa, active_orders, total_products, total_value } = detail
+  if (!mesa) return (
+    <div className="mesa-detail-container">
+      <div className="mesa-detail-error">
+        <p>Mesa no encontrada.</p>
+        <button onClick={() => navigate(`/local/${localId}/pos`)}>Volver</button>
+      </div>
+    </div>
+  )
+
   const hasOrders = active_orders && active_orders.length > 0
   const agregadosActivos = Object.entries(agregados)
 

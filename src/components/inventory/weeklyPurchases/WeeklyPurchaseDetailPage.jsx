@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams, useLocation } from 'react-router-dom'
-import { getAuthContext } from '../../../lib/apiClient'
 import {
   getLocalById,
   getSupplierDetailForBusiness,
@@ -67,8 +66,7 @@ function WeeklyPurchaseDetailPage({ user, userRole, onLogout }) {
 
   const resolveBusiness = useCallback(async () => {
     if (!localId) return null
-    const { token } = await getAuthContext()
-    const loc = await getLocalById(localId, token)
+    const loc = await getLocalById(localId)
     return loc?.business_id != null ? String(loc.business_id) : null
   }, [localId])
 
@@ -81,8 +79,7 @@ function WeeklyPurchaseDetailPage({ user, userRole, onLogout }) {
     setError('')
     setLoading(true)
     try {
-      const { token } = await getAuthContext()
-      const data = await getWeeklyPurchaseOrder(token, orderId, businessId)
+      const data = await getWeeklyPurchaseOrder(orderId, businessId)
       setOrder(data && typeof data === 'object' ? data : null)
       if (data?.status) setStatusEdit(data.status)
       const items = Array.isArray(data?.items) ? data.items : []
@@ -139,8 +136,7 @@ function WeeklyPurchaseDetailPage({ user, userRole, onLogout }) {
     let cancelled = false
     ;(async () => {
       try {
-        const { token } = await getAuthContext()
-        const detail = await getSupplierDetailForBusiness(token, order.supplier_id, businessId)
+        const detail = await getSupplierDetailForBusiness(order.supplier_id, businessId)
         if (!cancelled) setSupplierName(detail?.name ? String(detail.name) : String(order.supplier_id))
       } catch {
         if (!cancelled) setSupplierName(String(order.supplier_id))
@@ -156,8 +152,7 @@ function WeeklyPurchaseDetailPage({ user, userRole, onLogout }) {
     setSavingStatus(true)
     setActionError('')
     try {
-      const { token } = await getAuthContext()
-      const updated = await patchWeeklyPurchaseOrder(token, orderId, businessId, { status: statusEdit })
+      const updated = await patchWeeklyPurchaseOrder(orderId, businessId, { status: statusEdit })
       setOrder(updated)
     } catch (e) {
       setActionError(e?.message || 'No se pudo actualizar el estado.')
@@ -171,7 +166,6 @@ function WeeklyPurchaseDetailPage({ user, userRole, onLogout }) {
     setSavingLines(true)
     setActionError('')
     try {
-      const { token } = await getAuthContext()
       const items = draftLines
         .filter((l) => l.product_id && Number(l.quantity_ordered) > 0)
         .map((l) => ({
@@ -180,7 +174,7 @@ function WeeklyPurchaseDetailPage({ user, userRole, onLogout }) {
           unit_price_clp: Math.max(0, Math.round(Number(l.unit_price_clp) || 0)),
           line_notes: l.line_notes || undefined,
         }))
-      const updated = await putWeeklyPurchaseOrderItems(token, orderId, businessId, items)
+      const updated = await putWeeklyPurchaseOrderItems(orderId, businessId, items)
       setOrder(updated)
     } catch (e) {
       setActionError(e?.message || 'No se pudieron guardar las líneas.')
@@ -194,8 +188,7 @@ function WeeklyPurchaseDetailPage({ user, userRole, onLogout }) {
     if (!window.confirm('¿Eliminar esta orden en borrador?')) return
     setActionError('')
     try {
-      const { token } = await getAuthContext()
-      await deleteWeeklyPurchaseOrder(token, orderId, businessId)
+      await deleteWeeklyPurchaseOrder(orderId, businessId)
       navigate(`/local/${localId}/inventario/compras-semanales`, { state: { local: selectedLocal } })
     } catch (e) {
       setActionError(e?.message || 'No se pudo eliminar.')
@@ -212,8 +205,7 @@ function WeeklyPurchaseDetailPage({ user, userRole, onLogout }) {
     }
     setActionError('')
     try {
-      const { token } = await getAuthContext()
-      const updated = await patchWeeklyPurchaseLineReception(token, orderId, itemId, businessId, qty)
+      const updated = await patchWeeklyPurchaseLineReception(orderId, itemId, businessId, qty)
       setOrder(updated)
       const items = Array.isArray(updated?.items) ? updated.items : []
       const recv = {}
@@ -324,6 +316,7 @@ function WeeklyPurchaseDetailPage({ user, userRole, onLogout }) {
                             step="any"
                             value={draftLines[idx]?.quantity_ordered ?? ''}
                             onChange={(ev) => updateDraftLine(idx, 'quantity_ordered', ev.target.value)}
+                            onKeyDown={(ev) => ['e', 'E', '+', '-'].includes(ev.key) && ev.preventDefault()}
                           />
                         ) : (
                           it.quantity_ordered
@@ -336,6 +329,7 @@ function WeeklyPurchaseDetailPage({ user, userRole, onLogout }) {
                             min="0"
                             value={draftLines[idx]?.unit_price_clp ?? ''}
                             onChange={(ev) => updateDraftLine(idx, 'unit_price_clp', ev.target.value)}
+                            onKeyDown={(ev) => ['e', 'E', '+', '-'].includes(ev.key) && ev.preventDefault()}
                           />
                         ) : (
                           formatMoneyClp(it.unit_price_clp)
@@ -352,6 +346,7 @@ function WeeklyPurchaseDetailPage({ user, userRole, onLogout }) {
                             onChange={(ev) =>
                               setRecvInputs((prev) => ({ ...prev, [String(it.id)]: ev.target.value }))
                             }
+                            onKeyDown={(ev) => ['e', 'E', '+', '-'].includes(ev.key) && ev.preventDefault()}
                             aria-label="Cantidad recibida"
                           />
                         </td>

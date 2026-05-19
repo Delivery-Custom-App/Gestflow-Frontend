@@ -59,9 +59,9 @@ const MONTH_OPTIONS = Array.from({ length: 12 }, (_, i) => {
 })
 
 function defaultYearList() {
-  const hi = new Date().getFullYear() + 2
+  const cur = new Date().getFullYear()
   const out = []
-  for (let y = hi; y >= 1970; y -= 1) out.push(y)
+  for (let y = cur + 1; y >= cur - 3; y -= 1) out.push(y)
   return out
 }
 

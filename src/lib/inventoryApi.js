@@ -5,8 +5,8 @@ import {
   setCachedCategories,
 } from './categoryCatalogCache'
 
-export function getInventoryKpisByLocal(localId, token) {
-  return apiRequest(`/inventory/kpis/${localId}`, { token })
+export function getInventoryKpisByLocal(localId) {
+  return apiRequest(`/inventory/kpis/${localId}`)
 }
 
 /**
@@ -36,8 +36,8 @@ export function buildInventoryStockListPath(localId, filters = {}) {
   return `/inventory/locals/${localId}/stock${qs ? `?${qs}` : ''}`
 }
 
-export function getInventoryStockList(localId, token, filters = {}) {
-  return apiRequest(buildInventoryStockListPath(localId, filters), { token })
+export function getInventoryStockList(localId, filters = {}) {
+  return apiRequest(buildInventoryStockListPath(localId, filters))
 }
 
 /**
@@ -62,9 +62,9 @@ export function buildInventoryProductsPath(localId, filters = {}) {
   return `/inventory/locals/${localId}/products?${params.toString()}`
 }
 
-export async function getInventoryProductsPage(localId, token, filters = {}) {
+export async function getInventoryProductsPage(localId, filters = {}) {
   const path = buildInventoryProductsPath(localId, filters)
-  const data = await apiRequest(path, { token })
+  const data = await apiRequest(path)
   if (!data || typeof data !== 'object') {
     return { items: [], total: 0, limit: filters.limit ?? 50, offset: filters.offset ?? 0 }
   }
@@ -92,13 +92,13 @@ export function buildInventorySuppliersForLocalPath(localId, filters = {}) {
   return `/inventory/locals/${localId}/suppliers${qs ? `?${qs}` : ''}`
 }
 
-export function getInventorySuppliersForLocal(localId, token, filters = {}) {
-  return apiRequest(buildInventorySuppliersForLocalPath(localId, filters), { token })
+export function getInventorySuppliersForLocal(localId, filters = {}) {
+  return apiRequest(buildInventorySuppliersForLocalPath(localId, filters))
 }
 
 /** Local por id (incluye business_id). */
-export function getLocalById(localId, token) {
-  return apiRequest(`/locals/${localId}`, { token })
+export function getLocalById(localId) {
+  return apiRequest(`/locals/${localId}`)
 }
 
 /**
@@ -118,8 +118,8 @@ export function buildSuppliersWithMetricsPath(businessId, filters = {}) {
   return `/suppliers?${params.toString()}`
 }
 
-export function getSuppliersWithMetricsForBusiness(token, businessId, filters = {}) {
-  return apiRequest(buildSuppliersWithMetricsPath(businessId, filters), { token })
+export function getSuppliersWithMetricsForBusiness(businessId, filters = {}) {
+  return apiRequest(buildSuppliersWithMetricsPath(businessId, filters))
 }
 
 /**
@@ -132,8 +132,8 @@ export function buildSupplierDetailPath(supplierId, businessId) {
   return `/suppliers/${encodeURIComponent(String(supplierId))}?${params.toString()}`
 }
 
-export function getSupplierDetailForBusiness(token, supplierId, businessId) {
-  return apiRequest(buildSupplierDetailPath(supplierId, businessId), { token })
+export function getSupplierDetailForBusiness(supplierId, businessId) {
+  return apiRequest(buildSupplierDetailPath(supplierId, businessId))
 }
 
 /**
@@ -153,8 +153,8 @@ export function buildSupplierPurchaseHistoryPath(supplierId, businessId, opts = 
   return `/suppliers/${encodeURIComponent(String(supplierId))}/purchase-history?${params.toString()}`
 }
 
-export function getSupplierPurchaseHistoryForBusiness(token, supplierId, businessId, opts = {}) {
-  return apiRequest(buildSupplierPurchaseHistoryPath(supplierId, businessId, opts), { token })
+export function getSupplierPurchaseHistoryForBusiness(supplierId, businessId, opts = {}) {
+  return apiRequest(buildSupplierPurchaseHistoryPath(supplierId, businessId, opts))
 }
 
 /**
@@ -162,17 +162,16 @@ export function getSupplierPurchaseHistoryForBusiness(token, supplierId, busines
  * Alta rápida: `{ name }`. Registro completo (HU-86): también `rut`, `address`, `category`, `contact_name`, `phone`, `email`.
  * @param {object} body
  */
-export function postSupplier(token, body) {
-  return apiRequest('/suppliers', { method: 'POST', token, body })
+export function postSupplier(body) {
+  return apiRequest('/suppliers', { method: 'POST', body })
 }
 
 /** HU-34: condiciones comerciales y datos de proveedor (PATCH parcial). */
-export function patchSupplier(token, supplierId, businessId, body) {
+export function patchSupplier(supplierId, businessId, body) {
   const params = new URLSearchParams()
   params.set('business_id', String(businessId))
   return apiRequest(`/suppliers/${encodeURIComponent(String(supplierId))}?${params.toString()}`, {
     method: 'PATCH',
-    token,
     body,
   })
 }
@@ -180,7 +179,6 @@ export function patchSupplier(token, supplierId, businessId, body) {
 /**
  * KPIs de proveedores y compras (insumos aprobados) por mes. Requiere Admin/Superadmin.
  * @param {string} localId - UUID del local (el backend resuelve el negocio).
- * @param {string} token
  * @param {{ year?: number, month?: number }} [opts] - mes calendario; por defecto mes actual en servidor.
  */
 export function buildSupplierKpisPath(localId, opts = {}) {
@@ -194,8 +192,8 @@ export function buildSupplierKpisPath(localId, opts = {}) {
   return `/suppliers/kpis?${params.toString()}`
 }
 
-export function getSupplierKpisByLocal(localId, token, opts = {}) {
-  return apiRequest(buildSupplierKpisPath(localId, opts), { token })
+export function getSupplierKpisByLocal(localId, opts = {}) {
+  return apiRequest(buildSupplierKpisPath(localId, opts))
 }
 
 /** GET /categories?local_id= — listado del local (HU-87). */
@@ -205,30 +203,30 @@ export function buildCategoriesListPath(localId) {
   return `/categories?${params.toString()}`
 }
 
-export function getCategoriesForLocal(localId, token) {
-  return apiRequest(buildCategoriesListPath(localId), { token })
+export function getCategoriesForLocal(localId) {
+  return apiRequest(buildCategoriesListPath(localId))
 }
 
 /** Lista categorías usando caché en memoria (HU-87). */
-export async function loadCategoriesForLocalCached(localId, token) {
+export async function loadCategoriesForLocalCached(localId) {
   const cached = getCachedCategories(localId)
   if (cached) return cached
-  const data = await getCategoriesForLocal(localId, token)
+  const data = await getCategoriesForLocal(localId)
   const rows = Array.isArray(data) ? data : []
   setCachedCategories(localId, rows)
   return rows
 }
 
 /** POST /categories — ADMIN+; body { local_id, name, is_active }. */
-export function postCategory(token, body) {
-  return apiRequest('/categories', { method: 'POST', token, body })
+export function postCategory(body) {
+  return apiRequest('/categories', { method: 'POST', body })
 }
 
 /**
  * Resuelve el nombre canónico: reutiliza categoría existente (comparación sin distinguir mayúsculas)
  * o crea una nueva vía POST y actualiza la caché (HU-87).
  */
-export async function resolveCategoryNameForLocal(localId, token, rawName) {
+export async function resolveCategoryNameForLocal(localId, rawName) {
   const trimmed = String(rawName || '').trim()
   if (!trimmed) {
     throw new Error('Indica una categoría.')
@@ -236,7 +234,7 @@ export async function resolveCategoryNameForLocal(localId, token, rawName) {
 
   let rows = getCachedCategories(localId)
   if (!rows) {
-    const data = await getCategoriesForLocal(localId, token)
+    const data = await getCategoriesForLocal(localId)
     rows = Array.isArray(data) ? data : []
     setCachedCategories(localId, rows)
   }
@@ -246,7 +244,7 @@ export async function resolveCategoryNameForLocal(localId, token, rawName) {
     return String(hit.name).trim()
   }
 
-  const created = await postCategory(token, {
+  const created = await postCategory({
     local_id: localId,
     name: trimmed,
     is_active: true,
@@ -260,28 +258,25 @@ export async function resolveCategoryNameForLocal(localId, token, rawName) {
   return trimmed
 }
 
-export function postInventoryNewProduct(localId, token, body) {
+export function postInventoryNewProduct(localId, body) {
   return apiRequest(`/inventory/locals/${localId}/new-product`, {
     method: 'POST',
-    token,
     body,
   })
 }
 
 /** Actualiza stock o mínimo; la API devuelve la fila con total_value recalculado (stock × costo). */
-export function patchInventoryStock(localId, inventoryId, token, body) {
+export function patchInventoryStock(localId, inventoryId, body) {
   return apiRequest(`/inventory/locals/${localId}/stock/${inventoryId}`, {
     method: 'PATCH',
-    token,
     body,
   })
 }
 
 /** Actualiza costo unitario (products.price); respuesta con total_value recalculado. */
-export function patchInventoryProductUnitCost(localId, productId, token, body) {
+export function patchInventoryProductUnitCost(localId, productId, body) {
   return apiRequest(`/inventory/locals/${localId}/products/${productId}/unit-cost`, {
     method: 'PATCH',
-    token,
     body,
   })
 }

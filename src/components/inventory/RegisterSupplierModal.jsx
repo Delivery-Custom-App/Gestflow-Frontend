@@ -89,7 +89,11 @@ function RegisterSupplierModal({ open, onClose, onSuccess, businessId }) {
       }
     }
     setFieldErrors(next)
-    return Object.keys(next).length === 0
+    const errs = Object.keys(next)
+    if (errs.length > 0) {
+      setError(`Corrige los campos requeridos: ${errs.map((k) => next[k]).join(' • ')}`)
+    }
+    return errs.length === 0
   }
 
   const handleSubmit = async (e) => {
@@ -98,7 +102,7 @@ function RegisterSupplierModal({ open, onClose, onSuccess, businessId }) {
     if (!validate()) return
     setSubmitting(true)
     try {
-      const { token, businessId: bidFromUser } = await getAuthContext()
+      const { businessId: bidFromUser } = await getAuthContext()
       const bid = businessId || bidFromUser
       const body = {
         name: form.name.trim(),
@@ -113,13 +117,13 @@ function RegisterSupplierModal({ open, onClose, onSuccess, businessId }) {
       if (bid) body.business_id = bid
       body.rut = normalizeRutInput(body.rut)
       try {
-        await postSupplier(token, body)
+        await postSupplier(body)
       } catch (apiErr) {
         // Compatibilidad: si backend aún no soporta start_date, reintenta sin ese campo.
         if (body.start_date) {
           const fallbackBody = { ...body }
           delete fallbackBody.start_date
-          await postSupplier(token, fallbackBody)
+          await postSupplier(fallbackBody)
         } else {
           throw apiErr
         }

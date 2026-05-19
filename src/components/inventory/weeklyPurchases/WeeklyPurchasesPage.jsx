@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams, useLocation, useSearchParams } from 'react-router-dom'
-import { getAuthContext } from '../../../lib/apiClient'
 import {
   getLocalById,
   getSupplierDetailForBusiness,
@@ -126,13 +125,15 @@ function NewWeeklyOrderModal({
   const [error, setError] = useState('')
 
   useEffect(() => {
-    if (!open || !businessId) return
+    if (!open || !businessId) {
+      setError('')
+      return
+    }
     let cancelled = false
     ;(async () => {
       setLoadingSup(true)
       setError('')
       try {
-        const { token } = await getAuthContext()
         const filters = {}
         if (supplierSearchDebounced && String(supplierSearchDebounced).trim()) {
           filters.search = String(supplierSearchDebounced).trim()
@@ -140,7 +141,7 @@ function NewWeeklyOrderModal({
         if (supplierCategoryFilter && String(supplierCategoryFilter).trim()) {
           filters.category = String(supplierCategoryFilter).trim()
         }
-        const rows = await getSuppliersWithMetricsForBusiness(token, businessId, filters)
+        const rows = await getSuppliersWithMetricsForBusiness(businessId, filters)
         if (!cancelled) setSuppliers(Array.isArray(rows) ? rows : [])
       } catch (e) {
         if (!cancelled) setError(e?.message || 'No se pudieron cargar proveedores.')
@@ -171,10 +172,9 @@ function NewWeeklyOrderModal({
       setError('')
       setPurchaseHistory(null)
       try {
-        const { token } = await getAuthContext()
         const [detail, history] = await Promise.all([
-          getSupplierDetailForBusiness(token, supplierId, businessId).catch(() => null),
-          getSupplierPurchaseHistoryForBusiness(token, supplierId, businessId).catch(() => null),
+          getSupplierDetailForBusiness(supplierId, businessId).catch(() => null),
+          getSupplierPurchaseHistoryForBusiness(supplierId, businessId).catch(() => null),
         ])
         if (cancelled) return
         setPurchaseHistory(history && typeof history === 'object' ? history : null)
@@ -219,7 +219,6 @@ function NewWeeklyOrderModal({
     setSubmitting(true)
     setError('')
     try {
-      const { token } = await getAuthContext()
       const weekStart = mondayOfWeekContaining(weekDate)
       const body = {
         business_id: businessId,
@@ -233,7 +232,7 @@ function NewWeeklyOrderModal({
           line_notes: l.line_notes || undefined,
         })),
       }
-      const created = await postWeeklyPurchaseOrder(token, body)
+      const created = await postWeeklyPurchaseOrder(body)
       onCreated(created)
       onClose()
     } catch (e) {
@@ -521,8 +520,7 @@ function WeeklyPurchasesPage({ user, userRole, onLogout }) {
 
   const resolveBusiness = useCallback(async () => {
     if (!localId) return null
-    const { token } = await getAuthContext()
-    const loc = await getLocalById(localId, token)
+    const loc = await getLocalById(localId)
     return loc?.business_id != null ? String(loc.business_id) : null
   }, [localId])
 
@@ -535,12 +533,11 @@ function WeeklyPurchasesPage({ user, userRole, onLogout }) {
     setError('')
     setLoading(true)
     try {
-      const { token } = await getAuthContext()
       const filters = {}
       if (filterWeek) filters.week_start = mondayOfWeekContaining(filterWeek)
       if (filterSupplier) filters.supplier_id = filterSupplier
       if (filterStatus) filters.status = filterStatus
-      const rows = await getWeeklyPurchaseOrders(token, businessId, filters)
+      const rows = await getWeeklyPurchaseOrders(businessId, filters)
       setOrders(Array.isArray(rows) ? rows : [])
     } catch (e) {
       setOrders([])
@@ -585,8 +582,7 @@ function WeeklyPurchasesPage({ user, userRole, onLogout }) {
     let cancelled = false
     ;(async () => {
       try {
-        const { token } = await getAuthContext()
-        const rows = await getSuppliersWithMetricsForBusiness(token, businessId)
+        const rows = await getSuppliersWithMetricsForBusiness(businessId)
         if (cancelled) return
         const set = new Set()
         for (const r of Array.isArray(rows) ? rows : []) {
@@ -616,11 +612,10 @@ function WeeklyPurchasesPage({ user, userRole, onLogout }) {
     let cancelled = false
     ;(async () => {
       try {
-        const { token } = await getAuthContext()
         const filters = {}
         if (supplierSearchDebounced) filters.search = supplierSearchDebounced
         if (supplierCategoryFilter) filters.category = supplierCategoryFilter
-        const rows = await getSuppliersWithMetricsForBusiness(token, businessId, filters)
+        const rows = await getSuppliersWithMetricsForBusiness(businessId, filters)
         const list = Array.isArray(rows) ? rows : []
         if (cancelled) return
         setSuppliers(list)
@@ -653,10 +648,9 @@ function WeeklyPurchasesPage({ user, userRole, onLogout }) {
     setReportLoading(true)
     setReportError('')
     try {
-      const { token } = await getAuthContext()
       const wf = mondayOfWeekContaining(reportFrom)
       const wt = mondayOfWeekContaining(reportTo)
-      const data = await getWeeklyPurchaseComparisonReport(token, businessId, wf, wt)
+      const data = await getWeeklyPurchaseComparisonReport(businessId, wf, wt)
       setReportData(data)
     } catch (e) {
       setReportData(null)

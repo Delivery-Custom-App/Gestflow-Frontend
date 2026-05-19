@@ -12,8 +12,7 @@ import ReportesModal from './ReportesModal'
 import MenuModal from './MenuModal'
 import MesaDetailModal from './MesaDetailModal'
 import '../../styles/POSModule.css'
-
-const WORKER_ROLES = ['Empleado', 'Cajero']
+import { WORKER_ROLES } from '../../constants/roles'
 
 export default function POSModule({ user, userRole, onLogout }) {
   const navigate = useNavigate()

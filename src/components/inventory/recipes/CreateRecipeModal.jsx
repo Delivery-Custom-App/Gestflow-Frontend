@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react'
-import { getAuthContext } from '../../../lib/apiClient'
 import { getInventoryProductsPage } from '../../../lib/inventoryApi'
 import './recipes.css'
 
@@ -48,28 +47,18 @@ function CreateRecipeModal({ isOpen, recipe, categories, onSave, onCancel, local
     setNewIngredient({ product_id: '', quantity_required: '', unit: 'unidad' })
     setErrors({})
 
-    // Fetch products
-    fetchProducts()
-  }, [isOpen, recipe])
-
-  const fetchProducts = async () => {
-    setLoading(true)
-    try {
-      if (!localId) {
-        setProducts([])
-        return
-      }
-
-      const { token } = await getAuthContext()
-      const page = await getInventoryProductsPage(localId, token, { limit: 500, offset: 0 })
-      setProducts(page?.items || [])
-    } catch (err) {
-      console.error('Error fetching products:', err)
-      setErrors((prev) => ({ ...prev, products: 'Error cargando productos' }))
-    } finally {
-      setLoading(false)
+    if (!localId) {
+      setProducts([])
+      return
     }
-  }
+    let cancelled = false
+    setLoading(true)
+    getInventoryProductsPage(localId, { limit: 500, offset: 0 })
+      .then((page) => { if (!cancelled) setProducts(page?.items || []) })
+      .catch(() => { if (!cancelled) setErrors((prev) => ({ ...prev, products: 'Error cargando productos' })) })
+      .finally(() => { if (!cancelled) setLoading(false) })
+    return () => { cancelled = true }
+  }, [isOpen, recipe, localId])
 
   const handleFormChange = (e) => {
     const { name, value } = e.target
@@ -100,7 +89,7 @@ function CreateRecipeModal({ isOpen, recipe, categories, onSave, onCancel, local
     }
 
     const selectedProductId = String(newIngredient.product_id)
-    const product = products.find((p) => String(p.id) === selectedProductId)
+    const product = products.find((p) => String(p.product_id) === selectedProductId)
     if (!product) return
 
     const isDuplicate = ingredients.some(
@@ -117,7 +106,7 @@ function CreateRecipeModal({ isOpen, recipe, categories, onSave, onCancel, local
 
     const newIng = {
       product_id: selectedProductId,
-      product_name: product.name,
+      product_name: product.product_name,
       quantity_required: parseFloat(newIngredient.quantity_required),
       unit: newIngredient.unit,
       unit_cost_clp: Number(product.unit_cost_clp ?? product.price_per_unit ?? 0),
@@ -316,8 +305,8 @@ function CreateRecipeModal({ isOpen, recipe, categories, onSave, onCancel, local
                     >
                       <option value="">Selecciona un producto</option>
                       {products.map((prod) => (
-                        <option key={prod.id} value={prod.id}>
-                          {prod.name} (${Number(prod.unit_cost_clp ?? prod.price_per_unit ?? 0).toFixed(0)}/u)
+                        <option key={prod.product_id} value={prod.product_id}>
+                          {prod.product_name} (${Number(prod.unit_cost_clp ?? 0).toFixed(0)}/u)
                         </option>
                       ))}
                     </select>
