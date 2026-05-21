@@ -32,7 +32,7 @@ describe('CategoryTypeahead (HU-87)', () => {
     input.focus()
     await user.keyboard('{Enter}')
 
-    expect(resolveCategoryNameForLocal).toHaveBeenCalledWith(localId, 't', 'bebidas')
+    expect(resolveCategoryNameForLocal).toHaveBeenCalledWith(localId, 'bebidas')
     await vi.waitFor(() => {
       expect(onChange).toHaveBeenCalledWith('Bebidas')
     })

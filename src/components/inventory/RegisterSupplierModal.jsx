@@ -7,16 +7,13 @@ import {
   normalizeRutInput,
   validateChileRutMessage,
 } from '../../utils/chileRut'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+import { Button } from '@/components/ui/button'
+import { Label } from '@/components/ui/label'
 
 const INITIAL = {
-  name: '',
-  rut: '',
-  address: '',
-  category: '',
-  contact_name: '',
-  phone: '',
-  email: '',
-  start_date: '',
+  name: '', rut: '', address: '', category: '',
+  contact_name: '', phone: '', email: '', start_date: '',
 }
 
 const CL_PHONE_PREFIX = '+56 9'
@@ -26,28 +23,26 @@ function normalizeChileMobileDigits(value) {
   const rawDigits = String(value ?? '').replace(/\D/g, '')
   let digits = rawDigits
   if (digits.startsWith('56')) digits = digits.slice(2)
-  if (digits.startsWith('9')) digits = digits.slice(1)
+  if (digits.startsWith('9'))  digits = digits.slice(1)
   return digits.slice(0, CL_PHONE_DIGITS)
 }
 
 function RegisterSupplierModal({ open, onClose, onSuccess, businessId }) {
-  const [form, setForm] = useState(INITIAL)
-  const [submitting, setSubmitting] = useState(false)
-  const [error, setError] = useState('')
+  const [form,        setFormState] = useState(INITIAL)
+  const [submitting,  setSubmitting] = useState(false)
+  const [error,       setError]      = useState('')
   const [fieldErrors, setFieldErrors] = useState({})
 
   useEffect(() => {
     if (!open) return
-    setForm(INITIAL)
+    setFormState(INITIAL)
     setError('')
     setFieldErrors({})
     setSubmitting(false)
   }, [open])
 
-  if (!open) return null
-
   const setField = (key, value) => {
-    setForm((prev) => ({ ...prev, [key]: value }))
+    setFormState((prev) => ({ ...prev, [key]: value }))
     setFieldErrors((prev) => {
       if (!prev[key]) return prev
       const next = { ...prev }
@@ -59,41 +54,35 @@ function RegisterSupplierModal({ open, onClose, onSuccess, businessId }) {
   const validate = () => {
     const next = {}
     const req = [
-      ['name', 'Nombre comercial'],
-      ['rut', 'RUT'],
-      ['address', 'Dirección'],
-      ['category', 'Categoría'],
-      ['contact_name', 'Nombre de contacto'],
-      ['phone', 'Teléfono'],
-      ['email', 'Email'],
+      ['name',         'Nombre comercial'],
+      ['rut',          'RUT'],
+      ['address',      'Dirección'],
+      ['category',     'Categoría'],
+      ['contact_name', 'Contacto'],
+      ['phone',        'Teléfono'],
+      ['email',        'Email'],
     ]
     for (const [key, label] of req) {
-      if (!String(form[key] ?? '').trim()) {
-        next[key] = `${label} es obligatorio.`
-      }
+      if (!String(form[key] ?? '').trim()) next[key] = `${label} es obligatorio.`
     }
     if (!next.rut) {
       const rutErr = validateChileRutMessage(form.rut)
       if (rutErr) next.rut = rutErr
     }
     if (!next.phone) {
-      const normalizedPhone = normalizeChileMobileDigits(form.phone)
-      if (normalizedPhone.length !== CL_PHONE_DIGITS) {
-        next.phone = 'Ingresa 8 dígitos después de +56 9.'
-      }
+      const digits = normalizeChileMobileDigits(form.phone)
+      if (digits.length !== CL_PHONE_DIGITS) next.phone = 'Ingresa 8 dígitos después de +56 9.'
     }
     if (!next.email && String(form.email).trim()) {
-      const em = String(form.email).trim()
-      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em)) {
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(form.email).trim())) {
         next.email = 'Ingresa un email válido.'
       }
     }
     setFieldErrors(next)
-    const errs = Object.keys(next)
-    if (errs.length > 0) {
-      setError(`Corrige los campos requeridos: ${errs.map((k) => next[k]).join(' • ')}`)
+    if (Object.keys(next).length > 0) {
+      setError(`Corrige los campos requeridos: ${Object.values(next).join(' • ')}`)
     }
-    return errs.length === 0
+    return Object.keys(next).length === 0
   }
 
   const handleSubmit = async (e) => {
@@ -105,25 +94,24 @@ function RegisterSupplierModal({ open, onClose, onSuccess, businessId }) {
       const { businessId: bidFromUser } = await getAuthContext()
       const bid = businessId || bidFromUser
       const body = {
-        name: form.name.trim(),
-        rut: form.rut.trim(),
-        address: form.address.trim(),
-        category: form.category.trim(),
+        name:         form.name.trim(),
+        rut:          normalizeRutInput(form.rut.trim()),
+        address:      form.address.trim(),
+        category:     form.category.trim(),
         contact_name: form.contact_name.trim(),
-        phone: `${CL_PHONE_PREFIX}${normalizeChileMobileDigits(form.phone)}`,
-        email: form.email.trim(),
+        phone:        `${CL_PHONE_PREFIX}${normalizeChileMobileDigits(form.phone)}`,
+        email:        form.email.trim(),
       }
       if (form.start_date) body.start_date = form.start_date
-      if (bid) body.business_id = bid
-      body.rut = normalizeRutInput(body.rut)
+      if (bid)             body.business_id = bid
+
       try {
         await postSupplier(body)
       } catch (apiErr) {
-        // Compatibilidad: si backend aún no soporta start_date, reintenta sin ese campo.
         if (body.start_date) {
-          const fallbackBody = { ...body }
-          delete fallbackBody.start_date
-          await postSupplier(fallbackBody)
+          const fallback = { ...body }
+          delete fallback.start_date
+          await postSupplier(fallback)
         } else {
           throw apiErr
         }
@@ -131,12 +119,6 @@ function RegisterSupplierModal({ open, onClose, onSuccess, businessId }) {
       onSuccess?.()
       onClose?.()
     } catch (err) {
-      console.warn('[Registrar proveedor] Error API', {
-        status: err?.status,
-        detail: err?.detail,
-        message: err?.message,
-        err,
-      })
       setError(err?.message || 'No se pudo registrar el proveedor.')
     } finally {
       setSubmitting(false)
@@ -144,171 +126,170 @@ function RegisterSupplierModal({ open, onClose, onSuccess, businessId }) {
   }
 
   const fe = (key) => fieldErrors[key]
+  const inputCls = (key) =>
+    `h-10 w-full rounded-md border px-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary)/0.3)] ${
+      fe(key) ? 'border-red-400' : 'border-[hsl(var(--border))]'
+    }`
 
   return (
-    <div className="npmodal-backdrop" role="presentation" onClick={onClose}>
-      <div
-        className="npmodal npmodal--wide"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="reg-supplier-title"
-        onClick={(ev) => ev.stopPropagation()}
+    <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) onClose?.() }}>
+      <DialogContent
+        className="max-w-2xl w-full flex flex-col overflow-hidden p-0"
+        style={{ maxHeight: 'min(92vh, 780px)' }}
+        onInteractOutside={(e) => {
+          const original = e.detail?.originalEvent ?? e
+          const target = original?.target
+          if (target instanceof Element && target.closest('[data-calendar-panel="true"]')) {
+            e.preventDefault()
+          }
+        }}
       >
-        <div className="npmodal-head">
-          <h2 id="reg-supplier-title">Registrar proveedor</h2>
-          <button type="button" className="npmodal-close" onClick={onClose} aria-label="Cerrar">
-            ×
-          </button>
-        </div>
-        <form className="npmodal-form" onSubmit={handleSubmit}>
-          <p className="scd-register-supplier-hint">Ingrese Datos de Nuevo proveedor</p>
-          {error ? (
-            <p className="npmodal-error npmodal-error--multiline" role="alert">
-              {error}
-            </p>
-          ) : null}
+        {/* Fixed header */}
+        <DialogHeader className="shrink-0">
+          <DialogTitle>Registrar proveedor</DialogTitle>
+          <p className="text-sm text-[hsl(var(--muted-foreground))]">
+            Complete los datos del nuevo proveedor
+          </p>
+        </DialogHeader>
 
-          <label className="npmodal-field">
-            <span>Nombre comercial</span>
-            <input
-              value={form.name}
-              onChange={(ev) => setField('name', ev.target.value)}
-              placeholder="Ingrese datos"
-              autoComplete="organization"
-              aria-invalid={!!fe('name')}
-              aria-describedby={fe('name') ? 'err-name' : undefined}
-            />
-            {fe('name') ? (
-              <span id="err-name" className="npmodal-field-error" role="alert">
-                {fe('name')}
-              </span>
-            ) : null}
-          </label>
+        {/* Scrollable body */}
+        <div className="flex-1 overflow-y-auto min-h-0">
+          <form id="rs-form" onSubmit={handleSubmit} className="flex flex-col gap-5 px-7 py-6">
 
-          <label className="npmodal-field">
-            <span>RUT</span>
-            <input
-              aria-label="RUT"
-              value={formatRutForDisplay(form.rut)}
-              onChange={(ev) => setField('rut', normalizeRutInput(ev.target.value))}
-              placeholder="Ingrese datos"
-              autoComplete="off"
-              inputMode="text"
-              aria-invalid={!!fe('rut')}
-            />
-            {fe('rut') ? (
-              <span className="npmodal-field-error" role="alert">
-                {fe('rut')}
-              </span>
-            ) : null}
-          </label>
+            {error && (
+              <p className="rounded-lg border border-red-200 bg-red-50 text-red-700 text-sm px-3 py-2 leading-snug" role="alert">
+                {error}
+              </p>
+            )}
 
-          <label className="npmodal-field">
-            <span>Dirección</span>
-            <input
-              value={form.address}
-              onChange={(ev) => setField('address', ev.target.value)}
-              placeholder="Ingrese datos"
-              autoComplete="street-address"
-              aria-invalid={!!fe('address')}
-            />
-            {fe('address') ? (
-              <span className="npmodal-field-error" role="alert">
-                {fe('address')}
-              </span>
-            ) : null}
-          </label>
-
-          <label className="npmodal-field">
-            <span>Categoría</span>
-            <input
-              value={form.category}
-              onChange={(ev) => setField('category', ev.target.value)}
-              placeholder="Ingrese datos"
-              aria-invalid={!!fe('category')}
-            />
-            {fe('category') ? (
-              <span className="npmodal-field-error" role="alert">
-                {fe('category')}
-              </span>
-            ) : null}
-          </label>
-
-          <div className="npmodal-row npmodal-row--2">
-            <label className="npmodal-field">
-              <span>Contacto</span>
+            {/* Name */}
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="rs-name">Nombre comercial <span className="text-red-500">*</span></Label>
               <input
-                value={form.contact_name}
-                onChange={(ev) => setField('contact_name', ev.target.value)}
-                placeholder="Ingrese datos"
-                autoComplete="name"
-                aria-invalid={!!fe('contact_name')}
+                id="rs-name"
+                value={form.name}
+                onChange={(e) => setField('name', e.target.value)}
+                placeholder="Ej: Distribuidora XYZ"
+                autoComplete="organization"
+                className={inputCls('name')}
               />
-              {fe('contact_name') ? (
-                <span className="npmodal-field-error" role="alert">
-                  {fe('contact_name')}
-                </span>
-              ) : null}
-            </label>
-            <label className="npmodal-field">
-              <span>Teléfono</span>
-              <div className="npmodal-phone-input-wrap">
-                <span className="npmodal-phone-prefix">{CL_PHONE_PREFIX}</span>
+              {fe('name') && <span className="text-xs text-red-500">{fe('name')}</span>}
+            </div>
+
+            {/* RUT + Category row */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="rs-rut">RUT <span className="text-red-500">*</span></Label>
                 <input
-                  type="tel"
-                  aria-label="Teléfono"
-                  value={normalizeChileMobileDigits(form.phone)}
-                  onChange={(ev) => setField('phone', normalizeChileMobileDigits(ev.target.value))}
-                  placeholder="Ingrese datos"
-                  autoComplete="tel"
-                  inputMode="numeric"
-                  maxLength={CL_PHONE_DIGITS}
-                  aria-invalid={!!fe('phone')}
+                  id="rs-rut"
+                  value={formatRutForDisplay(form.rut)}
+                  onChange={(e) => setField('rut', normalizeRutInput(e.target.value))}
+                  placeholder="12.345.678-9"
+                  autoComplete="off"
+                  inputMode="text"
+                  className={inputCls('rut')}
                 />
+                {fe('rut') && <span className="text-xs text-red-500">{fe('rut')}</span>}
               </div>
-              {fe('phone') ? (
-                <span className="npmodal-field-error" role="alert">
-                  {fe('phone')}
-                </span>
-              ) : null}
-            </label>
-          </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="rs-category">Categoría <span className="text-red-500">*</span></Label>
+                <input
+                  id="rs-category"
+                  value={form.category}
+                  onChange={(e) => setField('category', e.target.value)}
+                  placeholder="Ej: Lácteos"
+                  className={inputCls('category')}
+                />
+                {fe('category') && <span className="text-xs text-red-500">{fe('category')}</span>}
+              </div>
+            </div>
 
-          <label className="npmodal-field">
-            <span>Email</span>
-            <input
-              type="email"
-              value={form.email}
-              onChange={(ev) => setField('email', ev.target.value)}
-              placeholder="Ingrese datos"
-              autoComplete="email"
-              aria-invalid={!!fe('email')}
+            {/* Address */}
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="rs-address">Dirección <span className="text-red-500">*</span></Label>
+              <input
+                id="rs-address"
+                value={form.address}
+                onChange={(e) => setField('address', e.target.value)}
+                placeholder="Ej: Av. Providencia 1234, Santiago"
+                autoComplete="street-address"
+                className={inputCls('address')}
+              />
+              {fe('address') && <span className="text-xs text-red-500">{fe('address')}</span>}
+            </div>
+
+            {/* Contact + Phone row */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="rs-contact">Contacto <span className="text-red-500">*</span></Label>
+                <input
+                  id="rs-contact"
+                  value={form.contact_name}
+                  onChange={(e) => setField('contact_name', e.target.value)}
+                  placeholder="Nombre completo"
+                  autoComplete="name"
+                  className={inputCls('contact_name')}
+                />
+                {fe('contact_name') && <span className="text-xs text-red-500">{fe('contact_name')}</span>}
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="rs-phone">Teléfono <span className="text-red-500">*</span></Label>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs font-semibold text-[hsl(var(--muted-foreground))] shrink-0 bg-[hsl(var(--muted))] px-2 rounded-md border border-[hsl(var(--border))] h-10 flex items-center">
+                    {CL_PHONE_PREFIX}
+                  </span>
+                  <input
+                    id="rs-phone"
+                    type="tel"
+                    value={normalizeChileMobileDigits(form.phone)}
+                    onChange={(e) => setField('phone', normalizeChileMobileDigits(e.target.value))}
+                    placeholder="12345678"
+                    inputMode="numeric"
+                    maxLength={CL_PHONE_DIGITS}
+                    className={`${inputCls('phone')} flex-1 min-w-0`}
+                  />
+                </div>
+                {fe('phone') && <span className="text-xs text-red-500">{fe('phone')}</span>}
+              </div>
+            </div>
+
+            {/* Email */}
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="rs-email">Email <span className="text-red-500">*</span></Label>
+              <input
+                id="rs-email"
+                type="email"
+                value={form.email}
+                onChange={(e) => setField('email', e.target.value)}
+                placeholder="contacto@proveedor.cl"
+                autoComplete="email"
+                className={inputCls('email')}
+              />
+              {fe('email') && <span className="text-xs text-red-500">{fe('email')}</span>}
+            </div>
+
+            {/* Start date */}
+            <ModernDateField
+              label="Fecha desde (histórico proveedor)"
+              value={form.start_date}
+              onChange={(iso) => setField('start_date', iso)}
+              disabled={submitting}
             />
-            {fe('email') ? (
-              <span className="npmodal-field-error" role="alert">
-                {fe('email')}
-              </span>
-            ) : null}
-          </label>
 
-          <ModernDateField
-            label="Fecha desde (histórico proveedor)"
-            value={form.start_date}
-            onChange={(iso) => setField('start_date', iso)}
-            disabled={submitting}
-          />
+          </form>
+        </div>
 
-          <div className="npmodal-actions">
-            <button type="button" className="npmodal-btn npmodal-btn--ghost" onClick={onClose} disabled={submitting}>
-              Cancelar
-            </button>
-            <button type="submit" className="npmodal-btn npmodal-btn--primary" disabled={submitting}>
-              {submitting ? 'Guardando…' : 'Registrar'}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+        {/* Fixed footer */}
+        <DialogFooter className="shrink-0">
+          <Button type="button" variant="outline" onClick={onClose} disabled={submitting}>
+            Cancelar
+          </Button>
+          <Button type="submit" form="rs-form" disabled={submitting}>
+            {submitting ? 'Guardando…' : 'Registrar'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }
 

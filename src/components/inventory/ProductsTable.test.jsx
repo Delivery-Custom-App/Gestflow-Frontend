@@ -4,9 +4,11 @@ import ProductsTable from './ProductsTable'
 
 describe('ProductsTable', () => {
   it('muestra estado de carga de datos', () => {
-    render(<ProductsTable items={[]} loading error="" currentPage={1} totalPages={1} onPageChange={vi.fn()} />)
+    const { container } = render(
+      <ProductsTable items={[]} loading error="" currentPage={1} totalPages={1} onPageChange={vi.fn()} />,
+    )
 
-    expect(screen.getByText('Cargando productos…')).toBeInTheDocument()
+    expect(container.querySelectorAll('[data-slot="skeleton"]')).toHaveLength(50)
   })
 
   it('muestra estado vacio y permite accion para crear primer producto', () => {

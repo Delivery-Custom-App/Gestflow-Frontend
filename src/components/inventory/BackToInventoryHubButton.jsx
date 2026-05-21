@@ -1,5 +1,5 @@
 import { useNavigate, useParams } from 'react-router-dom'
-import './BackToInventoryHubButton.css'
+import { ChevronLeft } from 'lucide-react'
 
 /**
  * Vuelta al hub de inventario con el mismo estilo en Recetas, Stock, Proveedores y Compras semanales.
@@ -18,14 +18,16 @@ function BackToInventoryHubButton({ navState } = {}) {
   }
 
   return (
-    <div className="inv-back-hub-wrap">
-      <button type="button" className="inv-back-hub" onClick={handleClick}>
-        <span className="inv-back-hub__chev" aria-hidden="true">
-          <svg viewBox="0 0 24 24" width="18" height="18" fill="none">
-            <path d="M15 18l-6-6 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
+    <div className="mb-4">
+      <button
+        type="button"
+        onClick={handleClick}
+        className="inline-flex items-center gap-2 pl-2 pr-4 py-2 rounded-full border border-[hsl(var(--primary)/0.35)] bg-gradient-to-b from-white to-green-50 shadow-sm text-sm font-bold text-[hsl(var(--primary))] cursor-pointer transition-all duration-100 hover:border-[hsl(var(--primary)/0.55)] hover:shadow-md hover:-translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/50"
+      >
+        <span className="flex items-center justify-center w-8 h-8 rounded-full bg-[hsl(var(--primary)/0.12)] text-emerald-700" aria-hidden="true">
+          <ChevronLeft size={18} />
         </span>
-        <span className="inv-back-hub__text">Centro de inventario</span>
+        <span>Centro de inventario</span>
       </button>
     </div>
   )

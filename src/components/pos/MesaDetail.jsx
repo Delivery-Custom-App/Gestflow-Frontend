@@ -5,7 +5,16 @@ import { useMenuPOS } from '../../hooks/useMenuPOS'
 import { formatCLP } from '../../lib/formatCLP'
 import { apiRequest } from '../../lib/apiClient'
 import ProductList from './ProductList'
-import '../../styles/MesaDetail.css'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Badge } from '@/components/ui/badge'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog'
 
 const EXTRAS_DISPONIBLES = [
   'Pan', 'Ketchup', 'Mostaza', 'Mayonesa',
@@ -13,7 +22,7 @@ const EXTRAS_DISPONIBLES = [
   'Servilletas', 'Cubiertos',
 ]
 
-export default function MesaDetail({ user, userRole, onLogout }) {
+export default function MesaDetail() {
   const navigate = useNavigate()
   const { mesaId, localId } = useParams()
   const { detail, loading, error, refresh } = useMesaDetail(mesaId)
@@ -30,7 +39,6 @@ export default function MesaDetail({ user, userRole, onLogout }) {
     fetchMenu()
   }, [fetchMenu])
 
-  // Búsqueda en picker con el mismo endpoint que el menú (`?search=`) y debounce
   useEffect(() => {
     if (!showPicker) return
     const id = setTimeout(() => {
@@ -39,7 +47,6 @@ export default function MesaDetail({ user, userRole, onLogout }) {
     return () => clearTimeout(id)
   }, [pickerSearch, showPicker, fetchMenu])
 
-  // ── Agregados helpers ──────────────────────────────────────
   const agregarExtra = (nombre) =>
     setAgregados((prev) => ({ ...prev, [nombre]: (prev[nombre] || 0) + 1 }))
   const quitarExtra = (nombre) =>
@@ -51,7 +58,6 @@ export default function MesaDetail({ user, userRole, onLogout }) {
     })
   const limpiarExtras = () => setAgregados({})
 
-  // ── Abrir selector de productos ────────────────────────────
   const handleOpenPicker = (orderId = null) => {
     setPickerOrderId(orderId)
     setAddError(null)
@@ -60,14 +66,12 @@ export default function MesaDetail({ user, userRole, onLogout }) {
     setShowPicker(true)
   }
 
-  // ── Agregar producto (crea orden si no existe) ─────────────
   const handleAddProduct = useCallback(async (product) => {
     setAddingProduct(true)
     setAddError(null)
     try {
       let orderId = pickerOrderId
 
-      // Si no hay orden, crear una primero
       if (!orderId) {
         const newOrder = await apiRequest('/orders', {
           method: 'POST',
@@ -82,7 +86,6 @@ export default function MesaDetail({ user, userRole, onLogout }) {
         orderId = newOrder.id
       }
 
-      // Agregar producto a la orden
       await apiRequest(`/orders/${orderId}/items`, {
         method: 'POST',
         body: {
@@ -103,44 +106,48 @@ export default function MesaDetail({ user, userRole, onLogout }) {
     }
   }, [pickerOrderId, localId, mesaId, refresh, fetchMenu])
 
-  // El backend filtra por `search`
   const pickerMenu = (menuData?.categories || []).filter((cat) => (cat.products?.length || 0) > 0)
-
   const handleGoBack = () => navigate(`/local/${localId}/pos`)
 
   // ── Loading / Error states ────────────────────────────────
   if (loading) return (
-    <div className="mesa-detail-container">
-      <div className="mesa-detail-loading"><p>Cargando detalle de mesa...</p></div>
-    </div>
-  )
-  if (error) return (
-    <div className="mesa-detail-container">
-      <div className="mesa-detail-error">
-        <p>Error: {error}</p>
-        <button onClick={() => navigate(`/local/${localId}/pos`)}>Volver</button>
+    <div className="min-h-screen flex items-center justify-center bg-[hsl(var(--background))]">
+      <div className="flex flex-col items-center gap-2 text-[hsl(var(--muted-foreground))]">
+        <div className="w-6 h-6 border-2 border-[hsl(var(--primary))] border-t-transparent rounded-full animate-spin" />
+        <p className="text-sm">Cargando detalle de mesa...</p>
       </div>
     </div>
   )
+
+  if (error) return (
+    <div className="min-h-screen flex items-center justify-center bg-[hsl(var(--background))]">
+      <div className="text-center space-y-3">
+        <p className="text-sm text-[hsl(var(--destructive))]">Error: {error}</p>
+        <Button variant="outline" size="sm" onClick={() => navigate(`/local/${localId}/pos`)}>Volver</Button>
+      </div>
+    </div>
+  )
+
   if (!detail) return (
-    <div className="mesa-detail-container">
-      <div className="mesa-vacia">
-        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+    <div className="min-h-screen flex items-center justify-center bg-[hsl(var(--background))]">
+      <div className="flex flex-col items-center gap-3 text-[hsl(var(--muted-foreground))]">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-12 h-12 opacity-30">
           <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c.866-1.5 2.926-5.231 9.303-6.622m0 0a27.047 27.047 0 015.897 6.622M12 12.75c2.613 0 4.859-1.354 5.573-3.423" />
         </svg>
-        <div className="mesa-vacia-text">Esta mesa está vacía</div>
-        <div className="mesa-vacia-subtitle">Sin órdenes activas</div>
-        <button onClick={() => navigate(`/local/${localId}/pos`)}>Volver</button>
+        <p className="font-medium">Esta mesa está vacía</p>
+        <p className="text-xs">Sin órdenes activas</p>
+        <Button variant="outline" size="sm" onClick={() => navigate(`/local/${localId}/pos`)}>Volver</Button>
       </div>
     </div>
   )
 
   const { mesa, active_orders, total_products, total_value } = detail
+
   if (!mesa) return (
-    <div className="mesa-detail-container">
-      <div className="mesa-detail-error">
-        <p>Mesa no encontrada.</p>
-        <button onClick={() => navigate(`/local/${localId}/pos`)}>Volver</button>
+    <div className="min-h-screen flex items-center justify-center bg-[hsl(var(--background))]">
+      <div className="text-center space-y-3">
+        <p className="text-sm text-[hsl(var(--destructive))]">Mesa no encontrada.</p>
+        <Button variant="outline" size="sm" onClick={() => navigate(`/local/${localId}/pos`)}>Volver</Button>
       </div>
     </div>
   )
@@ -149,205 +156,237 @@ export default function MesaDetail({ user, userRole, onLogout }) {
   const agregadosActivos = Object.entries(agregados)
 
   return (
-    <main className="mesa-detail-container">
-      <header className="mesa-detail-header">
-        <button className="mesa-detail-back-btn" onClick={handleGoBack}>← Volver</button>
-        <div className="mesa-detail-title">
-          <h1>{mesa.name || `Mesa ${mesa.numero}`}</h1>
-          <p className="mesa-detail-zone">{mesa.zona || 'General'}</p>
+    <main className="min-h-screen bg-[hsl(var(--background))]">
+      {/* Header */}
+      <header className="sticky top-0 z-10 flex items-center gap-4 px-4 lg:px-6 h-14 bg-white border-b border-[hsl(var(--border))]">
+        <button
+          className="flex items-center gap-1 text-sm text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--primary))] transition-colors"
+          onClick={handleGoBack}
+        >
+          ← Volver
+        </button>
+        <div className="flex-1 min-w-0">
+          <h1 className="text-sm font-semibold text-[hsl(var(--foreground))] leading-none truncate">
+            {mesa.name || `Mesa ${mesa.numero}`}
+          </h1>
+          <p className="text-xs text-[hsl(var(--muted-foreground))]">{mesa.zona || 'General'}</p>
         </div>
       </header>
 
-      <div className="mesa-detail-body">
+      <div className="max-w-4xl mx-auto px-4 lg:px-6 py-6 space-y-6">
         {/* Info básica */}
-        <section className="mesa-detail-info">
-          <div className="info-card">
-            <span className="info-label">Capacidad</span>
-            <span className="info-value">{mesa.capacidad || 4} personas</span>
-          </div>
-          <div className="info-card">
-            <span className="info-label">Estado</span>
-            <span className={`info-value state-${mesa.state || 'libre'}`}>{getStateName(mesa.state)}</span>
-          </div>
-          <div className="info-card">
-            <span className="info-label">Tipo</span>
-            <span className="info-value">{mesa.is_delivery ? 'Delivery' : 'Dine-In'}</span>
-          </div>
+        <section className="grid grid-cols-3 gap-3">
+          {[
+            { label: 'Capacidad', value: `${mesa.capacidad || 4} personas` },
+            { label: 'Estado', value: getStateName(mesa.state), highlight: true },
+            { label: 'Tipo', value: mesa.is_delivery ? 'Delivery' : 'Dine-In' },
+          ].map(({ label, value, highlight }) => (
+            <div key={label} className="bg-white rounded-xl border border-[hsl(var(--border))] p-3 text-center">
+              <p className="text-[10px] uppercase tracking-widest text-[hsl(var(--muted-foreground))] mb-1">{label}</p>
+              <p className={`text-sm font-semibold ${highlight ? 'text-[hsl(var(--primary))]' : 'text-[hsl(var(--foreground))]'}`}>
+                {value}
+              </p>
+            </div>
+          ))}
         </section>
 
         {/* KPIs */}
-        <section className="mesa-detail-kpis">
-          <article className="kpi-card kpi-productos">
-            <div className="kpi-icon">
-              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <section className="grid grid-cols-2 gap-3">
+          <article className="bg-white rounded-xl border border-[hsl(var(--border))] p-4 flex items-center gap-3">
+            <div className="w-9 h-9 flex items-center justify-center rounded-lg bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))] shrink-0">
+              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" className="w-5 h-5">
                 <rect x="3" y="3" width="7" height="7" rx="1" stroke="currentColor" strokeWidth="1.5" />
                 <rect x="14" y="3" width="7" height="7" rx="1" stroke="currentColor" strokeWidth="1.5" />
                 <rect x="3" y="14" width="7" height="7" rx="1" stroke="currentColor" strokeWidth="1.5" />
                 <rect x="14" y="14" width="7" height="7" rx="1" stroke="currentColor" strokeWidth="1.5" />
               </svg>
             </div>
-            <div className="kpi-content">
-              <p className="kpi-label">Productos</p>
-              <p className="kpi-value">{total_products}</p>
+            <div>
+              <p className="text-xl font-bold text-[hsl(var(--foreground))]">{total_products}</p>
+              <p className="text-xs text-[hsl(var(--muted-foreground))]">Productos</p>
             </div>
           </article>
-          <article className="kpi-card kpi-valor">
-            <div className="kpi-icon">
-              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <article className="bg-white rounded-xl border border-[hsl(var(--border))] p-4 flex items-center gap-3">
+            <div className="w-9 h-9 flex items-center justify-center rounded-lg bg-green-100 text-green-700 shrink-0">
+              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" className="w-5 h-5">
                 <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="1.5" />
                 <path d="M12 7v5M9.5 14h5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
               </svg>
             </div>
-            <div className="kpi-content">
-              <p className="kpi-label">Valor Total</p>
-              <p className="kpi-value">${formatCLP(total_value)}</p>
+            <div>
+              <p className="text-xl font-bold text-[hsl(var(--foreground))]">${formatCLP(total_value)}</p>
+              <p className="text-xs text-[hsl(var(--muted-foreground))]">Valor Total</p>
             </div>
           </article>
         </section>
 
-        {/* Órdenes + Agregados (todo junto) */}
-        <section className="mesa-detail-orders">
-          <div className="orders-section-header">
-            <h2>Órdenes Activas</h2>
-            <button className="btn-add-product" onClick={() => handleOpenPicker(hasOrders ? active_orders[0]?.id : null)}>
+        {/* Órdenes + Agregados */}
+        <section className="bg-white rounded-xl border border-[hsl(var(--border))] p-4 space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-[hsl(var(--foreground))]">Órdenes Activas</h2>
+            <Button
+              size="sm"
+              className="bg-[hsl(var(--primary))] hover:bg-[hsl(var(--primary))]/90 text-white"
+              onClick={() => handleOpenPicker(hasOrders ? active_orders[0]?.id : null)}
+            >
               + Agregar Producto
-            </button>
+            </Button>
           </div>
 
           {hasOrders ? (
-            <div className="orders-list">
+            <div className="space-y-3">
               {active_orders.map((order) => (
-                <article key={order.id} className={`order-card order-status-${order.status}`}>
-                  <div className="order-header">
-                    <div className="order-meta">
-                      <span className="order-status-badge">{getOrderStatusLabel(order.status)}</span>
-                      <span className="order-payment">{getPaymentLabel(order.payment_method)}</span>
+                <article key={order.id} className={`border border-[hsl(var(--border))] rounded-lg overflow-hidden`}>
+                  <div className="flex items-center justify-between px-3 py-2 bg-[hsl(var(--accent))]">
+                    <div className="flex items-center gap-2">
+                      <Badge className="bg-[hsl(var(--primary))] text-white text-xs">{getOrderStatusLabel(order.status)}</Badge>
+                      <span className="text-xs text-[hsl(var(--muted-foreground))]">{getPaymentLabel(order.payment_method)}</span>
                     </div>
-                    <span className="order-total">${formatCLP(order.total)}</span>
+                    <span className="text-sm font-semibold text-[hsl(var(--foreground))]">${formatCLP(order.total)}</span>
                   </div>
-                  <div className="order-items">
-                    <div className="order-items-header">
-                      <h3>Productos</h3>
-                    </div>
+                  <div className="p-3 space-y-2">
+                    <p className="text-xs font-medium text-[hsl(var(--muted-foreground))] uppercase tracking-wide">Productos</p>
                     <ProductList products={order.items || []} orderId={order.id} onProductsChanged={refresh} />
                   </div>
-                  <div className="order-footer">
-                    <span className="order-subtotal">Subtotal: ${formatCLP(order.subtotal)}</span>
+                  <div className="px-3 py-2 border-t border-[hsl(var(--border))] text-right">
+                    <span className="text-xs text-[hsl(var(--muted-foreground))]">Subtotal: ${formatCLP(order.subtotal)}</span>
                   </div>
                 </article>
               ))}
             </div>
           ) : (
-            <div className="mesa-sin-ordenes">
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+            <div className="flex flex-col items-center gap-2 py-8 text-[hsl(var(--muted-foreground))]">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-10 h-10 opacity-30">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c.866-1.5 2.926-5.231 9.303-6.622m0 0a27.047 27.047 0 015.897 6.622M12 12.75c2.613 0 4.859-1.354 5.573-3.423" />
               </svg>
-              <p className="mesa-sin-ordenes-text">Mesa libre</p>
-              <p className="mesa-sin-ordenes-subtitle">Agrega un producto para iniciar la atención</p>
+              <p className="text-sm font-medium">Mesa libre</p>
+              <p className="text-xs">Agrega un producto para iniciar la atención</p>
             </div>
           )}
 
-          {/* ── Agregados — dentro de la sección de órdenes ── */}
-          <div className="mesa-agregados">
-            <div className="agregados-header">
-              <h3>Agregados de la Mesa</h3>
-              <p className="agregados-subtitle">Extras sin costo entregados en la mesa</p>
+          {/* Agregados */}
+          <div className="border-t border-[hsl(var(--border))] pt-4 space-y-3">
+            <div>
+              <h3 className="text-sm font-semibold text-[hsl(var(--foreground))]">Agregados de la Mesa</h3>
+              <p className="text-xs text-[hsl(var(--muted-foreground))]">Extras sin costo entregados en la mesa</p>
             </div>
-            <div className="extras-chips">
+            <div className="flex flex-wrap gap-2">
               {EXTRAS_DISPONIBLES.map((nombre) => (
-                <button key={nombre} className="extra-chip" onClick={() => agregarExtra(nombre)}>
+                <button
+                  key={nombre}
+                  className="px-3 py-1 text-xs rounded-full border border-[hsl(var(--border))] text-[hsl(var(--muted-foreground))] hover:border-[hsl(var(--primary))] hover:text-[hsl(var(--primary))] hover:bg-[hsl(var(--primary))]/5 transition-colors"
+                  onClick={() => agregarExtra(nombre)}
+                >
                   + {nombre}
                 </button>
               ))}
             </div>
             {agregadosActivos.length > 0 ? (
-              <div className="agregados-activos">
+              <div className="space-y-2">
                 {agregadosActivos.map(([nombre, cantidad]) => (
-                  <div key={nombre} className="agregado-row">
-                    <span className="agregado-nombre">{nombre}</span>
-                    <div className="agregado-controls">
-                      <button className="agregado-btn-minus" onClick={() => quitarExtra(nombre)}>−</button>
-                      <span className="agregado-cantidad">x{cantidad}</span>
-                      <button className="agregado-btn-plus" onClick={() => agregarExtra(nombre)}>+</button>
+                  <div key={nombre} className="flex items-center justify-between p-2 rounded-lg bg-[hsl(var(--accent))]">
+                    <span className="text-sm text-[hsl(var(--foreground))]">{nombre}</span>
+                    <div className="flex items-center gap-1">
+                      <button
+                        className="w-6 h-6 flex items-center justify-center rounded-full border border-[hsl(var(--border))] text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--destructive))] text-sm"
+                        onClick={() => quitarExtra(nombre)}
+                      >
+                        −
+                      </button>
+                      <span className="text-xs font-medium w-8 text-center">x{cantidad}</span>
+                      <button
+                        className="w-6 h-6 flex items-center justify-center rounded-full border border-[hsl(var(--border))] text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--primary))] text-sm"
+                        onClick={() => agregarExtra(nombre)}
+                      >
+                        +
+                      </button>
                     </div>
                   </div>
                 ))}
-                <button className="btn-limpiar-extras" onClick={limpiarExtras}>Limpiar todo</button>
+                <button
+                  className="text-xs text-[hsl(var(--destructive))] hover:underline"
+                  onClick={limpiarExtras}
+                >
+                  Limpiar todo
+                </button>
               </div>
             ) : (
-              <p className="agregados-empty">Ningún agregado registrado aún.</p>
+              <p className="text-xs text-[hsl(var(--muted-foreground))]">Ningún agregado registrado aún.</p>
             )}
           </div>
         </section>
       </div>
 
-      <footer className="mesa-detail-footer">
-        <button className="btn-volver" onClick={handleGoBack}>← Volver a Visualización</button>
+      {/* Footer */}
+      <footer className="sticky bottom-0 px-4 lg:px-6 py-3 bg-white border-t border-[hsl(var(--border))]">
+        <Button variant="outline" size="sm" onClick={handleGoBack}>
+          ← Volver a Visualización
+        </Button>
       </footer>
 
-      {/* ── Product Picker Modal ── */}
-      {showPicker && (
-        <div
-          className="picker-backdrop"
-          onClick={() => {
+      {/* Product Picker Modal */}
+      <Dialog
+        open={showPicker}
+        onOpenChange={(open) => {
+          if (!open) {
             setShowPicker(false)
             setPickerSearch('')
             fetchMenu()
-          }}
-        >
-          <div className="picker-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="picker-header">
-              <h3>Seleccionar Producto</h3>
-              <button
-                type="button"
-                className="picker-close"
-                onClick={() => {
-                  setShowPicker(false)
-                  setPickerSearch('')
-                  fetchMenu()
-                }}
-              >
-                ✕
-              </button>
-            </div>
+          }
+        }}
+      >
+        <DialogContent className="max-w-md max-h-[75vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle>Seleccionar Producto</DialogTitle>
+          </DialogHeader>
 
-            <input
-              className="picker-search"
-              type="text"
-              placeholder="Buscar producto..."
-              value={pickerSearch}
-              onChange={(e) => setPickerSearch(e.target.value)}
-              autoFocus
-            />
+          <Input
+            type="text"
+            placeholder="Buscar producto..."
+            value={pickerSearch}
+            onChange={(e) => setPickerSearch(e.target.value)}
+            autoFocus
+            className="h-9"
+          />
 
-            {addError && <p className="picker-error">{addError}</p>}
+          {addError && (
+            <p className="text-xs text-[hsl(var(--destructive))] bg-red-50 border border-red-200 rounded px-3 py-2">
+              {addError}
+            </p>
+          )}
 
-            <div className="picker-list">
-              {pickerMenu.length === 0 && (
-                <p className="picker-empty">Sin resultados</p>
-              )}
-              {pickerMenu.map((cat) => (
-                <div key={cat.id}>
-                  <p className="picker-cat-label">{cat.name}</p>
-                  {cat.products.map((product) => (
-                    <button
-                      key={product.id}
-                      className="picker-product-row"
-                      onClick={() => handleAddProduct(product)}
-                      disabled={addingProduct}
-                    >
-                      <span className="picker-product-name">{product.name}</span>
-                      <span className="picker-product-price">${formatCLP(product.price)}</span>
-                    </button>
-                  ))}
+          <div className="flex-1 overflow-y-auto space-y-3 pr-1">
+            {pickerMenu.length === 0 ? (
+              <p className="text-sm text-[hsl(var(--muted-foreground))] text-center py-6">Sin resultados</p>
+            ) : (
+              pickerMenu.map((cat) => (
+                <div key={cat.id} className="space-y-1">
+                  <p className="text-[10px] font-semibold uppercase tracking-widest text-[hsl(var(--muted-foreground))] px-1">
+                    {cat.name}
+                  </p>
+                  <div className="rounded-lg border border-[hsl(var(--border))] divide-y divide-[hsl(var(--border))]">
+                    {cat.products.map((product) => (
+                      <button
+                        key={product.id}
+                        className="w-full flex items-center justify-between px-3 py-2.5 text-sm hover:bg-[hsl(var(--accent))] transition-colors text-left disabled:opacity-50"
+                        onClick={() => handleAddProduct(product)}
+                        disabled={addingProduct}
+                      >
+                        <span className="font-medium text-[hsl(var(--foreground))]">{product.name}</span>
+                        <span className="text-[hsl(var(--primary))] font-semibold shrink-0 ml-4">${formatCLP(product.price)}</span>
+                      </button>
+                    ))}
+                  </div>
                 </div>
-              ))}
-            </div>
-
-            {addingProduct && <p className="picker-adding">Agregando...</p>}
+              ))
+            )}
           </div>
-        </div>
-      )}
+
+          {addingProduct && (
+            <p className="text-xs text-[hsl(var(--muted-foreground))] text-center">Agregando...</p>
+          )}
+        </DialogContent>
+      </Dialog>
     </main>
   )
 }

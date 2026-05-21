@@ -1,5 +1,10 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import tailwindcss from '@tailwindcss/vite'
+import { fileURLToPath } from 'url'
+import path from 'path'
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 // En Docker, el proxy corre dentro del contenedor frontend: usar nombre del servicio (p. ej. backend:8000).
 // En el host, localhost:8000. Override: VITE_DEV_PROXY_TARGET.
@@ -8,9 +13,14 @@ const devProxyTarget =
 
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), tailwindcss()],
+  resolve: {
+    alias: {
+      '@': path.resolve(__dirname, './src'),
+    },
+  },
   build: {
-    cssMinify: false, // Desabilita minificación de CSS por error en lighthouse
+    cssMinify: false,
     minify: 'terser',
   },
   server: {

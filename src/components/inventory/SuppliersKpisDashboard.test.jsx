@@ -3,6 +3,7 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import SuppliersKpisDashboard from './SuppliersKpisDashboard'
+import { AuthProvider } from '../../context/AuthContext'
 import * as providersApi from '../../lib/providersApi'
 
 vi.mock('../../lib/apiClient', () => ({
@@ -55,14 +56,13 @@ const mockUser = { email: 'a@b.cl', user_metadata: {} }
 
 function renderSuppliers(role = 'Admin') {
   return render(
-    <MemoryRouter initialEntries={['/local/loc-1/inventario/proveedores']}>
-      <Routes>
-        <Route
-          path="/local/:localId/inventario/proveedores"
-          element={<SuppliersKpisDashboard user={mockUser} userRole={role} onLogout={vi.fn()} />}
-        />
-      </Routes>
-    </MemoryRouter>,
+    <AuthProvider user={mockUser} userRole={role} logout={vi.fn()}>
+      <MemoryRouter initialEntries={['/local/loc-1/inventario/proveedores']}>
+        <Routes>
+          <Route path="/local/:localId/inventario/proveedores" element={<SuppliersKpisDashboard />} />
+        </Routes>
+      </MemoryRouter>
+    </AuthProvider>,
   )
 }
 
@@ -78,13 +78,12 @@ describe('SuppliersKpisDashboard', () => {
       expect(screen.getByText('4')).toBeInTheDocument()
     })
 
-    const region = screen.getByRole('region', { name: /KPIs de proveedores/i })
-    const labels = [...region.querySelectorAll('.scd-kpi-label')].map((el) => el.textContent.trim())
-
-    expect(labels).toEqual(['Total proveedores', 'Proveedores activos', 'Compras del mes (CLP)'])
-
-    const values = [...region.querySelectorAll('.scd-kpi-value')].map((el) => el.textContent.trim())
-    expect(values).toEqual(['4', '3', '$1.250.000'])
+    expect(screen.getByText('Total proveedores')).toBeInTheDocument()
+    expect(screen.getByText('Proveedores activos')).toBeInTheDocument()
+    expect(screen.getByText('Compras del mes (CLP)')).toBeInTheDocument()
+    expect(screen.getByText('4')).toBeInTheDocument()
+    expect(screen.getByText('3')).toBeInTheDocument()
+    expect(screen.getByText('$1.250.000')).toBeInTheDocument()
 
     await waitFor(() => {
       expect(screen.getByRole('heading', { name: /Listado de proveedores/i })).toBeInTheDocument()
@@ -101,7 +100,7 @@ describe('SuppliersKpisDashboard', () => {
 
     await waitFor(() => {
       expect(
-        screen.getByText(/Solo administradores \(Admin o Superadmin\) pueden ver los KPIs de proveedores/i),
+        screen.getByText(/Solo administradores pueden ver los KPIs de proveedores/i),
       ).toBeInTheDocument()
     })
   })
@@ -125,13 +124,13 @@ describe('SuppliersKpisDashboard', () => {
     renderSuppliers('Admin')
 
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: /Ver detalle de Proveedor Demo/i })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /Ver detalle/i })).toBeInTheDocument()
     })
 
-    await user.click(screen.getByRole('button', { name: /Ver detalle de Proveedor Demo/i }))
+    await user.click(screen.getByRole('button', { name: /Ver detalle/i }))
 
     await waitFor(() => {
-      expect(providersApi.getSupplierDetailForBusiness).toHaveBeenCalledWith('test-token', 's-1', 'biz-1')
+      expect(providersApi.getSupplierDetailForBusiness).toHaveBeenCalledWith('s-1', 'biz-1')
     })
 
     expect(await screen.findByRole('heading', { name: /Detalle del proveedor/i })).toBeInTheDocument()

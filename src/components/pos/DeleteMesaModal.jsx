@@ -1,5 +1,12 @@
 import { useState } from 'react'
-import '../../styles/DeleteMesaModal.css'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog'
+import { Button } from '@/components/ui/button'
 
 /**
  * Modal de confirmación para borrar una mesa
@@ -7,67 +14,69 @@ import '../../styles/DeleteMesaModal.css'
  * Muestra error del backend si hay órdenes activas
  */
 export default function DeleteMesaModal({ mesa, onClose, onConfirm, isDeleting = false, error = null }) {
-  const [showError, setShowError] = useState(error)
-  return (
-    <div className="delete-mesa-modal-overlay">
-      <div className="delete-mesa-modal">
-        <div className="delete-mesa-modal-header">
-          <div className="delete-mesa-modal-icon">⚠️</div>
-          <h2>Eliminar Mesa</h2>
-        </div>
+  const [showError] = useState(error)
 
-        <div className="delete-mesa-modal-content">
-          <p className="delete-warning">
+  return (
+    <Dialog open onOpenChange={onClose}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <span aria-hidden="true">⚠️</span> Eliminar Mesa
+          </DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-4 py-1">
+          <p className="text-sm text-[hsl(var(--foreground))]">
             ¿Estás seguro que deseas eliminar la mesa <strong>{mesa.name}</strong>?
           </p>
-          <p className="delete-info">
+          <p className="text-sm text-[hsl(var(--muted-foreground))]">
             Esta acción <strong>no se puede deshacer</strong>. Se eliminarán todos los datos asociados.
           </p>
 
-          {/* Información de la mesa */}
-          <div className="mesa-info-summary">
-            <div className="info-row">
-              <span className="info-label">Nombre:</span>
-              <span className="info-value">{mesa.name}</span>
+          {/* Info de la mesa */}
+          <div className="rounded-lg border border-[hsl(var(--border))] divide-y divide-[hsl(var(--border))]">
+            <div className="flex justify-between items-center px-3 py-2">
+              <span className="text-xs text-[hsl(var(--muted-foreground))]">Nombre</span>
+              <span className="text-xs font-medium">{mesa.name}</span>
             </div>
-            <div className="info-row">
-              <span className="info-label">Zona:</span>
-              <span className="info-value">{mesa.zona || 'General'}</span>
+            <div className="flex justify-between items-center px-3 py-2">
+              <span className="text-xs text-[hsl(var(--muted-foreground))]">Zona</span>
+              <span className="text-xs font-medium">{mesa.zona || 'General'}</span>
             </div>
-            <div className="info-row">
-              <span className="info-label">Capacidad:</span>
-              <span className="info-value">{mesa.capacidad} personas</span>
+            <div className="flex justify-between items-center px-3 py-2">
+              <span className="text-xs text-[hsl(var(--muted-foreground))]">Capacidad</span>
+              <span className="text-xs font-medium">{mesa.capacidad} personas</span>
             </div>
           </div>
 
-          {/* Error si hay órdenes activas */}
-          {showError && (
-            <div className="delete-mesa-error">
+          {/* Error backend */}
+          {(showError || error) && (
+            <div className="rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-sm text-[hsl(var(--destructive))]">
               <strong>⚠️ No se puede eliminar:</strong>
-              <p>{showError}</p>
+              <p className="mt-0.5">{showError || error}</p>
             </div>
           )}
         </div>
 
-        <div className="delete-mesa-modal-actions">
-          <button
+        <DialogFooter>
+          <Button
             type="button"
-            className="btn-cancel"
+            variant="outline"
             onClick={onClose}
-            disabled={isDeleting || showError}
+            disabled={isDeleting}
           >
-            {showError ? 'Cerrar' : 'Cancelar'}
-          </button>
-          <button
+            {showError || error ? 'Cerrar' : 'Cancelar'}
+          </Button>
+          <Button
             type="button"
-            className="btn-delete"
+            variant="destructive"
             onClick={() => onConfirm(mesa.id)}
-            disabled={isDeleting || showError}
+            disabled={isDeleting || !!(showError || error)}
           >
             {isDeleting ? 'Eliminando...' : 'Eliminar Mesa'}
-          </button>
-        </div>
-      </div>
-    </div>
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }

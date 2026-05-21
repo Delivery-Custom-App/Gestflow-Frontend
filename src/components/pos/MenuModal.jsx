@@ -1,7 +1,16 @@
 import { useEffect, useState, useMemo } from 'react'
 import { useMenuPOS } from '../../hooks/useMenuPOS'
 import { formatCLP } from '../../lib/formatCLP'
-import '../../styles/MenuModal.css'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
 
 /**
  * Modal del menú: KPIs por categoría, búsqueda con debounce y filtro de categoría en cliente.
@@ -21,14 +30,8 @@ export default function MenuModal({ localId, onClose }) {
     fetch({ search: debouncedSearch })
   }, [fetch, debouncedSearch])
 
-  const handleBackdropClick = (e) => {
-    if (e.target === e.currentTarget) onClose()
-  }
-
-  // Categoría en cliente; el texto va al backend
   const filteredCategories = useMemo(() => {
     if (!data?.categories) return []
-
     return data.categories
       .filter((cat) => selectedCat === 'all' || cat.id === selectedCat)
       .filter((cat) => (cat.products?.length || 0) > 0)
@@ -37,56 +40,59 @@ export default function MenuModal({ localId, onClose }) {
   const totalVisible = filteredCategories.reduce((sum, c) => sum + c.products.length, 0)
 
   return (
-    <div className="menu-backdrop" onClick={handleBackdropClick} role="dialog" aria-modal="true" aria-label="Menú del local">
-      <div className="menu-modal">
-
-        {/* Header */}
-        <header className="menu-header">
-          <div className="menu-header-title">
-            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+    <Dialog open onOpenChange={onClose}>
+      <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" className="w-5 h-5 text-[hsl(var(--primary))]">
               <path d="M4 6h16M4 12h16M4 18h10" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
             </svg>
-            <h2>Menú</h2>
+            Menú
             {data && (
-              <span className="menu-total-badge">{data.total_products} productos</span>
+              <Badge className="ml-1 bg-[hsl(var(--primary))] text-white">{data.total_products} productos</Badge>
             )}
-          </div>
-          <button className="menu-close" onClick={onClose} aria-label="Cerrar menú">✕</button>
-        </header>
+          </DialogTitle>
+        </DialogHeader>
 
-        {/* Chips por categoría (conteos) */}
+        {/* Chips por categoría */}
         {data?.categories?.length > 0 && (
-          <div className="menu-kpis" role="list" aria-label="Filtrar por categoría">
+          <div className="flex flex-wrap gap-2 pb-1" role="list" aria-label="Filtrar por categoría">
             <button
-              className={`menu-kpi-chip${selectedCat === 'all' ? ' active' : ''}`}
+              className={`px-3 py-1 rounded-full text-xs font-medium transition-colors border ${
+                selectedCat === 'all'
+                  ? 'bg-[hsl(var(--primary))] text-white border-[hsl(var(--primary))]'
+                  : 'border-[hsl(var(--border))] text-[hsl(var(--muted-foreground))] hover:border-[hsl(var(--primary))] hover:text-[hsl(var(--primary))]'
+              }`}
               onClick={() => setSelectedCat('all')}
             >
-              <span className="menu-kpi-name">Todos</span>
-              <span className="menu-kpi-count">{data.total_products}</span>
+              Todos <span className="ml-1 opacity-70">{data.total_products}</span>
             </button>
             {data.categories.map((cat) => (
               <button
                 key={cat.id}
-                className={`menu-kpi-chip${selectedCat === cat.id ? ' active' : ''}`}
+                className={`px-3 py-1 rounded-full text-xs font-medium transition-colors border ${
+                  selectedCat === cat.id
+                    ? 'bg-[hsl(var(--primary))] text-white border-[hsl(var(--primary))]'
+                    : 'border-[hsl(var(--border))] text-[hsl(var(--muted-foreground))] hover:border-[hsl(var(--primary))] hover:text-[hsl(var(--primary))]'
+                }`}
                 onClick={() => setSelectedCat(selectedCat === cat.id ? 'all' : cat.id)}
               >
-                <span className="menu-kpi-name">{cat.name}</span>
-                <span className="menu-kpi-count">{cat.product_count}</span>
+                {cat.name} <span className="ml-1 opacity-70">{cat.product_count}</span>
               </button>
             ))}
           </div>
         )}
 
-        {/* Búsqueda y filtro por categoría */}
+        {/* Búsqueda y filtro */}
         {data && !loading && !error && (
-          <div className="menu-filters">
-            <div className="menu-search-wrapper">
-              <svg className="menu-search-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <div className="flex gap-2">
+            <div className="relative flex-1">
+              <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[hsl(var(--muted-foreground))]" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                 <circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="1.8"/>
                 <path d="M16.5 16.5L21 21" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
               </svg>
-              <input
-                className="menu-search-input"
+              <Input
+                className="pl-8 h-8 text-sm"
                 type="text"
                 placeholder="Buscar producto..."
                 value={search}
@@ -95,7 +101,7 @@ export default function MenuModal({ localId, onClose }) {
               />
             </div>
             <select
-              className="menu-cat-select"
+              className="h-8 text-xs rounded-md border border-[hsl(var(--border))] bg-white px-2 focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary))]/30"
               value={selectedCat}
               onChange={(e) => setSelectedCat(e.target.value)}
               aria-label="Filtrar por categoría"
@@ -109,45 +115,54 @@ export default function MenuModal({ localId, onClose }) {
         )}
 
         {/* Body */}
-        <div className="menu-body">
+        <div className="flex-1 overflow-y-auto space-y-4 pr-1">
           {loading && (
-            <div className="menu-loading">
-              <div className="menu-spinner" aria-label="Cargando..." />
-              <p>Cargando menú...</p>
+            <div className="flex flex-col items-center gap-2 py-8 text-[hsl(var(--muted-foreground))]">
+              <div className="w-6 h-6 border-2 border-[hsl(var(--primary))] border-t-transparent rounded-full animate-spin" aria-label="Cargando..." />
+              <p className="text-sm">Cargando menú...</p>
             </div>
           )}
 
           {error && (
-            <div className="menu-error">
+            <div className="p-4 rounded-lg bg-red-50 border border-red-200 text-sm text-[hsl(var(--destructive))] flex flex-col items-start gap-2">
               <p>Error al cargar el menú: {error}</p>
-              <button type="button" onClick={() => fetch({ search: debouncedSearch })} style={{ marginTop: '0.75rem', padding: '0.5rem 1.25rem', background: '#ef4444', color: 'white', border: 'none', borderRadius: '0.5rem', fontWeight: 600, cursor: 'pointer' }}>
+              <Button
+                size="sm"
+                variant="destructive"
+                onClick={() => fetch({ search: debouncedSearch })}
+              >
                 Reintentar
-              </button>
+              </Button>
             </div>
           )}
 
-          {/* Listado por categoría */}
           {!loading && !error && data && (
             <>
               {filteredCategories.length === 0 ? (
-                <p className="menu-empty">
+                <p className="text-sm text-[hsl(var(--muted-foreground))] py-8 text-center">
                   {search ? `Sin resultados para "${search}"` : 'No hay productos disponibles.'}
                 </p>
               ) : (
                 filteredCategories.map((cat) => (
-                  <section key={cat.id} className="menu-category-group">
-                    <h3 className="menu-category-label">{cat.name} ({cat.products.length})</h3>
-                    {cat.products.map((product) => (
-                      <div key={product.id} className="menu-product-item">
-                        <div className="menu-product-info">
-                          <span className="menu-product-name">{product.name}</span>
-                          {product.description && (
-                            <span className="menu-product-desc">{product.description}</span>
-                          )}
+                  <section key={cat.id} className="space-y-1.5">
+                    <h3 className="text-xs font-semibold uppercase tracking-widest text-[hsl(var(--muted-foreground))] px-1">
+                      {cat.name} ({cat.products.length})
+                    </h3>
+                    <div className="rounded-lg border border-[hsl(var(--border))] divide-y divide-[hsl(var(--border))]">
+                      {cat.products.map((product) => (
+                        <div key={product.id} className="flex items-center justify-between px-3 py-2.5 hover:bg-[hsl(var(--accent))] transition-colors">
+                          <div>
+                            <p className="text-sm font-medium text-[hsl(var(--foreground))]">{product.name}</p>
+                            {product.description && (
+                              <p className="text-xs text-[hsl(var(--muted-foreground))]">{product.description}</p>
+                            )}
+                          </div>
+                          <span className="text-sm font-semibold text-[hsl(var(--primary))] shrink-0 ml-4">
+                            ${formatCLP(product.price)}
+                          </span>
                         </div>
-                        <span className="menu-product-price">${formatCLP(product.price)}</span>
-                      </div>
-                    ))}
+                      ))}
+                    </div>
                   </section>
                 ))
               )}
@@ -155,12 +170,10 @@ export default function MenuModal({ localId, onClose }) {
           )}
         </div>
 
-        {/* Footer */}
-        <footer className="menu-footer">
-          <button className="menu-btn-cerrar" onClick={onClose}>Cerrar</button>
-        </footer>
-
-      </div>
-    </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Cerrar</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }

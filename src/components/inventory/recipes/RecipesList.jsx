@@ -1,12 +1,17 @@
-import './recipes.css'
-
-function formatCLP(value) {
-  if (value == null || Number.isNaN(Number(value))) return '—'
-  return new Intl.NumberFormat('es-CL', {
-    maximumFractionDigits: 0,
-    minimumFractionDigits: 0,
-  }).format(Math.round(Number(value)))
-}
+import { useState } from 'react'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import {
+  Table,
+  TableHeader,
+  TableBody,
+  TableRow,
+  TableHead,
+  TableCell,
+} from '@/components/ui/table'
+import { Eye, Pencil, Power, Trash2 } from 'lucide-react'
+import { cn } from '@/lib/utils'
+import { formatCLPOrDash as formatCLP } from '../../../lib/formatCLP'
 
 function RecipesList({
   recipes,
@@ -18,226 +23,233 @@ function RecipesList({
   onEdit,
   searchTerm,
 }) {
+  const [actionError, setActionError] = useState('')
+  const [actionLoading, setActionLoading] = useState(null)
+
   const filtered = recipes.filter((recipe) =>
-    recipe.name.toLowerCase().includes(searchTerm.toLowerCase())
+    recipe.name.toLowerCase().includes((searchTerm || '').toLowerCase())
   )
 
+  const emptyTitle = searchTerm ? 'No se encontraron recetas' : 'No hay recetas registradas'
+  const emptySubtitle = searchTerm ? 'Intenta con otro término de búsqueda' : 'Crea la primera receta para comenzar'
+
+  const handleToggle = async (recipe) => {
+    setActionLoading(`toggle-${recipe.id}`)
+    setActionError('')
+    try {
+      await onToggleStatus(recipe.id, !recipe.is_active)
+    } catch (e) {
+      setActionError(e?.message || 'Error al cambiar estado')
+    } finally {
+      setActionLoading(null)
+    }
+  }
+
+  const handleDelete = async (recipe) => {
+    if (!window.confirm(`¿Eliminar receta "${recipe.name}"? Esta acción no se puede deshacer.`)) return
+    setActionLoading(`delete-${recipe.id}`)
+    setActionError('')
+    try {
+      await onDelete(recipe.id)
+    } catch (e) {
+      setActionError(e?.message || 'No se pudo eliminar la receta')
+    } finally {
+      setActionLoading(null)
+    }
+  }
+
   return (
-    <div className="recipes-list__container">
-      {/* Mobile cards */}
-      <div className="recipes-list__cards" aria-label="Listado de recetas (móvil)">
+    <>
+      {actionError ? (
+        <p className="rounded-md bg-red-50 border border-red-200 text-red-700 text-sm px-3 py-2" role="alert">
+          {actionError}
+        </p>
+      ) : null}
+
+      {/* Mobile cards — hidden on md+ */}
+      <div className="flex flex-col gap-3 md:hidden" aria-label="Listado de recetas (móvil)">
         {error ? (
-          <div className="recipes-list__error">{error}</div>
+          <div className="rounded-md bg-red-50 border border-red-200 text-red-700 text-sm px-3 py-2">{error}</div>
         ) : null}
         {!error && loading ? (
-          <div className="recipes-list__loading">Cargando recetas…</div>
+          <p className="text-sm text-[hsl(var(--muted-foreground))] py-4 text-center">Cargando recetas…</p>
         ) : null}
         {!error && !loading && filtered.length === 0 ? (
-          <div className="recipes-list__empty-state">
-            <p className="recipes-list__empty-title">
-              {searchTerm ? 'No se encontraron recetas' : 'No hay recetas registradas'}
-            </p>
-            <p className="recipes-list__empty-subtitle">
-              {searchTerm ? 'Intenta con otro término de búsqueda' : 'Crea la primera receta para comenzar'}
-            </p>
+          <div className="flex flex-col items-center gap-1 py-8 text-center">
+            <p className="font-semibold text-[hsl(var(--foreground))]">{emptyTitle}</p>
+            <p className="text-sm text-[hsl(var(--muted-foreground))]">{emptySubtitle}</p>
           </div>
         ) : null}
 
-        {!error &&
-          !loading &&
-          filtered.map((recipe) => (
-            <article
-              key={recipe.id}
-              className={`recipes-card ${recipe.is_active ? '' : 'recipes-card--inactive'}`}
-            >
-              <div className="recipes-card__head">
-                <div className="recipes-card__title-wrap">
-                  <div className="recipes-card__title">{recipe.name}</div>
-                  {recipe.category_name ? (
-                    <div className="recipes-card__subtitle">{recipe.category_name}</div>
-                  ) : null}
-                </div>
-                <span
-                  className={`recipes-card__status ${
-                    recipe.is_active ? 'recipes-card__status--active' : 'recipes-card__status--inactive'
-                  }`}
-                >
-                  {recipe.is_active ? 'Activa' : 'Inactiva'}
-                </span>
+        {!error && !loading && filtered.map((recipe) => (
+          <article
+            key={recipe.id}
+            className={cn(
+              'rounded-xl border bg-white shadow-sm p-4 flex flex-col gap-3',
+              !recipe.is_active && 'opacity-60',
+            )}
+          >
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <p className="font-bold text-[hsl(var(--foreground))]">{recipe.name}</p>
+                {recipe.category_name && (
+                  <p className="text-xs text-[hsl(var(--muted-foreground))]">{recipe.category_name}</p>
+                )}
               </div>
+              <Badge variant={recipe.is_active ? 'success' : 'secondary'}>
+                {recipe.is_active ? 'Activa' : 'Inactiva'}
+              </Badge>
+            </div>
 
-              {recipe.description ? (
-                <p className="recipes-card__desc">{recipe.description}</p>
-              ) : null}
+            {recipe.description && (
+              <p className="text-xs text-[hsl(var(--muted-foreground))] line-clamp-2">{recipe.description}</p>
+            )}
 
-              <div className="recipes-card__grid">
-                <div className="recipes-card__kv">
-                  <span className="recipes-card__k">Costo</span>
-                  <span className="recipes-card__v">${formatCLP(recipe.total_cost)}</span>
+            <div className="grid grid-cols-4 gap-2">
+              {[
+                ['Costo', `$${formatCLP(recipe.total_cost)}`],
+                ['Venta', `$${formatCLP(recipe.price_sale)}`],
+                ['Margen', `${recipe.profit_margin_percent?.toFixed(1)}%`],
+                ['Porciones', recipe.yield_portions],
+              ].map(([k, v]) => (
+                <div key={k} className="flex flex-col items-center rounded-md bg-[hsl(var(--accent))] px-2 py-1.5">
+                  <span className="text-[10px] text-[hsl(var(--muted-foreground))]">{k}</span>
+                  <span className="text-xs font-bold text-[hsl(var(--foreground))]">{v}</span>
                 </div>
-                <div className="recipes-card__kv">
-                  <span className="recipes-card__k">Venta</span>
-                  <span className="recipes-card__v">${formatCLP(recipe.price_sale)}</span>
-                </div>
-                <div className="recipes-card__kv">
-                  <span className="recipes-card__k">Margen</span>
-                  <span className="recipes-card__v">{recipe.profit_margin_percent?.toFixed(1)}%</span>
-                </div>
-                <div className="recipes-card__kv">
-                  <span className="recipes-card__k">Porciones</span>
-                  <span className="recipes-card__v">{recipe.yield_portions}</span>
-                </div>
-              </div>
+              ))}
+            </div>
 
-              <div className="recipes-card__actions">
-                <button
-                  type="button"
-                  className="recipes-card__btn"
-                  onClick={() => onViewDetail(recipe.id)}
-                >
-                  Ver
-                </button>
-                <button
-                  type="button"
-                  className="recipes-card__btn"
-                  onClick={() => onEdit(recipe)}
-                >
-                  Editar
-                </button>
-                <button
-                  type="button"
-                  className="recipes-card__btn"
-                  onClick={() => onToggleStatus(recipe.id, !recipe.is_active)}
-                >
-                  {recipe.is_active ? 'Desactivar' : 'Activar'}
-                </button>
-                <button
-                  type="button"
-                  className="recipes-card__btn recipes-card__btn--danger"
-                  onClick={() => {
-                    if (window.confirm(`¿Eliminar receta "${recipe.name}"?`)) {
-                      onDelete(recipe.id)
-                    }
-                  }}
-                >
-                  Eliminar
-                </button>
-              </div>
-            </article>
-          ))}
+            <div className="flex gap-2 flex-wrap">
+              <Button type="button" variant="outline" size="sm" onClick={() => onViewDetail(recipe.id)} disabled={!recipe.is_active}>Ver</Button>
+              <Button type="button" variant="outline" size="sm" onClick={() => onEdit(recipe)} disabled={!recipe.is_active}>Editar</Button>
+              <Button type="button" variant="outline" size="sm" onClick={() => handleToggle(recipe)} disabled={actionLoading === `toggle-${recipe.id}`}>
+                {recipe.is_active ? 'Desactivar' : 'Activar'}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="text-[hsl(var(--destructive))] border-[hsl(var(--destructive)/0.3)]"
+                onClick={() => handleDelete(recipe)}
+                disabled={actionLoading === `delete-${recipe.id}`}
+              >
+                Eliminar
+              </Button>
+            </div>
+          </article>
+        ))}
       </div>
 
-      <div className="recipes-list__table-wrapper">
-        <table className="recipes-list__table">
-          <thead>
-            <tr>
-              <th>Receta</th>
-              <th>Categoría</th>
-              <th>Costo Total</th>
-              <th>Precio Venta</th>
-              <th>Margen</th>
-              <th>Porciones</th>
-              <th>Estado</th>
-              <th>Acciones</th>
-            </tr>
-          </thead>
-          <tbody>
+      {/* Desktop table — hidden below md */}
+      <div className="hidden md:block rounded-md border border-[hsl(var(--border))] overflow-x-auto">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Receta</TableHead>
+              <TableHead>Categoría</TableHead>
+              <TableHead className="text-right">Costo Total</TableHead>
+              <TableHead className="text-right">Precio Venta</TableHead>
+              <TableHead className="text-right">Margen</TableHead>
+              <TableHead className="text-right">Porciones</TableHead>
+              <TableHead>Estado</TableHead>
+              <TableHead>Acciones</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
             {error ? (
-              <tr>
-                <td colSpan={8} className="recipes-list__error">
-                  {error}
-                </td>
-              </tr>
+              <TableRow>
+                <TableCell colSpan={8} className="text-center text-[hsl(var(--destructive))] py-8">{error}</TableCell>
+              </TableRow>
             ) : null}
             {!error && loading ? (
-              <tr>
-                <td colSpan={8} className="recipes-list__loading">
-                  Cargando recetas…
-                </td>
-              </tr>
+              <TableRow>
+                <TableCell colSpan={8} className="text-center text-[hsl(var(--muted-foreground))] py-8">Cargando recetas…</TableCell>
+              </TableRow>
             ) : null}
             {!error && !loading && filtered.length === 0 ? (
-              <tr>
-                <td colSpan={8} className="recipes-list__empty">
-                  <div className="recipes-list__empty-state">
-                    <p className="recipes-list__empty-title">
-                      {searchTerm ? 'No se encontraron recetas' : 'No hay recetas registradas'}
-                    </p>
-                    <p className="recipes-list__empty-subtitle">
-                      {searchTerm ? 'Intenta con otro término de búsqueda' : 'Crea la primera receta para comenzar'}
-                    </p>
+              <TableRow>
+                <TableCell colSpan={8} className="py-10">
+                  <div className="flex flex-col items-center gap-1 text-center">
+                    <p className="font-semibold text-[hsl(var(--foreground))]">{emptyTitle}</p>
+                    <p className="text-sm text-[hsl(var(--muted-foreground))]">{emptySubtitle}</p>
                   </div>
-                </td>
-              </tr>
+                </TableCell>
+              </TableRow>
             ) : null}
-            {!error &&
-              !loading &&
-              filtered.map((recipe) => (
-                <tr key={recipe.id} className={!recipe.is_active ? 'recipes-list__row--inactive' : ''}>
-                  <td>
-                    <div className="recipes-list__recipe-name">{recipe.name}</div>
-                    {recipe.description && (
-                      <div className="recipes-list__recipe-desc">{recipe.description}</div>
-                    )}
-                  </td>
-                  <td>{recipe.category_name || '—'}</td>
-                  <td className="recipes-list__cost">${formatCLP(recipe.total_cost)}</td>
-                  <td className="recipes-list__price">${formatCLP(recipe.price_sale)}</td>
-                  <td className={`recipes-list__margin ${recipe.profit_margin_percent >= 30 ? 'recipes-list__margin--good' : ''}`}>
-                    {recipe.profit_margin_percent?.toFixed(1)}%
-                  </td>
-                  <td className="recipes-list__portions">{recipe.yield_portions}</td>
-                  <td>
-                    <span className={`recipes-list__status ${recipe.is_active ? 'recipes-list__status--active' : 'recipes-list__status--inactive'}`}>
-                      {recipe.is_active ? '✓ Activa' : '◯ Inactiva'}
-                    </span>
-                  </td>
-                  <td>
-                    <div className="recipes-list__actions">
-                      <button
-                        type="button"
-                        className="recipes-list__action-btn recipes-list__action-btn--view"
-                        onClick={() => onViewDetail(recipe.id)}
-                        title="Ver detalles"
-                      >
-                        👁️
-                      </button>
-                      <button
-                        type="button"
-                        className="recipes-list__action-btn recipes-list__action-btn--edit"
-                        onClick={() => onEdit(recipe)}
-                        title="Editar"
-                      >
-                        ✏️
-                      </button>
-                      <button
-                        type="button"
-                        className="recipes-list__action-btn recipes-list__action-btn--toggle"
-                        onClick={() => onToggleStatus(recipe.id, !recipe.is_active)}
-                        title={recipe.is_active ? 'Desactivar' : 'Activar'}
-                      >
-                        {recipe.is_active ? '⊘' : '⊚'}
-                      </button>
-                      <button
-                        type="button"
-                        className="recipes-list__action-btn recipes-list__action-btn--delete"
-                        onClick={() => {
-                          if (window.confirm(`¿Eliminar receta "${recipe.name}"?`)) {
-                            onDelete(recipe.id)
-                          }
-                        }}
-                        title="Eliminar"
-                      >
-                        🗑️
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-          </tbody>
-        </table>
+            {!error && !loading && filtered.map((recipe) => (
+              <TableRow key={recipe.id} className={cn(!recipe.is_active && 'opacity-60')}>
+                <TableCell>
+                  <div className="font-medium text-[hsl(var(--foreground))]">{recipe.name}</div>
+                  {recipe.description && (
+                    <div className="text-xs text-[hsl(var(--muted-foreground))] truncate max-w-[180px]">{recipe.description}</div>
+                  )}
+                </TableCell>
+                <TableCell>{recipe.category_name || '—'}</TableCell>
+                <TableCell className="text-right text-red-600 font-medium">${formatCLP(recipe.total_cost)}</TableCell>
+                <TableCell className="text-right text-[hsl(var(--primary))] font-medium">${formatCLP(recipe.price_sale)}</TableCell>
+                <TableCell className={`text-right font-bold ${recipe.profit_margin_percent >= 30 ? 'text-emerald-600' : 'text-[hsl(var(--foreground))]'}`}>
+                  {recipe.profit_margin_percent?.toFixed(1)}%
+                </TableCell>
+                <TableCell className="text-right">{recipe.yield_portions}</TableCell>
+                <TableCell>
+                  <Badge variant={recipe.is_active ? 'success' : 'secondary'}>
+                    {recipe.is_active ? 'Activa' : 'Inactiva'}
+                  </Badge>
+                </TableCell>
+                <TableCell>
+                  <div className="flex items-center gap-1">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => onViewDetail(recipe.id)}
+                      title={recipe.is_active ? 'Ver detalles' : 'Receta inactiva'}
+                      className="p-1 h-7 w-7"
+                      disabled={!recipe.is_active}
+                    >
+                      <Eye size={14} />
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => onEdit(recipe)}
+                      title={recipe.is_active ? 'Editar' : 'Receta inactiva'}
+                      className="p-1 h-7 w-7"
+                      disabled={!recipe.is_active}
+                    >
+                      <Pencil size={14} />
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleToggle(recipe)}
+                      title={recipe.is_active ? 'Desactivar' : 'Activar'}
+                      className={cn('p-1 h-7 w-7', recipe.is_active ? 'text-amber-600 hover:text-amber-700' : 'text-emerald-600 hover:text-emerald-700')}
+                      disabled={actionLoading === `toggle-${recipe.id}`}
+                    >
+                      <Power size={14} />
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleDelete(recipe)}
+                      title="Eliminar"
+                      className="p-1 h-7 w-7 text-[hsl(var(--destructive))]"
+                      disabled={actionLoading === `delete-${recipe.id}`}
+                    >
+                      <Trash2 size={14} />
+                    </Button>
+                  </div>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
       </div>
-    </div>
+    </>
   )
 }
 
