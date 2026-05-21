@@ -1,22 +1,35 @@
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+
+const ALL_VALUE = '__ALL__'
+
 /**
  * Selector de categoría para inventario.
  * `options`: { id: string (UUID), name: string }[] — id se envía al API como query `category`.
  */
 function CategoryFilterSelect({ value, onChange, options }) {
   return (
-    <select
-      className="scd-select"
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      aria-label="Filtrar por categoría"
+    <Select
+      value={value || ALL_VALUE}
+      onValueChange={(v) => onChange(v === ALL_VALUE ? '' : v)}
     >
-      <option value="">Todas las categorías</option>
-      {options.map(({ id, name }) => (
-        <option key={id} value={id}>
-          {name}
-        </option>
-      ))}
-    </select>
+      <SelectTrigger className="h-9 text-sm min-w-[180px]" aria-label="Filtrar por categoría">
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        <SelectItem value={ALL_VALUE}>Todas las categorías</SelectItem>
+        {options.map(({ id, name }) => (
+          <SelectItem key={id} value={id}>
+            {name}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
   )
 }
 

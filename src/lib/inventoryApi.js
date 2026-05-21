@@ -280,3 +280,19 @@ export function patchInventoryProductUnitCost(localId, productId, body) {
     body,
   })
 }
+
+/** Elimina el registro de inventario y el producto asociado del local. */
+export function deleteInventoryItem(localId, inventoryId) {
+  return apiRequest(`/inventory/locals/${localId}/stock/${inventoryId}`, {
+    method: 'DELETE',
+  })
+}
+
+/** Elimina un proveedor del negocio (nullifica supplier_id en productos asociados). */
+export function deleteSupplier(supplierId, businessId) {
+  const params = new URLSearchParams()
+  params.set('business_id', String(businessId))
+  return apiRequest(`/suppliers/${encodeURIComponent(String(supplierId))}?${params.toString()}`, {
+    method: 'DELETE',
+  })
+}

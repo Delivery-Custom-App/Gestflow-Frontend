@@ -1,4 +1,14 @@
 import { useState } from 'react'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 
 const INITIAL_FORM = { name: '', capacidad: '', zona: '' }
 
@@ -58,22 +68,19 @@ export default function CreateMesaModal({ mesas, onClose, onSubmit }) {
   }
 
   return (
-    <div className="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modal-title">
-      <div className="modal-box">
-        <div className="modal-header">
-          <h2 id="modal-title">Crear Mesa</h2>
-          <button className="modal-close" type="button" onClick={onClose} aria-label="Cerrar">
-            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <path d="M6 6L18 18M18 6L6 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-            </svg>
-          </button>
-        </div>
+    <Dialog open onOpenChange={onClose}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Crear Mesa</DialogTitle>
+        </DialogHeader>
 
-        <form className="modal-form" onSubmit={handleSubmit} noValidate>
-          {/* Número de mesa */}
-          <div className="form-field">
-            <label htmlFor="mesa-name">Número / Nombre de Mesa <span className="required">*</span></label>
-            <input
+        <form onSubmit={handleSubmit} noValidate className="space-y-4 pt-1">
+          {/* Nombre */}
+          <div className="space-y-1.5">
+            <Label htmlFor="mesa-name">
+              Número / Nombre de Mesa <span className="text-[hsl(var(--destructive))]">*</span>
+            </Label>
+            <Input
               id="mesa-name"
               name="name"
               type="text"
@@ -81,15 +88,17 @@ export default function CreateMesaModal({ mesas, onClose, onSubmit }) {
               value={form.name}
               onChange={handleChange}
               disabled={submitting}
-              className={errors.name ? 'input-error' : ''}
+              className={errors.name ? 'border-[hsl(var(--destructive))]' : ''}
             />
-            {errors.name && <p className="field-error">{errors.name}</p>}
+            {errors.name && <p className="text-xs text-[hsl(var(--destructive))]">{errors.name}</p>}
           </div>
 
           {/* Capacidad */}
-          <div className="form-field">
-            <label htmlFor="mesa-capacidad">Capacidad (personas) <span className="required">*</span></label>
-            <input
+          <div className="space-y-1.5">
+            <Label htmlFor="mesa-capacidad">
+              Capacidad (personas) <span className="text-[hsl(var(--destructive))]">*</span>
+            </Label>
+            <Input
               id="mesa-capacidad"
               name="capacidad"
               type="number"
@@ -98,15 +107,17 @@ export default function CreateMesaModal({ mesas, onClose, onSubmit }) {
               value={form.capacidad}
               onChange={handleChange}
               disabled={submitting}
-              className={errors.capacidad ? 'input-error' : ''}
+              className={errors.capacidad ? 'border-[hsl(var(--destructive))]' : ''}
             />
-            {errors.capacidad && <p className="field-error">{errors.capacidad}</p>}
+            {errors.capacidad && <p className="text-xs text-[hsl(var(--destructive))]">{errors.capacidad}</p>}
           </div>
 
           {/* Zona */}
-          <div className="form-field">
-            <label htmlFor="mesa-zona">Zona <span className="required">*</span></label>
-            <input
+          <div className="space-y-1.5">
+            <Label htmlFor="mesa-zona">
+              Zona <span className="text-[hsl(var(--destructive))]">*</span>
+            </Label>
+            <Input
               id="mesa-zona"
               name="zona"
               type="text"
@@ -114,23 +125,31 @@ export default function CreateMesaModal({ mesas, onClose, onSubmit }) {
               value={form.zona}
               onChange={handleChange}
               disabled={submitting}
-              className={errors.zona ? 'input-error' : ''}
+              className={errors.zona ? 'border-[hsl(var(--destructive))]' : ''}
             />
-            {errors.zona && <p className="field-error">{errors.zona}</p>}
+            {errors.zona && <p className="text-xs text-[hsl(var(--destructive))]">{errors.zona}</p>}
           </div>
 
-          {serverError && <p className="server-error">{serverError}</p>}
+          {serverError && (
+            <p className="text-xs text-[hsl(var(--destructive))] bg-red-50 border border-red-200 rounded px-3 py-2">
+              {serverError}
+            </p>
+          )}
 
-          <div className="modal-actions">
-            <button type="button" className="btn-cancel" onClick={onClose} disabled={submitting}>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={onClose} disabled={submitting}>
               Cancelar
-            </button>
-            <button type="submit" className="btn-submit" disabled={submitting}>
+            </Button>
+            <Button
+              type="submit"
+              disabled={submitting}
+              className="bg-[hsl(var(--primary))] hover:bg-[hsl(var(--primary))]/90 text-white"
+            >
               {submitting ? 'Creando...' : 'Crear Mesa'}
-            </button>
-          </div>
+            </Button>
+          </DialogFooter>
         </form>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   )
 }

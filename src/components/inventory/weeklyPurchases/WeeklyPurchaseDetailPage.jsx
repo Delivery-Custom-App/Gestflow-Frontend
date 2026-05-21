@@ -1,27 +1,32 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useNavigate, useParams, useLocation } from 'react-router-dom'
+import { useCallback, useEffect, useState } from 'react'
+import { useNavigate, useParams } from 'react-router-dom'
+import { useSelectedLocal } from '../../../hooks/useSelectedLocal'
+import { useLocalBusinessId } from '../../../hooks/useLocalBusinessId'
 import {
-  getLocalById,
   getSupplierDetailForBusiness,
   deleteWeeklyPurchaseOrder,
   getWeeklyPurchaseOrder,
   patchWeeklyPurchaseLineReception,
   patchWeeklyPurchaseOrder,
-  putWeeklyPurchaseOrderItems,
 } from '../../../lib/providersApi'
-import { isInventoryAdminRole } from '../../../utils/inventoryAccess'
+import { useAuth } from '../../../context/AuthContext'
+import { formatCLPDisplay as formatMoneyClp } from '../../../lib/formatCLP'
 import InventoryShell from '../InventoryShell'
 import LoadingSpinner from '../../LoadingSpinner'
-import '../../../styles/inventory/WeeklyPurchases.css'
-
-function formatMoneyClp(value) {
-  if (value == null || Number.isNaN(Number(value))) return '—'
-  const n = new Intl.NumberFormat('es-CL', {
-    maximumFractionDigits: 0,
-    minimumFractionDigits: 0,
-  }).format(Math.round(Number(value)))
-  return `$${n}`
-}
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import {
+  Table,
+  TableHeader,
+  TableBody,
+  TableRow,
+  TableHead,
+  TableCell,
+} from '@/components/ui/table'
+import { ChevronLeft } from 'lucide-react'
+import { cn } from '@/lib/utils'
 
 const STATUS_LABELS = {
   draft: 'Borrador',
@@ -32,22 +37,20 @@ const STATUS_LABELS = {
   cancelled: 'Anulada',
 }
 
-function statusBadgeClass(status) {
-  const s = String(status || 'draft')
-  return `wp-badge wp-badge--${s.replace(/[^a-z_]/g, '_')}`
+const STATUS_VARIANT = {
+  draft: 'secondary',
+  sent: 'info',
+  in_transit: 'warning',
+  partially_received: 'warning',
+  received: 'success',
+  cancelled: 'destructive',
 }
 
-function WeeklyPurchaseDetailPage({ user, userRole, onLogout }) {
+function WeeklyPurchaseDetailPage() {
+  const { isInventoryAdmin: canAccess } = useAuth()
   const navigate = useNavigate()
   const { localId, orderId } = useParams()
-  const location = useLocation()
-
-  const selectedLocal = useMemo(() => {
-    if (location.state?.local) return location.state.local
-    return { id: localId, name: `Local ${localId ?? ''}` }
-  }, [location.state, localId])
-
-  const canAccess = isInventoryAdminRole(userRole)
+  const selectedLocal = useSelectedLocal(localId)
 
   const [businessId, setBusinessId] = useState(null)
   const [order, setOrder] = useState(null)
@@ -59,16 +62,9 @@ function WeeklyPurchaseDetailPage({ user, userRole, onLogout }) {
   const [statusEdit, setStatusEdit] = useState('draft')
   const [savingStatus, setSavingStatus] = useState(false)
 
-  const [draftLines, setDraftLines] = useState([])
-  const [savingLines, setSavingLines] = useState(false)
-
   const [recvInputs, setRecvInputs] = useState({})
 
-  const resolveBusiness = useCallback(async () => {
-    if (!localId) return null
-    const loc = await getLocalById(localId)
-    return loc?.business_id != null ? String(loc.business_id) : null
-  }, [localId])
+  const resolveBusiness = useLocalBusinessId(localId)
 
   const load = useCallback(async () => {
     if (!orderId || !businessId) {
@@ -83,15 +79,6 @@ function WeeklyPurchaseDetailPage({ user, userRole, onLogout }) {
       setOrder(data && typeof data === 'object' ? data : null)
       if (data?.status) setStatusEdit(data.status)
       const items = Array.isArray(data?.items) ? data.items : []
-      setDraftLines(
-        items.map((it) => ({
-          product_id: it.product_id,
-          product_name: it.product_name_snapshot || it.product_id,
-          quantity_ordered: it.quantity_ordered,
-          unit_price_clp: it.unit_price_clp,
-          line_notes: it.line_notes || null,
-        })),
-      )
       const recv = {}
       for (const it of items) {
         recv[String(it.id)] = String(it.quantity_received ?? '')
@@ -119,9 +106,7 @@ function WeeklyPurchaseDetailPage({ user, userRole, onLogout }) {
         if (!cancelled) setBusinessId(null)
       }
     })()
-    return () => {
-      cancelled = true
-    }
+    return () => { cancelled = true }
   }, [localId, canAccess, resolveBusiness])
 
   useEffect(() => {
@@ -142,9 +127,7 @@ function WeeklyPurchaseDetailPage({ user, userRole, onLogout }) {
         if (!cancelled) setSupplierName(String(order.supplier_id))
       }
     })()
-    return () => {
-      cancelled = true
-    }
+    return () => { cancelled = true }
   }, [order?.supplier_id, businessId])
 
   const applyStatus = async () => {
@@ -158,28 +141,6 @@ function WeeklyPurchaseDetailPage({ user, userRole, onLogout }) {
       setActionError(e?.message || 'No se pudo actualizar el estado.')
     } finally {
       setSavingStatus(false)
-    }
-  }
-
-  const saveDraftLines = async () => {
-    if (!businessId || !orderId || order?.status !== 'draft') return
-    setSavingLines(true)
-    setActionError('')
-    try {
-      const items = draftLines
-        .filter((l) => l.product_id && Number(l.quantity_ordered) > 0)
-        .map((l) => ({
-          product_id: l.product_id,
-          quantity_ordered: Number(l.quantity_ordered),
-          unit_price_clp: Math.max(0, Math.round(Number(l.unit_price_clp) || 0)),
-          line_notes: l.line_notes || undefined,
-        }))
-      const updated = await putWeeklyPurchaseOrderItems(orderId, businessId, items)
-      setOrder(updated)
-    } catch (e) {
-      setActionError(e?.message || 'No se pudieron guardar las líneas.')
-    } finally {
-      setSavingLines(false)
     }
   }
 
@@ -218,127 +179,114 @@ function WeeklyPurchaseDetailPage({ user, userRole, onLogout }) {
     }
   }
 
-  const updateDraftLine = (idx, field, value) => {
-    setDraftLines((prev) => {
-      const copy = [...prev]
-      if (!copy[idx]) return prev
-      copy[idx] = { ...copy[idx], [field]: value }
-      return copy
-    })
-  }
+  const selectClass = 'h-9 rounded-md border border-[hsl(var(--border))] bg-white px-3 py-1 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary)/0.3)]'
 
   return (
-    <InventoryShell user={user} userRole={userRole} onLogout={onLogout} active="weekly-purchases">
-      <div className="inv-stock-page">
+    <InventoryShell>
+      <div className="flex flex-col gap-6 px-6 py-6 pb-10">
         <button
           type="button"
-          className="scd-back-link"
-          onClick={() =>
-            navigate(`/local/${localId}/inventario/compras-semanales`, { state: { local: selectedLocal } })
-          }
+          onClick={() => navigate(`/local/${localId}/inventario/compras-semanales`, { state: { local: selectedLocal } })}
+          className="inline-flex items-center gap-1.5 text-sm text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] transition-colors self-start"
         >
-          ← Volver a compras semanales
+          <ChevronLeft size={16} />
+          Volver a compras semanales
         </button>
 
-        <header className="scd-header scd-header--compact">
-          <div>
-            <h1 className="scd-title">Orden de compra semanal</h1>
-            <p className="scd-subtitle">
-              {order ? (
-                <>
-                  Semana (lunes): <strong>{order.week_start_date}</strong> · Proveedor:{' '}
-                  <strong>{supplierName || order.supplier_id}</strong>
-                </>
-              ) : (
-                'Cargando…'
-              )}
-            </p>
+        <header className="flex items-start justify-between gap-4 flex-wrap">
+          <div className="flex flex-col gap-2">
+            <h1 className="text-2xl font-bold text-[hsl(var(--foreground))]">Orden de compra semanal</h1>
+            {order ? (
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-sm text-[hsl(var(--muted-foreground))]">
+                  Semana (lunes): <strong className="text-[hsl(var(--foreground))]">{order.week_start_date}</strong>
+                </span>
+                <span className="text-[hsl(var(--muted-foreground)/0.4)]">·</span>
+                <span className="inline-flex items-center px-3 py-0.5 rounded-full bg-[hsl(var(--primary)/0.12)] text-[hsl(var(--primary))] text-sm font-bold tracking-wide">
+                  {supplierName || order.supplier_id}
+                </span>
+              </div>
+            ) : (
+              <span className="text-sm text-[hsl(var(--muted-foreground))]">Cargando…</span>
+            )}
           </div>
+          {order && (
+            <div className="flex items-center gap-2.5 shrink-0 mt-1">
+              <Badge variant={STATUS_VARIANT[order.status] ?? 'secondary'}>
+                {STATUS_LABELS[order.status] || order.status}
+              </Badge>
+              <span className="text-sm text-[hsl(var(--muted-foreground))]">
+                Total estimado: <strong className="text-[hsl(var(--primary))]">{formatMoneyClp(order.total_estimated_clp)}</strong>
+              </span>
+            </div>
+          )}
         </header>
 
-        {!canAccess ? <p className="npmodal-error">No tienes permisos.</p> : null}
+        {!canAccess ? (
+          <p className="rounded-md bg-red-50 border border-red-200 text-red-700 text-sm px-3 py-2">No tienes permisos.</p>
+        ) : null}
 
-        {actionError ? <p className="npmodal-error">{actionError}</p> : null}
+        {actionError ? (
+          <p className="rounded-md bg-red-50 border border-red-200 text-red-700 text-sm px-3 py-2" role="alert">
+            {actionError}
+          </p>
+        ) : null}
 
         {loading ? <LoadingSpinner message="Cargando orden…" /> : null}
 
-        {!loading && error ? <p className="npmodal-error">{error}</p> : null}
+        {!loading && error ? (
+          <p className="rounded-md bg-red-50 border border-red-200 text-red-700 text-sm px-3 py-2">{error}</p>
+        ) : null}
 
         {!loading && order && !error ? (
           <>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem', alignItems: 'center', marginBottom: '1rem' }}>
-              <span className={statusBadgeClass(order.status)}>{STATUS_LABELS[order.status] || order.status}</span>
-              <span>Total estimado: {formatMoneyClp(order.total_estimated_clp)}</span>
-            </div>
 
-            <div className="wp-toolbar">
-              <label>
-                Cambiar estado
-                <select value={statusEdit} onChange={(ev) => setStatusEdit(ev.target.value)}>
+            <div className="flex flex-wrap gap-3 items-end rounded-xl border border-[hsl(var(--border))] bg-white p-4 shadow-sm">
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="wp-status">Cambiar estado</Label>
+                <select
+                  id="wp-status"
+                  value={statusEdit}
+                  onChange={(ev) => setStatusEdit(ev.target.value)}
+                  className={selectClass}
+                >
                   {Object.entries(STATUS_LABELS).map(([k, v]) => (
-                    <option key={k} value={k}>
-                      {v}
-                    </option>
+                    <option key={k} value={k}>{v}</option>
                   ))}
                 </select>
-              </label>
-              <button type="button" className="wp-btn wp-btn--primary" onClick={() => applyStatus()} disabled={savingStatus}>
+              </div>
+              <Button type="button" onClick={() => applyStatus()} disabled={savingStatus}>
                 {savingStatus ? 'Guardando…' : 'Guardar estado'}
-              </button>
+              </Button>
               {order.status === 'draft' ? (
-                <button type="button" className="wp-btn wp-btn--danger" onClick={() => removeDraft()}>
+                <Button type="button" variant="destructive" onClick={() => removeDraft()}>
                   Eliminar borrador
-                </button>
+                </Button>
               ) : null}
             </div>
 
-            <div className="wp-table-wrap">
-              <table className="wp-table">
-                <thead>
-                  <tr>
-                    <th>Producto</th>
-                    <th>Pedido</th>
-                    <th>Precio unit.</th>
-                    <th>Subtotal</th>
-                    {order.status !== 'draft' ? <th>Recibido</th> : null}
-                    {order.status !== 'draft' ? <th>Acción</th> : null}
-                  </tr>
-                </thead>
-                <tbody>
-                  {(order.items || []).map((it, idx) => (
-                    <tr key={String(it.id)}>
-                      <td>{it.product_name_snapshot || it.product_id || '—'}</td>
-                      <td>
-                        {order.status === 'draft' ? (
-                          <input
-                            type="number"
-                            min="0.01"
-                            step="any"
-                            value={draftLines[idx]?.quantity_ordered ?? ''}
-                            onChange={(ev) => updateDraftLine(idx, 'quantity_ordered', ev.target.value)}
-                            onKeyDown={(ev) => ['e', 'E', '+', '-'].includes(ev.key) && ev.preventDefault()}
-                          />
-                        ) : (
-                          it.quantity_ordered
-                        )}
-                      </td>
-                      <td>
-                        {order.status === 'draft' ? (
-                          <input
-                            type="number"
-                            min="0"
-                            value={draftLines[idx]?.unit_price_clp ?? ''}
-                            onChange={(ev) => updateDraftLine(idx, 'unit_price_clp', ev.target.value)}
-                            onKeyDown={(ev) => ['e', 'E', '+', '-'].includes(ev.key) && ev.preventDefault()}
-                          />
-                        ) : (
-                          formatMoneyClp(it.unit_price_clp)
-                        )}
-                      </td>
-                      <td>{formatMoneyClp(it.line_total_estimated_clp)}</td>
+            <div className="rounded-md border border-[hsl(var(--border))] overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Producto</TableHead>
+                    <TableHead>Pedido</TableHead>
+                    <TableHead>Precio unit.</TableHead>
+                    <TableHead>Subtotal</TableHead>
+                    {order.status !== 'draft' ? <TableHead>Recibido</TableHead> : null}
+                    {order.status !== 'draft' ? <TableHead>Acción</TableHead> : null}
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {(order.items || []).map((it) => (
+                    <TableRow key={String(it.id)}>
+                      <TableCell className="font-medium">{it.product_name_snapshot || it.product_id || '—'}</TableCell>
+                      <TableCell>{it.quantity_ordered}</TableCell>
+                      <TableCell>{formatMoneyClp(it.unit_price_clp)}</TableCell>
+                      <TableCell>{formatMoneyClp(it.line_total_estimated_clp)}</TableCell>
                       {order.status !== 'draft' ? (
-                        <td>
-                          <input
+                        <TableCell>
+                          <Input
                             type="number"
                             min="0"
                             step="any"
@@ -348,29 +296,22 @@ function WeeklyPurchaseDetailPage({ user, userRole, onLogout }) {
                             }
                             onKeyDown={(ev) => ['e', 'E', '+', '-'].includes(ev.key) && ev.preventDefault()}
                             aria-label="Cantidad recibida"
+                            className="w-24"
                           />
-                        </td>
+                        </TableCell>
                       ) : null}
                       {order.status !== 'draft' ? (
-                        <td>
-                          <button type="button" className="wp-btn" onClick={() => registerReception(it.id)}>
+                        <TableCell>
+                          <Button type="button" variant="outline" size="sm" onClick={() => registerReception(it.id)}>
                             Registrar
-                          </button>
-                        </td>
+                          </Button>
+                        </TableCell>
                       ) : null}
-                    </tr>
+                    </TableRow>
                   ))}
-                </tbody>
-              </table>
+                </TableBody>
+              </Table>
             </div>
-
-            {order.status === 'draft' ? (
-              <div className="wp-actions">
-                <button type="button" className="wp-btn wp-btn--primary" onClick={() => saveDraftLines()} disabled={savingLines}>
-                  {savingLines ? 'Guardando líneas…' : 'Guardar líneas'}
-                </button>
-              </div>
-            ) : null}
           </>
         ) : null}
       </div>

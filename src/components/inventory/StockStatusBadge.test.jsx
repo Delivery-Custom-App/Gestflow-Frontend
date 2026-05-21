@@ -11,6 +11,7 @@ describe('StockStatusBadge', () => {
 
   it('muestra Óptimo para OPTIMO', () => {
     render(<StockStatusBadge row={{ stock_status: 'OPTIMO' }} />)
-    expect(screen.getByText('Óptimo')).toHaveClass('scd-stock-badge--optimal')
+    const badge = screen.getByText('Óptimo')
+    expect(badge).toHaveAttribute('data-stock-status', 'optimal')
   })
 })
