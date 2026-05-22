@@ -43,6 +43,26 @@ function LegacyProveedoresComprasSemanalesDetailRedirect() {
   return <Navigate to={`/local/${localId}/inventario/compras-semanales/${orderId}`} replace />
 }
 
+const PRACTICE_LOCAL_ID =
+  import.meta.env.VITE_PRACTICE_LOCAL_ID || '22222222-2222-4222-8222-222222222222'
+
+/** Atajo de prácticas: /practica/recetas → dashboard de recetas del local demo */
+function RecetasPracticaRedirect() {
+  const local = { id: PRACTICE_LOCAL_ID, name: 'Local práctica recetas' }
+  // #region agent log
+  if (typeof window !== 'undefined') {
+    fetch('http://127.0.0.1:7673/ingest/fc1bcda6-0b0a-47fe-82fd-7a27bd7f1276',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'a557df'},body:JSON.stringify({sessionId:'a557df',hypothesisId:'H2',location:'AuthenticatedRoutes.jsx:RecetasPracticaRedirect',message:'redirect to recipes',data:{localId:PRACTICE_LOCAL_ID},timestamp:Date.now()})}).catch(()=>{});
+  }
+  // #endregion
+  return (
+    <Navigate
+      to={`/local/${PRACTICE_LOCAL_ID}/inventario/recipes`}
+      replace
+      state={{ local }}
+    />
+  )
+}
+
 /** @param {'superadmin' | 'admin'} variant */
 function AdminAppRoutes({ variant }) {
   const homeAtRoot = variant === 'admin'
@@ -51,6 +71,7 @@ function AdminAppRoutes({ variant }) {
       <Route element={<AdminLayout />}>
         {homeAtRoot && <Route path="/" element={<AdminDashboard />} />}
         <Route path="/admin" element={<AdminDashboard />} />
+        <Route path="/practica/recetas" element={<RecetasPracticaRedirect />} />
         <Route path="/local/:localId/inventario/stock" element={<StockControlDashboard />} />
         <Route path="/local/:localId/inventario/recipes" element={<RecipesPage />} />
         <Route path="/local/:localId/inventario/compras-semanales/:orderId" element={<WeeklyPurchaseDetailPage />} />
