@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { apiRequest } from '../lib/apiClient'
+import { recetasApiRequest } from '../lib/recetasApiClient'
 
 export function useRecipes(localId) {
   const [recipes, setRecipes] = useState([])
@@ -18,7 +18,7 @@ export function useRecipes(localId) {
         if (search) params.append('search', search)
         if (isActive !== null) params.append('is_active', isActive)
 
-        const data = await apiRequest(`/recipes?${params.toString()}`)
+        const data = await recetasApiRequest(`/recipes?${params.toString()}`)
         setRecipes(data || [])
         setError(null)
       } catch (err) {
@@ -34,7 +34,7 @@ export function useRecipes(localId) {
   const fetchKpis = useCallback(async () => {
     if (!localId) return
     try {
-      const data = await apiRequest(`/recipes/kpis?local_id=${localId}`)
+      const data = await recetasApiRequest(`/recipes/kpis?local_id=${localId}`)
       setKpis(data)
     } catch (err) {
       console.error('Error fetching KPIs:', err)
@@ -52,7 +52,7 @@ export function useRecipes(localId) {
   const getRecipe = useCallback(
     async (recipeId) => {
       try {
-        const data = await apiRequest(`/recipes/${recipeId}?local_id=${localId}`)
+        const data = await recetasApiRequest(`/recipes/${recipeId}?local_id=${localId}`)
         return data
       } catch (err) {
         throw new Error(err.message || 'Error al obtener receta')
@@ -65,7 +65,7 @@ export function useRecipes(localId) {
   const createRecipe = useCallback(
     async ({ categoryId, name, description, priceSale, yieldPortions, ingredients }) => {
       try {
-        const data = await apiRequest(`/recipes`, {
+        const data = await recetasApiRequest(`/recipes`, {
           method: 'POST',
           body: {
             local_id: localId,
@@ -94,7 +94,7 @@ export function useRecipes(localId) {
   const updateRecipe = useCallback(
     async (recipeId, { name, description, priceSale, yieldPortions, categoryId, ingredients, isActive }) => {
       try {
-        const data = await apiRequest(`/recipes/${recipeId}?local_id=${localId}`, {
+        const data = await recetasApiRequest(`/recipes/${recipeId}?local_id=${localId}`, {
           method: 'PUT',
           body: {
             name,
@@ -127,7 +127,7 @@ export function useRecipes(localId) {
   const toggleRecipeStatus = useCallback(
     async (recipeId, isActive) => {
       try {
-        const data = await apiRequest(`/recipes/${recipeId}/status?local_id=${localId}&is_active=${isActive}`, {
+        const data = await recetasApiRequest(`/recipes/${recipeId}/status?local_id=${localId}&is_active=${isActive}`, {
           method: 'PATCH',
         })
         setRecipes((prev) =>
@@ -145,7 +145,7 @@ export function useRecipes(localId) {
   const deleteRecipe = useCallback(
     async (recipeId) => {
       try {
-        await apiRequest(`/recipes/${recipeId}?local_id=${localId}`, {
+        await recetasApiRequest(`/recipes/${recipeId}?local_id=${localId}`, {
           method: 'DELETE',
         })
         setRecipes((prev) => prev.filter((r) => r.id !== recipeId))
@@ -166,7 +166,7 @@ export function useRecipes(localId) {
         })
         if (orderId) params.append('order_id', orderId)
 
-        const data = await apiRequest(`/recipes/${recipeId}/consume?${params.toString()}`, {
+        const data = await recetasApiRequest(`/recipes/${recipeId}/consume?${params.toString()}`, {
           method: 'POST',
         })
         return data

@@ -6,7 +6,7 @@ import RecipesList from './RecipesList'
 import RecipeDetail from './RecipeDetail'
 import CreateRecipeModal from './CreateRecipeModal'
 import { useRecipes } from '../../../hooks/useRecipes'
-import { apiRequest } from '../../../lib/apiClient'
+import { recetasApiRequest } from '../../../lib/recetasApiClient'
 import { Button } from '@/components/ui/button'
 import { BookOpen } from 'lucide-react'
 import { formatCLPOrDash as formatCLP } from '../../../lib/formatCLP'
@@ -14,6 +14,12 @@ import { formatCLPOrDash as formatCLP } from '../../../lib/formatCLP'
 function RecipesPage() {
   const { localId } = useParams()
   const selectedLocal = useSelectedLocal(localId)
+
+  useEffect(() => {
+    // #region agent log
+    fetch('http://127.0.0.1:7673/ingest/fc1bcda6-0b0a-47fe-82fd-7a27bd7f1276',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'a557df'},body:JSON.stringify({sessionId:'a557df',hypothesisId:'H3',location:'RecipesPage.jsx:mount',message:'RecipesPage mounted',data:{localId,recetasUrl:import.meta.env.VITE_RECETAS_API_URL},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
+  }, [localId])
 
   const { recipes, kpis, loading, error, fetchRecipes, getRecipe, createRecipe, updateRecipe, toggleRecipeStatus, deleteRecipe, fetchKpis } = useRecipes(localId)
 
@@ -29,7 +35,7 @@ function RecipesPage() {
   useEffect(() => {
     const loadCategories = async () => {
       try {
-        const data = await apiRequest(`/categories?local_id=${localId}`)
+        const data = await recetasApiRequest(`/recipes/categories?local_id=${localId}`)
         setCategories(Array.isArray(data) ? data : [])
       } catch (err) {
         console.error('Error loading categories:', err)

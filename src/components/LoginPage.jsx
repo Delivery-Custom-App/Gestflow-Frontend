@@ -101,6 +101,17 @@ export default function LoginPage() {
             </p>
           )}
         </form>
+        {import.meta.env.DEV && (
+          <p className="mt-4 text-center text-xs text-[hsl(var(--muted-foreground))]">
+            Tras iniciar sesión, recetas (práctica):{' '}
+            <a
+              href="/practica/recetas"
+              className="text-[hsl(var(--primary))] underline font-medium"
+            >
+              /practica/recetas
+            </a>
+          </p>
+        )}
       </section>
     </main>
   )

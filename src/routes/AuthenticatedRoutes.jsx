@@ -44,6 +44,21 @@ function LegacyProveedoresComprasSemanalesDetailRedirect() {
   return <Navigate to={`/local/${localId}/inventario/compras-semanales/${orderId}`} replace />
 }
 
+const PRACTICE_LOCAL_ID =
+  import.meta.env.VITE_PRACTICE_LOCAL_ID || '22222222-2222-4222-8222-222222222222'
+
+/** Atajo de prácticas: /practica/recetas → dashboard de recetas del local demo */
+function RecetasPracticaRedirect() {
+  const local = { id: PRACTICE_LOCAL_ID, name: 'Local práctica recetas' }
+  return (
+    <Navigate
+      to={`/local/${PRACTICE_LOCAL_ID}/inventario/recipes`}
+      replace
+      state={{ local }}
+    />
+  )
+}
+
 /** @param {'superadmin' | 'admin'} variant */
 function AdminAppRoutes({ variant }) {
   const homeAtRoot = variant === 'admin'
@@ -53,6 +68,7 @@ function AdminAppRoutes({ variant }) {
         {homeAtRoot && <Route path="/" element={<AdminDashboard />} />}
         <Route path="/admin" element={<AdminDashboard />} />
         {variant === 'superadmin' && <Route path="/admin/usuarios" element={<UserManagement />} />}
+        <Route path="/practica/recetas" element={<RecetasPracticaRedirect />} />
         <Route path="/local/:localId/inventario/stock" element={<StockControlDashboard />} />
         <Route path="/local/:localId/inventario/recipes" element={<RecipesPage />} />
         <Route path="/local/:localId/inventario/compras-semanales/:orderId" element={<WeeklyPurchaseDetailPage />} />

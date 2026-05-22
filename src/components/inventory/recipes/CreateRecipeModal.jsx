@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { getInventoryProductsPage } from '../../../lib/inventoryApi'
+import { recetasApiRequest } from '../../../lib/recetasApiClient'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -65,7 +65,7 @@ function CreateRecipeModal({ isOpen, recipe, categories, onSave, onCancel, local
     }
     let cancelled = false
     setLoading(true)
-    getInventoryProductsPage(localId, { limit: 500, offset: 0 })
+    recetasApiRequest(`/recipes/products?local_id=${localId}&limit=500&offset=0`)
       .then((page) => { if (!cancelled) setProducts(page?.items || []) })
       .catch(() => { if (!cancelled) setErrors((prev) => ({ ...prev, products: 'Error cargando productos' })) })
       .finally(() => { if (!cancelled) setLoading(false) })
