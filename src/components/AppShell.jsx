@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Outlet, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import { useAlerts } from '../hooks/useAlerts'
 import { motion, AnimatePresence } from 'framer-motion'
 import { cn } from '@/lib/utils'
 import {
@@ -330,11 +331,47 @@ function Sidebar({ collapsed, onToggle }) {
   )
 }
 
+/* ── AlertBell — campana con badge de alertas pendientes en el header ── */
+function AlertBell({ localId }) {
+  const navigate  = useNavigate()
+  const { pathname, state: locState } = useLocation()
+  const { pendingCount } = useAlerts(localId)
+
+  if (!localId) return null
+
+  const navState = locState?.local ? { local: locState.local } : { local: { id: localId } }
+  const isActive = pathname.includes('/administrativo/alertas')
+
+  return (
+    <button
+      onClick={() => navigate(`/local/${localId}/administrativo/alertas`, { state: navState })}
+      title={pendingCount > 0 ? `${pendingCount} alerta(s) pendiente(s)` : 'Alertas'}
+      className={cn(
+        'relative flex items-center justify-center w-9 h-9 rounded-lg transition-colors',
+        isActive
+          ? 'bg-amber-100 text-amber-700'
+          : 'text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))] hover:text-[hsl(var(--foreground))]',
+      )}
+    >
+      <Bell size={18} />
+      {pendingCount > 0 && (
+        <span className="absolute -top-0.5 -right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-bold text-white leading-none">
+          {pendingCount > 99 ? '99+' : pendingCount}
+        </span>
+      )}
+    </button>
+  )
+}
+
 /* ── AppShell — persistent layout via Outlet ────────────────────── */
 function AppShell() {
   const [collapsed, setCollapsed] = useState(() => {
     try { return window.localStorage.getItem('appSidebarCollapsed') === '1' } catch { return false }
   })
+
+  const { pathname } = useLocation()
+  const localIdMatch = pathname.match(/\/local\/([^/]+)/)
+  const localId = localIdMatch ? localIdMatch[1] : null
 
   const handleToggle = () => {
     setCollapsed((v) => {
@@ -348,6 +385,11 @@ function AppShell() {
     <div className="flex h-screen bg-[hsl(var(--background))]">
       <Sidebar collapsed={collapsed} onToggle={handleToggle} />
       <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
+        {localId && (
+          <div className="shrink-0 flex items-center justify-end gap-2 px-4 py-2 border-b border-[hsl(var(--border))] bg-white">
+            <AlertBell localId={localId} />
+          </div>
+        )}
         <Outlet />
       </div>
     </div>
