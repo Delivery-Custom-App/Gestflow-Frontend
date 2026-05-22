@@ -1,5 +1,5 @@
 import { supabase } from './supabaseClient'
-import { getBusinessIdFromToken } from '../utils/jwt'
+import { getBusinessId } from '../utils/jwt'
 
 const apiBaseUrl = import.meta.env.VITE_API_URL || ''
 
@@ -104,7 +104,7 @@ async function parseErrorResponse(response) {
 export async function getAuthContext() {
   const session = await getSession()
   const token = session.access_token
-  const businessId = getBusinessIdFromToken(token)
+  const businessId = getBusinessId(session.user, token)
 
   return {
     token,
@@ -136,7 +136,7 @@ export async function getOptionalAuthContext() {
 
     return {
       token,
-      businessId: getBusinessIdFromToken(token),
+      businessId: getBusinessId(data.session.user, token),
       user: data.session.user,
     }
   } catch {
