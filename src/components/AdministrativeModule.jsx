@@ -13,7 +13,7 @@ import {
   getRendicionesDashboard,
   getTransfersByLocal,
 } from '../lib/administrativeApi'
-import { getAuthContext } from '../lib/apiClient'
+import { getAuthContext, apiRequest } from '../lib/apiClient'
 import { enrichDashboardWithChartData, generateIncomeTrendFromOrders, generateExpenseBreakdownFromData } from '../utils/chartDataHelpers'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -21,13 +21,14 @@ import { cn } from '@/lib/utils'
 import { formatCLPCurrency as formatMoney } from '../lib/formatCLP'
 
 const sections = [
-  { id: 'dashboard',   label: 'Dashboard',      subtitle: 'Resumen general del sistema' },
-  { id: 'ventas',      label: 'Ventas',          subtitle: 'Ventas del dia con desglose' },
-  { id: 'rendiciones', label: 'Rendiciones',     subtitle: 'Resumen de transferencias dueno a local' },
-  { id: 'reportes',    label: 'Reportes',        subtitle: 'Ventas, flujo y comparativas por periodo' },
-  { id: 'flujo-caja',  label: 'Flujo de Caja',  subtitle: 'Resumen monetario por periodo de tiempo' },
-  { id: 'alertas',     label: 'Alertas',         subtitle: 'Seccion reservada para otro desarrollador' },
-  { id: 'bonos',       label: 'Bonos',           subtitle: 'Resumen de bonos por meta cumplida' },
+  { id: 'dashboard',      label: 'Dashboard',      subtitle: 'Resumen general del sistema' },
+  { id: 'ventas',         label: 'Ventas',          subtitle: 'Ventas del dia con desglose' },
+  { id: 'rendiciones',    label: 'Rendiciones',     subtitle: 'Resumen de transferencias dueno a local' },
+  { id: 'reportes',       label: 'Reportes',        subtitle: 'Ventas, flujo y comparativas por periodo' },
+  { id: 'flujo-caja',     label: 'Flujo de Caja',  subtitle: 'Resumen monetario por periodo de tiempo' },
+  { id: 'alertas',        label: 'Alertas',         subtitle: 'Seccion reservada para otro desarrollador' },
+  { id: 'bonos',          label: 'Bonos',           subtitle: 'Resumen de bonos por meta cumplida' },
+  { id: 'configuracion',  label: 'Configuración',   subtitle: 'Dispositivos POS y ajustes del local' },
 ]
 
 function toNumber(value, fallback = 0) {
@@ -441,6 +442,129 @@ function BonosContent({ dashboard, loading, error }) {
   )
 }
 
+function ConfiguracionContent({ localId }) {
+  const [posList, setPosList] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [form, setForm] = useState({ mp_pos_id: '', name: '' })
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    if (!localId) return
+    setLoading(true)
+    getAuthContext().then(({ token }) =>
+      apiRequest(`/mercadopago-pos?local_id=${localId}`, { token })
+        .then((data) => setPosList(Array.isArray(data) ? data : []))
+        .catch(() => setError('Error cargando dispositivos POS'))
+        .finally(() => setLoading(false))
+    )
+  }, [localId])
+
+  const handleAdd = async (e) => {
+    e.preventDefault()
+    if (!form.mp_pos_id.trim()) return setError('El ID del POS es requerido')
+    setSaving(true)
+    setError('')
+    try {
+      const { token } = await getAuthContext()
+      const newPos = await apiRequest('/mercadopago-pos', {
+        method: 'POST',
+        token,
+        body: { mp_pos_id: form.mp_pos_id.trim(), local_id: localId, name: form.name.trim() || null },
+      })
+      setPosList((prev) => [...prev, newPos])
+      setForm({ mp_pos_id: '', name: '' })
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleDelete = async (id) => {
+    try {
+      const { token } = await getAuthContext()
+      await apiRequest(`/mercadopago-pos/${id}`, { method: 'DELETE', token })
+      setPosList((prev) => prev.filter((p) => p.id !== id))
+    } catch {
+      setError('Error eliminando dispositivo')
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-6 max-w-2xl">
+      <section className="border border-[hsl(var(--border))] rounded-lg p-5">
+        <h3 className="text-sm font-semibold mb-4 flex items-center gap-2">
+          <span className="w-2 h-2 rounded-full bg-[hsl(var(--primary))]" />
+          Dispositivos POS MercadoPago
+        </h3>
+
+        {loading ? (
+          <p className="text-sm text-[hsl(var(--muted-foreground))]">Cargando...</p>
+        ) : posList.length === 0 ? (
+          <p className="text-sm text-[hsl(var(--muted-foreground))] py-4 text-center border border-dashed rounded-md">
+            No hay dispositivos POS registrados
+          </p>
+        ) : (
+          <div className="border rounded-md overflow-hidden mb-4">
+            <table className="w-full text-sm">
+              <thead className="bg-muted/50 border-b">
+                <tr>
+                  <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">ID del POS</th>
+                  <th className="text-left px-4 py-2.5 font-medium text-muted-foreground">Nombre</th>
+                  <th className="px-4 py-2.5" />
+                </tr>
+              </thead>
+              <tbody className="divide-y">
+                {posList.map((pos) => (
+                  <tr key={pos.id} className="hover:bg-muted/30">
+                    <td className="px-4 py-2.5 font-mono text-xs">{pos.mp_pos_id}</td>
+                    <td className="px-4 py-2.5 text-muted-foreground">{pos.name || '—'}</td>
+                    <td className="px-4 py-2.5 text-right">
+                      <Button variant="ghost" size="sm" onClick={() => handleDelete(pos.id)}
+                        className="text-[hsl(var(--destructive))] hover:text-[hsl(var(--destructive))]">
+                        Eliminar
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        <form onSubmit={handleAdd} className="flex gap-2 flex-wrap items-end">
+          <div className="flex flex-col gap-1 flex-1 min-w-35">
+            <label className="text-xs text-muted-foreground">ID del POS *</label>
+            <input
+              type="text"
+              placeholder="ej: PAX_A920_001"
+              value={form.mp_pos_id}
+              onChange={(e) => setForm((p) => ({ ...p, mp_pos_id: e.target.value }))}
+              className="h-9 rounded-md border border-[hsl(var(--border))] px-3 text-sm focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary)/0.3)]"
+            />
+          </div>
+          <div className="flex flex-col gap-1 flex-1 min-w-35">
+            <label className="text-xs text-muted-foreground">Nombre (opcional)</label>
+            <input
+              type="text"
+              placeholder="ej: Caja 1"
+              value={form.name}
+              onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
+              className="h-9 rounded-md border border-[hsl(var(--border))] px-3 text-sm focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary)/0.3)]"
+            />
+          </div>
+          <Button type="submit" disabled={saving}>
+            {saving ? 'Agregando...' : 'Agregar POS'}
+          </Button>
+        </form>
+
+        {error && <p className="mt-2 text-xs text-[hsl(var(--destructive))]">{error}</p>}
+      </section>
+    </div>
+  )
+}
+
 function renderSectionContent(activeSection, payload) {
   switch (activeSection) {
     case 'dashboard': {
@@ -464,6 +588,8 @@ function renderSectionContent(activeSection, payload) {
       return <AlertasContent dashboard={payload.dashboard} loading={payload.loading} error={payload.error} />
     case 'bonos':
       return <BonosContent dashboard={payload.dashboard} loading={payload.loading} error={payload.error} />
+    case 'configuracion':
+      return <ConfiguracionContent localId={payload.localId} />
     default: {
       const defaultDashboard = enrichDashboardWithChartData(payload.dashboard)
       const defaultIncomeData = generateIncomeTrendFromOrders(payload.orders)
@@ -560,7 +686,7 @@ function AdministrativeModule() {
           <SectionActions activeSection={activeSection} />
         </div>
 
-        {renderSectionContent(activeSection, { ...sectionData, loading, error: sectionError })}
+        {renderSectionContent(activeSection, { ...sectionData, localId, loading, error: sectionError })}
       </main>
     </>
   )
