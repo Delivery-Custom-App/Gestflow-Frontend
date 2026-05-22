@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Outlet, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import { isSuperAdminRole } from '../auth/roleLabel'
 import { motion, AnimatePresence } from 'framer-motion'
 import { cn } from '@/lib/utils'
 import {
@@ -8,7 +9,7 @@ import {
   DollarSign, FileText, BarChart3, Wallet, Bell, Gift,
   Table2, BookOpen, Monitor, ChefHat, ClipboardList,
   Package, Truck, ShoppingCart, BookMarked, PackageOpen,
-  LogOut, Utensils,
+  LogOut, Utensils, Users,
 } from 'lucide-react'
 
 /* ── key sets for accordion auto-open ──────────────────────────── */
@@ -18,6 +19,7 @@ const INV_KEYS   = new Set(['inv-hub', 'inv-prov', 'inv-stock', 'inv-compras', '
 
 /* ── active-key derived from pathname ──────────────────────────── */
 function deriveActiveKey(pathname) {
+  if (pathname === '/admin/usuarios')                   return 'usuarios'
   if (pathname.includes('/inventario/proveedores'))     return 'inv-prov'
   if (pathname.includes('/inventario/stock'))           return 'inv-stock'
   if (pathname.includes('/inventario/compras-semanales')) return 'inv-compras'
@@ -77,7 +79,7 @@ const ACCORDIONS = [
 ]
 
 /* ── Sidebar ────────────────────────────────────────────────────── */
-function Sidebar({ collapsed, onToggle }) {
+function Sidebar({ collapsed, onToggle, isSuperAdmin }) {
   const { user, userRole, logout } = useAuth()
   const navigate   = useNavigate()
   const { pathname, state: locState } = useLocation()
@@ -118,6 +120,7 @@ function Sidebar({ collapsed, onToggle }) {
   const goItem = (item) => {
     switch (item.key) {
       case 'locales':   navigate('/admin'); break
+      case 'usuarios':  navigate('/admin/usuarios'); break
       case 'dashboard': navigate(localId ? `/local/${localId}/dashboard` : '/admin', { state: navState }); break
       case 'pos-mesas': case 'pos-menu': case 'pos-bar': case 'pos-cocina': case 'pos-pedidos':
         if (localId) navigate(`/local/${localId}/pos`, { state: navState }); break
@@ -136,6 +139,7 @@ function Sidebar({ collapsed, onToggle }) {
   const discoverItems = [
     { key: 'locales',   label: 'Tus Locales', icon: Store },
     ...(localId ? [{ key: 'dashboard', label: 'Dashboard', icon: LayoutDashboard }] : []),
+    ...(isSuperAdmin ? [{ key: 'usuarios', label: 'Usuarios', icon: Users }] : []),
   ]
 
   const navBtn = (item, small = false) => {
@@ -332,6 +336,8 @@ function Sidebar({ collapsed, onToggle }) {
 
 /* ── AppShell — persistent layout via Outlet ────────────────────── */
 function AppShell() {
+  const { userRole } = useAuth()
+  const isSuperAdmin = isSuperAdminRole(userRole)
   const [collapsed, setCollapsed] = useState(() => {
     try { return window.localStorage.getItem('appSidebarCollapsed') === '1' } catch { return false }
   })
@@ -346,7 +352,7 @@ function AppShell() {
 
   return (
     <div className="flex h-screen bg-[hsl(var(--background))]">
-      <Sidebar collapsed={collapsed} onToggle={handleToggle} />
+      <Sidebar collapsed={collapsed} onToggle={handleToggle} isSuperAdmin={isSuperAdmin} />
       <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
         <Outlet />
       </div>
