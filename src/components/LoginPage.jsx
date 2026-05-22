@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useAuth } from '../context/AuthContext'
 
-export default function LoginPage() {
+export default function LoginPage({ onShowRegister }) {
   const { login } = useAuth()
   const {
     email,
@@ -111,6 +111,19 @@ export default function LoginPage() {
               /practica/recetas
             </a>
           </p>
+        )}
+
+        {onShowRegister && (
+          <div className="mt-5 text-center">
+            <span className="text-sm text-[hsl(var(--muted-foreground))]">¿No tienes una cuenta? </span>
+            <button
+              type="button"
+              onClick={onShowRegister}
+              className="text-sm font-medium text-[hsl(var(--primary))] hover:underline"
+            >
+              Regístrate aquí
+            </button>
+          </div>
         )}
       </section>
     </main>
