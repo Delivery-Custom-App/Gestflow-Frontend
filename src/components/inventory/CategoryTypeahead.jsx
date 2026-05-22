@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useId, useRef, useState } from 'react'
-import { getAuthContext } from '../../lib/apiClient'
 import { resolveCategoryNameForLocal } from '../../lib/inventoryApi'
+import { cn } from '@/lib/utils'
 
 /**
  * Categoría libre (HU-87): sin listado de sugerencias; escribes el nombre y Enter
@@ -28,8 +28,7 @@ function CategoryTypeahead({ localId, value, onChange, disabled, 'aria-invalid':
     setOkHint(false)
     if (okTimerRef.current) clearTimeout(okTimerRef.current)
     try {
-      const { token } = await getAuthContext()
-      const name = await resolveCategoryNameForLocal(localId, token, trimmed)
+      const name = await resolveCategoryNameForLocal(localId, trimmed)
       onChange(name)
       setOkHint(true)
       okTimerRef.current = setTimeout(() => setOkHint(false), 2200)
@@ -50,7 +49,7 @@ function CategoryTypeahead({ localId, value, onChange, disabled, 'aria-invalid':
   }
 
   return (
-    <div className="npmodal-category-typeahead">
+    <div className="flex flex-col gap-1">
       <input
         id={inputDomId}
         type="text"
@@ -61,19 +60,23 @@ function CategoryTypeahead({ localId, value, onChange, disabled, 'aria-invalid':
         aria-invalid={ariaInvalid || undefined}
         disabled={disabled || saving}
         placeholder="Escribe la categoría y pulsa Enter para guardarla"
+        className={cn(
+          'h-9 w-full rounded-md border border-[hsl(var(--border))] bg-white px-3 py-1 text-sm shadow-sm placeholder:text-[hsl(var(--muted-foreground))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary)/0.3)] disabled:opacity-50',
+          ariaInvalid && 'border-[hsl(var(--destructive))]'
+        )}
       />
       {loadError ? (
-        <p className="npmodal-category-typeahead__hint npmodal-category-typeahead__hint--error" role="alert">
+        <p className="text-xs text-[hsl(var(--destructive))]" role="alert">
           {loadError}
         </p>
       ) : null}
       {saving ? (
-        <p className="npmodal-category-typeahead__hint npmodal-category-typeahead__item--muted" aria-live="polite">
+        <p className="text-xs text-[hsl(var(--muted-foreground))]" aria-live="polite">
           Guardando categoría…
         </p>
       ) : null}
       {okHint && !loadError && !saving ? (
-        <p className="npmodal-category-typeahead__hint" aria-live="polite">
+        <p className="text-xs text-emerald-600" aria-live="polite">
           Categoría guardada en el local.
         </p>
       ) : null}

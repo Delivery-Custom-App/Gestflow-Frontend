@@ -2,7 +2,9 @@ import { useState } from 'react'
 import { useOrderItems } from '../../hooks/useOrderItems'
 import { formatCLP } from '../../lib/formatCLP'
 import ProductDetailModal from './ProductDetailModal'
-import '../../styles/ProductList.css'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { cn } from '@/lib/utils'
 
 /** Lista de productos de la orden con edición de cantidad/precio y detalle. */
 export default function ProductList({ products = [], orderId = null, onProductsChanged = null, className = '' }) {
@@ -15,13 +17,12 @@ export default function ProductList({ products = [], orderId = null, onProductsC
 
   if (!products || products.length === 0) {
     return (
-      <div className={`product-list product-list-empty ${className}`}>
-        <p className="product-list-empty-message">No hay productos</p>
+      <div className={cn('py-4 text-center', className)}>
+        <p className="text-sm text-[hsl(var(--muted-foreground))]">No hay productos</p>
       </div>
     )
   }
 
-  // Validar consistencia: cantidad y precio correctos
   const validateProduct = (product) => {
     const hasName = !!product.product_name
     const hasQuantity = product.quantity > 0
@@ -74,16 +75,17 @@ export default function ProductList({ products = [], orderId = null, onProductsC
   }
 
   return (
-    <div className={`product-list ${className}`}>
-      <div className="product-list-header">
-        <div className="product-col-name">Producto</div>
-        <div className="product-col-quantity">Cantidad</div>
-        <div className="product-col-price">Precio</div>
-        <div className="product-col-total">Total</div>
-        <div className="product-col-actions">Acciones</div>
+    <div className={cn('space-y-2', className)}>
+      {/* Header */}
+      <div className="grid grid-cols-[1fr_auto_auto_auto_auto] gap-2 px-2 text-[10px] font-semibold uppercase tracking-widest text-[hsl(var(--muted-foreground))]">
+        <span>Producto</span>
+        <span className="text-right">Cant.</span>
+        <span className="text-right">P. Unit</span>
+        <span className="text-right">Total</span>
+        <span className="text-right">Acc.</span>
       </div>
 
-      <ul className="product-list-items">
+      <ul className="space-y-1">
         {products.map((product, index) => {
           const validation = validateProduct(product)
           const isEditing = editingId === product.id
@@ -91,76 +93,86 @@ export default function ProductList({ products = [], orderId = null, onProductsC
           return (
             <li
               key={product.id || index}
-              className={`product-item ${!validation.isValid ? 'product-item-invalid' : ''} ${isEditing ? 'product-item-editing' : ''}`}
+              className={cn(
+                'grid grid-cols-[1fr_auto_auto_auto_auto] gap-2 items-center px-2 py-1.5 rounded-lg text-sm',
+                !validation.isValid && 'bg-orange-50 border border-orange-200',
+                isEditing && 'bg-[hsl(var(--accent))]',
+                !isEditing && !(!validation.isValid) && 'hover:bg-[hsl(var(--accent))]/50',
+              )}
               data-product-id={product.id}
             >
+              {/* Nombre */}
               <div
-                className="product-col-name product-col-name-clickable"
+                className={cn(
+                  'flex items-center gap-1 min-w-0',
+                  !isEditing && 'cursor-pointer',
+                )}
                 onClick={() => !isEditing && setSelectedProduct(product)}
                 title="Ver detalle del producto"
-                role="button"
+                role={!isEditing ? 'button' : undefined}
                 tabIndex={isEditing ? -1 : 0}
                 onKeyDown={(e) => { if (!isEditing && (e.key === 'Enter' || e.key === ' ')) setSelectedProduct(product) }}
               >
-                <span className="product-name">{product.product_name || 'Producto sin nombre'}</span>
-                {!validation.hasName && <span className="product-warning">⚠ Sin nombre</span>}
+                <span className="text-[hsl(var(--foreground))] font-medium truncate">
+                  {product.product_name || 'Producto sin nombre'}
+                </span>
+                {!validation.hasName && (
+                  <span className="text-orange-500 text-xs shrink-0" title="Sin nombre">⚠</span>
+                )}
               </div>
 
-              <div className="product-col-quantity">
+              {/* Cantidad */}
+              <div className="text-right">
                 {isEditing ? (
-                  <input
+                  <Input
                     type="number"
                     min="1"
                     value={editQuantity}
                     onChange={(e) => setEditQuantity(e.target.value)}
-                    className="edit-input"
+                    className="w-14 h-6 text-xs text-right"
                     disabled={loading}
                   />
                 ) : (
-                  <>
-                    <span className="product-quantity">
-                      {validation.hasQuantity ? `x${product.quantity}` : '—'}
-                    </span>
-                    {!validation.hasQuantity && <span className="product-warning">⚠ Cantidad</span>}
-                  </>
+                  <span className={cn('text-xs', !validation.hasQuantity && 'text-orange-500')}>
+                    {validation.hasQuantity ? `x${product.quantity}` : '—'}
+                  </span>
                 )}
               </div>
 
-              <div className="product-col-price">
+              {/* Precio unitario */}
+              <div className="text-right">
                 {isEditing ? (
-                  <input
+                  <Input
                     type="number"
                     step="0.01"
                     min="0.01"
                     value={editPrice}
                     onChange={(e) => setEditPrice(e.target.value)}
-                    className="edit-input"
+                    className="w-20 h-6 text-xs text-right"
                     disabled={loading}
                   />
                 ) : (
-                  <>
-                    <span className="product-price">${formatCLP(product.unit_price || 0)}</span>
-                    {!validation.hasPrice && <span className="product-warning">⚠ Precio</span>}
-                  </>
-                )}
-              </div>
-
-              <div className="product-col-total">
-                <span className="product-total">${formatCLP(product.total_price || 0)}</span>
-                {!validation.priceConsistent && (
-                  <span className="product-warning" title="El total no coincide con cantidad × precio unitario">
-                    ⚠
+                  <span className={cn('text-xs', !validation.hasPrice && 'text-orange-500')}>
+                    ${formatCLP(product.unit_price || 0)}
                   </span>
                 )}
               </div>
 
-              <div className="product-col-actions">
+              {/* Total */}
+              <div className="text-right">
+                <span className={cn('text-xs font-medium', !validation.priceConsistent && 'text-orange-500')}>
+                  ${formatCLP(product.total_price || 0)}
+                </span>
+              </div>
+
+              {/* Acciones */}
+              <div className="flex items-center justify-end gap-0.5">
                 {isEditing ? (
-                  <div className="action-buttons">
+                  <>
                     <button
                       onClick={() => handleEditSave(product)}
                       disabled={loading}
-                      className="btn-save"
+                      className="w-6 h-6 flex items-center justify-center rounded text-green-600 hover:bg-green-100 text-xs transition-colors disabled:opacity-50"
                       title="Guardar cambios"
                     >
                       ✓
@@ -168,18 +180,18 @@ export default function ProductList({ products = [], orderId = null, onProductsC
                     <button
                       onClick={() => setEditingId(null)}
                       disabled={loading}
-                      className="btn-cancel-edit"
+                      className="w-6 h-6 flex items-center justify-center rounded text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--accent))] text-xs transition-colors disabled:opacity-50"
                       title="Cancelar"
                     >
                       ✕
                     </button>
-                  </div>
+                  </>
                 ) : (
-                  <div className="action-buttons">
+                  <>
                     <button
                       onClick={() => handleEditStart(product)}
                       disabled={loading}
-                      className="btn-edit"
+                      className="w-6 h-6 flex items-center justify-center rounded text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--primary))] hover:bg-[hsl(var(--accent))] text-xs transition-colors disabled:opacity-50"
                       title="Editar"
                     >
                       ✎
@@ -187,12 +199,12 @@ export default function ProductList({ products = [], orderId = null, onProductsC
                     <button
                       onClick={() => handleDelete(product)}
                       disabled={loading}
-                      className="btn-delete"
+                      className="w-6 h-6 flex items-center justify-center rounded text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--destructive))] hover:bg-red-50 text-xs transition-colors disabled:opacity-50"
                       title="Eliminar"
                     >
                       🗑
                     </button>
-                  </div>
+                  </>
                 )}
               </div>
             </li>
@@ -202,19 +214,18 @@ export default function ProductList({ products = [], orderId = null, onProductsC
 
       {/* Error */}
       {(localError || error) && (
-        <div className="product-list-error">
-          <p>{localError || error}</p>
-        </div>
+        <p className="text-xs text-[hsl(var(--destructive))] bg-red-50 border border-red-200 rounded px-3 py-2">
+          {localError || error}
+        </p>
       )}
 
-      {/* Resumen de validación */}
+      {/* Warning consistencia */}
       {products.some((p) => !validateProduct(p).isValid) && (
-        <div className="product-list-warnings">
-          <p>⚠ Algunos productos tienen datos inconsistentes</p>
-        </div>
+        <p className="text-xs text-orange-600 bg-orange-50 border border-orange-200 rounded px-3 py-2">
+          ⚠ Algunos productos tienen datos inconsistentes
+        </p>
       )}
 
-      {/* Detalle de producto */}
       {selectedProduct && (
         <ProductDetailModal
           product={selectedProduct}

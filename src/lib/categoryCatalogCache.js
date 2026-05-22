@@ -37,6 +37,3 @@ export function mergeCategoryIntoCache(localId, row) {
   setCachedCategories(localId, next)
 }
 
-export function invalidateCategoryCache(localId) {
-  if (localId) byLocal.delete(String(localId))
-}

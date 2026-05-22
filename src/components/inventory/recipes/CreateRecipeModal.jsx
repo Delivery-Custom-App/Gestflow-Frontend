@@ -1,7 +1,18 @@
 import { useState, useEffect } from 'react'
-import { getAuthContext } from '../../../lib/apiClient'
 import { getInventoryProductsPage } from '../../../lib/inventoryApi'
-import './recipes.css'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import {
+  Table,
+  TableHeader,
+  TableBody,
+  TableRow,
+  TableHead,
+  TableCell,
+} from '@/components/ui/table'
+import { Plus, Trash2 } from 'lucide-react'
 
 function CreateRecipeModal({ isOpen, recipe, categories, onSave, onCancel, localId }) {
   const [formData, setFormData] = useState({
@@ -48,28 +59,18 @@ function CreateRecipeModal({ isOpen, recipe, categories, onSave, onCancel, local
     setNewIngredient({ product_id: '', quantity_required: '', unit: 'unidad' })
     setErrors({})
 
-    // Fetch products
-    fetchProducts()
-  }, [isOpen, recipe])
-
-  const fetchProducts = async () => {
-    setLoading(true)
-    try {
-      if (!localId) {
-        setProducts([])
-        return
-      }
-
-      const { token } = await getAuthContext()
-      const page = await getInventoryProductsPage(localId, token, { limit: 500, offset: 0 })
-      setProducts(page?.items || [])
-    } catch (err) {
-      console.error('Error fetching products:', err)
-      setErrors((prev) => ({ ...prev, products: 'Error cargando productos' }))
-    } finally {
-      setLoading(false)
+    if (!localId) {
+      setProducts([])
+      return
     }
-  }
+    let cancelled = false
+    setLoading(true)
+    getInventoryProductsPage(localId, { limit: 500, offset: 0 })
+      .then((page) => { if (!cancelled) setProducts(page?.items || []) })
+      .catch(() => { if (!cancelled) setErrors((prev) => ({ ...prev, products: 'Error cargando productos' })) })
+      .finally(() => { if (!cancelled) setLoading(false) })
+    return () => { cancelled = true }
+  }, [isOpen, recipe, localId])
 
   const handleFormChange = (e) => {
     const { name, value } = e.target
@@ -84,40 +85,28 @@ function CreateRecipeModal({ isOpen, recipe, categories, onSave, onCancel, local
 
   const handleIngredientChange = (e) => {
     const { name, value } = e.target
-    setNewIngredient((prev) => ({
-      ...prev,
-      [name]: value,
-    }))
+    setNewIngredient((prev) => ({ ...prev, [name]: value }))
   }
 
   const addIngredient = () => {
     if (!newIngredient.product_id || !newIngredient.quantity_required) {
-      setErrors((prev) => ({
-        ...prev,
-        ingredient: 'Selecciona producto y cantidad',
-      }))
+      setErrors((prev) => ({ ...prev, ingredient: 'Selecciona producto y cantidad' }))
       return
     }
 
     const selectedProductId = String(newIngredient.product_id)
-    const product = products.find((p) => String(p.id) === selectedProductId)
+    const product = products.find((p) => String(p.product_id) === selectedProductId)
     if (!product) return
 
-    const isDuplicate = ingredients.some(
-      (ing) => String(ing.product_id) === selectedProductId
-    )
-
+    const isDuplicate = ingredients.some((ing) => String(ing.product_id) === selectedProductId)
     if (isDuplicate) {
-      setErrors((prev) => ({
-        ...prev,
-        ingredient: 'Este producto ya está agregado',
-      }))
+      setErrors((prev) => ({ ...prev, ingredient: 'Este producto ya está agregado' }))
       return
     }
 
     const newIng = {
       product_id: selectedProductId,
-      product_name: product.name,
+      product_name: product.product_name,
       quantity_required: parseFloat(newIngredient.quantity_required),
       unit: newIngredient.unit,
       unit_cost_clp: Number(product.unit_cost_clp ?? product.price_per_unit ?? 0),
@@ -133,9 +122,7 @@ function CreateRecipeModal({ isOpen, recipe, categories, onSave, onCancel, local
   }
 
   const calculateTotalCost = () => {
-    return ingredients.reduce((sum, ing) => {
-      return sum + ing.quantity_required * ing.unit_cost_clp
-    }, 0)
+    return ingredients.reduce((sum, ing) => sum + ing.quantity_required * ing.unit_cost_clp, 0)
   }
 
   const calculateMargin = () => {
@@ -152,14 +139,12 @@ function CreateRecipeModal({ isOpen, recipe, categories, onSave, onCancel, local
     if (parseFloat(formData.price_sale) <= 0) newErrors.price_sale = 'Precio debe ser mayor a 0'
     if (formData.yield_portions < 1) newErrors.yield_portions = 'Debe rendir al menos 1 porción'
     if (ingredients.length === 0) newErrors.ingredients = 'Agrega al menos 1 ingrediente'
-
     setErrors(newErrors)
     return Object.keys(newErrors).length === 0
   }
 
   const handleSave = async () => {
     if (!validateForm()) return
-
     setSavingLoading(true)
     try {
       const totalCost = calculateTotalCost()
@@ -173,176 +158,166 @@ function CreateRecipeModal({ isOpen, recipe, categories, onSave, onCancel, local
         profit_margin_percent: calculateMargin(),
         ingredients,
       }
-
-      if (recipe) {
-        payload.id = recipe.id
-      }
-
+      if (recipe) payload.id = recipe.id
       await onSave(payload)
     } finally {
       setSavingLoading(false)
     }
   }
 
-  if (!isOpen) return null
-
   const totalCost = calculateTotalCost()
   const margin = calculateMargin()
 
+  const selectClass = (errKey) =>
+    `h-9 w-full rounded-md border px-3 py-1 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary)/0.3)] bg-white ${
+      errors[errKey] ? 'border-[hsl(var(--destructive))]' : 'border-[hsl(var(--border))]'
+    }`
+
   return (
-    <div className="recipe-modal__overlay" onClick={onCancel}>
-      <div className="recipe-modal__container" onClick={(e) => e.stopPropagation()}>
-        <div className="recipe-modal__header">
-          <h2 className="recipe-modal__title">
-            {recipe ? '✏️ Editar Receta' : '➕ Nueva Receta'}
-          </h2>
-          <button
-            type="button"
-            className="recipe-modal__close"
-            onClick={onCancel}
-            aria-label="Cerrar"
-          >
-            ✕
-          </button>
-        </div>
+    <Dialog open={isOpen} onOpenChange={(open) => { if (!open) onCancel() }}>
+      <DialogContent className="max-w-3xl w-full flex flex-col overflow-hidden p-0" style={{ maxHeight: 'min(92vh, 780px)' }}>
+        <DialogHeader className="shrink-0 px-6 pt-6 pb-3 border-b border-[hsl(var(--border))]">
+          <DialogTitle>{recipe ? 'Editar Receta' : 'Nueva Receta'}</DialogTitle>
+        </DialogHeader>
 
-        <div className="recipe-modal__content">
-          {/* Datos Básicos */}
-          <fieldset className="recipe-modal__fieldset">
-            <legend className="recipe-modal__legend">📝 Datos de la Receta</legend>
-
-            <div className="recipe-modal__form-grid">
-              <div className="recipe-modal__form-group">
-                <label className="recipe-modal__label">
-                  Categoría <span className="recipe-modal__required">*</span>
-                </label>
+        <div className="flex-1 overflow-y-auto min-h-0 px-6 py-5 flex flex-col gap-5">
+          {/* Datos básicos */}
+          <fieldset className="border border-[hsl(var(--border))] rounded-md p-4">
+            <legend className="text-xs font-semibold text-[hsl(var(--muted-foreground))] uppercase tracking-wide px-1">
+              Datos de la Receta
+            </legend>
+            <div className="grid grid-cols-2 gap-3 mt-2">
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="cr-category">
+                  Categoría <span className="text-[hsl(var(--destructive))]">*</span>
+                </Label>
                 <select
+                  id="cr-category"
                   name="category_id"
                   value={formData.category_id}
                   onChange={handleFormChange}
-                  className={`recipe-modal__input ${errors.category_id ? 'recipe-modal__input--error' : ''}`}
+                  className={selectClass('category_id')}
                 >
                   <option value="">Selecciona una categoría</option>
                   {categories.map((cat) => (
-                    <option key={cat.id} value={cat.id}>
-                      {cat.name}
-                    </option>
+                    <option key={cat.id} value={cat.id}>{cat.name}</option>
                   ))}
                 </select>
-                {errors.category_id && (
-                  <span className="recipe-modal__error">{errors.category_id}</span>
-                )}
+                {errors.category_id && <span className="text-xs text-[hsl(var(--destructive))]">{errors.category_id}</span>}
               </div>
 
-              <div className="recipe-modal__form-group">
-                <label className="recipe-modal__label">
-                  Nombre <span className="recipe-modal__required">*</span>
-                </label>
-                <input
-                  type="text"
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="cr-name">
+                  Nombre <span className="text-[hsl(var(--destructive))]">*</span>
+                </Label>
+                <Input
+                  id="cr-name"
                   name="name"
                   value={formData.name}
                   onChange={handleFormChange}
                   placeholder="Ej: Filete a lo Pobre"
-                  className={`recipe-modal__input ${errors.name ? 'recipe-modal__input--error' : ''}`}
+                  className={errors.name ? 'border-[hsl(var(--destructive))]' : ''}
                 />
-                {errors.name && <span className="recipe-modal__error">{errors.name}</span>}
+                {errors.name && <span className="text-xs text-[hsl(var(--destructive))]">{errors.name}</span>}
               </div>
 
-              <div className="recipe-modal__form-group recipe-modal__form-group--full">
-                <label className="recipe-modal__label">Descripción</label>
+              <div className="col-span-2 flex flex-col gap-1.5">
+                <Label htmlFor="cr-description">Descripción</Label>
                 <textarea
+                  id="cr-description"
                   name="description"
                   value={formData.description}
                   onChange={handleFormChange}
                   placeholder="Breve descripción"
-                  className="recipe-modal__textarea"
-                  rows="1"
+                  rows={2}
+                  className="w-full rounded-md border border-[hsl(var(--border))] bg-white px-3 py-2 text-sm shadow-sm resize-none focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary)/0.3)]"
                 />
               </div>
 
-              <div className="recipe-modal__form-group">
-                <label className="recipe-modal__label">
-                  Precio de Venta (CLP) <span className="recipe-modal__required">*</span>
-                </label>
-                <input
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="cr-price-sale">
+                  Precio de Venta (CLP) <span className="text-[hsl(var(--destructive))]">*</span>
+                </Label>
+                <Input
+                  id="cr-price-sale"
                   type="number"
                   name="price_sale"
                   value={formData.price_sale}
                   onChange={handleFormChange}
                   placeholder="12000"
-                  className={`recipe-modal__input ${errors.price_sale ? 'recipe-modal__input--error' : ''}`}
+                  className={errors.price_sale ? 'border-[hsl(var(--destructive))]' : ''}
                 />
-                {errors.price_sale && (
-                  <span className="recipe-modal__error">{errors.price_sale}</span>
-                )}
+                {errors.price_sale && <span className="text-xs text-[hsl(var(--destructive))]">{errors.price_sale}</span>}
               </div>
 
-              <div className="recipe-modal__form-group">
-                <label className="recipe-modal__label">
-                  Porciones que Rinde <span className="recipe-modal__required">*</span>
-                </label>
-                <input
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="cr-yield">
+                  Porciones que Rinde <span className="text-[hsl(var(--destructive))]">*</span>
+                </Label>
+                <Input
+                  id="cr-yield"
                   type="number"
                   name="yield_portions"
                   value={formData.yield_portions}
                   onChange={handleFormChange}
                   min="1"
-                  className={`recipe-modal__input ${errors.yield_portions ? 'recipe-modal__input--error' : ''}`}
+                  className={errors.yield_portions ? 'border-[hsl(var(--destructive))]' : ''}
                 />
-                {errors.yield_portions && (
-                  <span className="recipe-modal__error">{errors.yield_portions}</span>
-                )}
+                {errors.yield_portions && <span className="text-xs text-[hsl(var(--destructive))]">{errors.yield_portions}</span>}
               </div>
             </div>
           </fieldset>
 
           {/* Ingredientes */}
-          <fieldset className="recipe-modal__fieldset">
-            <legend className="recipe-modal__legend">🥘 Ingredientes</legend>
+          <fieldset className="border border-[hsl(var(--border))] rounded-md p-4">
+            <legend className="text-xs font-semibold text-[hsl(var(--muted-foreground))] uppercase tracking-wide px-1">
+              Ingredientes
+            </legend>
 
             {loading ? (
-              <div className="recipe-modal__loading">Cargando productos...</div>
+              <p className="text-sm text-[hsl(var(--muted-foreground))] py-3">Cargando productos...</p>
             ) : (
               <>
-                <div className="recipe-modal__ingredient-selector">
-                  <div className="recipe-modal__form-group">
-                    <label className="recipe-modal__label">Producto</label>
+                <div className="grid grid-cols-3 gap-2 mt-2 items-end">
+                  <div className="flex flex-col gap-1.5">
+                    <Label htmlFor="cr-ing-product">Producto</Label>
                     <select
+                      id="cr-ing-product"
                       name="product_id"
                       value={newIngredient.product_id}
                       onChange={handleIngredientChange}
-                      className="recipe-modal__input"
+                      className={selectClass(null)}
                     >
                       <option value="">Selecciona un producto</option>
                       {products.map((prod) => (
-                        <option key={prod.id} value={prod.id}>
-                          {prod.name} (${Number(prod.unit_cost_clp ?? prod.price_per_unit ?? 0).toFixed(0)}/u)
+                        <option key={prod.product_id} value={prod.product_id}>
+                          {prod.product_name} (${Number(prod.unit_cost_clp ?? 0).toFixed(0)}/u)
                         </option>
                       ))}
                     </select>
                   </div>
 
-                  <div className="recipe-modal__form-group">
-                    <label className="recipe-modal__label">Cantidad</label>
-                    <input
+                  <div className="flex flex-col gap-1.5">
+                    <Label htmlFor="cr-ing-qty">Cantidad</Label>
+                    <Input
+                      id="cr-ing-qty"
                       type="number"
                       name="quantity_required"
                       value={newIngredient.quantity_required}
                       onChange={handleIngredientChange}
                       placeholder="0.5"
                       step="0.01"
-                      className="recipe-modal__input"
                     />
                   </div>
 
-                  <div className="recipe-modal__form-group">
-                    <label className="recipe-modal__label">Formato de medida</label>
+                  <div className="flex flex-col gap-1.5">
+                    <Label htmlFor="cr-ing-unit">Formato de medida</Label>
                     <select
+                      id="cr-ing-unit"
                       name="unit"
                       value={newIngredient.unit}
                       onChange={handleIngredientChange}
-                      className="recipe-modal__input"
+                      className={selectClass(null)}
                     >
                       <option value="unidad">unidad</option>
                       <option value="kg">kg</option>
@@ -354,121 +329,104 @@ function CreateRecipeModal({ isOpen, recipe, categories, onSave, onCancel, local
                       <option value="cucharadita">cucharadita</option>
                     </select>
                   </div>
-
-                  <button
-                    type="button"
-                    onClick={addIngredient}
-                    className="recipe-modal__btn recipe-modal__btn--add"
-                    title="Agregar ingrediente"
-                  >
-                    ➕ Agregar
-                  </button>
                 </div>
 
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={addIngredient}
+                  className="mt-2 gap-1.5"
+                >
+                  <Plus size={15} /> Agregar ingrediente
+                </Button>
+
                 {errors.ingredient && (
-                  <div className="recipe-modal__error recipe-modal__error--block">
-                    {errors.ingredient}
-                  </div>
+                  <p className="text-xs text-[hsl(var(--destructive))] mt-1">{errors.ingredient}</p>
                 )}
                 {errors.ingredients && (
-                  <div className="recipe-modal__error recipe-modal__error--block">
-                    {errors.ingredients}
-                  </div>
+                  <p className="text-xs text-[hsl(var(--destructive))] mt-1">{errors.ingredients}</p>
                 )}
 
                 {ingredients.length > 0 ? (
-                  <table className="recipe-modal__ingredients-table">
-                    <thead>
-                      <tr>
-                        <th>Producto</th>
-                        <th>Cantidad</th>
-                        <th>Costo Unit.</th>
-                        <th>Subtotal</th>
-                        <th>Acción</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {ingredients.map((ing) => (
-                        <tr key={ing.product_id}>
-                          <td>{ing.product_name}</td>
-                          <td>
-                            {ing.quantity_required} {ing.unit}
-                          </td>
-                          <td>${ing.unit_cost_clp?.toFixed(0) || '0'}</td>
-                          <td>${(ing.quantity_required * ing.unit_cost_clp).toFixed(0)}</td>
-                          <td>
-                            <button
-                              type="button"
-                              onClick={() => removeIngredient(ing.product_id)}
-                              className="recipe-modal__btn recipe-modal__btn--remove"
-                              title="Eliminar ingrediente"
-                            >
-                              🗑️
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                ) : (
-                  <div className="recipe-modal__empty-message">
-                    <p className="recipe-modal__empty-text">Sin ingredientes agregados. Usa el selector arriba.</p>
+                  <div className="mt-3 rounded-md border border-[hsl(var(--border))] overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Producto</TableHead>
+                          <TableHead>Cantidad</TableHead>
+                          <TableHead>Costo Unit.</TableHead>
+                          <TableHead>Subtotal</TableHead>
+                          <TableHead></TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {ingredients.map((ing) => (
+                          <TableRow key={ing.product_id}>
+                            <TableCell>{ing.product_name}</TableCell>
+                            <TableCell>{ing.quantity_required} {ing.unit}</TableCell>
+                            <TableCell>${ing.unit_cost_clp?.toFixed(0) || '0'}</TableCell>
+                            <TableCell>${(ing.quantity_required * ing.unit_cost_clp).toFixed(0)}</TableCell>
+                            <TableCell>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => removeIngredient(ing.product_id)}
+                                aria-label="Eliminar ingrediente"
+                                className="text-[hsl(var(--destructive))] hover:text-[hsl(var(--destructive))]"
+                              >
+                                <Trash2 size={15} />
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
                   </div>
+                ) : (
+                  <p className="text-sm text-center text-[hsl(var(--muted-foreground))] mt-3 py-3 border border-dashed border-[hsl(var(--border))] rounded-md">
+                    Sin ingredientes agregados. Usa el selector arriba.
+                  </p>
                 )}
               </>
             )}
           </fieldset>
 
-          {/* Resumen Financiero */}
+          {/* Resumen financiero */}
           {ingredients.length > 0 && (
-            <fieldset className="recipe-modal__fieldset">
-              <legend className="recipe-modal__legend">💰 Resumen Financiero</legend>
-              <div className="recipe-modal__summary">
-                <div className="recipe-modal__summary-item">
-                  <span>Costo Total:</span>
-                  <span className="recipe-modal__summary-value">${totalCost.toFixed(0)}</span>
-                </div>
-                <div className="recipe-modal__summary-item">
-                  <span>Costo por Porción:</span>
-                  <span className="recipe-modal__summary-value">
-                    ${(totalCost / formData.yield_portions).toFixed(0)}
-                  </span>
-                </div>
-                <div className="recipe-modal__summary-item">
-                  <span>Precio de Venta:</span>
-                  <span className="recipe-modal__summary-value">
-                    ${formData.price_sale || '0'}
-                  </span>
-                </div>
-                <div className={`recipe-modal__summary-item ${margin >= 30 ? 'recipe-modal__summary-item--good' : ''}`}>
-                  <span>Margen de Ganancia:</span>
-                  <span className="recipe-modal__summary-value">{margin.toFixed(1)}%</span>
-                </div>
+            <fieldset className="border border-[hsl(var(--border))] rounded-md p-4">
+              <legend className="text-xs font-semibold text-[hsl(var(--muted-foreground))] uppercase tracking-wide px-1">
+                Resumen Financiero
+              </legend>
+              <div className="grid grid-cols-2 gap-3 mt-2">
+                {[
+                  ['Costo Total', `$${totalCost.toFixed(0)}`],
+                  ['Costo por Porción', `$${(totalCost / formData.yield_portions).toFixed(0)}`],
+                  ['Precio de Venta', `$${formData.price_sale || '0'}`],
+                  ['Margen de Ganancia', `${margin.toFixed(1)}%`, margin >= 30],
+                ].map(([label, val, isGood]) => (
+                  <div key={label} className="flex justify-between items-center rounded-md bg-[hsl(var(--accent))] px-3 py-2">
+                    <span className="text-xs text-[hsl(var(--muted-foreground))]">{label}</span>
+                    <span className={`text-sm font-bold ${isGood ? 'text-emerald-600' : 'text-[hsl(var(--foreground))]'}`}>
+                      {val}
+                    </span>
+                  </div>
+                ))}
               </div>
             </fieldset>
           )}
         </div>
 
-        <div className="recipe-modal__footer">
-          <button
-            type="button"
-            onClick={onCancel}
-            className="recipe-modal__btn recipe-modal__btn--secondary"
-            disabled={savingLoading}
-          >
+        <DialogFooter className="shrink-0 px-6 py-4 border-t border-[hsl(var(--border))]">
+          <Button type="button" variant="outline" onClick={onCancel} disabled={savingLoading}>
             Cancelar
-          </button>
-          <button
-            type="button"
-            onClick={handleSave}
-            className="recipe-modal__btn recipe-modal__btn--primary"
-            disabled={savingLoading}
-          >
-            {savingLoading ? '⏳ Guardando...' : recipe ? '✓ Actualizar' : '✓ Crear Receta'}
-          </button>
-        </div>
-      </div>
-    </div>
+          </Button>
+          <Button type="button" onClick={handleSave} disabled={savingLoading}>
+            {savingLoading ? 'Guardando...' : recipe ? 'Actualizar' : 'Crear Receta'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }
 

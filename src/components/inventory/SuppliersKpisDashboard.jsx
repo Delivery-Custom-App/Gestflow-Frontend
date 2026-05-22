@@ -1,100 +1,84 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useParams, useLocation } from 'react-router-dom'
+import { useParams } from 'react-router-dom'
+import { useSelectedLocal } from '../../hooks/useSelectedLocal'
+import { motion } from 'framer-motion'
 import { getAuthContext } from '../../lib/apiClient'
 import {
+  deleteSupplier,
   getLocalById,
   getSupplierKpisByLocal,
   getSuppliersWithMetricsForBusiness,
+  patchSupplier,
 } from '../../lib/providersApi'
-import { isInventoryAdminRole } from '../../utils/inventoryAccess'
+import { useAuth } from '../../context/AuthContext'
+import { formatCLPDisplay as formatMoneyClp } from '../../lib/formatCLP'
 import InventoryShell from './InventoryShell'
-import BackToInventoryHubButton from './BackToInventoryHubButton'
 import LoadingSpinner from '../LoadingSpinner'
 import RegisterSupplierModal from './RegisterSupplierModal'
 import SupplierDetailModal from './SupplierDetailModal'
-import '../../styles/inventory/StockControlDashboard.css'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import { Card, CardContent } from '@/components/ui/card'
+import {
+  Table, TableHeader, TableBody, TableRow, TableHead, TableCell,
+} from '@/components/ui/table'
+import { Users, CheckCircle, DollarSign, Store, Plus, Clock, Eye, Power, Trash2 } from 'lucide-react'
 
 const MONTH_NAMES = [
-  'Enero',
-  'Febrero',
-  'Marzo',
-  'Abril',
-  'Mayo',
-  'Junio',
-  'Julio',
-  'Agosto',
-  'Septiembre',
-  'Octubre',
-  'Noviembre',
-  'Diciembre',
+  'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+  'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre',
 ]
 
-function formatMoneyClp(value) {
-  if (value == null || Number.isNaN(Number(value))) return '—'
-  const n = new Intl.NumberFormat('es-CL', {
-    maximumFractionDigits: 0,
-    minimumFractionDigits: 0,
-  }).format(Math.round(Number(value)))
-  return `$${n}`
+const CURRENT_YEAR = new Date().getFullYear()
+
+const AVATAR_COLORS = [
+  'bg-emerald-100 text-emerald-700',
+  'bg-blue-100 text-blue-700',
+  'bg-violet-100 text-violet-700',
+  'bg-amber-100 text-amber-700',
+  'bg-rose-100 text-rose-700',
+  'bg-cyan-100 text-cyan-700',
+]
+
+const STAGGER = { hidden: {}, visible: { transition: { staggerChildren: 0.08 } } }
+const ITEM    = { hidden: { opacity: 0, y: 14 }, visible: { opacity: 1, y: 0, transition: { duration: 0.25 } } }
+
+function supplierAvatar(name, index) {
+  const letter = String(name || '?').trim().charAt(0).toUpperCase()
+  const color  = AVATAR_COLORS[index % AVATAR_COLORS.length]
+  return { letter, color }
 }
 
-function formatRequestDateTime(value) {
-  if (!value) return '—'
-  return new Intl.DateTimeFormat('es-CL', {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-  }).format(value)
-}
-
-function currentYearMonth() {
-  const d = new Date()
-  return { year: d.getFullYear(), month: d.getMonth() + 1 }
-}
-
-function SuppliersKpisDashboard({ user, userRole, onLogout }) {
+function SuppliersKpisDashboard() {
+  const { isInventoryAdmin: canAccess } = useAuth()
   const { localId } = useParams()
-  const location = useLocation()
+  const selectedLocal = useSelectedLocal(localId)
 
-  const selectedLocal = useMemo(() => {
-    if (location.state?.local) return location.state.local
-    return { id: localId, name: `Local ${localId ?? ''}` }
-  }, [location.state, localId])
+  const [year,  setYear]  = useState(CURRENT_YEAR)
+  const [month, setMonth] = useState(() => new Date().getMonth() + 1)
 
-  const canAccess = isInventoryAdminRole(userRole)
-
-  /** Solo mes: el año es siempre el calendario actual (sin lista de años fija). */
-  const [month, setMonth] = useState(() => currentYearMonth().month)
-  const [data, setData] = useState(null)
+  const [data,    setData]    = useState(null)
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
+  const [error,   setError]   = useState('')
 
-  const [suppliersRows, setSuppliersRows] = useState([])
-  const [suppliersLoading, setSuppliersLoading] = useState(true)
-  const [suppliersError, setSuppliersError] = useState('')
+  const [suppliersRows,      setSuppliersRows]      = useState([])
+  const [suppliersLoading,   setSuppliersLoading]   = useState(true)
+  const [suppliersError,     setSuppliersError]     = useState('')
   const [resolvedBusinessId, setResolvedBusinessId] = useState(null)
-  const [registerSupplierOpen, setRegisterSupplierOpen] = useState(false)
-  const [detailSupplierId, setDetailSupplierId] = useState(null)
-  const [requestedAt, setRequestedAt] = useState(null)
+  const [registerOpen,   setRegisterOpen]   = useState(false)
+  const [detailId,       setDetailId]       = useState(null)
+  const [updatedAt,      setUpdatedAt]      = useState(null)
+  const [rowActionId,    setRowActionId]    = useState(null)  // id in-flight
+  const [confirmDeleteId, setConfirmDeleteId] = useState(null)
 
   const load = useCallback(async () => {
-    if (!canAccess) {
-      setLoading(false)
-      setData(null)
-      setError('')
-      return
-    }
-    if (!localId) {
-      setError('No se indicó un local.')
-      setLoading(false)
-      return
-    }
+    if (!canAccess) { setLoading(false); setData(null); setError(''); return }
+    if (!localId)   { setError('No se indicó un local.'); setLoading(false); return }
     setError('')
     setLoading(true)
-    setRequestedAt(new Date())
+    setUpdatedAt(new Date())
     try {
-      const { token } = await getAuthContext()
-      const year = new Date().getFullYear()
-      const payload = await getSupplierKpisByLocal(localId, token, { year, month })
+      const payload = await getSupplierKpisByLocal(localId, { year, month })
       setData(payload)
     } catch (e) {
       setData(null)
@@ -102,25 +86,25 @@ function SuppliersKpisDashboard({ user, userRole, onLogout }) {
     } finally {
       setLoading(false)
     }
-  }, [localId, month, canAccess])
+  }, [localId, year, month, canAccess])
 
   const loadSuppliersList = useCallback(async () => {
     if (!canAccess || !localId) {
       setSuppliersRows([])
       setSuppliersLoading(false)
-      setSuppliersError('')
       setResolvedBusinessId(null)
       return
     }
     setSuppliersError('')
     setSuppliersLoading(true)
     try {
-      const { token, businessId: bidFromToken } = await getAuthContext()
-      // Siempre derivar el negocio del local en la URL. Si el JWT trae otro business_id
-      // (p. ej. Superadmin), usarlo primero rompía el listado y el alta de proveedores.
-      const loc = await getLocalById(localId, token)
+      const [{ businessId: bidFromToken }, loc] = await Promise.all([
+        getAuthContext(),
+        getLocalById(localId),
+      ])
       const businessId =
-        loc?.business_id != null ? String(loc.business_id) : bidFromToken != null ? String(bidFromToken) : null
+        loc?.business_id != null ? String(loc.business_id) :
+        bidFromToken != null     ? String(bidFromToken)     : null
       if (!businessId) {
         setSuppliersRows([])
         setSuppliersError('No se pudo determinar el negocio del local.')
@@ -128,7 +112,7 @@ function SuppliersKpisDashboard({ user, userRole, onLogout }) {
         return
       }
       setResolvedBusinessId(businessId)
-      const rows = await getSuppliersWithMetricsForBusiness(token, businessId)
+      const rows = await getSuppliersWithMetricsForBusiness(businessId)
       setSuppliersRows(Array.isArray(rows) ? rows : [])
     } catch (e) {
       setSuppliersRows([])
@@ -139,213 +123,329 @@ function SuppliersKpisDashboard({ user, userRole, onLogout }) {
     }
   }, [localId, canAccess])
 
-  useEffect(() => {
-    load()
-  }, [load])
+  const handleToggleActive = useCallback(async (row) => {
+    if (!resolvedBusinessId || rowActionId) return
+    const newActive = row.is_active === false ? true : false
+    setRowActionId(String(row.id))
+    setSuppliersRows((prev) => prev.map((r) => String(r.id) === String(row.id) ? { ...r, is_active: newActive } : r))
+    try {
+      await patchSupplier(String(row.id), resolvedBusinessId, { is_active: newActive })
+      await loadSuppliersList()
+    } catch {
+      setSuppliersRows((prev) => prev.map((r) => String(r.id) === String(row.id) ? { ...r, is_active: row.is_active } : r))
+    } finally {
+      setRowActionId(null)
+    }
+  }, [resolvedBusinessId, rowActionId, loadSuppliersList])
 
-  useEffect(() => {
-    loadSuppliersList()
-  }, [loadSuppliersList])
+  const handleDelete = useCallback(async (row) => {
+    if (!resolvedBusinessId || rowActionId) return
+    setRowActionId(String(row.id))
+    setConfirmDeleteId(null)
+    try {
+      await deleteSupplier(String(row.id), resolvedBusinessId)
+      setSuppliersRows((prev) => prev.filter((r) => String(r.id) !== String(row.id)))
+      await load()
+    } catch (e) {
+      setSuppliersError(e?.message || 'No se pudo eliminar el proveedor.')
+    } finally {
+      setRowActionId(null)
+    }
+  }, [resolvedBusinessId, rowActionId, load])
 
-  const calendarYear = new Date().getFullYear()
+  const availableYears = useMemo(() => {
+    const set = new Set([CURRENT_YEAR])
+    for (const row of suppliersRows) {
+      const raw = row.start_date || row.created_at
+      if (!raw) continue
+      const y = new Date(raw).getFullYear()
+      if (Number.isFinite(y) && y > 1900 && y <= CURRENT_YEAR + 1) set.add(y)
+    }
+    return Array.from(set).sort((a, b) => a - b)
+  }, [suppliersRows])
+
+  useEffect(() => { load() },             [load])
+  useEffect(() => { loadSuppliersList() }, [loadSuppliersList])
+
+  const kpiCards = [
+    { icon: Users,       label: 'Total proveedores',    value: data?.total_suppliers ?? '—',              iconColor: 'text-blue-600',                iconBg: 'bg-blue-50',    accent: 'border-l-blue-500'    },
+    { icon: CheckCircle, label: 'Proveedores activos',  value: data?.active_suppliers ?? '—',             iconColor: 'text-emerald-600',             iconBg: 'bg-emerald-50', accent: 'border-l-emerald-500' },
+    { icon: DollarSign,  label: 'Compras del mes (CLP)', value: formatMoneyClp(data?.month_purchases_clp), iconColor: 'text-[hsl(var(--primary))]',   iconBg: 'bg-emerald-50', accent: 'border-l-emerald-700' },
+  ]
 
   return (
-    <InventoryShell user={user} userRole={userRole} onLogout={onLogout} active="suppliers">
-      <div className="inv-stock-page providers-layout providers-layout--kpis">
-        <BackToInventoryHubButton navState={{ local: selectedLocal }} />
+    <InventoryShell>
+      {/* No mx-auto — content anchors to the left with padding only */}
+      <div className="px-6 py-6 flex flex-col gap-6 pb-10">
 
-        <div className="scd-suppliers-head">
-          <header className="scd-header scd-header--compact">
-            <span className="scd-header-icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24" fill="none">
-                <path d="M4 10h3l2-4h6l2 4h3v8H4V10z" stroke="currentColor" strokeWidth="1.5" />
-                <path d="M9 18v-4h6v4" stroke="currentColor" strokeWidth="1.5" />
-              </svg>
+        {/* ── Header ── */}
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <header className="flex items-center gap-4">
+            <span className="flex items-center justify-center w-13 h-13 rounded-xl bg-[hsl(var(--primary)/0.1)] text-[hsl(var(--primary))] p-3">
+              <Store size={26} />
             </span>
             <div>
-              <h1 className="scd-title">Proveedores</h1>
-              <p className="scd-subtitle">Gestiona proveedores activos y monitorea su impacto en compras</p>
+              <h1 className="text-2xl font-bold text-[hsl(var(--foreground))]">Proveedores</h1>
+              <p className="text-sm text-[hsl(var(--muted-foreground))] mt-0.5">
+                Gestiona proveedores y monitorea su impacto en compras
+              </p>
             </div>
           </header>
 
-          {canAccess ? (
-            <div className="scd-period-toolbar" role="group" aria-label="Período">
-              <span className="scd-period-label">Período</span>
-              <span className="scd-period-year-now" title="Siempre año calendario actual">
-                {calendarYear}
-              </span>
-              <select
-                className="scd-period-select"
-                aria-label="Mes del año en curso"
-                value={month}
-                onChange={(ev) => setMonth(Number(ev.target.value))}
-              >
-                {MONTH_NAMES.map((name, i) => (
-                  <option key={name} value={i + 1}>
-                    {name}
-                  </option>
-                ))}
-              </select>
-              <button
-                type="button"
-                className="scd-period-refresh"
-                onClick={() => load()}
-                disabled={loading}
-                aria-label="Actualizar KPIs de proveedores"
-              >
-                {loading ? 'Actualizando…' : 'Actualizar'}
-              </button>
+          {canAccess && (
+            <div className="flex items-center gap-3 flex-wrap">
+              {/* Period selector */}
+              <div className="flex items-center gap-0 rounded-lg border border-[hsl(var(--border))] bg-white overflow-hidden shadow-sm">
+                <select
+                  value={year}
+                  onChange={(e) => setYear(Number(e.target.value))}
+                  className="h-9 border-0 bg-transparent px-3 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-inset focus:ring-[hsl(var(--primary)/0.3)] cursor-pointer"
+                  aria-label="Año"
+                >
+                  {availableYears.map((y) => (
+                    <option key={y} value={y}>{y}</option>
+                  ))}
+                </select>
+                <div className="w-px h-5 bg-[hsl(var(--border))]" />
+                <select
+                  value={month}
+                  onChange={(e) => setMonth(Number(e.target.value))}
+                  className="h-9 border-0 bg-transparent px-3 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-inset focus:ring-[hsl(var(--primary)/0.3)] cursor-pointer"
+                  aria-label="Mes"
+                >
+                  {MONTH_NAMES.map((name, i) => (
+                    <option key={name} value={i + 1}>{name}</option>
+                  ))}
+                </select>
+              </div>
+
+              {resolvedBusinessId && (
+                <Button
+                  type="button"
+                  onClick={() => setRegisterOpen(true)}
+                  disabled={suppliersLoading}
+                  className="gap-2 h-9"
+                >
+                  <Plus size={16} />
+                  Registrar proveedor
+                </Button>
+              )}
             </div>
-          ) : null}
+          )}
         </div>
 
-        {!canAccess ? (
-          <div className="scd-status scd-status--error" role="alert">
-            Solo administradores (Admin o Superadmin) pueden ver los KPIs de proveedores.
+        {/* ── Last updated ── */}
+        {updatedAt && canAccess && (
+          <div className="flex items-center gap-2 text-sm text-[hsl(var(--muted-foreground))] -mt-2">
+            <Clock size={14} className="shrink-0" />
+            <span>
+              Actualizado:{' '}
+              <strong className="text-[hsl(var(--foreground))]">
+                {new Intl.DateTimeFormat('es-CL', { dateStyle: 'medium', timeStyle: 'short' }).format(updatedAt)}
+              </strong>
+            </span>
           </div>
-        ) : null}
+        )}
 
-        {canAccess && error ? <div className="scd-status scd-status--error">{error}</div> : null}
-        {canAccess && loading && !data ? <LoadingSpinner message="Cargando indicadores de proveedores…" /> : null}
+        {/* ── Access error ── */}
+        {!canAccess && (
+          <div className="rounded-lg border border-red-200 bg-red-50 text-red-700 px-4 py-3">
+            Solo administradores pueden ver los KPIs de proveedores.
+          </div>
+        )}
 
-        {canAccess && data ? (
-          <>
-            <p className="scd-period-meta scd-period-meta--plain">
-              Fecha de solicitud: <strong>{formatRequestDateTime(requestedAt)}</strong>
-            </p>
-            <section className="scd-kpis providers-kpi-grid" aria-label="KPIs de proveedores">
-              <article className="scd-kpi">
-                <span className="scd-kpi-icon scd-kpi-icon--box" aria-hidden="true">
-                  <svg viewBox="0 0 24 24" fill="none">
-                    <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2M9 11a4 4 0 100-8 4 4 0 000 8z" stroke="currentColor" strokeWidth="1.5" />
-                    <path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-                  </svg>
-                </span>
-                <div>
-                  <p className="scd-kpi-label">Total proveedores</p>
-                  <p className="scd-kpi-value">{data.total_suppliers ?? 0}</p>
-                </div>
-              </article>
-              <article className="scd-kpi scd-kpi--optimal">
-                <span className="scd-kpi-icon" aria-hidden="true">
-                  <svg viewBox="0 0 24 24" fill="none">
-                    <path
-                      d="M9 12l2 2 4-4M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                      stroke="currentColor"
-                      strokeWidth="1.5"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
-                </span>
-                <div>
-                  <p className="scd-kpi-label">Proveedores activos</p>
-                  <p className="scd-kpi-value">{data.active_suppliers ?? 0}</p>
-                </div>
-              </article>
-              <article className="scd-kpi scd-kpi--value">
-                <span className="scd-kpi-icon scd-kpi-icon--green" aria-hidden="true">
-                  <svg viewBox="0 0 24 24" fill="none">
-                    <path d="M12 2v20M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-                  </svg>
-                </span>
-                <div>
-                  <p className="scd-kpi-label">Compras del mes (CLP)</p>
-                  <p className="scd-kpi-value scd-kpi-value--money">{formatMoneyClp(data.month_purchases_clp)}</p>
-                </div>
-              </article>
-            </section>
-          </>
-        ) : null}
+        {/* ── KPI error ── */}
+        {canAccess && error && (
+          <div className="rounded-lg border border-red-200 bg-red-50 text-red-700 px-4 py-3">
+            {error}
+          </div>
+        )}
 
-        {canAccess ? (
-          <section
-            className="scd-suppliers-list-section providers-section-card"
-            aria-labelledby="scd-suppliers-list-title"
+        {/* ── KPI cards ── */}
+        {canAccess && (
+          <motion.div
+            className="grid grid-cols-1 sm:grid-cols-3 gap-4"
+            variants={STAGGER} initial="hidden" animate="visible"
           >
-            <div className="scd-table-meta scd-table-meta--with-action">
+            {kpiCards.map((k) => (
+              <motion.div key={k.label} variants={ITEM}>
+                <Card className={`border-l-4 ${k.accent} h-full`}>
+                  <CardContent className="flex items-center gap-4 p-5">
+                    <span className={`flex items-center justify-center w-12 h-12 rounded-full shrink-0 ${k.iconBg} ${k.iconColor}`}>
+                      <k.icon size={24} />
+                    </span>
+                    <div className="min-w-0">
+                      <p className="text-sm text-[hsl(var(--muted-foreground))] leading-tight">{k.label}</p>
+                      {loading
+                        ? <div className="h-8 w-16 bg-[hsl(var(--muted))] rounded animate-pulse mt-1" />
+                        : <p className={`text-3xl font-bold leading-tight mt-1 ${k.iconColor}`}>{k.value}</p>
+                      }
+                    </div>
+                  </CardContent>
+                </Card>
+              </motion.div>
+            ))}
+          </motion.div>
+        )}
+
+        {/* ── Suppliers table ── */}
+        {canAccess && (
+          <Card>
+            <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b border-[hsl(var(--border))]">
               <div>
-                <h2 id="scd-suppliers-list-title" className="scd-section-title">
-                  Listado de proveedores
-                </h2>
+                <h2 className="text-lg font-semibold text-[hsl(var(--foreground))]">Listado de proveedores</h2>
+                {!suppliersLoading && (
+                  <p className="text-sm text-[hsl(var(--muted-foreground))] mt-0.5">
+                    {suppliersRows.length} proveedor{suppliersRows.length !== 1 ? 'es' : ''} registrado{suppliersRows.length !== 1 ? 's' : ''}
+                  </p>
+                )}
               </div>
-              {resolvedBusinessId ? (
-                <button
-                  type="button"
-                  className="scd-btn-register-supplier"
-                  onClick={() => setRegisterSupplierOpen(true)}
-                  disabled={suppliersLoading}
-                >
-                  Registrar proveedor
-                </button>
-              ) : null}
             </div>
-            {suppliersError ? <div className="scd-status scd-status--error">{suppliersError}</div> : null}
-            {suppliersLoading ? (
-              <LoadingSpinner message="Cargando proveedores…" />
-            ) : suppliersRows.length === 0 && !suppliersError ? (
-              <p className="scd-table-empty">No hay proveedores registrados para este negocio.</p>
-            ) : (
-              <div className="scd-table-wrap">
-                <table className="scd-table">
-                  <thead>
-                    <tr>
-                      <th scope="col">Proveedor</th>
-                      <th scope="col">Estado</th>
-                      <th scope="col" className="scd-table-num">
-                        Unidades en inventario
-                      </th>
-                      <th scope="col" className="scd-table-num">
-                        Valor inventario (CLP)
-                      </th>
-                      <th scope="col" className="scd-table-actions-col">
-                        Acciones
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {suppliersRows.map((row) => (
-                      <tr key={row.id}>
-                        <td className="scd-table-supplier">{row.name || '—'}</td>
-                        <td>{row.is_active === false ? 'Inactivo' : 'Activo'}</td>
-                        <td className="scd-table-num">{row.purchased_products_count ?? 0}</td>
-                        <td className="scd-table-num scd-kpi-value--money">
-                          {formatMoneyClp(row.supplier_purchases_total_clp)}
-                        </td>
-                        <td>
-                          <button
-                            type="button"
-                            className="scd-btn-supplier-detail"
-                            onClick={() => setDetailSupplierId(row.id != null ? String(row.id) : null)}
-                            aria-label={`Ver detalle de ${row.name || 'proveedor'}`}
-                          >
-                            Ver detalle
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+
+            {suppliersError && (
+              <div className="mx-6 mt-4 rounded-lg border border-red-200 bg-red-50 text-red-700 px-4 py-3">
+                {suppliersError}
               </div>
             )}
-          </section>
-        ) : null}
+
+            {suppliersLoading ? (
+              <div className="py-12">
+                <LoadingSpinner message="Cargando proveedores…" />
+              </div>
+            ) : suppliersRows.length === 0 && !suppliersError ? (
+              <div className="flex flex-col items-center justify-center py-16 text-center px-6">
+                <span className="flex items-center justify-center w-14 h-14 rounded-full bg-[hsl(var(--muted))] text-[hsl(var(--muted-foreground))] mb-4">
+                  <Store size={26} />
+                </span>
+                <p className="text-base font-medium text-[hsl(var(--foreground))]">Sin proveedores registrados</p>
+                <p className="text-sm text-[hsl(var(--muted-foreground))] mt-1">
+                  Registra tu primer proveedor con el botón de arriba.
+                </p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-[hsl(var(--muted)/0.5)] hover:bg-[hsl(var(--muted)/0.5)]">
+                      <TableHead className="pl-6 py-3 text-sm font-semibold">Proveedor</TableHead>
+                      <TableHead className="py-3 text-sm font-semibold">Estado</TableHead>
+                      <TableHead className="text-right py-3 text-sm font-semibold">Uds. en inventario</TableHead>
+                      <TableHead className="text-right py-3 text-sm font-semibold">Valor inventario</TableHead>
+                      <TableHead className="pr-6 py-3 text-right text-sm font-semibold">Acciones</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {suppliersRows.map((row, idx) => {
+                      const inactive = row.is_active === false
+                      const isBusy   = rowActionId === String(row.id)
+                      const { letter, color } = supplierAvatar(row.name, idx)
+                      const avatarCls = inactive ? 'bg-gray-100 text-gray-400' : color
+                      const isConfirmingDelete = confirmDeleteId === String(row.id)
+
+                      return (
+                        <TableRow
+                          key={row.id}
+                          className={`transition-colors ${inactive ? 'bg-[hsl(var(--muted)/0.25)] opacity-60' : 'hover:bg-[hsl(var(--muted)/0.3)]'}`}
+                        >
+                          <TableCell className="pl-6 py-4">
+                            <div className="flex items-center gap-3">
+                              <span className={`flex items-center justify-center w-10 h-10 rounded-full text-base font-bold shrink-0 ${avatarCls}`}>
+                                {letter}
+                              </span>
+                              <span className={`font-semibold text-base ${inactive ? 'text-[hsl(var(--muted-foreground))]' : 'text-[hsl(var(--foreground))]'}`}>
+                                {row.name || '—'}
+                              </span>
+                            </div>
+                          </TableCell>
+                          <TableCell className="py-4">
+                            <Badge
+                              className={`text-sm px-3 py-1 ${inactive
+                                ? 'bg-gray-100 text-gray-500 border border-gray-200 hover:bg-gray-100'
+                                : 'bg-emerald-100 text-emerald-700 border border-emerald-200 hover:bg-emerald-100'
+                              }`}
+                            >
+                              {inactive ? 'Inactivo' : 'Activo'}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className={`text-right tabular-nums text-base py-4 ${inactive ? 'text-gray-400' : 'text-[hsl(var(--muted-foreground))]'}`}>
+                            {row.purchased_products_count ?? 0}
+                          </TableCell>
+                          <TableCell className={`text-right tabular-nums text-base font-semibold py-4 ${inactive ? 'text-gray-400' : 'text-[hsl(var(--primary))]'}`}>
+                            {formatMoneyClp(row.supplier_purchases_total_clp)}
+                          </TableCell>
+                          <TableCell className="pr-6 py-3">
+                            <div className="flex items-center justify-end gap-1">
+                              {isConfirmingDelete ? (
+                                <div className="flex items-center gap-1.5">
+                                  <span className="text-xs text-red-600 font-medium whitespace-nowrap">¿Eliminar?</span>
+                                  <Button type="button" variant="destructive" size="sm" disabled={isBusy}
+                                    onClick={() => handleDelete(row)} className="h-7 px-2 text-xs">
+                                    {isBusy ? '…' : 'Sí'}
+                                  </Button>
+                                  <Button type="button" variant="ghost" size="sm"
+                                    onClick={() => setConfirmDeleteId(null)} className="h-7 px-2 text-xs">
+                                    No
+                                  </Button>
+                                </div>
+                              ) : (
+                                <>
+                                  <button
+                                    type="button"
+                                    title="Ver detalle"
+                                    disabled={isBusy}
+                                    onClick={() => setDetailId(row.id != null ? String(row.id) : null)}
+                                    className="w-8 h-8 flex items-center justify-center rounded-lg text-[hsl(var(--primary))] hover:bg-[hsl(var(--primary)/0.08)] disabled:opacity-40 transition-colors"
+                                  >
+                                    <Eye size={16} />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    title={inactive ? 'Habilitar proveedor' : 'Deshabilitar proveedor'}
+                                    disabled={isBusy}
+                                    onClick={() => handleToggleActive(row)}
+                                    className={`w-8 h-8 flex items-center justify-center rounded-lg disabled:opacity-40 transition-colors ${
+                                      inactive
+                                        ? 'text-emerald-600 hover:bg-emerald-50'
+                                        : 'text-amber-500 hover:bg-amber-50'
+                                    }`}
+                                  >
+                                    <Power size={16} />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    title="Eliminar proveedor"
+                                    disabled={isBusy}
+                                    onClick={() => setConfirmDeleteId(String(row.id))}
+                                    className="w-8 h-8 flex items-center justify-center rounded-lg text-red-500 hover:bg-red-50 disabled:opacity-40 transition-colors"
+                                  >
+                                    <Trash2 size={16} />
+                                  </button>
+                                </>
+                              )}
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      )
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+          </Card>
+        )}
 
         <RegisterSupplierModal
-          open={registerSupplierOpen}
-          onClose={() => setRegisterSupplierOpen(false)}
+          open={registerOpen}
+          onClose={() => setRegisterOpen(false)}
           businessId={resolvedBusinessId}
-          onSuccess={() => {
-            load()
-            loadSuppliersList()
-          }}
+          onSuccess={() => { load(); loadSuppliersList() }}
         />
 
         <SupplierDetailModal
-          open={detailSupplierId != null && detailSupplierId !== ''}
-          supplierId={detailSupplierId}
+          open={detailId != null && detailId !== ''}
+          supplierId={detailId}
           businessId={resolvedBusinessId}
-          onClose={() => setDetailSupplierId(null)}
+          onClose={() => setDetailId(null)}
         />
       </div>
     </InventoryShell>

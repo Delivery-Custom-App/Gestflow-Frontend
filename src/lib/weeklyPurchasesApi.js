@@ -4,56 +4,55 @@ import { apiRequest } from './apiClient'
  * HU-34: órdenes de compra semanales a proveedores.
  * @param {{ week_start?: string, supplier_id?: string, status?: string }} [filters]
  */
-export function getWeeklyPurchaseOrders(token, businessId, filters = {}) {
+export function getWeeklyPurchaseOrders(businessId, filters = {}) {
   const params = new URLSearchParams()
   params.set('business_id', String(businessId))
   if (filters.week_start) params.set('week_start', String(filters.week_start))
   if (filters.supplier_id) params.set('supplier_id', String(filters.supplier_id))
   if (filters.status) params.set('status', String(filters.status))
-  return apiRequest(`/weekly-purchase-orders?${params.toString()}`, { token })
+  return apiRequest(`/weekly-purchase-orders?${params.toString()}`)
 }
 
-export function getWeeklyPurchaseOrder(token, orderId, businessId) {
+export function getWeeklyPurchaseOrder(orderId, businessId) {
   const params = new URLSearchParams({ business_id: String(businessId) })
-  return apiRequest(`/weekly-purchase-orders/${encodeURIComponent(orderId)}?${params}`, { token })
+  return apiRequest(`/weekly-purchase-orders/${encodeURIComponent(orderId)}?${params}`)
 }
 
-export function postWeeklyPurchaseOrder(token, body) {
-  return apiRequest('/weekly-purchase-orders', { method: 'POST', token, body })
+export function postWeeklyPurchaseOrder(body) {
+  return apiRequest('/weekly-purchase-orders', { method: 'POST', body })
 }
 
-export function patchWeeklyPurchaseOrder(token, orderId, businessId, body) {
+export function patchWeeklyPurchaseOrder(orderId, businessId, body) {
   const params = new URLSearchParams({ business_id: String(businessId) })
-  return apiRequest(`/weekly-purchase-orders/${encodeURIComponent(orderId)}?${params}`, { method: 'PATCH', token, body })
+  return apiRequest(`/weekly-purchase-orders/${encodeURIComponent(orderId)}?${params}`, { method: 'PATCH', body })
 }
 
-export function putWeeklyPurchaseOrderItems(token, orderId, businessId, items) {
+export function putWeeklyPurchaseOrderItems(orderId, businessId, items) {
   const params = new URLSearchParams({ business_id: String(businessId) })
   return apiRequest(`/weekly-purchase-orders/${encodeURIComponent(orderId)}/items?${params}`, {
     method: 'PUT',
-    token,
     body: { items },
   })
 }
 
-export function patchWeeklyPurchaseLineReception(token, orderId, itemId, businessId, quantity_received) {
+export function patchWeeklyPurchaseLineReception(orderId, itemId, businessId, quantity_received) {
   const params = new URLSearchParams({ business_id: String(businessId) })
   return apiRequest(
     `/weekly-purchase-orders/${encodeURIComponent(orderId)}/items/${encodeURIComponent(itemId)}/reception?${params}`,
-    { method: 'PATCH', token, body: { quantity_received } },
+    { method: 'PATCH', body: { quantity_received } },
   )
 }
 
-export function deleteWeeklyPurchaseOrder(token, orderId, businessId) {
+export function deleteWeeklyPurchaseOrder(orderId, businessId) {
   const params = new URLSearchParams({ business_id: String(businessId) })
-  return apiRequest(`/weekly-purchase-orders/${encodeURIComponent(orderId)}?${params}`, { method: 'DELETE', token })
+  return apiRequest(`/weekly-purchase-orders/${encodeURIComponent(orderId)}?${params}`, { method: 'DELETE' })
 }
 
-export function getWeeklyPurchaseComparisonReport(token, businessId, week_from, week_to) {
+export function getWeeklyPurchaseComparisonReport(businessId, week_from, week_to) {
   const params = new URLSearchParams({
     business_id: String(businessId),
     week_from: String(week_from),
     week_to: String(week_to),
   })
-  return apiRequest(`/weekly-purchase-orders/reports/comparison?${params.toString()}`, { token })
+  return apiRequest(`/weekly-purchase-orders/reports/comparison?${params.toString()}`)
 }

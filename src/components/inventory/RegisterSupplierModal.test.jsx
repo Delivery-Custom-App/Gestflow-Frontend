@@ -24,13 +24,13 @@ const validForm = {
 }
 
 function fillValidForm(user) {
-  return user.type(screen.getByLabelText(/Nombre comercial/i, { selector: 'input' }), validForm.name)
-    .then(() => user.type(screen.getByLabelText(/^RUT$/i, { selector: 'input' }), validForm.rut))
-    .then(() => user.type(screen.getByLabelText(/Dirección/i, { selector: 'input' }), validForm.address))
-    .then(() => user.type(screen.getByLabelText(/Categoría/i, { selector: 'input' }), validForm.category))
-    .then(() => user.type(screen.getByLabelText(/^Contacto$/i, { selector: 'input' }), validForm.contact_name))
-    .then(() => user.type(screen.getByLabelText(/^Teléfono$/i, { selector: 'input' }), validForm.phone))
-    .then(() => user.type(screen.getByLabelText(/^Email$/i, { selector: 'input' }), validForm.email))
+  return user.type(screen.getByLabelText(/Nombre comercial/i), validForm.name)
+    .then(() => user.type(screen.getByLabelText(/^RUT/i), validForm.rut))
+    .then(() => user.type(screen.getByLabelText(/Dirección/i), validForm.address))
+    .then(() => user.type(screen.getByLabelText(/Categoría/i), validForm.category))
+    .then(() => user.type(screen.getByLabelText(/^Contacto/i), validForm.contact_name))
+    .then(() => user.type(screen.getByLabelText(/^Teléfono/i), validForm.phone))
+    .then(() => user.type(screen.getByLabelText(/^Email/i), validForm.email))
 }
 
 describe('RegisterSupplierModal', () => {
@@ -55,7 +55,7 @@ describe('RegisterSupplierModal', () => {
     const user = userEvent.setup()
     render(<RegisterSupplierModal open onClose={vi.fn()} businessId="biz-1" />)
     await user.click(screen.getByRole('button', { name: /Registrar$/i }))
-    expect(await screen.findByText(/Nombre comercial es obligatorio/i)).toBeInTheDocument()
+    expect(await screen.findByText('Nombre comercial es obligatorio.')).toBeInTheDocument()
     expect(postSupplier).not.toHaveBeenCalled()
   })
 
@@ -72,8 +72,7 @@ describe('RegisterSupplierModal', () => {
     await waitFor(() => {
       expect(postSupplier).toHaveBeenCalledTimes(1)
     })
-    const [token, body] = postSupplier.mock.calls[0]
-    expect(token).toBe('tok')
+    const [body] = postSupplier.mock.calls[0]
     expect(body.business_id).toBe('biz-99')
     expect(body.name).toBe(validForm.name)
     expect(body.rut).toBe('123456785')

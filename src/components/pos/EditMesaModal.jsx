@@ -1,5 +1,14 @@
 import { useState } from 'react'
-import '../../styles/EditMesaModal.css'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 
 /**
  * Modal para editar una mesa existente
@@ -40,12 +49,8 @@ export default function EditMesaModal({ mesa, onClose, onSubmit }) {
       ...prev,
       [name]: type === 'checkbox' ? checked : type === 'number' ? Number(value) : value,
     }))
-    // Limpiar error al escribir
     if (errors[name]) {
-      setErrors((prev) => ({
-        ...prev,
-        [name]: '',
-      }))
+      setErrors((prev) => ({ ...prev, [name]: '' }))
     }
   }
 
@@ -73,44 +78,36 @@ export default function EditMesaModal({ mesa, onClose, onSubmit }) {
   }
 
   return (
-    <div className="edit-mesa-modal-overlay">
-      <div className="edit-mesa-modal">
-        <div className="edit-mesa-modal-header">
-          <h2>Editar Mesa</h2>
-          <button
-            className="edit-mesa-modal-close"
-            type="button"
-            onClick={onClose}
-            aria-label="Cerrar"
-          >
-            ✕
-          </button>
-        </div>
+    <Dialog open onOpenChange={onClose}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Editar Mesa</DialogTitle>
+        </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="edit-mesa-form">
+        <form onSubmit={handleSubmit} className="space-y-4 pt-1">
           {/* Nombre */}
-          <div className="form-group">
-            <label htmlFor="edit-mesa-name">
-              Nombre <span className="required">*</span>
-            </label>
-            <input
+          <div className="space-y-1.5">
+            <Label htmlFor="edit-mesa-name">
+              Nombre <span className="text-[hsl(var(--destructive))]">*</span>
+            </Label>
+            <Input
               id="edit-mesa-name"
               type="text"
               name="name"
               value={form.name}
               onChange={handleChange}
               placeholder="Ej: mesa 1, mesa A, etc."
-              className={errors.name ? 'input-error' : ''}
+              className={errors.name ? 'border-[hsl(var(--destructive))]' : ''}
             />
-            {errors.name && <span className="error-message">{errors.name}</span>}
+            {errors.name && <p className="text-xs text-[hsl(var(--destructive))]">{errors.name}</p>}
           </div>
 
           {/* Capacidad */}
-          <div className="form-group">
-            <label htmlFor="edit-mesa-capacidad">
-              Capacidad (personas) <span className="required">*</span>
-            </label>
-            <input
+          <div className="space-y-1.5">
+            <Label htmlFor="edit-mesa-capacidad">
+              Capacidad (personas) <span className="text-[hsl(var(--destructive))]">*</span>
+            </Label>
+            <Input
               id="edit-mesa-capacidad"
               type="number"
               name="capacidad"
@@ -118,67 +115,62 @@ export default function EditMesaModal({ mesa, onClose, onSubmit }) {
               onChange={handleChange}
               min="1"
               max="100"
-              className={errors.capacidad ? 'input-error' : ''}
+              className={errors.capacidad ? 'border-[hsl(var(--destructive))]' : ''}
             />
-            {errors.capacidad && <span className="error-message">{errors.capacidad}</span>}
+            {errors.capacidad && <p className="text-xs text-[hsl(var(--destructive))]">{errors.capacidad}</p>}
           </div>
 
           {/* Zona */}
-          <div className="form-group">
-            <label htmlFor="edit-mesa-zona">
-              Zona <span className="required">*</span>
-            </label>
-            <input
+          <div className="space-y-1.5">
+            <Label htmlFor="edit-mesa-zona">
+              Zona <span className="text-[hsl(var(--destructive))]">*</span>
+            </Label>
+            <Input
               id="edit-mesa-zona"
               type="text"
               name="zona"
               value={form.zona}
               onChange={handleChange}
               placeholder="Ej: Salón, Patio, Terraza"
-              className={errors.zona ? 'input-error' : ''}
+              className={errors.zona ? 'border-[hsl(var(--destructive))]' : ''}
             />
-            {errors.zona && <span className="error-message">{errors.zona}</span>}
+            {errors.zona && <p className="text-xs text-[hsl(var(--destructive))]">{errors.zona}</p>}
           </div>
 
           {/* Estado activo/inactivo */}
-          <div className="form-group checkbox-group">
-            <label htmlFor="edit-mesa-active">
+          <div className="space-y-1.5">
+            <Label htmlFor="edit-mesa-active" className="flex items-center gap-2 cursor-pointer">
               <input
                 id="edit-mesa-active"
                 type="checkbox"
                 name="is_active"
                 checked={form.is_active}
                 onChange={handleChange}
+                className="w-4 h-4 rounded accent-[hsl(var(--primary))]"
               />
               <span>Mesa activa</span>
-            </label>
-            <p className="help-text">
+            </Label>
+            <p className="text-xs text-[hsl(var(--muted-foreground))] pl-6">
               {form.is_active
                 ? 'La mesa está disponible para usar'
                 : 'La mesa está inactiva y no aparecerá en el listado'}
             </p>
           </div>
 
-          {/* Botones */}
-          <div className="edit-mesa-modal-actions">
-            <button
-              type="button"
-              className="btn-cancel"
-              onClick={onClose}
-              disabled={isSubmitting}
-            >
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={onClose} disabled={isSubmitting}>
               Cancelar
-            </button>
-            <button
+            </Button>
+            <Button
               type="submit"
-              className="btn-submit"
               disabled={isSubmitting}
+              className="bg-[hsl(var(--primary))] hover:bg-[hsl(var(--primary))]/90 text-white"
             >
               {isSubmitting ? 'Guardando...' : 'Guardar Cambios'}
-            </button>
-          </div>
+            </Button>
+          </DialogFooter>
         </form>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   )
 }

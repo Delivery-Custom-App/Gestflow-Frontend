@@ -1,16 +1,19 @@
 import { useCallback, useEffect, useState } from 'react'
-import { getAuthContext } from '../../lib/apiClient'
 import { getSupplierDetailForBusiness, patchSupplier } from '../../lib/providersApi'
-import '../../styles/inventory/WeeklyPurchases.css'
-
-function formatMoneyClp(value) {
-  if (value == null || Number.isNaN(Number(value))) return '—'
-  const n = new Intl.NumberFormat('es-CL', {
-    maximumFractionDigits: 0,
-    minimumFractionDigits: 0,
-  }).format(Math.round(Number(value)))
-  return `$${n}`
-}
+import { formatCLPDisplay as formatMoneyClp } from '../../lib/formatCLP'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import { Label } from '@/components/ui/label'
+import { Input } from '@/components/ui/input'
+import {
+  Table,
+  TableHeader,
+  TableBody,
+  TableRow,
+  TableHead,
+  TableCell,
+} from '@/components/ui/table'
 
 function displayStr(value) {
   const s = value != null ? String(value).trim() : ''
@@ -36,8 +39,7 @@ function SupplierDetailModal({ open, supplierId, businessId, onClose }) {
     setLoading(true)
     setDetail(null)
     try {
-      const { token } = await getAuthContext()
-      const data = await getSupplierDetailForBusiness(token, supplierId, businessId)
+      const data = await getSupplierDetailForBusiness(supplierId, businessId)
       setDetail(data && typeof data === 'object' ? data : null)
       if (data && typeof data === 'object') {
         setPaymentTerms(data.payment_terms_days != null ? String(data.payment_terms_days) : '')
@@ -62,15 +64,6 @@ function SupplierDetailModal({ open, supplierId, businessId, onClose }) {
     load()
   }, [open, supplierId, businessId, load])
 
-  useEffect(() => {
-    if (!open) return
-    const onKey = (ev) => {
-      if (ev.key === 'Escape') onClose()
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [open, onClose])
-
   if (!open || !supplierId || !businessId) return null
 
   const products = Array.isArray(detail?.purchased_products) ? detail.purchased_products : []
@@ -80,7 +73,6 @@ function SupplierDetailModal({ open, supplierId, businessId, onClose }) {
     setCommercialError('')
     setCommercialSaving(true)
     try {
-      const { token } = await getAuthContext()
       const body = {}
       if (paymentTerms.trim() !== '') {
         const n = parseInt(paymentTerms, 10)
@@ -97,7 +89,7 @@ function SupplierDetailModal({ open, supplierId, businessId, onClose }) {
         body.delivery_lead_time_days = null
       }
       body.commercial_notes = commercialNotes.trim() || null
-      const updated = await patchSupplier(token, supplierId, businessId, body)
+      const updated = await patchSupplier(supplierId, businessId, body)
       setDetail((prev) => (prev && typeof prev === 'object' ? { ...prev, ...updated } : updated))
     } catch (e) {
       setCommercialError(e?.message || 'No se pudieron guardar las condiciones.')
@@ -107,143 +99,139 @@ function SupplierDetailModal({ open, supplierId, businessId, onClose }) {
   }
 
   return (
-    <div className="npmodal-backdrop" role="presentation" onClick={onClose}>
-      <div
-        className="npmodal npmodal--wide supplier-detail-modal"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="supplier-detail-title"
-        onClick={(ev) => ev.stopPropagation()}
+    <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) onClose() }}>
+      <DialogContent
+        className="max-w-2xl w-full flex flex-col overflow-hidden p-0"
+        style={{ maxHeight: 'min(92vh, 820px)' }}
       >
-        <div className="npmodal-head">
-          <h2 id="supplier-detail-title">Detalle del proveedor</h2>
-          <button type="button" className="npmodal-close" onClick={onClose} aria-label="Cerrar">
-            ×
-          </button>
-        </div>
+        {/* Fixed header */}
+        <DialogHeader className="shrink-0 px-7 pt-6 pb-4 border-b border-[hsl(var(--border))]">
+          <DialogTitle>Detalle del proveedor</DialogTitle>
+        </DialogHeader>
 
-        <div className="supplier-detail-body">
-          {loading ? (
-            <p className="supplier-detail-loading" role="status">
-              Cargando…
-            </p>
-          ) : null}
+        {/* Scrollable body — no visible scrollbar */}
+        <div className="flex-1 overflow-y-auto min-h-0 no-scrollbar px-7 py-5">
+          <div className="flex flex-col gap-6">
+            {loading ? (
+              <p className="text-sm text-[hsl(var(--muted-foreground))]" role="status">Cargando…</p>
+            ) : null}
 
-          {error ? <p className="npmodal-error">{error}</p> : null}
+            {error ? (
+              <p className="rounded-md bg-red-50 border border-red-200 text-red-700 text-sm px-3 py-2">{error}</p>
+            ) : null}
 
-          {!loading && !error && detail ? (
-            <>
-              <div className="supplier-detail-headline">
-                <h3 className="supplier-detail-name">{displayStr(detail.name)}</h3>
-                <span className={`supplier-detail-badge ${detail.is_active === false ? 'is-inactive' : ''}`}>
-                  {detail.is_active === false ? 'Inactivo' : 'Activo'}
-                </span>
-              </div>
-
-              <dl className="supplier-detail-dl">
-                <dt>RUT</dt>
-                <dd>{displayStr(detail.rut)}</dd>
-                <dt>Teléfono</dt>
-                <dd>{displayStr(detail.phone)}</dd>
-                <dt>Email</dt>
-                <dd>{displayStr(detail.email)}</dd>
-                <dt>Dirección</dt>
-                <dd>{displayStr(detail.address)}</dd>
-                <dt>Contacto</dt>
-                <dd>{displayStr(detail.contact_name)}</dd>
-                <dt>Categoría</dt>
-                <dd>{displayStr(detail.category)}</dd>
-              </dl>
-
-              <form className="supplier-detail-commercial-form supplier-detail-commercial" onSubmit={saveCommercial}>
-                <h4>Condiciones comerciales (HU-34)</h4>
-                {commercialError ? <p className="npmodal-error">{commercialError}</p> : null}
-                <label>
-                  Plazo de pago (días)
-                  <input
-                    type="number"
-                    min="0"
-                    value={paymentTerms}
-                    onChange={(ev) => setPaymentTerms(ev.target.value)}
-                    placeholder="Ej. 30"
-                  />
-                </label>
-                <label>
-                  Plazo de entrega típico (días)
-                  <input
-                    type="number"
-                    min="0"
-                    value={leadTime}
-                    onChange={(ev) => setLeadTime(ev.target.value)}
-                    placeholder="Ej. 3"
-                  />
-                </label>
-                <label>
-                  Observaciones
-                  <textarea value={commercialNotes} onChange={(ev) => setCommercialNotes(ev.target.value)} placeholder="Condiciones u notas" />
-                </label>
-                <button type="submit" className="npmodal-btn npmodal-btn--primary" disabled={commercialSaving}>
-                  {commercialSaving ? 'Guardando…' : 'Guardar condiciones'}
-                </button>
-              </form>
-
-              <div className="supplier-detail-kpis" aria-label="Indicadores">
-                <div className="supplier-detail-kpi">
-                  <span className="supplier-detail-kpi-label">Total productos (unidades)</span>
-                  <span className="supplier-detail-kpi-value">{detail.purchased_products_count ?? 0}</span>
+            {!loading && !error && detail ? (
+              <>
+                {/* Name + badge */}
+                <div className="flex items-center gap-3">
+                  <h3 className="text-lg font-bold text-[hsl(var(--foreground))]">{displayStr(detail.name)}</h3>
+                  <Badge variant={detail.is_active === false ? 'destructive' : 'success'}>
+                    {detail.is_active === false ? 'Inactivo' : 'Activo'}
+                  </Badge>
                 </div>
-                <div className="supplier-detail-kpi">
-                  <span className="supplier-detail-kpi-label">Total compras (CLP)</span>
-                  <span className="supplier-detail-kpi-value supplier-detail-kpi-value--money">
-                    {formatMoneyClp(detail.supplier_purchases_total_clp)}
-                  </span>
-                </div>
-              </div>
 
-              <h4 className="supplier-detail-subtitle">Productos en inventario</h4>
-              {products.length === 0 ? (
-                <p className="supplier-detail-empty-products">No hay productos asociados o sin stock registrado.</p>
-              ) : (
-                <div className="supplier-detail-table-wrap">
-                  <table className="supplier-detail-products-table">
-                    <thead>
-                      <tr>
-                        <th scope="col">Producto</th>
-                        <th scope="col" className="supplier-detail-num">
-                          Cantidad
-                        </th>
-                        <th scope="col" className="supplier-detail-num">
-                          Costo unit. (CLP)
-                        </th>
-                        <th scope="col" className="supplier-detail-num">
-                          Subtotal (CLP)
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {products.map((p) => (
-                        <tr key={String(p.product_id)}>
-                          <td>{displayStr(p.name)}</td>
-                          <td className="supplier-detail-num">{p.quantity ?? 0}</td>
-                          <td className="supplier-detail-num">{formatMoneyClp(p.unit_price_clp)}</td>
-                          <td className="supplier-detail-num">{formatMoneyClp(p.line_total_clp)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </>
-          ) : null}
+                {/* Contact grid */}
+                <dl className="grid grid-cols-2 gap-x-8 gap-y-4 text-sm">
+                  {[
+                    ['RUT', detail.rut],
+                    ['Teléfono', detail.phone],
+                    ['Email', detail.email],
+                    ['Dirección', detail.address],
+                    ['Contacto', detail.contact_name],
+                    ['Categoría', detail.category],
+                  ].map(([label, val]) => (
+                    <div key={label} className="flex flex-col gap-0.5">
+                      <dt className="text-xs font-semibold text-[hsl(var(--muted-foreground))] uppercase tracking-wide">{label}</dt>
+                      <dd className="text-[hsl(var(--foreground))] font-medium">{displayStr(val)}</dd>
+                    </div>
+                  ))}
+                </dl>
 
-          <div className="npmodal-actions supplier-detail-actions">
-            <button type="button" className="npmodal-btn npmodal-btn--primary" onClick={onClose}>
-              Cerrar
-            </button>
+                {/* Commercial conditions */}
+                <form onSubmit={saveCommercial} className="flex flex-col gap-4 border border-[hsl(var(--border))] rounded-xl p-5 bg-[hsl(var(--accent)/0.4)]">
+                  <h4 className="font-semibold text-[hsl(var(--foreground))]">Condiciones comerciales</h4>
+                  {commercialError ? (
+                    <p className="rounded-md bg-red-50 border border-red-200 text-red-700 text-sm px-3 py-2">{commercialError}</p>
+                  ) : null}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="flex flex-col gap-1.5">
+                      <Label htmlFor="sd-payment-terms">Plazo de pago (días)</Label>
+                      <Input id="sd-payment-terms" type="number" min="0" value={paymentTerms}
+                        onChange={(ev) => setPaymentTerms(ev.target.value)} placeholder="Ej. 30" />
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      <Label htmlFor="sd-lead-time">Plazo de entrega típico (días)</Label>
+                      <Input id="sd-lead-time" type="number" min="0" value={leadTime}
+                        onChange={(ev) => setLeadTime(ev.target.value)} placeholder="Ej. 3" />
+                    </div>
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <Label htmlFor="sd-notes">Observaciones</Label>
+                    <textarea id="sd-notes" value={commercialNotes}
+                      onChange={(ev) => setCommercialNotes(ev.target.value)}
+                      placeholder="Condiciones u notas" rows={3}
+                      className="w-full rounded-md border border-[hsl(var(--border))] bg-white px-3 py-2 text-sm shadow-sm resize-none focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary)/0.3)]"
+                    />
+                  </div>
+                  <Button type="submit" disabled={commercialSaving} className="self-start">
+                    {commercialSaving ? 'Guardando…' : 'Guardar condiciones'}
+                  </Button>
+                </form>
+
+                {/* KPI cards */}
+                <div className="grid grid-cols-2 gap-4">
+                  {[
+                    ['Total productos (unidades)', detail.purchased_products_count ?? 0, false],
+                    ['Total compras (CLP)', formatMoneyClp(detail.supplier_purchases_total_clp), true],
+                  ].map(([label, val, isMoney]) => (
+                    <div key={label} className="flex flex-col gap-1 rounded-xl border border-[hsl(var(--border))] bg-white px-5 py-4">
+                      <span className="text-xs text-[hsl(var(--muted-foreground))] font-medium">{label}</span>
+                      <span className={`text-2xl font-bold ${isMoney ? 'text-[hsl(var(--primary))]' : 'text-[hsl(var(--foreground))]'}`}>
+                        {val}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Products table */}
+                <div>
+                  <h4 className="font-semibold text-[hsl(var(--foreground))] mb-3">Productos en inventario</h4>
+                  {products.length === 0 ? (
+                    <p className="text-sm text-[hsl(var(--muted-foreground))] bg-[hsl(var(--accent)/0.4)] rounded-lg px-4 py-3">
+                      No hay productos asociados a este proveedor.
+                    </p>
+                  ) : (
+                    <div className="rounded-xl border border-[hsl(var(--border))] overflow-x-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Producto</TableHead>
+                            <TableHead className="text-right">Cantidad</TableHead>
+                            <TableHead className="text-right">Costo unit. (CLP)</TableHead>
+                            <TableHead className="text-right">Subtotal (CLP)</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {products.map((p) => (
+                            <TableRow key={String(p.product_id)}>
+                              <TableCell className="font-medium">{displayStr(p.name)}</TableCell>
+                              <TableCell className="text-right">{p.quantity ?? 0}</TableCell>
+                              <TableCell className="text-right">{formatMoneyClp(p.unit_price_clp)}</TableCell>
+                              <TableCell className="text-right">{formatMoneyClp(p.line_total_clp)}</TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  )}
+                </div>
+              </>
+            ) : null}
           </div>
         </div>
-      </div>
-    </div>
+
+      </DialogContent>
+    </Dialog>
   )
 }
 

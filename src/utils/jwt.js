@@ -25,6 +25,15 @@ export function decodeJWT(token) {
   }
 }
 
+function pickFirstNonEmpty(...values) {
+  for (const value of values) {
+    if (value !== undefined && value !== null && value !== '') {
+      return value
+    }
+  }
+  return null
+}
+
 /**
  * Extrae el business_id del JWT de Supabase
  * @param {string} token - Token JWT
@@ -33,9 +42,32 @@ export function decodeJWT(token) {
 export function getBusinessIdFromToken(token) {
   const claims = decodeJWT(token)
 
-  const businessId = claims?.user_metadata?.business_id || claims?.app_metadata?.business_id || claims?.business_id || null
+  const businessId = pickFirstNonEmpty(
+    claims?.app_metadata?.business_id,
+    claims?.user_metadata?.business_id,
+    claims?.business_id,
+  )
 
   return businessId
+}
+
+/**
+ * Extrae el business_id desde el usuario de sesión y, como fallback, desde el JWT.
+ * Se prioriza app_metadata sobre user_metadata.
+ * @param {object|null} user - Usuario autenticado de Supabase
+ * @param {string|null} token - JWT de acceso
+ * @returns {string|null}
+ */
+export function getBusinessId(user, token) {
+  const claims = token ? decodeJWT(token) : null
+
+  return pickFirstNonEmpty(
+    user?.app_metadata?.business_id,
+    user?.user_metadata?.business_id,
+    claims?.app_metadata?.business_id,
+    claims?.user_metadata?.business_id,
+    claims?.business_id,
+  )
 }
 
 /**
@@ -47,17 +79,17 @@ export function getBusinessIdFromToken(token) {
 export function getUserRole(user, token) {
   const claims = token ? decodeJWT(token) : null
 
-  const role =
-    user?.user_metadata?.role ||
-    user?.user_metadata?.user_role ||
-    user?.app_metadata?.role ||
-    user?.app_metadata?.user_role ||
-    claims?.user_metadata?.role ||
-    claims?.user_metadata?.user_role ||
-    claims?.app_metadata?.role ||
-    claims?.app_metadata?.user_role ||
-    claims?.role ||
-    null
+  const role = pickFirstNonEmpty(
+    user?.app_metadata?.role,
+    user?.app_metadata?.user_role,
+    user?.user_metadata?.role,
+    user?.user_metadata?.user_role,
+    claims?.app_metadata?.role,
+    claims?.app_metadata?.user_role,
+    claims?.user_metadata?.role,
+    claims?.user_metadata?.user_role,
+    claims?.role,
+  )
 
   return role
 }

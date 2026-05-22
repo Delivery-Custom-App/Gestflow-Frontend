@@ -1,7 +1,14 @@
 import { useEffect } from 'react'
 import { useReportesPOS } from '../../hooks/useReportesPOS'
 import { formatCLP } from '../../lib/formatCLP'
-import '../../styles/ReportesModal.css'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog'
+import { Button } from '@/components/ui/button'
 
 /** Modal de reportes POS: top producto, bebida y top 5 (datos del backend). */
 export default function ReportesModal({ localId, onClose }) {
@@ -11,67 +18,61 @@ export default function ReportesModal({ localId, onClose }) {
     fetch()
   }, [fetch])
 
-  const handleBackdropClick = (e) => {
-    if (e.target === e.currentTarget) onClose()
-  }
-
   return (
-    <div className="reportes-backdrop" onClick={handleBackdropClick} role="dialog" aria-modal="true" aria-label="Reportes POS">
-      <div className="reportes-modal">
-
-        <header className="reportes-header">
-          <div className="reportes-header-title">
-            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+    <Dialog open onOpenChange={onClose}>
+      <DialogContent className="max-w-xl max-h-[85vh] flex flex-col">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" className="w-5 h-5 text-[hsl(var(--primary))]">
               <path d="M3 3v18h18" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
               <path d="M7 16l4-5 4 3 4-6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
             </svg>
-            <h2>Reportes Básicos</h2>
-          </div>
-          <button className="reportes-close" onClick={onClose} aria-label="Cerrar reportes">✕</button>
-        </header>
+            Reportes Básicos
+          </DialogTitle>
+        </DialogHeader>
 
-        <div className="reportes-body">
+        <div className="flex-1 overflow-y-auto space-y-4 pr-1">
           {loading && (
-            <div className="reportes-loading">
-              <div className="reportes-spinner" aria-label="Cargando..." />
-              <p>Cargando datos...</p>
+            <div className="flex flex-col items-center gap-2 py-8 text-[hsl(var(--muted-foreground))]">
+              <div className="w-6 h-6 border-2 border-[hsl(var(--primary))] border-t-transparent rounded-full animate-spin" aria-label="Cargando..." />
+              <p className="text-sm">Cargando datos...</p>
             </div>
           )}
 
           {error && (
-            <div className="reportes-error">
+            <div className="p-4 rounded-lg bg-red-50 border border-red-200 text-sm text-[hsl(var(--destructive))] space-y-2">
               <p>Error al cargar reportes: {error}</p>
-              <button onClick={fetch} className="btn-retry">Reintentar</button>
+              <Button size="sm" variant="destructive" onClick={fetch}>Reintentar</Button>
             </div>
           )}
 
           {!loading && !error && data && (
             <>
-              {/* Destacados: producto + bebida más vendidos */}
-              <section className="reportes-destacados">
+              {/* Destacados */}
+              <section className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <DestacadoCard
                   titulo="Producto más vendido"
                   icono="🍽️"
                   metric={data.top_producto}
-                  colorClass="destacado-producto"
+                  colorClass="border-[hsl(var(--primary))]/30 bg-[hsl(var(--primary))]/5"
                   emptyMsg="Sin ventas registradas"
                 />
                 <DestacadoCard
                   titulo="Bebida más vendida"
                   icono="🥤"
                   metric={data.top_bebida}
-                  colorClass="destacado-bebida"
+                  colorClass="border-blue-200 bg-blue-50"
                   emptyMsg="Sin bebidas vendidas"
                 />
               </section>
 
-              {/* Top 5 general */}
-              <section className="reportes-top5">
-                <h3 className="reportes-section-title">Top 5 Productos</h3>
+              {/* Top 5 */}
+              <section className="space-y-2">
+                <h3 className="text-sm font-semibold text-[hsl(var(--foreground))]">Top 5 Productos</h3>
                 {data.top_5.length === 0 ? (
-                  <p className="reportes-empty">No hay datos de ventas disponibles.</p>
+                  <p className="text-sm text-[hsl(var(--muted-foreground))]">No hay datos de ventas disponibles.</p>
                 ) : (
-                  <ol className="top5-list">
+                  <ol className="space-y-2">
                     {data.top_5.map((item, index) => (
                       <Top5Item key={String(item.product_id)} item={item} rank={index + 1} />
                     ))}
@@ -82,41 +83,47 @@ export default function ReportesModal({ localId, onClose }) {
           )}
 
           {!loading && !error && !data && (
-            <p className="reportes-empty">No hay datos disponibles.</p>
+            <p className="text-sm text-[hsl(var(--muted-foreground))]">No hay datos disponibles.</p>
           )}
         </div>
 
-        <footer className="reportes-footer">
-          <button className="reportes-btn-actualizar" onClick={fetch} disabled={loading}>
+        <DialogFooter>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={fetch}
+            disabled={loading}
+          >
             {loading ? 'Actualizando...' : '↻ Actualizar'}
-          </button>
-          <button className="reportes-btn-cerrar" onClick={onClose}>Cerrar</button>
-        </footer>
-
-      </div>
-    </div>
+          </Button>
+          <Button variant="outline" size="sm" onClick={onClose}>
+            Cerrar
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }
 
 function DestacadoCard({ titulo, icono, metric, colorClass, emptyMsg }) {
   return (
-    <div className={`destacado-card ${colorClass}`}>
-      <div className="destacado-icon">{icono}</div>
-      <div className="destacado-content">
-        <p className="destacado-titulo">{titulo}</p>
-        {metric ? (
-          <>
-            <p className="destacado-nombre">{metric.product_name}</p>
-            <p className="destacado-stats">
-              <span>{metric.units_sold} unidades</span>
-              <span className="destacado-sep">·</span>
-              <span>${formatCLP(metric.revenue)}</span>
-            </p>
-          </>
-        ) : (
-          <p className="destacado-empty">{emptyMsg}</p>
-        )}
+    <div className={`rounded-xl border p-4 space-y-2 ${colorClass}`}>
+      <div className="flex items-center gap-2">
+        <span className="text-xl" aria-hidden="true">{icono}</span>
+        <p className="text-xs font-semibold text-[hsl(var(--muted-foreground))] uppercase tracking-wide">{titulo}</p>
       </div>
+      {metric ? (
+        <div>
+          <p className="text-sm font-bold text-[hsl(var(--foreground))]">{metric.product_name}</p>
+          <p className="text-xs text-[hsl(var(--muted-foreground))] mt-0.5">
+            {metric.units_sold} unidades
+            <span className="mx-1">·</span>
+            ${formatCLP(metric.revenue)}
+          </p>
+        </div>
+      ) : (
+        <p className="text-xs text-[hsl(var(--muted-foreground))]">{emptyMsg}</p>
+      )}
     </div>
   )
 }
@@ -125,18 +132,30 @@ function Top5Item({ item, rank }) {
   const maxUnits = 999
   const barWidth = Math.min((item.units_sold / maxUnits) * 100, 100)
 
+  const rankColors = {
+    1: 'bg-yellow-400 text-yellow-900',
+    2: 'bg-slate-300 text-slate-700',
+    3: 'bg-orange-300 text-orange-800',
+  }
+  const rankClass = rankColors[rank] || 'bg-[hsl(var(--accent))] text-[hsl(var(--muted-foreground))]'
+
   return (
-    <li className="top5-item">
-      <span className={`top5-rank rank-${rank <= 3 ? rank : 'rest'}`}>{rank}</span>
-      <div className="top5-info">
-        <div className="top5-name-row">
-          <span className="top5-name">{item.product_name}</span>
-          <span className="top5-units">{item.units_sold} uds.</span>
+    <li className="flex items-start gap-3 p-3 rounded-lg border border-[hsl(var(--border))] bg-white">
+      <span className={`w-6 h-6 flex items-center justify-center rounded-full text-xs font-bold shrink-0 mt-0.5 ${rankClass}`}>
+        {rank}
+      </span>
+      <div className="flex-1 min-w-0 space-y-1.5">
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-sm font-medium text-[hsl(var(--foreground))] truncate">{item.product_name}</span>
+          <span className="text-xs text-[hsl(var(--muted-foreground))] shrink-0">{item.units_sold} uds.</span>
         </div>
-        <div className="top5-bar-container">
-          <div className="top5-bar" style={{ width: `${barWidth}%` }} />
+        <div className="h-1.5 bg-[hsl(var(--accent))] rounded-full overflow-hidden">
+          <div
+            className="h-full bg-[hsl(var(--primary))] rounded-full transition-all"
+            style={{ width: `${barWidth}%` }}
+          />
         </div>
-        <span className="top5-revenue">${formatCLP(item.revenue)}</span>
+        <span className="text-xs text-[hsl(var(--muted-foreground))]">${formatCLP(item.revenue)}</span>
       </div>
     </li>
   )

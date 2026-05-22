@@ -1,114 +1,116 @@
-import { useState } from 'react'
-import '../styles/LocalsGrid.css'
+import { Building2, MapPin, Plus } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 
-function LocalsGrid({ locales, onLocalSelect, onCreateLocal }) {
-  const [hoveredLocal, setHoveredLocal] = useState(null)
-
-  const modulesList = [
-    'Administrativo',
-    'POS Restaurante',
-    'Inventario',
-    'Configuración',
-  ]
+function LocalCard({ local, index, onSelect }) {
+  const initials = local.name
+    .split(' ')
+    .slice(0, 2)
+    .map((w) => w[0])
+    .join('')
+    .toUpperCase()
 
   return (
-    <div className="locales-grid-container">
-      <div className="locales-wrapper">
-        <div className="locales-page-title">
-          <div>
-            <h2>Tus Locales</h2>
-            <p className="locales-subtitle">Selecciona un local para gestionar sus módulos</p>
-          </div>
-          <button className="btn-create-local-header" onClick={onCreateLocal} aria-label="Crear nuevo local">
-            <span aria-hidden="true">+</span> Crear Local
-          </button>
+    <button
+      type="button"
+      onClick={() => onSelect(local, index)}
+      className="group relative w-full text-left overflow-hidden rounded-2xl border border-[hsl(var(--border))] bg-white shadow-sm hover:shadow-xl hover:-translate-y-1.5 transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--primary))]"
+    >
+      {/* Header */}
+      <div className="relative px-6 py-6 overflow-hidden bg-[hsl(var(--primary))]">
+        {/* Background pattern */}
+        <div className="absolute inset-0 opacity-10">
+          <div className="absolute -right-6 -top-6 h-32 w-32 rounded-full border-[20px] border-white" />
+          <div className="absolute -right-2 -bottom-10 h-24 w-24 rounded-full border-[16px] border-white" />
         </div>
 
-        {locales.length === 0 ? (
-          <div className="empty-state">
-            <div className="empty-icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24" fill="none">
-                <rect x="5" y="3" width="10" height="18" rx="1.5" stroke="currentColor" strokeWidth="1.8" />
-                <rect x="9" y="7" width="10" height="14" rx="1.5" stroke="currentColor" strokeWidth="1.8" />
-              </svg>
-            </div>
-            <h3>No hay locales disponibles</h3>
-            <p>Crea tu primer local para comenzar a gestionar</p>
-            <button className="btn-create-local-empty" onClick={onCreateLocal}>
-              Crear Local
-            </button>
+        <div className="relative flex items-center gap-4">
+          {/* Avatar with initials */}
+          <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-white/20 backdrop-blur-sm border border-white/30">
+            <span className="text-lg font-black text-white tracking-tight">{initials}</span>
           </div>
-        ) : (
-          <>
-            <div className="locales-grid">
-              {locales.map((local, index) => (
-                <div
+
+          <div className="min-w-0 flex-1">
+            <h3 className="font-extrabold text-white text-lg leading-tight truncate">{local.name}</h3>
+            {local.address ? (
+              <div className="mt-1 flex items-center gap-1.5">
+                <MapPin className="h-3 w-3 text-white/70 shrink-0" />
+                <p className="text-xs text-white/75 truncate">{local.address}</p>
+              </div>
+            ) : (
+              <p className="text-xs text-white/50 mt-1">Sin dirección registrada</p>
+            )}
+          </div>
+        </div>
+      </div>
+
+    </button>
+  )
+}
+
+function LocalsGrid({ locales, onLocalSelect, onCreateLocal }) {
+  return (
+    <div className="min-h-full bg-[hsl(var(--background))]">
+      {/* Page hero */}
+      <div
+        className="px-6 py-12"
+        style={{ background: 'linear-gradient(160deg, hsl(var(--primary)/0.06) 0%, hsl(var(--background)) 70%)' }}
+      >
+        <div className="mx-auto max-w-5xl">
+          <div className="flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
+            <div>
+              <div className="inline-flex items-center gap-2 rounded-full bg-[hsl(var(--primary)/0.1)] px-3 py-1 text-xs font-semibold text-[hsl(var(--primary))] mb-3">
+                <Building2 className="h-3.5 w-3.5" />
+                SibaGestión
+              </div>
+              <h1 className="text-3xl font-black text-[hsl(var(--foreground))] tracking-tight">
+                Tus Locales
+              </h1>
+              <p className="mt-1.5 text-sm text-[hsl(var(--muted-foreground))] max-w-md">
+                {locales.length > 0
+                  ? `Tienes ${locales.length} local${locales.length !== 1 ? 'es' : ''} registrado${locales.length !== 1 ? 's' : ''}. Selecciona uno para gestionarlo.`
+                  : 'Crea tu primer local para comenzar a operar.'}
+              </p>
+            </div>
+            <Button onClick={onCreateLocal} className="shrink-0 gap-2 rounded-xl px-5">
+              <Plus className="h-4 w-4" />
+              Crear Local
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      {/* Content */}
+      <div className="px-6 pb-12">
+        <div className="mx-auto max-w-5xl">
+          {locales.length === 0 ? (
+            <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-[hsl(var(--border))] bg-white py-24 text-center">
+              <div className="mb-5 flex h-20 w-20 items-center justify-center rounded-2xl bg-[hsl(var(--primary)/0.08)]">
+                <Building2 className="h-10 w-10 text-[hsl(var(--primary))]" />
+              </div>
+              <h3 className="mb-2 text-xl font-bold text-[hsl(var(--foreground))]">
+                No hay locales disponibles
+              </h3>
+              <p className="mb-8 text-sm text-[hsl(var(--muted-foreground))] max-w-xs">
+                Agrega tu primer local para empezar a gestionar tu negocio con SibaGestión.
+              </p>
+              <Button onClick={onCreateLocal} className="gap-2 rounded-xl px-6">
+                <Plus className="h-4 w-4" />
+                Crear primer local
+              </Button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+              {locales.map((local, i) => (
+                <LocalCard
                   key={local.id}
-                  className="local-card"
-                  onMouseEnter={() => setHoveredLocal(local.id)}
-                  onMouseLeave={() => setHoveredLocal(null)}
-                >
-                  <div className="local-header" style={{ backgroundColor: '#059669' }}>
-                    <div className="local-icon" aria-hidden="true">
-                      <svg viewBox="0 0 24 24" fill="none">
-                        <rect x="5" y="3" width="10" height="18" rx="1.5" stroke="currentColor" strokeWidth="1.8" />
-                        <rect x="9" y="7" width="10" height="14" rx="1.5" stroke="currentColor" strokeWidth="1.8" />
-                      </svg>
-                    </div>
-                    <div className="local-title-section">
-                      <h3>{local.name}</h3>
-                      <p className="local-location">{local.address}</p>
-                    </div>
-                    <div className="local-arrow" aria-hidden="true">
-                      <svg viewBox="0 0 24 24" fill="none">
-                        <path d="M5 12H19M12 5L19 12L12 19" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-                      </svg>
-                    </div>
-                  </div>
-
-                  <div className="local-content">
-                    <div className="local-modules">
-                      <p className="modules-label">Módulos Disponibles:</p>
-                      <ul className="modules-list">
-                        {modulesList.map((module, idx) => (
-                          <li key={idx}>{module}</li>
-                        ))}
-                      </ul>
-                    </div>
-
-                    <button
-                      className={`local-button ${hoveredLocal === local.id ? 'hovered' : ''}`}
-                      onClick={() => onLocalSelect(local, index)}
-                      style={{ backgroundColor: '#059669' }}
-                    >
-                      Ver Detalles
-                      <span className="button-arrow">→</span>
-                    </button>
-                  </div>
-                </div>
+                  local={local}
+                  index={i}
+                  onSelect={onLocalSelect}
+                />
               ))}
             </div>
-
-            <div className="locales-stats">
-              <div className="stat-card">
-                <div className="stat-number">{locales.length}</div>
-                <div className="stat-label">Locales Disponibles</div>
-              </div>
-              <div className="stat-card">
-                <div className="stat-number">4</div>
-                <div className="stat-label">Módulos por Local</div>
-              </div>
-              <div className="stat-card">
-                <div className="stat-number">100%</div>
-                <div className="stat-label">Funcionalidad</div>
-              </div>
-              <div className="stat-card">
-                <div className="stat-number">v1</div>
-                <div className="stat-label">Versión Sistema</div>
-              </div>
-            </div>
-          </>
-        )}
+          )}
+        </div>
       </div>
     </div>
   )

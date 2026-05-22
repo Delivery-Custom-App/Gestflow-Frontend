@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useParams, useLocation } from 'react-router-dom'
-import { getAuthContext } from '../../lib/apiClient'
+import { useParams } from 'react-router-dom'
+import { useSelectedLocal } from '../../hooks/useSelectedLocal'
 import {
+  deleteInventoryItem,
   getInventoryKpisByLocal,
   getInventoryProductsPage,
   getInventoryStockList,
@@ -9,30 +10,35 @@ import {
   patchInventoryStock,
 } from '../../lib/inventoryApi'
 import InventoryShell from './InventoryShell'
-import BackToInventoryHubButton from './BackToInventoryHubButton'
 import LoadingSpinner from '../LoadingSpinner'
 import NuevoProductoModal from './NuevoProductoModal'
 import ProductsTable from './ProductsTable'
-import StatusFilterCheckboxes from './StatusFilterCheckboxes'
 import CategoryFilterSelect from './CategoryFilterSelect'
-import '../../styles/inventory/StockControlDashboard.css'
+import { motion } from 'framer-motion'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Search, Package, CheckCircle, TrendingDown, AlertTriangle, DollarSign, Plus } from 'lucide-react'
+import PageTransition from '../PageTransition'
+import { formatCLPDisplay as formatMoney } from '../../lib/formatCLP'
 
-function formatMoney(value) {
-  if (value == null || Number.isNaN(Number(value))) return '—'
-  const n = new Intl.NumberFormat('es-CL', {
-    maximumFractionDigits: 0,
-    minimumFractionDigits: 0,
-  }).format(Math.round(Number(value)))
-  return `$${n}`
+const kpiContainerVariants = {
+  hidden: {},
+  visible: { transition: { staggerChildren: 0.08, delayChildren: 0.1 } },
 }
 
-function StockControlDashboard({ user, userRole, onLogout }) {
+const kpiItemVariants = {
+  hidden: { opacity: 0, y: 20, scale: 0.95 },
+  visible: { opacity: 1, y: 0, scale: 1, transition: { duration: 0.32, ease: [0.4, 0, 0.2, 1] } },
+}
+
+const sectionVariants = {
+  hidden: { opacity: 0, y: 18 },
+  visible: { opacity: 1, y: 0, transition: { duration: 0.3, ease: [0.4, 0, 0.2, 1], delay: 0.18 } },
+}
+
+function StockControlDashboard() {
   const { localId } = useParams()
-  const location = useLocation()
-  const selectedLocal = useMemo(() => {
-    if (location.state?.local) return location.state.local
-    return { id: localId, name: `Local ${localId ?? ''}` }
-  }, [location.state, localId])
+  const selectedLocal = useSelectedLocal(localId)
 
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -64,8 +70,7 @@ function StockControlDashboard({ user, userRole, onLogout }) {
     }
     setError('')
     try {
-      const { token } = await getAuthContext()
-      const payload = await getInventoryKpisByLocal(localId, token)
+      const payload = await getInventoryKpisByLocal(localId)
       setData(payload)
     } catch (e) {
       setError(e?.message || 'No se pudieron cargar los KPIs de inventario.')
@@ -79,8 +84,7 @@ function StockControlDashboard({ user, userRole, onLogout }) {
   const loadCategoriesCatalog = useCallback(async () => {
     if (!localId) return
     try {
-      const { token } = await getAuthContext()
-      const rows = await getInventoryStockList(localId, token, {})
+      const rows = await getInventoryStockList(localId, {})
       const arr = Array.isArray(rows) ? rows : []
       const m = new Map()
       for (const row of arr) {
@@ -117,9 +121,8 @@ function StockControlDashboard({ user, userRole, onLogout }) {
       setItemsError('')
       setItemsLoading(true)
       try {
-        const { token } = await getAuthContext()
         const offset = (page - 1) * pageSize
-        const { items: pageItems, total } = await getInventoryProductsPage(localId, token, {
+        const { items: pageItems, total } = await getInventoryProductsPage(localId, {
           ...filters,
           limit: pageSize,
           offset,
@@ -168,8 +171,7 @@ function StockControlDashboard({ user, userRole, onLogout }) {
       if (!localId) return
       setActionError('')
       try {
-        const { token } = await getAuthContext()
-        await patchInventoryStock(localId, row.inventory_id, token, body)
+        await patchInventoryStock(localId, row.inventory_id, body)
         await load()
         await loadItems(currentFilters, currentPage)
       } catch (e) {
@@ -185,8 +187,7 @@ function StockControlDashboard({ user, userRole, onLogout }) {
       if (!localId) return
       setActionError('')
       try {
-        const { token } = await getAuthContext()
-        await patchInventoryProductUnitCost(localId, row.product_id, token, { unitCost: unitCostClp })
+        await patchInventoryProductUnitCost(localId, row.product_id, { unitCost: unitCostClp })
         await load()
         await loadItems(currentFilters, currentPage)
       } catch (e) {
@@ -197,146 +198,204 @@ function StockControlDashboard({ user, userRole, onLogout }) {
     [localId, load, loadItems, currentFilters, currentPage],
   )
 
-  return (
-    <InventoryShell user={user} userRole={userRole} onLogout={onLogout} active="stock">
-      <div className="inv-stock-page">
-        <BackToInventoryHubButton navState={{ local: selectedLocal }} />
+  const handleDeleteItem = useCallback(
+    async (row) => {
+      if (!localId) return
+      setActionError('')
+      try {
+        await deleteInventoryItem(localId, row.inventory_id)
+        await load()
+        setCurrentPage(1)
+        await loadItems(currentFilters, 1)
+      } catch (e) {
+        setActionError(e?.message || 'No se pudo eliminar el producto.')
+        throw e
+      }
+    },
+    [localId, load, loadItems, currentFilters],
+  )
 
-        <header className="scd-header scd-header--compact">
-          <span className="scd-header-icon" aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="none">
-              <path d="M12 3L20 7.5V16.5L12 21L4 16.5V7.5L12 3Z" stroke="currentColor" strokeWidth="1.6" />
-            </svg>
+  const handleKpiClick = (filterValue) => {
+    if (!filterValue) { setStatusFilters([]); return }
+    setStatusFilters((prev) => (prev.includes(filterValue) ? [] : [filterValue]))
+  }
+
+  const KPI_CARDS = data
+    ? [
+        {
+          icon: <Package size={22} />,
+          label: 'Total productos',
+          value: data.total_products ?? 0,
+          filterValue: null,
+          iconColorClass: 'text-[hsl(var(--primary))]',
+          iconBgClass: 'bg-emerald-50',
+          accentClass: 'border-l-emerald-700',
+          valueColorClass: 'text-[hsl(var(--foreground))]',
+          activeRing: '',
+        },
+        {
+          icon: <CheckCircle size={22} />,
+          label: 'Stock óptimo',
+          value: data.optimal_stock_count ?? 0,
+          filterValue: 'OPTIMO',
+          iconColorClass: 'text-emerald-600',
+          iconBgClass: 'bg-emerald-50',
+          accentClass: 'border-l-emerald-500',
+          valueColorClass: 'text-emerald-700',
+          activeRing: 'ring-2 ring-emerald-400',
+        },
+        {
+          icon: <TrendingDown size={22} />,
+          label: 'Stock bajo',
+          value: data.low_stock_count ?? 0,
+          filterValue: 'BAJO',
+          iconColorClass: 'text-amber-600',
+          iconBgClass: 'bg-amber-50',
+          accentClass: 'border-l-amber-500',
+          valueColorClass: 'text-amber-700',
+          activeRing: 'ring-2 ring-amber-400',
+        },
+        {
+          icon: <AlertTriangle size={22} />,
+          label: 'Stock crítico',
+          value: data.critical_stock_count ?? 0,
+          filterValue: 'CRITICO',
+          iconColorClass: 'text-red-600',
+          iconBgClass: 'bg-red-50',
+          accentClass: 'border-l-red-500',
+          valueColorClass: 'text-red-700',
+          activeRing: 'ring-2 ring-red-400',
+        },
+        {
+          icon: <DollarSign size={22} />,
+          label: 'Valor total',
+          value: formatMoney(data.total_value),
+          filterValue: null,
+          noClick: true,
+          iconColorClass: 'text-[hsl(var(--primary))]',
+          iconBgClass: 'bg-emerald-50',
+          accentClass: 'border-l-emerald-700',
+          valueColorClass: 'text-[hsl(var(--primary))]',
+          activeRing: '',
+        },
+      ]
+    : []
+
+  return (
+    <InventoryShell>
+      <PageTransition className="flex flex-col gap-6 px-6 py-6 pb-10">
+        <header className="flex items-center gap-3">
+          <span className="flex items-center justify-center w-10 h-10 rounded-full bg-[hsl(var(--primary)/0.1)] text-[hsl(var(--primary))]" aria-hidden="true">
+            <Package size={22} />
           </span>
           <div>
-            <h1 className="scd-title">Stock producto</h1>
-            <p className="scd-subtitle">Gestiona existencias y costos para decisiones de reposición</p>
+            <h1 className="text-xl font-bold text-[hsl(var(--foreground))]">Stock producto</h1>
+            <p className="text-sm text-[hsl(var(--muted-foreground))]">Gestiona existencias y costos para decisiones de reposición</p>
           </div>
         </header>
 
-        {error ? <div className="scd-status scd-status--error">{error}</div> : null}
+        {error ? (
+          <div className="rounded-md bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3">
+            {error}
+          </div>
+        ) : null}
         {!error && loading && !data ? <LoadingSpinner message="Cargando indicadores..." /> : null}
 
         {data ? (
-          <section className="scd-kpis" aria-label="KPIs de inventario">
-            <article className="scd-kpi">
-              <span className="scd-kpi-icon scd-kpi-icon--box" aria-hidden="true">
-                <svg viewBox="0 0 24 24" fill="none">
-                  <path d="M12 3l8 4v10l-8 4-8-4V7l8-4z" stroke="currentColor" strokeWidth="1.5" />
-                </svg>
-              </span>
-              <div>
-                <p className="scd-kpi-label">Total productos</p>
-                <p className="scd-kpi-value">{data.total_products ?? 0}</p>
-              </div>
-            </article>
-            <article className="scd-kpi scd-kpi--optimal">
-              <span className="scd-kpi-icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24" fill="none">
-                  <path
-                    d="M9 12l2 2 4-4M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                    stroke="currentColor"
-                    strokeWidth="1.5"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-              </span>
-              <div>
-                <p className="scd-kpi-label">Stock óptimo</p>
-                <p className="scd-kpi-value">{data.optimal_stock_count ?? 0}</p>
-              </div>
-            </article>
-            <article className="scd-kpi scd-kpi--low">
-              <span className="scd-kpi-icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24" fill="none">
-                  <path d="M4 18V6M8 18V10M12 18V14M16 18V8M20 18V4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-                </svg>
-              </span>
-              <div>
-                <p className="scd-kpi-label">Stock bajo</p>
-                <p className="scd-kpi-value">{data.low_stock_count ?? 0}</p>
-              </div>
-            </article>
-            <article className="scd-kpi scd-kpi--critical">
-              <span className="scd-kpi-icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24" fill="none">
-                  <path
-                    d="M12 9v4M12 17h.01M10.3 3.6L2.2 18.4A1 1 0 003.1 20h17.8a1 1 0 00.9-1.6L13.7 3.6a1 1 0 00-1.8 0z"
-                    stroke="currentColor"
-                    strokeWidth="1.5"
-                    strokeLinecap="round"
-                  />
-                </svg>
-              </span>
-              <div>
-                <p className="scd-kpi-label">Stock crítico</p>
-                <p className="scd-kpi-value">{data.critical_stock_count ?? 0}</p>
-              </div>
-            </article>
-            <article className="scd-kpi scd-kpi--value">
-              <span className="scd-kpi-icon scd-kpi-icon--green" aria-hidden="true">
-                <svg viewBox="0 0 24 24" fill="none">
-                  <path d="M4 18V6M8 18V10M12 18V14M16 18V8M20 18V4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-                </svg>
-              </span>
-              <div>
-                <p className="scd-kpi-label">Valor total</p>
-                <p className="scd-kpi-value scd-kpi-value--money">{formatMoney(data.total_value)}</p>
-              </div>
-            </article>
-          </section>
+          <motion.section
+            className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3"
+            aria-label="KPIs de inventario"
+            variants={kpiContainerVariants}
+            initial="hidden"
+            animate="visible"
+          >
+            {KPI_CARDS.map((kpi) => {
+              const isActive = kpi.filterValue && statusFilters.includes(kpi.filterValue)
+              const isClickable = !kpi.noClick
+              return (
+                <motion.div
+                  key={kpi.label}
+                  variants={kpiItemVariants}
+                  whileHover={isClickable ? { scale: 1.04, y: -4, transition: { type: 'spring', stiffness: 380, damping: 22 } } : undefined}
+                  whileTap={isClickable ? { scale: 0.98 } : undefined}
+                  onClick={isClickable ? () => handleKpiClick(kpi.filterValue) : undefined}
+                  className={isClickable ? 'cursor-pointer' : undefined}
+                  title={isClickable ? (isActive ? 'Quitar filtro' : kpi.filterValue ? `Filtrar por ${kpi.label.toLowerCase()}` : 'Ver todos los productos') : undefined}
+                >
+                  <Card className={`border-l-4 ${kpi.accentClass} overflow-hidden h-full transition-shadow ${isActive ? kpi.activeRing : ''}`}>
+                    <CardContent className="flex items-center gap-2.5 p-3">
+                      <span
+                        className={`flex items-center justify-center w-9 h-9 rounded-full shrink-0 ${kpi.iconBgClass} ${kpi.iconColorClass}`}
+                        aria-hidden="true"
+                      >
+                        {kpi.icon}
+                      </span>
+                      <div className="min-w-0">
+                        <p className="text-xs text-[hsl(var(--muted-foreground))] leading-tight">{kpi.label}</p>
+                        <p className={`text-xl font-bold leading-tight mt-0.5 ${kpi.valueColorClass}`}>{kpi.value}</p>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </motion.div>
+              )
+            })}
+          </motion.section>
         ) : null}
 
-        <section className="scd-panel" aria-labelledby="scd-inventory-heading">
-          <div className="scd-panel-head">
-            <h2 id="scd-inventory-heading">Inventario de productos</h2>
-            <button type="button" className="scd-btn-new" onClick={() => setModalOpen(true)}>
-              + Nuevo producto
-            </button>
-          </div>
-
-          {actionError ? (
-            <div className="scd-status scd-status--error scd-status--compact" role="alert">
-              {actionError}
+        <motion.div variants={sectionVariants} initial="hidden" animate="visible">
+        <Card aria-labelledby="scd-inventory-heading">
+          <CardHeader className="pb-4">
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <CardTitle id="scd-inventory-heading" className="text-base">Inventario de productos</CardTitle>
+              <Button type="button" onClick={() => setModalOpen(true)} className="gap-1.5">
+                <Plus size={16} />
+                Nuevo producto
+              </Button>
             </div>
-          ) : null}
+          </CardHeader>
+          <CardContent className="flex flex-col gap-4 pt-0">
+            {actionError ? (
+              <div className="rounded-md bg-red-50 border border-red-200 text-red-700 text-sm px-3 py-2" role="alert">
+                {actionError}
+              </div>
+            ) : null}
 
-          <div className="scd-filters" role="search" aria-label="Filtrar inventario">
-            <div className="scd-search">
-              <span className="scd-search-icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24" fill="none">
-                  <circle cx="11" cy="11" r="6" stroke="currentColor" strokeWidth="1.6" />
-                  <path d="M16 16l5 5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-                </svg>
-              </span>
-              <input
-                type="search"
-                placeholder="Buscar por nombre de producto…"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                aria-label="Buscar productos por nombre"
-                autoComplete="off"
-              />
+            <div className="flex flex-wrap gap-3 items-center" role="search" aria-label="Filtrar inventario">
+              <div className="relative flex-1 min-w-[200px]">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[hsl(var(--muted-foreground))]" aria-hidden="true">
+                  <Search size={16} />
+                </span>
+                <input
+                  type="search"
+                  placeholder="Buscar por nombre de producto…"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  aria-label="Buscar productos por nombre"
+                  autoComplete="off"
+                  className="h-9 w-full rounded-md border border-[hsl(var(--border))] bg-white pl-9 pr-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary)/0.3)]"
+                />
+              </div>
+              <CategoryFilterSelect value={categoryFilter} onChange={setCategoryFilter} options={categoriesCatalog} />
             </div>
-            <CategoryFilterSelect value={categoryFilter} onChange={setCategoryFilter} options={categoriesCatalog} />
-            <StatusFilterCheckboxes value={statusFilters} onChange={setStatusFilters} />
-          </div>
 
-          <ProductsTable
-            items={items}
-            loading={itemsLoading}
-            error={itemsError}
-            currentPage={safeCurrentPage}
-            totalPages={totalPages}
-            totalCount={totalCount}
-            pageSize={pageSize}
-            onPageChange={setCurrentPage}
-            onEmptyAction={() => setModalOpen(true)}
-            onPatchStock={handlePatchStock}
-            onPatchUnitCost={handlePatchUnitCost}
-          />
-        </section>
+            <ProductsTable
+              items={items}
+              loading={itemsLoading}
+              error={itemsError}
+              currentPage={safeCurrentPage}
+              totalPages={totalPages}
+              totalCount={totalCount}
+              pageSize={pageSize}
+              onPageChange={setCurrentPage}
+              onEmptyAction={() => setModalOpen(true)}
+              onPatchStock={handlePatchStock}
+              onPatchUnitCost={handlePatchUnitCost}
+              onDeleteItem={handleDeleteItem}
+              statusFilters={statusFilters}
+            />
+          </CardContent>
+        </Card>
+        </motion.div>
 
         <NuevoProductoModal
           open={modalOpen}
@@ -349,7 +408,7 @@ function StockControlDashboard({ user, userRole, onLogout }) {
             loadItems(currentFilters, 1).catch(() => {})
           }}
         />
-      </div>
+      </PageTransition>
     </InventoryShell>
   )
 }

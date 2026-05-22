@@ -1,292 +1,107 @@
-import { useCallback, memo } from 'react'
-import { isSupabaseConfigured, supabase } from '../lib/supabaseClient'
+import { useState } from 'react'
+import { Eye, EyeOff, Building2 } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { useAuth } from '../context/AuthContext'
 
-/**
- * Página de login
- */
-function LoginPage({
-  showPassword,
-  setShowPassword,
-  email,
-  setEmail,
-  password,
-  setPassword,
-  isLoading,
-  errorMessage,
-  successMessage,
-  handleSubmit,
-}) {
-  // Crear handlers memoizados para los inputs
-  const handleEmailChange = useCallback((event) => {
-    setEmail(event.target.value)
-  }, [setEmail])
+export default function LoginPage() {
+  const { login } = useAuth()
+  const {
+    email,
+    setEmail,
+    password,
+    setPassword,
+    isLoading,
+    errorMessage,
+    successMessage,
+    handleSubmit,
+  } = login
 
-  const handlePasswordChange = useCallback((event) => {
-    setPassword(event.target.value)
-  }, [setPassword])
+  const [showPassword, setShowPassword] = useState(false)
 
-  const handleTogglePassword = useCallback(() => {
-    setShowPassword((value) => !value)
-  }, [setShowPassword])
   return (
-    <main className="login-page">
-      <header className="brand-header" aria-label="Marca">
-        <div className="brand-icon" aria-hidden="true">
-          <svg viewBox="0 0 24 24" fill="none" role="presentation">
-            <rect
-              x="5"
-              y="3"
-              width="10"
-              height="18"
-              rx="1.5"
-              stroke="currentColor"
-              strokeWidth="1.8"
-            />
-            <rect
-              x="9"
-              y="7"
-              width="10"
-              height="14"
-              rx="1.5"
-              stroke="currentColor"
-              strokeWidth="1.8"
-            />
-            <line
-              x1="9"
-              y1="11"
-              x2="13"
-              y2="11"
-              stroke="currentColor"
-              strokeWidth="1.8"
-            />
-            <line
-              x1="9"
-              y1="14"
-              x2="13"
-              y2="14"
-              stroke="currentColor"
-              strokeWidth="1.8"
-            />
-          </svg>
+    <main
+      className="relative min-h-screen flex flex-col items-center justify-center gap-7 px-4 py-10"
+      style={{
+        backgroundImage: "url('/sibaritco-logo.svg')",
+        backgroundRepeat: 'no-repeat',
+        backgroundPosition: 'center',
+        backgroundSize: '40%',
+        backgroundAttachment: 'fixed',
+      }}
+    >
+      <div className="pointer-events-none absolute inset-0 bg-white/92" />
+
+      <div className="relative flex flex-col items-center gap-3 text-center">
+        <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-[hsl(var(--primary))] shadow-lg">
+          <Building2 className="h-8 w-8 text-white" />
         </div>
-        <h1>SibaGestion</h1>
-        <p className="subtitle">Sistema de Gestion Comercial</p>
-        <p className="tagline">Sibaritico desde 1991</p>
-      </header>
+        <h1 className="text-4xl font-extrabold tracking-tight text-[hsl(var(--primary))]">SibaGestion</h1>
+        <p className="text-base text-emerald-500">Sistema de Gestión Integral</p>
+      </div>
 
-      <section className="login-card" aria-label="Formulario de inicio de sesion">
-        <h2>Iniciar Sesion</h2>
+      <section
+        aria-label="Formulario de inicio de sesión"
+        className="relative w-full max-w-md rounded-2xl border border-[hsl(var(--primary-border,150,50%,75%))] bg-white/80 p-7 shadow-xl backdrop-blur-sm"
+      >
+        <h2 className="mb-5 text-center text-2xl font-bold text-[hsl(var(--foreground))]">Iniciar Sesión</h2>
 
-        <p className="demo-status">
-          {isSupabaseConfigured
-            ? 'Autenticacion Supabase activada'
-            : 'Modo demostracion activado'}
-        </p>
-
-        <aside className="demo-box">
-          <p className="demo-title">Estado:</p>
-          <p>
-            {isSupabaseConfigured
-              ? 'Tu proyecto esta conectado a Supabase. Puedes iniciar sesion con usuarios reales.'
-              : 'Aun no hay variables de entorno de Supabase. Configuralas para usar autenticacion real.'}
-          </p>
-        </aside>
-
-        <form className="login-form" onSubmit={handleSubmit}>
-          <label htmlFor="email">Correo Electronico</label>
-          <input
-            id="email"
-            type="email"
-            placeholder="usuario@empresa.com"
-            autoComplete="off"
-            value={email}
-            onChange={handleEmailChange}
-            disabled={isLoading}
-          />
-
-          <label htmlFor="password">Contrasena</label>
-          <div className="password-wrap">
-            <input
-              id="password"
-              type={showPassword ? 'text' : 'password'}
-              placeholder="Tu contrasena"
-              autoComplete="off"
-              value={password}
-              onChange={handlePasswordChange}
+        <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="email">Correo Electrónico</Label>
+            <Input
+              id="email"
+              type="email"
+              placeholder="usuario@empresa.com"
+              autoComplete="email"
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
               disabled={isLoading}
             />
-            <button
-              type="button"
-              className="toggle-password"
-              onClick={handleTogglePassword}
-              aria-label={showPassword ? 'Ocultar contrasena' : 'Mostrar contrasena'}
-              disabled={isLoading}
-            >
-              {showPassword ? (
-                <svg
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  aria-hidden="true"
-                  role="presentation"
-                >
-                  <path
-                    d="M3 3L21 21"
-                    stroke="currentColor"
-                    strokeWidth="1.8"
-                    strokeLinecap="round"
-                  />
-                  <path
-                    d="M10.58 10.58C10.21 10.95 10 11.45 10 12C10 13.1 10.9 14 12 14C12.55 14 13.05 13.79 13.42 13.42"
-                    stroke="currentColor"
-                    strokeWidth="1.8"
-                    strokeLinecap="round"
-                  />
-                  <path
-                    d="M9.88 5.1C10.56 4.9 11.27 4.8 12 4.8C16.4 4.8 19.78 8.06 21 12C20.6 13.3 19.93 14.48 19.05 15.47"
-                    stroke="currentColor"
-                    strokeWidth="1.8"
-                    strokeLinecap="round"
-                  />
-                  <path
-                    d="M14.12 18.9C13.44 19.1 12.73 19.2 12 19.2C7.6 19.2 4.22 15.94 3 12C3.4 10.7 4.07 9.52 4.95 8.53"
-                    stroke="currentColor"
-                    strokeWidth="1.8"
-                    strokeLinecap="round"
-                  />
-                </svg>
-              ) : (
-                <svg
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  aria-hidden="true"
-                  role="presentation"
-                >
-                  <path
-                    d="M3 12C4.22 8.06 7.6 4.8 12 4.8C16.4 4.8 19.78 8.06 21 12C19.78 15.94 16.4 19.2 12 19.2C7.6 19.2 4.22 15.94 3 12Z"
-                    stroke="currentColor"
-                    strokeWidth="1.8"
-                  />
-                  <circle
-                    cx="12"
-                    cy="12"
-                    r="3"
-                    stroke="currentColor"
-                    strokeWidth="1.8"
-                  />
-                </svg>
-              )}
-            </button>
           </div>
 
-          <button type="submit" className="login-button" disabled={isLoading}>
-            <span aria-hidden="true" className="button-icon">
-              <svg viewBox="0 0 24 24" fill="none" role="presentation">
-                <rect
-                  x="5"
-                  y="3"
-                  width="10"
-                  height="18"
-                  rx="1.5"
-                  stroke="currentColor"
-                  strokeWidth="1.8"
-                />
-                <rect
-                  x="9"
-                  y="7"
-                  width="10"
-                  height="14"
-                  rx="1.5"
-                  stroke="currentColor"
-                  strokeWidth="1.8"
-                />
-              </svg>
-            </span>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="password">Contraseña</Label>
+            <div className="relative">
+              <Input
+                id="password"
+                type={showPassword ? 'text' : 'password'}
+                placeholder="Tu contraseña"
+                autoComplete="current-password"
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                disabled={isLoading}
+                className="pr-10"
+              />
+              <button
+                type="button"
+                className="absolute right-2 top-1/2 -translate-y-1/2 rounded-lg p-1.5 text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--accent))] hover:text-[hsl(var(--primary))] transition-colors disabled:opacity-45 disabled:cursor-not-allowed"
+                onClick={() => setShowPassword((v) => !v)}
+                aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                disabled={isLoading}
+              >
+                {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            </div>
+          </div>
+
+          <Button type="submit" className="mt-1 h-12 text-base" disabled={isLoading || !email || !password}>
             {isLoading ? 'Validando...' : 'Entrar'}
-          </button>
+          </Button>
 
           {errorMessage && (
-            <p className="auth-message auth-error">{errorMessage}</p>
+            <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+              {errorMessage}
+            </p>
           )}
           {successMessage && (
-            <p className="auth-message auth-success">{successMessage}</p>
+            <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
+              {successMessage}
+            </p>
           )}
         </form>
-
-        <nav className="bottom-nav" aria-label="Acciones">
-          <button type="button" aria-label="Tendencias">
-            <svg viewBox="0 0 24 24" fill="none" role="presentation">
-              <path
-                d="M4 16L9 11L13 14L20 7"
-                stroke="currentColor"
-                strokeWidth="1.8"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-              <path
-                d="M15 7H20V12"
-                stroke="currentColor"
-                strokeWidth="1.8"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
-          </button>
-          <button type="button" aria-label="Inventario">
-            <svg viewBox="0 0 24 24" fill="none" role="presentation">
-              <rect
-                x="5"
-                y="3"
-                width="10"
-                height="18"
-                rx="1.5"
-                stroke="currentColor"
-                strokeWidth="1.8"
-              />
-              <rect
-                x="9"
-                y="7"
-                width="10"
-                height="14"
-                rx="1.5"
-                stroke="currentColor"
-                strokeWidth="1.8"
-              />
-            </svg>
-          </button>
-          <button type="button" aria-label="Usuarios">
-            <svg viewBox="0 0 24 24" fill="none" role="presentation">
-              <circle
-                cx="9"
-                cy="9"
-                r="3"
-                stroke="currentColor"
-                strokeWidth="1.8"
-              />
-              <circle
-                cx="17"
-                cy="10"
-                r="2"
-                stroke="currentColor"
-                strokeWidth="1.8"
-              />
-              <path
-                d="M3.5 19C4.1 16.6 6.3 15 9 15C11.7 15 13.9 16.6 14.5 19"
-                stroke="currentColor"
-                strokeWidth="1.8"
-                strokeLinecap="round"
-              />
-              <path
-                d="M14.5 18.5C14.9 17 16.3 16 18 16C19.7 16 21.1 17 21.5 18.5"
-                stroke="currentColor"
-                strokeWidth="1.8"
-                strokeLinecap="round"
-              />
-            </svg>
-          </button>
-        </nav>
       </section>
     </main>
   )
 }
-
-export default memo(LoginPage)

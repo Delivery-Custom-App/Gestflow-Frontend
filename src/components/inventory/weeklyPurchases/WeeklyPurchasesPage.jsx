@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useNavigate, useParams, useLocation, useSearchParams } from 'react-router-dom'
-import { getAuthContext } from '../../../lib/apiClient'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { useSelectedLocal } from '../../../hooks/useSelectedLocal'
+import { useLocalBusinessId } from '../../../hooks/useLocalBusinessId'
 import {
-  getLocalById,
   getSupplierDetailForBusiness,
   getSupplierPurchaseHistoryForBusiness,
   getSuppliersWithMetricsForBusiness,
@@ -10,40 +10,38 @@ import {
   getWeeklyPurchaseOrders,
   postWeeklyPurchaseOrder,
 } from '../../../lib/providersApi'
-import { isInventoryAdminRole } from '../../../utils/inventoryAccess'
+import { useAuth } from '../../../context/AuthContext'
+import { formatCLPDisplay as formatMoneyClp } from '../../../lib/formatCLP'
 import InventoryShell from '../InventoryShell'
-import BackToInventoryHubButton from '../BackToInventoryHubButton'
 import LoadingSpinner from '../../LoadingSpinner'
 import ModernDateField from '../ModernDateField'
-import '../../../styles/inventory/WeeklyPurchases.css'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import { Label } from '@/components/ui/label'
+import { Input } from '@/components/ui/input'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import {
+  Table,
+  TableHeader,
+  TableBody,
+  TableRow,
+  TableHead,
+  TableCell,
+} from '@/components/ui/table'
+import { CalendarDays, RefreshCw, AlertTriangle, Plus, Minus, X, Search, BarChart2 } from 'lucide-react'
 
-/** HU-85: espera antes de consultar API al escribir nombre de proveedor */
 const SUPPLIER_SEARCH_DEBOUNCE_MS = 350
 
-function formatMoneyClp(value) {
-  if (value == null || Number.isNaN(Number(value))) return '—'
-  const n = new Intl.NumberFormat('es-CL', {
-    maximumFractionDigits: 0,
-    minimumFractionDigits: 0,
-  }).format(Math.round(Number(value)))
-  return `$${n}`
-}
-
-/** Fecha de semana (ISO) en texto largo para listados. */
 function formatWeekLong(iso) {
   if (!iso || typeof iso !== 'string' || iso.length < 10) return '—'
   const d = new Date(`${iso.slice(0, 10)}T12:00:00`)
   if (Number.isNaN(d.getTime())) return iso
   try {
     return new Intl.DateTimeFormat('es-CL', {
-      weekday: 'long',
-      day: 'numeric',
-      month: 'long',
-      year: 'numeric',
+      weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
     }).format(d)
-  } catch {
-    return iso
-  }
+  } catch { return iso }
 }
 
 function formatReceivedCell(order) {
@@ -52,7 +50,6 @@ function formatReceivedCell(order) {
   return '—'
 }
 
-/** Líneas iniciales del borrador desde catálogo/inventario (HU-69). */
 function linesFromSupplierDetail(detail) {
   const products = Array.isArray(detail?.purchased_products) ? detail.purchased_products : []
   return products.map((p) => ({
@@ -64,9 +61,6 @@ function linesFromSupplierDetail(detail) {
   }))
 }
 
-/**
- * HU-84: si no hay filas en inventario, sugerir productos desde histórico de órdenes semanales (precio medio recibido).
- */
 function linesFromPurchaseHistory(history) {
   const products = Array.isArray(history?.products) ? history.products : []
   return products.map((p) => {
@@ -83,7 +77,6 @@ function linesFromPurchaseHistory(history) {
   })
 }
 
-/** Lunes ISO de la semana que contiene la fecha YYYY-MM-DD */
 function mondayOfWeekContaining(isoDate) {
   const d = new Date(`${isoDate}T12:00:00`)
   const day = d.getDay()
@@ -101,46 +94,42 @@ const STATUS_LABELS = {
   cancelled: 'Anulada',
 }
 
-function statusBadgeClass(status) {
-  const s = String(status || 'draft')
-  return `wp-badge wp-badge--${s.replace(/[^a-z_]/g, '_')}`
+const STATUS_VARIANT = {
+  draft: 'secondary',
+  sent: 'info',
+  in_transit: 'warning',
+  partially_received: 'warning',
+  received: 'success',
+  cancelled: 'destructive',
 }
 
-function NewWeeklyOrderModal({
-  open,
-  businessId,
-  localId,
-  onClose,
-  onCreated,
-  supplierSearchDebounced = '',
-  supplierCategoryFilter = '',
-}) {
+/* ── Modal nueva orden ───────────────────────────────────────── */
+function NewWeeklyOrderModal({ open, businessId, localId, onClose, onCreated, supplierSearchDebounced = '', supplierCategoryFilter = '' }) {
   const [suppliers, setSuppliers] = useState([])
   const [supplierId, setSupplierId] = useState('')
   const [weekDate, setWeekDate] = useState(() => mondayOfWeekContaining(new Date().toISOString().slice(0, 10)))
   const [lines, setLines] = useState([])
-  const [purchaseHistory, setPurchaseHistory] = useState(null)
+  const [availableProducts, setAvailableProducts] = useState([])
+  const [pickerOpen, setPickerOpen] = useState(false)
+  const [pickerSelected, setPickerSelected] = useState(new Set())
+  const [pickerSearch, setPickerSearch] = useState('')
   const [loadingSup, setLoadingSup] = useState(false)
   const [loadingProducts, setLoadingProducts] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
 
+  // Load suppliers list
   useEffect(() => {
-    if (!open || !businessId) return
+    if (!open || !businessId) { setError(''); return }
     let cancelled = false
     ;(async () => {
       setLoadingSup(true)
       setError('')
       try {
-        const { token } = await getAuthContext()
         const filters = {}
-        if (supplierSearchDebounced && String(supplierSearchDebounced).trim()) {
-          filters.search = String(supplierSearchDebounced).trim()
-        }
-        if (supplierCategoryFilter && String(supplierCategoryFilter).trim()) {
-          filters.category = String(supplierCategoryFilter).trim()
-        }
-        const rows = await getSuppliersWithMetricsForBusiness(token, businessId, filters)
+        if (supplierSearchDebounced?.trim()) filters.search = supplierSearchDebounced.trim()
+        if (supplierCategoryFilter?.trim()) filters.category = supplierCategoryFilter.trim()
+        const rows = await getSuppliersWithMetricsForBusiness(businessId, filters)
         if (!cancelled) setSuppliers(Array.isArray(rows) ? rows : [])
       } catch (e) {
         if (!cancelled) setError(e?.message || 'No se pudieron cargar proveedores.')
@@ -148,92 +137,167 @@ function NewWeeklyOrderModal({
         if (!cancelled) setLoadingSup(false)
       }
     })()
-    return () => {
-      cancelled = true
-    }
+    return () => { cancelled = true }
   }, [open, businessId, supplierSearchDebounced, supplierCategoryFilter])
 
+  // Reset everything when modal closes
+  useEffect(() => {
+    if (!open) {
+      setSupplierId('')
+      setLines([])
+      setAvailableProducts([])
+      setPickerOpen(false)
+      setPickerSelected(new Set())
+      setPickerSearch('')
+      setError('')
+    }
+  }, [open])
+
+  // Keep supplierId valid when supplier list changes
   useEffect(() => {
     if (!supplierId) return
-    const ok = suppliers.some((s) => String(s.id) === String(supplierId))
-    if (!ok) setSupplierId('')
+    if (!suppliers.some((s) => String(s.id) === String(supplierId))) setSupplierId('')
   }, [suppliers, supplierId])
 
+  // Load available products when supplier selected — lines always start empty
   useEffect(() => {
     if (!open || !supplierId || !businessId) {
       setLines([])
-      setPurchaseHistory(null)
+      setAvailableProducts([])
+      setPickerOpen(false)
       return
     }
     let cancelled = false
     ;(async () => {
       setLoadingProducts(true)
       setError('')
-      setPurchaseHistory(null)
       try {
-        const { token } = await getAuthContext()
         const [detail, history] = await Promise.all([
-          getSupplierDetailForBusiness(token, supplierId, businessId).catch(() => null),
-          getSupplierPurchaseHistoryForBusiness(token, supplierId, businessId).catch(() => null),
+          getSupplierDetailForBusiness(supplierId, businessId).catch(() => null),
+          getSupplierPurchaseHistoryForBusiness(supplierId, businessId).catch(() => null),
         ])
         if (cancelled) return
-        setPurchaseHistory(history && typeof history === 'object' ? history : null)
         const fromDetail = linesFromSupplierDetail(detail)
-        if (fromDetail.length > 0) {
-          setLines(fromDetail)
-        } else {
-          setLines(linesFromPurchaseHistory(history))
-        }
+        const products = fromDetail.length > 0 ? fromDetail : linesFromPurchaseHistory(history)
+        setAvailableProducts(products)
+        setLines([])
+        setPickerOpen(false)
+        setPickerSelected(new Set())
+        setPickerSearch('')
       } catch (e) {
         if (!cancelled) {
+          setAvailableProducts([])
           setLines([])
-          setPurchaseHistory(null)
           setError(e?.message || 'No se pudieron cargar productos del proveedor.')
         }
       } finally {
         if (!cancelled) setLoadingProducts(false)
       }
     })()
-    return () => {
-      cancelled = true
-    }
+    return () => { cancelled = true }
   }, [open, supplierId, businessId])
 
-  const updateLine = (idx, field, value) => {
+  const togglePickerProduct = (productId) => {
+    setPickerSelected((prev) => {
+      const next = new Set(prev)
+      if (next.has(productId)) next.delete(productId)
+      else next.add(productId)
+      return next
+    })
+  }
+
+  const toggleSelectAll = () => {
+    const filtered = pickerFilteredProducts
+    const allSelected = filtered.length > 0 && filtered.every((p) => pickerSelected.has(String(p.product_id)))
+    if (allSelected) {
+      setPickerSelected((prev) => {
+        const next = new Set(prev)
+        for (const p of filtered) next.delete(String(p.product_id))
+        return next
+      })
+    } else {
+      setPickerSelected((prev) => {
+        const next = new Set(prev)
+        for (const p of filtered) next.add(String(p.product_id))
+        return next
+      })
+    }
+  }
+
+  const confirmPickerSelection = () => {
+    if (pickerSelected.size === 0) return
+    setLines((prev) => {
+      const next = [...prev]
+      for (const p of availableProducts) {
+        const pid = String(p.product_id)
+        if (!pickerSelected.has(pid)) continue
+        if (!next.some((l) => String(l.product_id) === pid)) {
+          next.push({ ...p, quantity_ordered: 1 })
+        }
+      }
+      return next
+    })
+    setPickerOpen(false)
+    setPickerSelected(new Set())
+    setPickerSearch('')
+  }
+
+  const removeLine = (idx) => setLines((prev) => prev.filter((_, i) => i !== idx))
+
+  const changeQty = (idx, delta) =>
     setLines((prev) => {
       const copy = [...prev]
       if (!copy[idx]) return prev
-      copy[idx] = { ...copy[idx], [field]: value }
+      const newQty = Math.max(1, Math.round(Number(copy[idx].quantity_ordered) + delta))
+      copy[idx] = { ...copy[idx], quantity_ordered: newQty }
       return copy
     })
-  }
+
+  const setQtyDirect = (idx, raw) =>
+    setLines((prev) => {
+      const copy = [...prev]
+      if (!copy[idx]) return prev
+      const parsed = parseInt(raw, 10)
+      copy[idx] = { ...copy[idx], quantity_ordered: Number.isFinite(parsed) && parsed > 0 ? parsed : 1 }
+      return copy
+    })
+
+  const unaddedProducts = availableProducts.filter(
+    (p) => !lines.some((l) => String(l.product_id) === String(p.product_id)),
+  )
+
+  const pickerFilteredProducts = useMemo(() => {
+    const q = pickerSearch.trim().toLowerCase()
+    if (!q) return unaddedProducts
+    return unaddedProducts.filter((p) => (p.product_name || '').toLowerCase().includes(q))
+  }, [unaddedProducts, pickerSearch])
+
+  const lineTotal = (line) =>
+    Math.round(Number(line.quantity_ordered)) * Math.round(Number(line.unit_price_clp))
+
+  const grandTotal = lines.reduce((sum, l) => sum + lineTotal(l), 0)
 
   const handleSubmit = async (ev) => {
     ev.preventDefault()
     if (!supplierId || !businessId) return
     const validLines = lines.filter((l) => l.product_id && Number(l.quantity_ordered) > 0)
-    if (validLines.length === 0) {
-      setError('Agrega al menos una línea con cantidad mayor a cero.')
-      return
-    }
+    if (!validLines.length) { setError('Agrega al menos un producto con cantidad mayor a cero.'); return }
     setSubmitting(true)
     setError('')
     try {
-      const { token } = await getAuthContext()
-      const weekStart = mondayOfWeekContaining(weekDate)
       const body = {
         business_id: businessId,
         local_id: localId || undefined,
         supplier_id: supplierId,
-        week_start_date: weekStart,
+        week_start_date: mondayOfWeekContaining(weekDate),
         items: validLines.map((l) => ({
           product_id: l.product_id,
-          quantity_ordered: Number(l.quantity_ordered),
+          quantity_ordered: Math.round(Number(l.quantity_ordered)),
           unit_price_clp: Math.max(0, Math.round(Number(l.unit_price_clp) || 0)),
           line_notes: l.line_notes || undefined,
         })),
       }
-      const created = await postWeeklyPurchaseOrder(token, body)
+      const created = await postWeeklyPurchaseOrder(body)
       onCreated(created)
       onClose()
     } catch (e) {
@@ -243,236 +307,330 @@ function NewWeeklyOrderModal({
     }
   }
 
-  if (!open) return null
+  const selectCls = 'h-9 w-full rounded-md border border-[hsl(var(--border))] bg-white px-3 py-1 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary)/0.3)]'
+  const colTemplate = '1fr 128px 104px 88px 32px'
 
   return (
-    <div className="npmodal-backdrop wp-new-order-backdrop" role="presentation" onClick={onClose}>
-      <div
-        className="npmodal npmodal--wide wp-new-order-modal"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="wp-new-title"
-        onClick={(ev) => ev.stopPropagation()}
+    <Dialog open={open} onOpenChange={(o) => { if (!o) onClose() }}>
+      <DialogContent
+        className="max-w-2xl w-full flex flex-col overflow-hidden p-0"
+        style={{ maxHeight: 'min(92vh, 820px)' }}
+        onInteractOutside={(e) => {
+          const original = e.detail?.originalEvent ?? e
+          const target = original?.target
+          if (target instanceof Element && target.closest('[data-calendar-panel="true"]')) e.preventDefault()
+        }}
       >
-        <div className="npmodal-head wp-new-order-head">
-          <div className="wp-new-order-head__main">
-            <div className="wp-new-order-head__icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24" fill="none">
-                <path
-                  d="M8 7V3h8v4M8 7h8M6 21h12a2 2 0 002-2V9a2 2 0 00-2-2H6a2 2 0 00-2 2v10a2 2 0 002 2z"
-                  stroke="currentColor"
-                  strokeWidth="1.5"
-                  strokeLinecap="round"
+        <DialogHeader className="shrink-0">
+          <DialogTitle className="flex items-center gap-2">
+            <CalendarDays size={18} aria-hidden="true" />
+            Nueva orden semanal
+          </DialogTitle>
+          <p className="text-sm text-[hsl(var(--muted-foreground))]">
+            Planificá la compra por semana y proveedor.
+          </p>
+        </DialogHeader>
+
+        <div className="flex-1 overflow-y-auto min-h-0">
+          <form id="new-order-form" onSubmit={handleSubmit} className="flex flex-col gap-5 px-7 py-5">
+            {error && (
+              <div className="flex gap-2 items-start rounded-md bg-red-50 border border-red-200 text-red-700 text-sm px-3 py-2" role="alert">
+                <AlertTriangle size={16} className="shrink-0 mt-0.5" />
+                <p>{error}</p>
+              </div>
+            )}
+
+            {/* Week + supplier */}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="flex flex-col gap-1.5">
+                <ModernDateField
+                  id="wp-new-order-week"
+                  label="Semana de compra"
+                  value={weekDate}
+                  onChange={(iso) => setWeekDate(iso || weekDate)}
                 />
-                <path d="M9 14h6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-              </svg>
+                <span className="text-xs text-[hsl(var(--muted-foreground))]">Se usará el lunes de esa semana.</span>
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="wp-modal-supplier">Proveedor</Label>
+                <select id="wp-modal-supplier" value={supplierId} onChange={(ev) => setSupplierId(ev.target.value)} required disabled={loadingSup} className={selectCls}>
+                  <option value="">{loadingSup ? 'Cargando…' : '— Seleccionar —'}</option>
+                  {suppliers.map((s) => <option key={String(s.id)} value={String(s.id)}>{s.name || s.id}</option>)}
+                </select>
+              </div>
             </div>
-            <div className="wp-new-order-head__titles">
-              <h2 id="wp-new-title">Nueva orden semanal</h2>
-              <p className="wp-new-order-head__subtitle">Planificá la compra por semana y proveedor en un solo paso.</p>
-            </div>
-          </div>
-          <button type="button" className="npmodal-close wp-new-order-close" onClick={onClose} aria-label="Cerrar">
-            <span aria-hidden="true">×</span>
-          </button>
+
+            {/* Products section */}
+            {supplierId && (
+              <div className="flex flex-col gap-3">
+
+                {/* Row: title + add button */}
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-sm font-semibold">Productos del pedido</h3>
+                    {lines.length > 0 && (
+                      <Badge variant="secondary">{lines.length} producto{lines.length === 1 ? '' : 's'}</Badge>
+                    )}
+                  </div>
+                  {!loadingProducts && unaddedProducts.length > 0 && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setPickerOpen((o) => !o)}
+                      className="gap-1.5 shrink-0"
+                    >
+                      <Plus size={14} />
+                      Agregar producto
+                    </Button>
+                  )}
+                </div>
+
+                {/* Loading */}
+                {loadingProducts && (
+                  <div className="flex items-center gap-2 text-sm text-[hsl(var(--muted-foreground))]">
+                    <span className="inline-block w-4 h-4 rounded-full border-2 border-[hsl(var(--primary))] border-t-transparent animate-spin" />
+                    Cargando productos del proveedor…
+                  </div>
+                )}
+
+                {/* Product picker — multi-select list */}
+                {pickerOpen && unaddedProducts.length > 0 && (
+                  <div className="rounded-md border border-[hsl(var(--border))] overflow-hidden shadow-sm">
+                    {/* Header */}
+                    <div className="flex items-center justify-between gap-2 px-3 py-2 bg-[hsl(var(--muted)/0.4)] border-b border-[hsl(var(--border))]">
+                      <span className="text-xs font-semibold text-[hsl(var(--muted-foreground))] uppercase tracking-wide">
+                        Seleccionar productos ({unaddedProducts.length} disponibles)
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => { setPickerOpen(false); setPickerSelected(new Set()); setPickerSearch('') }}
+                        aria-label="Cerrar selector"
+                        className="text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] p-0.5 rounded"
+                      >
+                        <X size={14} />
+                      </button>
+                    </div>
+
+                    {/* Search inside picker */}
+                    {unaddedProducts.length > 4 && (
+                      <div className="px-3 py-2 border-b border-[hsl(var(--border)/0.6)] bg-white">
+                        <div className="relative">
+                          <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[hsl(var(--muted-foreground))]" />
+                          <input
+                            type="search"
+                            placeholder="Buscar producto…"
+                            value={pickerSearch}
+                            onChange={(e) => setPickerSearch(e.target.value)}
+                            autoComplete="off"
+                            className="h-8 w-full rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--muted)/0.3)] pl-8 pr-3 text-xs focus:outline-none focus:ring-1 focus:ring-[hsl(var(--primary)/0.4)]"
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Select all row */}
+                    {pickerFilteredProducts.length > 1 && (
+                      <div className="flex items-center gap-2 px-3 py-1.5 bg-[hsl(var(--muted)/0.2)] border-b border-[hsl(var(--border)/0.4)]">
+                        <input
+                          type="checkbox"
+                          id="picker-select-all"
+                          checked={pickerFilteredProducts.length > 0 && pickerFilteredProducts.every((p) => pickerSelected.has(String(p.product_id)))}
+                          onChange={toggleSelectAll}
+                          className="h-3.5 w-3.5 accent-[hsl(var(--primary))]"
+                        />
+                        <label htmlFor="picker-select-all" className="text-xs text-[hsl(var(--muted-foreground))] cursor-pointer select-none">
+                          Seleccionar todos
+                          {pickerSearch && ` (${pickerFilteredProducts.length} resultado${pickerFilteredProducts.length === 1 ? '' : 's'})`}
+                        </label>
+                      </div>
+                    )}
+
+                    {/* Product rows */}
+                    <div className="max-h-52 overflow-y-auto divide-y divide-[hsl(var(--border)/0.4)] bg-white">
+                      {pickerFilteredProducts.length === 0 ? (
+                        <p className="text-xs text-[hsl(var(--muted-foreground))] text-center py-4">Sin resultados para "{pickerSearch}"</p>
+                      ) : pickerFilteredProducts.map((p) => {
+                        const pid = String(p.product_id)
+                        const checked = pickerSelected.has(pid)
+                        return (
+                          <label
+                            key={pid}
+                            htmlFor={`picker-${pid}`}
+                            className={`flex items-center gap-3 px-3 py-2.5 cursor-pointer transition-colors select-none ${checked ? 'bg-[hsl(var(--primary)/0.07)]' : 'hover:bg-[hsl(var(--accent)/0.5)]'}`}
+                          >
+                            <input
+                              type="checkbox"
+                              id={`picker-${pid}`}
+                              checked={checked}
+                              onChange={() => togglePickerProduct(pid)}
+                              className="h-3.5 w-3.5 shrink-0 accent-[hsl(var(--primary))]"
+                            />
+                            <div className="min-w-0 flex-1">
+                              <p className="text-sm font-medium truncate">{p.product_name}</p>
+                              <p className="text-xs text-[hsl(var(--muted-foreground))]">{formatMoneyClp(p.unit_price_clp)} / u.</p>
+                            </div>
+                          </label>
+                        )
+                      })}
+                    </div>
+
+                    {/* Footer — confirm */}
+                    <div className="flex items-center justify-between gap-3 px-3 py-2.5 bg-[hsl(var(--muted)/0.3)] border-t border-[hsl(var(--border))]">
+                      <span className="text-xs text-[hsl(var(--muted-foreground))]">
+                        {pickerSelected.size === 0
+                          ? 'Ningún producto seleccionado'
+                          : `${pickerSelected.size} producto${pickerSelected.size === 1 ? '' : 's'} seleccionado${pickerSelected.size === 1 ? '' : 's'}`}
+                      </span>
+                      <Button
+                        type="button"
+                        size="sm"
+                        disabled={pickerSelected.size === 0}
+                        onClick={confirmPickerSelection}
+                        className="gap-1.5"
+                      >
+                        <Plus size={13} />
+                        Agregar seleccionados
+                      </Button>
+                    </div>
+                  </div>
+                )}
+
+                {/* No products from supplier */}
+                {!loadingProducts && availableProducts.length === 0 && (
+                  <div className="flex gap-2 items-start rounded-md bg-amber-50 border border-amber-200 px-4 py-3">
+                    <AlertTriangle size={18} className="text-amber-500 shrink-0 mt-0.5" />
+                    <div>
+                      <strong className="text-sm">Sin productos disponibles</strong>
+                      <p className="text-xs text-[hsl(var(--muted-foreground))] mt-0.5">
+                        No hay productos en inventario ni historial para este proveedor.
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Empty lines hint */}
+                {!loadingProducts && lines.length === 0 && availableProducts.length > 0 && !pickerOpen && (
+                  <p className="text-sm text-[hsl(var(--muted-foreground))] text-center py-2">
+                    Usá <strong>Agregar producto</strong> para elegir qué pedir.
+                  </p>
+                )}
+
+                {/* Lines table */}
+                {lines.length > 0 && (
+                  <div className="rounded-md border border-[hsl(var(--border))] overflow-hidden">
+                    {/* Header */}
+                    <div
+                      className="grid gap-2 px-3 py-2 bg-[hsl(var(--muted)/0.3)] border-b border-[hsl(var(--border))] text-xs font-semibold text-[hsl(var(--muted-foreground))] uppercase tracking-wide"
+                      style={{ gridTemplateColumns: colTemplate }}
+                    >
+                      <span>Producto</span>
+                      <span className="text-center">Cantidad</span>
+                      <span className="text-right">Precio unit.</span>
+                      <span className="text-right">Total</span>
+                      <span />
+                    </div>
+
+                    {/* Rows */}
+                    <div className="divide-y divide-[hsl(var(--border)/0.4)] bg-white">
+                      {lines.map((line, idx) => (
+                        <div
+                          key={String(line.product_id)}
+                          className="grid items-center gap-2 px-3 py-2.5"
+                          style={{ gridTemplateColumns: colTemplate }}
+                        >
+                          {/* Name */}
+                          <span className="text-sm font-medium truncate" title={line.product_name}>{line.product_name}</span>
+
+                          {/* Qty stepper */}
+                          <div className="flex items-center justify-center gap-1">
+                            <button
+                              type="button"
+                              onClick={() => changeQty(idx, -1)}
+                              disabled={Number(line.quantity_ordered) <= 1}
+                              aria-label="Disminuir cantidad"
+                              className="w-7 h-7 flex items-center justify-center rounded-md border border-[hsl(var(--border))] bg-white hover:bg-[hsl(var(--accent))] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                            >
+                              <Minus size={12} />
+                            </button>
+                            <input
+                              type="number"
+                              min="1"
+                              step="1"
+                              value={line.quantity_ordered}
+                              onChange={(ev) => setQtyDirect(idx, ev.target.value)}
+                              aria-label={`Cantidad de ${line.product_name}`}
+                              className="w-12 h-7 text-center rounded-md border border-[hsl(var(--border))] bg-white text-sm font-medium focus:outline-none focus:ring-1 focus:ring-[hsl(var(--primary)/0.5)] [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => changeQty(idx, 1)}
+                              aria-label="Aumentar cantidad"
+                              className="w-7 h-7 flex items-center justify-center rounded-md border border-[hsl(var(--border))] bg-white hover:bg-[hsl(var(--accent))] transition-colors"
+                            >
+                              <Plus size={12} />
+                            </button>
+                          </div>
+
+                          {/* Unit price — readonly */}
+                          <span className="text-sm text-right text-[hsl(var(--muted-foreground))] select-none">
+                            {formatMoneyClp(line.unit_price_clp)}
+                          </span>
+
+                          {/* Line total */}
+                          <span className="text-sm text-right font-semibold">
+                            {formatMoneyClp(lineTotal(line))}
+                          </span>
+
+                          {/* Remove */}
+                          <button
+                            type="button"
+                            onClick={() => removeLine(idx)}
+                            aria-label={`Eliminar ${line.product_name}`}
+                            className="flex items-center justify-center w-7 h-7 rounded-md text-[hsl(var(--muted-foreground))] hover:text-red-600 hover:bg-red-50 transition-colors"
+                          >
+                            <X size={14} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Grand total */}
+                    <div
+                      className="grid items-center gap-2 px-3 py-2 border-t border-[hsl(var(--border))] bg-[hsl(var(--muted)/0.2)]"
+                      style={{ gridTemplateColumns: colTemplate }}
+                    >
+                      <span className="text-xs font-semibold text-[hsl(var(--muted-foreground))] uppercase tracking-wide col-span-3 text-right">Total pedido</span>
+                      <span className="text-sm font-bold text-right text-[hsl(var(--primary))]">{formatMoneyClp(grandTotal)}</span>
+                      <span />
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </form>
         </div>
 
-        <form className="npmodal-form wp-new-order-form" onSubmit={handleSubmit}>
-          {error ? (
-            <div className="wp-new-order-alert wp-new-order-alert--error" role="alert">
-              <span className="wp-new-order-alert__icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24" width="20" height="20" fill="none">
-                  <path
-                    d="M12 9v4m0 4h.01M10.3 3.6L2.2 18.4A1 1 0 003.1 20h17.8a1 1 0 00.9-1.6L13.7 3.6a1 1 0 00-1.8 0z"
-                    stroke="currentColor"
-                    strokeWidth="1.5"
-                    strokeLinecap="round"
-                  />
-                </svg>
-              </span>
-              <p>{error}</p>
-            </div>
-          ) : null}
-
-          <div className="npmodal-row npmodal-row--2 wp-new-order-row">
-            <div className="npmodal-field">
-              <ModernDateField
-                id="wp-new-order-week"
-                label="Semana de compra"
-                value={weekDate}
-                onChange={(iso) => setWeekDate(iso ? mondayOfWeekContaining(iso) : weekDate)}
-                aria-label="Semana de compra (se usa el lunes de esa semana)"
-              />
-              <span className="wp-new-order-field-hint npmodal-field-hint-after-mdate">
-                Cualquier día del calendario; se usará el lunes de esa semana.
-              </span>
-            </div>
-            <label className="npmodal-field">
-              <span>Proveedor</span>
-              <span className="wp-new-order-field-hint">
-                Mismo criterio que arriba: búsqueda por nombre y categoría en la página.
-              </span>
-              <select
-                value={supplierId}
-                onChange={(ev) => setSupplierId(ev.target.value)}
-                required
-                disabled={loadingSup}
-              >
-                <option value="">{loadingSup ? 'Cargando…' : '— Seleccionar —'}</option>
-                {suppliers.map((s) => (
-                  <option key={String(s.id)} value={String(s.id)}>
-                    {s.name || s.id}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
-
-          {loadingProducts ? (
-            <div className="wp-new-order-loading" aria-live="polite">
-              <span className="wp-new-order-loading__pulse" />
-              <span>Cargando catálogo e historial de compras…</span>
-            </div>
-          ) : null}
-
-          {supplierId && !loadingProducts && Array.isArray(purchaseHistory?.products) && purchaseHistory.products.length > 0 ? (
-            <div className="wp-new-order-history" aria-labelledby="wp-history-title">
-              <div className="wp-new-order-history__head">
-                <h3 id="wp-history-title">Productos comprados (historial)</h3>
-                <span className="wp-new-order-history__badge">HU-84 · órdenes semanales recibidas</span>
-              </div>
-              <p className="wp-new-order-history__hint">
-                Referencia por producto: última semana con actividad, cantidad total recibida y monto en compras ya
-                recepcionadas.
-              </p>
-              <div className="wp-new-order-history__table-wrap">
-                <table className="wp-new-order-history__table">
-                  <thead>
-                    <tr>
-                      <th>Producto</th>
-                      <th>Última compra (lunes)</th>
-                      <th>Cant. recibida</th>
-                      <th>Valor unit. (prom.)</th>
-                      <th>Valor total</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {purchaseHistory.products.map((row) => {
-                      const qty = Number(row.total_quantity_received) || 0
-                      const total = Number(row.total_amount_received_clp) || 0
-                      const unitAvg = qty > 0 ? Math.round(total / qty) : null
-                      return (
-                      <tr key={String(row.product_id)}>
-                        <td>{row.product_name || row.product_id}</td>
-                        <td>{row.last_purchase_week_start_date || '—'}</td>
-                        <td>
-                          {row.total_quantity_received != null
-                            ? Number(row.total_quantity_received).toLocaleString('es-CL', { maximumFractionDigits: 2 })
-                            : '—'}
-                        </td>
-                        <td>{unitAvg != null ? formatMoneyClp(unitAvg) : '—'}</td>
-                        <td>{formatMoneyClp(row.total_amount_received_clp)}</td>
-                      </tr>
-                      )
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          ) : null}
-
-          {supplierId && lines.length === 0 && !loadingProducts ? (
-            <div className="wp-new-order-callout" role="status">
-              <span className="wp-new-order-callout__icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24" width="22" height="22" fill="none">
-                  <path
-                    d="M12 16v-4m0-4h.01M12 2a10 10 0 100 20 10 10 0 000-20z"
-                    stroke="currentColor"
-                    strokeWidth="1.5"
-                    strokeLinecap="round"
-                  />
-                </svg>
-              </span>
-              <div>
-                <strong>Sin líneas para el borrador</strong>
-                <p>
-                  No hay productos con stock en inventario ni historial de compras semanales para este proveedor.
-                  Asociá productos al proveedor, registrá recepciones en órdenes previas o elegí otro proveedor.
-                </p>
-              </div>
-            </div>
-          ) : null}
-
-          {lines.length > 0 ? (
-            <div className="wp-new-order-lines">
-              <div className="wp-new-order-lines__head">
-                <h3 className="wp-new-order-lines__title">Líneas del pedido</h3>
-                <span className="wp-new-order-lines__badge">{lines.length} producto{lines.length === 1 ? '' : 's'}</span>
-              </div>
-              {lines.map((line, idx) => (
-                <div key={String(line.product_id)} className="wp-line-row wp-new-order-line">
-                  <label className="npmodal-field wp-new-order-line__product">
-                    <span>Producto</span>
-                    <input
-                      type="text"
-                      readOnly
-                      value={line.product_name || line.product_id}
-                      title={String(line.product_id)}
-                    />
-                  </label>
-                  <label className="npmodal-field">
-                    <span>Cantidad</span>
-                    <input
-                      type="number"
-                      min="0.01"
-                      step="any"
-                      value={line.quantity_ordered}
-                      onChange={(ev) => updateLine(idx, 'quantity_ordered', ev.target.value)}
-                    />
-                  </label>
-                  <label className="npmodal-field">
-                    <span>Precio unit. CLP</span>
-                    <input
-                      type="number"
-                      min="0"
-                      value={line.unit_price_clp}
-                      onChange={(ev) => updateLine(idx, 'unit_price_clp', ev.target.value)}
-                    />
-                  </label>
-                </div>
-              ))}
-            </div>
-          ) : null}
-
-          <div className="npmodal-actions wp-new-order-actions">
-            <button type="button" className="npmodal-btn npmodal-btn--ghost" onClick={onClose}>
-              Cancelar
-            </button>
-            <button type="submit" className="npmodal-btn npmodal-btn--primary" disabled={submitting || !supplierId}>
-              {submitting ? 'Creando…' : 'Crear borrador'}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+        <DialogFooter className="shrink-0">
+          <Button type="button" variant="outline" onClick={onClose}>Cancelar</Button>
+          <Button type="submit" form="new-order-form" disabled={submitting || !supplierId || lines.length === 0}>
+            {submitting ? 'Creando…' : 'Crear borrador'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }
 
-function WeeklyPurchasesPage({ user, userRole, onLogout }) {
+/* ── Página principal ────────────────────────────────────────── */
+function WeeklyPurchasesPage() {
+  const { isInventoryAdmin: canAccess } = useAuth()
   const navigate = useNavigate()
   const { localId } = useParams()
-  const location = useLocation()
   const [searchParams, setSearchParams] = useSearchParams()
-
-  const selectedLocal = useMemo(() => {
-    if (location.state?.local) return location.state.local
-    return { id: localId, name: `Local ${localId ?? ''}` }
-  }, [location.state, localId])
-
-  const canAccess = isInventoryAdminRole(userRole)
+  const selectedLocal = useSelectedLocal(localId)
 
   const [businessId, setBusinessId] = useState(null)
-  /** Evita mostrar error de negocio mientras aún se resuelve getLocalById. */
   const [businessIdLoading, setBusinessIdLoading] = useState(true)
   const [orders, setOrders] = useState([])
   const [loading, setLoading] = useState(true)
@@ -485,8 +643,8 @@ function WeeklyPurchasesPage({ user, userRole, onLogout }) {
   const [suppliers, setSuppliers] = useState([])
   const [supplierNames, setSupplierNames] = useState({})
 
-  const [reportFrom, setReportFrom] = useState(() => mondayOfWeekContaining(new Date().toISOString().slice(0, 10)))
-  const [reportTo, setReportTo] = useState(() => mondayOfWeekContaining(new Date().toISOString().slice(0, 10)))
+  const [reportFrom, setReportFrom] = useState('')
+  const [reportTo, setReportTo] = useState('')
   const [reportData, setReportData] = useState(null)
   const [reportLoading, setReportLoading] = useState(false)
   const [reportError, setReportError] = useState('')
@@ -499,63 +657,42 @@ function WeeklyPurchasesPage({ user, userRole, onLogout }) {
   const [supplierCategoryOptions, setSupplierCategoryOptions] = useState([])
 
   useEffect(() => {
-    const id = setTimeout(() => {
-      setSupplierSearchDebounced(String(supplierSearchInput || '').trim())
-    }, SUPPLIER_SEARCH_DEBOUNCE_MS)
+    const id = setTimeout(() => setSupplierSearchDebounced(String(supplierSearchInput || '').trim()), SUPPLIER_SEARCH_DEBOUNCE_MS)
     return () => clearTimeout(id)
   }, [supplierSearchInput])
 
   useEffect(() => {
-    setSearchParams(
-      (prev) => {
-        const next = new URLSearchParams(prev)
-        if (supplierSearchDebounced) next.set('search', supplierSearchDebounced)
-        else next.delete('search')
-        if (supplierCategoryFilter) next.set('category', supplierCategoryFilter)
-        else next.delete('category')
-        return next
-      },
-      { replace: true },
-    )
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev)
+      supplierSearchDebounced ? next.set('search', supplierSearchDebounced) : next.delete('search')
+      supplierCategoryFilter ? next.set('category', supplierCategoryFilter) : next.delete('category')
+      return next
+    }, { replace: true })
   }, [supplierSearchDebounced, supplierCategoryFilter, setSearchParams])
 
-  const resolveBusiness = useCallback(async () => {
-    if (!localId) return null
-    const { token } = await getAuthContext()
-    const loc = await getLocalById(localId, token)
-    return loc?.business_id != null ? String(loc.business_id) : null
-  }, [localId])
+  const resolveBusiness = useLocalBusinessId(localId)
 
   const loadOrders = useCallback(async () => {
-    if (!canAccess || !businessId) {
-      setOrders([])
-      setLoading(false)
-      return
-    }
+    if (!canAccess || !businessId) { setOrders([]); setLoading(false); return }
     setError('')
     setLoading(true)
     try {
-      const { token } = await getAuthContext()
       const filters = {}
       if (filterWeek) filters.week_start = mondayOfWeekContaining(filterWeek)
       if (filterSupplier) filters.supplier_id = filterSupplier
       if (filterStatus) filters.status = filterStatus
-      const rows = await getWeeklyPurchaseOrders(token, businessId, filters)
+      const rows = await getWeeklyPurchaseOrders(businessId, filters)
       setOrders(Array.isArray(rows) ? rows : [])
     } catch (e) {
       setOrders([])
-      setError(e?.message || 'No se pudieron cargar las órdenes semanales.')
+      setError(e?.message || 'No se pudieron cargar las órdenes.')
     } finally {
       setLoading(false)
     }
   }, [businessId, canAccess, filterWeek, filterSupplier, filterStatus])
 
   useEffect(() => {
-    if (!canAccess || !localId) {
-      setBusinessId(null)
-      setBusinessIdLoading(false)
-      return
-    }
+    if (!canAccess || !localId) { setBusinessId(null); setBusinessIdLoading(false); return }
     setBusinessIdLoading(true)
     let cancelled = false
     ;(async () => {
@@ -568,25 +705,17 @@ function WeeklyPurchasesPage({ user, userRole, onLogout }) {
         if (!cancelled) setBusinessIdLoading(false)
       }
     })()
-    return () => {
-      cancelled = true
-    }
+    return () => { cancelled = true }
   }, [localId, canAccess, resolveBusiness])
 
-  useEffect(() => {
-    loadOrders()
-  }, [loadOrders])
+  useEffect(() => { loadOrders() }, [loadOrders])
 
   useEffect(() => {
-    if (!businessId || !canAccess) {
-      setSupplierCategoryOptions([])
-      return
-    }
+    if (!businessId || !canAccess) { setSupplierCategoryOptions([]); return }
     let cancelled = false
     ;(async () => {
       try {
-        const { token } = await getAuthContext()
-        const rows = await getSuppliersWithMetricsForBusiness(token, businessId)
+        const rows = await getSuppliersWithMetricsForBusiness(businessId)
         if (cancelled) return
         const set = new Set()
         for (const r of Array.isArray(rows) ? rows : []) {
@@ -598,54 +727,36 @@ function WeeklyPurchasesPage({ user, userRole, onLogout }) {
         if (!cancelled) setSupplierCategoryOptions([])
       }
     })()
-    return () => {
-      cancelled = true
-    }
+    return () => { cancelled = true }
   }, [businessId, canAccess])
 
   useEffect(() => {
-    if (businessId) setSupplierNames({})
-  }, [businessId])
-
-  useEffect(() => {
-    if (!businessId || !canAccess) {
-      setSuppliers([])
-      setSupplierNames({})
-      return
-    }
+    if (!businessId || !canAccess) { setSuppliers([]); setSupplierNames({}); return }
     let cancelled = false
     ;(async () => {
       try {
-        const { token } = await getAuthContext()
         const filters = {}
         if (supplierSearchDebounced) filters.search = supplierSearchDebounced
         if (supplierCategoryFilter) filters.category = supplierCategoryFilter
-        const rows = await getSuppliersWithMetricsForBusiness(token, businessId, filters)
+        const rows = await getSuppliersWithMetricsForBusiness(businessId, filters)
         const list = Array.isArray(rows) ? rows : []
         if (cancelled) return
         setSuppliers(list)
         setSupplierNames((prev) => {
           const next = { ...prev }
-          for (const r of list) {
-            if (r.id) next[String(r.id)] = r.name || String(r.id)
-          }
+          for (const r of list) if (r.id) next[String(r.id)] = r.name || String(r.id)
           return next
         })
       } catch {
-        if (!cancelled) {
-          setSuppliers([])
-        }
+        if (!cancelled) setSuppliers([])
       }
     })()
-    return () => {
-      cancelled = true
-    }
+    return () => { cancelled = true }
   }, [businessId, canAccess, supplierSearchDebounced, supplierCategoryFilter])
 
   useEffect(() => {
     if (!filterSupplier) return
-    const ok = suppliers.some((s) => String(s.id) === String(filterSupplier))
-    if (!ok) setFilterSupplier('')
+    if (!suppliers.some((s) => String(s.id) === String(filterSupplier))) setFilterSupplier('')
   }, [suppliers, filterSupplier])
 
   const loadReport = async () => {
@@ -653,10 +764,11 @@ function WeeklyPurchasesPage({ user, userRole, onLogout }) {
     setReportLoading(true)
     setReportError('')
     try {
-      const { token } = await getAuthContext()
-      const wf = mondayOfWeekContaining(reportFrom)
-      const wt = mondayOfWeekContaining(reportTo)
-      const data = await getWeeklyPurchaseComparisonReport(token, businessId, wf, wt)
+      const data = await getWeeklyPurchaseComparisonReport(
+        businessId,
+        mondayOfWeekContaining(reportFrom),
+        mondayOfWeekContaining(reportTo),
+      )
       setReportData(data)
     } catch (e) {
       setReportData(null)
@@ -666,258 +778,272 @@ function WeeklyPurchasesPage({ user, userRole, onLogout }) {
     }
   }
 
-  const openDetail = (orderId) => {
-    navigate(`/local/${localId}/inventario/compras-semanales/${orderId}`, {
-      state: { local: selectedLocal },
-    })
-  }
+  const openDetail = (orderId) =>
+    navigate(`/local/${localId}/inventario/compras-semanales/${orderId}`, { state: { local: selectedLocal } })
+
+  const selectCls = 'h-9 w-full rounded-md border border-[hsl(var(--border))] bg-white px-3 py-1 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary)/0.3)]'
 
   return (
-    <InventoryShell user={user} userRole={userRole} onLogout={onLogout} active="weekly-purchases">
-      <div className="inv-stock-page providers-layout providers-layout--weekly">
-        <BackToInventoryHubButton navState={{ local: selectedLocal }} />
+    <InventoryShell>
+      <div className="flex flex-col gap-6 px-6 py-6 pb-10">
 
-        <header className="scd-header scd-header--compact wp-weekly-header">
-          <span className="scd-header-icon" aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="none">
-              <path d="M8 7V3h8v4M8 7h8M6 21h12a2 2 0 002-2V9a2 2 0 00-2-2H6a2 2 0 00-2 2v10a2 2 0 002 2z" stroke="currentColor" strokeWidth="1.5" />
-            </svg>
-          </span>
-          <div className="wp-weekly-header__text">
-            <h1 className="scd-title">Órdenes de compra semanales</h1>
-            <p className="scd-subtitle wp-weekly-lede">
-              Planificá la compra por semana y proveedor, seguí el estado de cada orden y compará totales entre fechas en
-              el reporte de abajo.
-            </p>
+        {/* Header */}
+        <header className="flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <span className="flex items-center justify-center w-10 h-10 rounded-full bg-[hsl(var(--primary)/0.1)] text-[hsl(var(--primary))]">
+              <CalendarDays size={22} />
+            </span>
+            <div>
+              <h1 className="text-2xl font-bold text-[hsl(var(--foreground))]">Órdenes de compra semanales</h1>
+              <p className="text-sm text-[hsl(var(--muted-foreground))] mt-0.5">
+                Planificá la compra por semana y proveedor, seguí el estado de cada orden.
+              </p>
+            </div>
           </div>
+          {canAccess && !businessIdLoading && businessId && (
+            <Button type="button" onClick={() => setNewModalOpen(true)} className="gap-1.5 shrink-0">
+              <Plus size={16} />
+              Nueva orden semanal
+            </Button>
+          )}
         </header>
 
-        {!canAccess ? (
-          <p className="npmodal-error">No tienes permisos para acceder a esta sección.</p>
-        ) : null}
-
-        {canAccess && businessIdLoading ? (
-          <div className="wp-business-loading" aria-live="polite">
-            <LoadingSpinner message="Cargando datos del local…" />
-          </div>
-        ) : null}
-
-        {canAccess && !businessIdLoading && !businessId ? (
-          <p className="npmodal-error" role="alert">
-            No se pudo determinar el negocio del local. Revisá la conexión o volvé a entrar al módulo.
+        {!canAccess && (
+          <p className="rounded-md bg-red-50 border border-red-200 text-red-700 text-sm px-3 py-2">
+            No tienes permisos para acceder a esta sección.
           </p>
-        ) : null}
+        )}
 
-        {canAccess && !businessIdLoading && businessId ? (
+        {canAccess && businessIdLoading && <LoadingSpinner message="Cargando datos del local…" />}
+
+        {canAccess && !businessIdLoading && !businessId && (
+          <p className="rounded-md bg-red-50 border border-red-200 text-red-700 text-sm px-3 py-2" role="alert">
+            No se pudo determinar el negocio del local.
+          </p>
+        )}
+
+        {canAccess && !businessIdLoading && businessId && (
           <>
-            <div className="wp-actions providers-section-card">
-              <button type="button" className="wp-btn wp-btn--primary" onClick={() => setNewModalOpen(true)}>
-                + Nueva orden semanal
-              </button>
-              <button type="button" className="wp-btn wp-btn--icon" onClick={() => loadOrders()} aria-label="Actualizar listado">
-                <svg className="wp-btn__icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                  <path
-                    d="M4 12a8 8 0 0113.657-5.657M20 12a8 8 0 01-13.657 5.657M20 12H12M4 12h4"
-                    stroke="currentColor"
-                    strokeWidth="1.6"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-                Actualizar listado
-              </button>
-            </div>
+            {/* Filtros — todos en una sola Card */}
+            <Card>
+              <CardContent className="pt-5 pb-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 items-end">
+                  {/* Buscar proveedor */}
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-sm font-medium text-[hsl(var(--foreground))]">Buscar proveedor</label>
+                    <div className="relative">
+                      <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[hsl(var(--muted-foreground))]" />
+                      <input
+                        type="search"
+                        value={supplierSearchInput}
+                        onChange={(ev) => setSupplierSearchInput(ev.target.value)}
+                        placeholder="Nombre…"
+                        autoComplete="off"
+                        className="h-9 w-full rounded-md border border-[hsl(var(--border))] bg-white pl-8 pr-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary)/0.3)]"
+                      />
+                    </div>
+                  </div>
 
-            <div className="wp-filters-panel providers-section-card" aria-label="Filtros de compras semanales">
-              <div className="wp-filters-panel__rows">
-                <div className="wp-filters-panel__row wp-filters-panel__row--primary">
-                  <label>
-                    Buscar proveedor
-                    <input
-                      type="search"
-                      value={supplierSearchInput}
-                      onChange={(ev) => setSupplierSearchInput(ev.target.value)}
-                      placeholder="Nombre (coincidencia parcial)"
-                      autoComplete="off"
-                    />
-                  </label>
-                  <div className="wp-filters-panel__mdate">
+                  {/* Filtrar por semana */}
+                  <div className="flex flex-col gap-1.5">
                     <ModernDateField
                       id="wp-filter-week"
-                      label="Filtrar por semana (lunes)"
+                      label="Semana (lunes)"
                       value={filterWeek}
-                      onChange={(iso) => setFilterWeek(iso ? mondayOfWeekContaining(iso) : '')}
+                      onChange={(iso) => setFilterWeek(iso || '')}
                     />
                   </div>
-                  <label>
-                    Proveedor (orden)
-                    <select value={filterSupplier} onChange={(ev) => setFilterSupplier(ev.target.value)}>
+
+                  {/* Proveedor de la orden */}
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-sm font-medium text-[hsl(var(--foreground))]">Proveedor</label>
+                    <select value={filterSupplier} onChange={(ev) => setFilterSupplier(ev.target.value)} className={selectCls}>
                       <option value="">Todos</option>
-                      {suppliers.map((s) => (
-                        <option key={String(s.id)} value={String(s.id)}>
-                          {s.name || s.id}
-                        </option>
-                      ))}
+                      {suppliers.map((s) => <option key={String(s.id)} value={String(s.id)}>{s.name || s.id}</option>)}
                     </select>
-                  </label>
-                  <label>
-                    Estado
-                    <select value={filterStatus} onChange={(ev) => setFilterStatus(ev.target.value)}>
+                  </div>
+
+                  {/* Estado */}
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-sm font-medium text-[hsl(var(--foreground))]">Estado</label>
+                    <select value={filterStatus} onChange={(ev) => setFilterStatus(ev.target.value)} className={selectCls}>
                       <option value="">Todos</option>
-                      {Object.entries(STATUS_LABELS).map(([k, v]) => (
-                        <option key={k} value={k}>
-                          {v}
-                        </option>
-                      ))}
+                      {Object.entries(STATUS_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
                     </select>
-                  </label>
-                </div>
-                <div className="wp-filters-panel__row wp-filters-panel__row--secondary">
-                  <label>
-                    Categoría (proveedor)
-                    <select value={supplierCategoryFilter} onChange={(ev) => setSupplierCategoryFilter(ev.target.value)}>
+                  </div>
+
+                  {/* Categoría */}
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-sm font-medium text-[hsl(var(--foreground))]">Categoría</label>
+                    <select value={supplierCategoryFilter} onChange={(ev) => setSupplierCategoryFilter(ev.target.value)} className={selectCls}>
                       <option value="">Todas</option>
-                      {supplierCategoryOptions.map((c) => (
-                        <option key={c} value={c}>
-                          {c}
-                        </option>
-                      ))}
+                      {supplierCategoryOptions.map((c) => <option key={c} value={c}>{c}</option>)}
                     </select>
-                  </label>
+                  </div>
                 </div>
-              </div>
-            </div>
+              </CardContent>
+            </Card>
 
-            {error ? <p className="npmodal-error">{error}</p> : null}
-
-            {loading ? (
-              <div className="wp-orders-loading" aria-live="polite">
-                <LoadingSpinner message="Cargando órdenes…" />
-              </div>
-            ) : (
-              <div className="wp-orders-card providers-section-card providers-table-wrap">
-                <div className="wp-orders-card__head">
-                  <h2 className="wp-orders-card__title">Órdenes de compra semanales</h2>
-                  <p className="wp-orders-card__meta">{`${orders.length} orden(es) encontrada(s)`}</p>
-                </div>
-                <div className="wp-table-wrap wp-table-wrap--in-card">
-                  <table className="wp-table wp-table--orders">
-                    <thead>
-                      <tr>
-                        <th>Semana (lunes)</th>
-                        <th>Proveedor</th>
-                        <th>Estado</th>
-                        <th>Total estimado</th>
-                        <th>Total recibido</th>
-                        <th />
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {orders.length === 0 ? (
-                        <tr>
-                          <td colSpan={6} className="wp-table-empty">
-                            No hay órdenes con los filtros actuales.
-                          </td>
-                        </tr>
-                      ) : (
-                        orders.map((o) => (
-                          <tr key={String(o.id)}>
-                            <td>{formatWeekLong(o.week_start_date)}</td>
-                            <td>{supplierNames[String(o.supplier_id)] || o.supplier_id || '—'}</td>
-                            <td>
-                              <span className={statusBadgeClass(o.status)}>{STATUS_LABELS[o.status] || o.status}</span>
-                            </td>
-                            <td>{formatMoneyClp(o.total_estimated_clp)}</td>
-                            <td>{formatReceivedCell(o)}</td>
-                            <td>
-                              <button type="button" className="wp-btn" onClick={() => openDetail(o.id)}>
-                                Ver / editar
-                              </button>
-                            </td>
-                          </tr>
-                        ))
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
+            {/* Error / listado */}
+            {error && (
+              <p className="rounded-md bg-red-50 border border-red-200 text-red-700 text-sm px-3 py-2" role="alert">{error}</p>
             )}
 
-            <section className="wp-section providers-section-card wp-section--report" aria-labelledby="wp-report-title">
-              <div className="wp-section__head">
-                <span className="wp-section__icon" aria-hidden="true">
-                  <svg viewBox="0 0 24 24" width="22" height="22" fill="none">
-                    <path d="M4 19V5M9 19V9M14 19v-6M19 19V11" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-                  </svg>
-                </span>
-                <div>
-                  <h3 id="wp-report-title">Reporte comparativo</h3>
-                  <p className="wp-section__lede">Comparación de órdenes entre rangos de semanas</p>
+            <Card>
+              <CardHeader className="pb-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <CardTitle className="text-base">Listado de órdenes</CardTitle>
+                    {!loading && (
+                      <p className="text-sm text-[hsl(var(--muted-foreground))] mt-0.5">
+                        {orders.length} orden{orders.length === 1 ? '' : 'es'} encontrada{orders.length === 1 ? '' : 's'}
+                      </p>
+                    )}
+                  </div>
+                  <Button type="button" variant="outline" size="sm" onClick={() => loadOrders()} aria-label="Actualizar listado" className="gap-1.5 shrink-0">
+                    <RefreshCw size={14} />
+                    Actualizar
+                  </Button>
                 </div>
-              </div>
-              <div className="wp-toolbar wp-toolbar--report">
-                <ModernDateField
-                  id="wp-report-from"
-                  label="Desde (lunes)"
-                  value={reportFrom}
-                  onChange={(iso) => setReportFrom(iso ? mondayOfWeekContaining(iso) : '')}
-                />
-                <ModernDateField
-                  id="wp-report-to"
-                  label="Hasta (lunes)"
-                  value={reportTo}
-                  onChange={(iso) => setReportTo(iso ? mondayOfWeekContaining(iso) : '')}
-                />
-                <button type="button" className="wp-btn wp-btn--primary" onClick={() => loadReport()} disabled={reportLoading}>
-                  {reportLoading ? 'Generando…' : 'Generar'}
-                </button>
-              </div>
-              {reportError ? <p className="npmodal-error">{reportError}</p> : null}
-              {reportData ? (
-                <>
-                  <div className="wp-table-wrap" style={{ marginBottom: '1rem' }}>
-                    <table className="wp-table">
-                      <thead>
-                        <tr>
-                          <th>Semana</th>
-                          <th>Órdenes</th>
-                          <th>Total estimado (CLP)</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {(reportData.by_week || []).map((w) => (
-                          <tr key={w.week_start_date}>
-                            <td>{w.week_start_date}</td>
-                            <td>{w.orders_count}</td>
-                            <td>{formatMoneyClp(w.total_estimated_clp)}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+              </CardHeader>
+              <CardContent className="pt-0 px-0 pb-0">
+                {loading ? (
+                  <div className="py-8"><LoadingSpinner message="Cargando órdenes…" /></div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Semana (lunes)</TableHead>
+                          <TableHead>Proveedor</TableHead>
+                          <TableHead>Estado</TableHead>
+                          <TableHead>Total estimado</TableHead>
+                          <TableHead>Total recibido</TableHead>
+                          <TableHead />
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {orders.length === 0 ? (
+                          <TableRow>
+                            <TableCell colSpan={6} className="text-center text-[hsl(var(--muted-foreground))] py-10">
+                              No hay órdenes con los filtros actuales.
+                            </TableCell>
+                          </TableRow>
+                        ) : (
+                          orders.map((o) => (
+                            <TableRow key={String(o.id)} className="cursor-pointer hover:bg-[hsl(var(--accent)/0.5)]" onClick={() => openDetail(o.id)}>
+                              <TableCell className="font-medium">{formatWeekLong(o.week_start_date)}</TableCell>
+                              <TableCell>{supplierNames[String(o.supplier_id)] || o.supplier_id || '—'}</TableCell>
+                              <TableCell>
+                                <Badge variant={STATUS_VARIANT[o.status] ?? 'secondary'}>
+                                  {STATUS_LABELS[o.status] || o.status}
+                                </Badge>
+                              </TableCell>
+                              <TableCell>{formatMoneyClp(o.total_estimated_clp)}</TableCell>
+                              <TableCell>{formatReceivedCell(o)}</TableCell>
+                              <TableCell>
+                                <Button type="button" variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); openDetail(o.id) }}>
+                                  Ver detalle →
+                                </Button>
+                              </TableCell>
+                            </TableRow>
+                          ))
+                        )}
+                      </TableBody>
+                    </Table>
                   </div>
-                  <div className="wp-table-wrap">
-                    <table className="wp-table">
-                      <thead>
-                        <tr>
-                          <th>Proveedor</th>
-                          <th>Órdenes</th>
-                          <th>Total estimado (CLP)</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {(reportData.by_supplier || []).map((s) => (
-                          <tr key={String(s.supplier_id)}>
-                            <td>{s.supplier_name}</td>
-                            <td>{s.orders_count}</td>
-                            <td>{formatMoneyClp(s.total_estimated_clp)}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Reporte comparativo */}
+            <Card>
+              <CardHeader className="pb-3">
+                <div className="flex items-center gap-3">
+                  <span className="flex items-center justify-center w-9 h-9 rounded-full bg-[hsl(var(--primary)/0.1)] text-[hsl(var(--primary))]">
+                    <BarChart2 size={18} />
+                  </span>
+                  <div>
+                    <CardTitle className="text-base">Reporte comparativo</CardTitle>
+                    <p className="text-sm text-[hsl(var(--muted-foreground))]">Comparación de órdenes entre rangos de semanas</p>
                   </div>
-                </>
-              ) : null}
-            </section>
+                </div>
+              </CardHeader>
+              <CardContent className="flex flex-col gap-4">
+                <div className="flex flex-wrap gap-4 items-end">
+                  <ModernDateField
+                    id="wp-report-from"
+                    label="Desde (lunes)"
+                    value={reportFrom}
+                    onChange={(iso) => setReportFrom(iso || '')}
+                  />
+                  <ModernDateField
+                    id="wp-report-to"
+                    label="Hasta (lunes)"
+                    value={reportTo}
+                    onChange={(iso) => setReportTo(iso || '')}
+                  />
+                  <Button type="button" onClick={loadReport} disabled={reportLoading} className="self-end">
+                    {reportLoading ? 'Generando…' : 'Generar reporte'}
+                  </Button>
+                </div>
+
+                {reportError && (
+                  <p className="rounded-md bg-red-50 border border-red-200 text-red-700 text-sm px-3 py-2" role="alert">{reportError}</p>
+                )}
+
+                {reportData && (
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-sm font-semibold text-[hsl(var(--foreground))] mb-2">Por semana</p>
+                      <div className="rounded-md border border-[hsl(var(--border))] overflow-x-auto">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>Semana</TableHead>
+                              <TableHead>Órdenes</TableHead>
+                              <TableHead>Total estimado</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {(reportData.by_week || []).map((w) => (
+                              <TableRow key={w.week_start_date}>
+                                <TableCell>{w.week_start_date}</TableCell>
+                                <TableCell>{w.orders_count}</TableCell>
+                                <TableCell>{formatMoneyClp(w.total_estimated_clp)}</TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold text-[hsl(var(--foreground))] mb-2">Por proveedor</p>
+                      <div className="rounded-md border border-[hsl(var(--border))] overflow-x-auto">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>Proveedor</TableHead>
+                              <TableHead>Órdenes</TableHead>
+                              <TableHead>Total estimado</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {(reportData.by_supplier || []).map((s) => (
+                              <TableRow key={String(s.supplier_id)}>
+                                <TableCell>{s.supplier_name}</TableCell>
+                                <TableCell>{s.orders_count}</TableCell>
+                                <TableCell>{formatMoneyClp(s.total_estimated_clp)}</TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
 
             <NewWeeklyOrderModal
               open={newModalOpen}
@@ -929,7 +1055,7 @@ function WeeklyPurchasesPage({ user, userRole, onLogout }) {
               supplierCategoryFilter={supplierCategoryFilter}
             />
           </>
-        ) : null}
+        )}
       </div>
     </InventoryShell>
   )
