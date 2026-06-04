@@ -27,7 +27,7 @@ function normalizeChileMobileDigits(value) {
   return digits.slice(0, CL_PHONE_DIGITS)
 }
 
-function RegisterSupplierModal({ open, onClose, onSuccess, businessId }) {
+function RegisterSupplierModal({ open, onClose, onSuccess, businessId, localId }) {
   const [form,        setFormState] = useState(INITIAL)
   const [submitting,  setSubmitting] = useState(false)
   const [error,       setError]      = useState('')
@@ -74,8 +74,16 @@ function RegisterSupplierModal({ open, onClose, onSuccess, businessId }) {
       if (digits.length !== CL_PHONE_DIGITS) next.phone = 'Ingresa 8 dígitos después de +56 9.'
     }
     if (!next.email && String(form.email).trim()) {
-      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(form.email).trim())) {
-        next.email = 'Ingresa un email válido.'
+      const emailVal = String(form.email).trim()
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[a-zA-Z]{2,}$/
+      if (!emailRegex.test(emailVal)) {
+        next.email = 'Ingresa un email válido (ej: proveedor@empresa.cl).'
+      } else {
+        const tld = emailVal.split('.').pop().toLowerCase()
+        const reservedTlds = ['test', 'local', 'localhost', 'example', 'invalid', 'internal']
+        if (reservedTlds.includes(tld)) {
+          next.email = `El dominio ".${tld}" no es válido. Usa un email real (ej: proveedor@gmail.com).`
+        }
       }
     }
     setFieldErrors(next)
@@ -104,6 +112,7 @@ function RegisterSupplierModal({ open, onClose, onSuccess, businessId }) {
       }
       if (form.start_date) body.start_date = form.start_date
       if (bid)             body.business_id = bid
+      if (localId)         body.local_id = localId
 
       try {
         await postSupplier(body)
@@ -280,13 +289,20 @@ function RegisterSupplierModal({ open, onClose, onSuccess, businessId }) {
         </div>
 
         {/* Fixed footer */}
-        <DialogFooter className="shrink-0">
-          <Button type="button" variant="outline" onClick={onClose} disabled={submitting}>
-            Cancelar
-          </Button>
-          <Button type="submit" form="rs-form" disabled={submitting}>
-            {submitting ? 'Guardando…' : 'Registrar'}
-          </Button>
+        <DialogFooter className="shrink-0 flex-col gap-2">
+          {error && (
+            <p className="w-full rounded-lg border border-red-200 bg-red-50 text-red-700 text-xs px-3 py-2 text-left" role="alert">
+              {error}
+            </p>
+          )}
+          <div className="flex gap-2 justify-end w-full">
+            <Button type="button" variant="outline" onClick={onClose} disabled={submitting}>
+              Cancelar
+            </Button>
+            <Button type="submit" form="rs-form" disabled={submitting}>
+              {submitting ? 'Guardando…' : 'Registrar'}
+            </Button>
+          </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>

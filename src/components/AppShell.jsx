@@ -1,19 +1,20 @@
 import { useState } from 'react'
 import { Outlet, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import { useAlerts } from '../hooks/useAlerts'
 import { motion, AnimatePresence } from 'framer-motion'
 import { cn } from '@/lib/utils'
 import {
   LayoutDashboard, Store, ChevronDown, ChevronLeft, ChevronRight,
   DollarSign, FileText, BarChart3, Wallet, Bell, Gift,
-  Table2, BookOpen, Monitor, ChefHat, ClipboardList,
+  Table2, ChefHat,
   Package, Truck, ShoppingCart, BookMarked, PackageOpen,
   LogOut, Utensils,
 } from 'lucide-react'
 
 /* ── key sets for accordion auto-open ──────────────────────────── */
 const ADMIN_KEYS = new Set(['administracion', 'ventas', 'rendiciones', 'reportes', 'flujo-caja', 'alertas', 'bonos'])
-const POS_KEYS   = new Set(['pos', 'pos-mesas', 'pos-menu', 'pos-bar', 'pos-cocina', 'pos-pedidos'])
+const POS_KEYS   = new Set(['pos', 'pos-mesas', 'pos-kitchen', 'pos-reportes'])
 const INV_KEYS   = new Set(['inv-hub', 'inv-prov', 'inv-stock', 'inv-compras', 'inv-recetas'])
 
 /* ── active-key derived from pathname ──────────────────────────── */
@@ -23,6 +24,8 @@ function deriveActiveKey(pathname) {
   if (pathname.includes('/inventario/compras-semanales')) return 'inv-compras'
   if (pathname.includes('/inventario/recipes'))         return 'inv-recetas'
   if (pathname.includes('/inventario'))                 return 'inv-hub'
+  if (pathname.includes('/pos/reportes'))               return 'pos-reportes'
+  if (pathname.includes('/pos/cocina'))                 return 'pos-kitchen'
   if (pathname.includes('/pos'))                        return 'pos-mesas'
   if (pathname.includes('/administrativo/ventas'))      return 'ventas'
   if (pathname.includes('/administrativo/rendiciones')) return 'rendiciones'
@@ -55,11 +58,9 @@ const ACCORDIONS = [
     label: 'POS Restaurante',
     icon: Table2,
     items: [
-      { key: 'pos-mesas',   label: 'Gestión de Mesas', icon: Table2        },
-      { key: 'pos-menu',    label: 'Menú',              icon: BookOpen,      disabled: true },
-      { key: 'pos-bar',     label: 'Pantalla Bar',      icon: Monitor,       disabled: true },
-      { key: 'pos-cocina',  label: 'Pantalla Cocina',   icon: ChefHat,       disabled: true },
-      { key: 'pos-pedidos', label: 'Toma de Pedidos',   icon: ClipboardList, disabled: true },
+      { key: 'pos-mesas',    label: 'Gestión de Mesas', icon: Table2    },
+      { key: 'pos-kitchen',  label: 'Cocina',            icon: ChefHat   },
+      { key: 'pos-reportes', label: 'Reportes',          icon: BarChart3 },
     ],
   },
   {
@@ -89,8 +90,10 @@ function Sidebar({ collapsed, onToggle }) {
 
   /* manually-toggled accordion overrides */
   const [userOpen, setUserOpen] = useState({ administracion: false, pos: false, inventario: false })
+  const [userClosed, setUserClosed] = useState({ administracion: false, pos: false, inventario: false })
 
   const isOpen = (key) => {
+    if (userClosed[key]) return false
     if (key === 'administracion' && ADMIN_KEYS.has(activeKey)) return true
     if (key === 'pos'            && POS_KEYS.has(activeKey))   return true
     if (key === 'inventario'     && INV_KEYS.has(activeKey))   return true
@@ -98,11 +101,14 @@ function Sidebar({ collapsed, onToggle }) {
   }
 
   const toggleAccordion = (key) => {
-    const autoOpen =
-      (key === 'administracion' && ADMIN_KEYS.has(activeKey)) ||
-      (key === 'pos'            && POS_KEYS.has(activeKey))   ||
-      (key === 'inventario'     && INV_KEYS.has(activeKey))
-    if (!autoOpen) setUserOpen((p) => ({ ...p, [key]: !p[key] }))
+    const open = isOpen(key)
+    if (open) {
+      setUserClosed(p => ({ ...p, [key]: true }))
+      setUserOpen(p => ({ ...p, [key]: false }))
+    } else {
+      setUserClosed(p => ({ ...p, [key]: false }))
+      setUserOpen(p => ({ ...p, [key]: true }))
+    }
   }
 
   const goAccordion = (key) => {
@@ -119,8 +125,12 @@ function Sidebar({ collapsed, onToggle }) {
     switch (item.key) {
       case 'locales':   navigate('/admin'); break
       case 'dashboard': navigate(localId ? `/local/${localId}/dashboard` : '/admin', { state: navState }); break
-      case 'pos-mesas': case 'pos-menu': case 'pos-bar': case 'pos-cocina': case 'pos-pedidos':
+      case 'pos-mesas':
         if (localId) navigate(`/local/${localId}/pos`, { state: navState }); break
+      case 'pos-kitchen':
+        if (localId) navigate(`/local/${localId}/pos/cocina`, { state: navState }); break
+      case 'pos-reportes':
+        if (localId) navigate(`/local/${localId}/pos/reportes`, { state: navState }); break
       case 'inv-hub':     if (localId) navigate(`/local/${localId}/inventario`, { state: navState }); break
       case 'inv-prov':    if (localId) navigate(`/local/${localId}/inventario/proveedores`, { state: navState }); break
       case 'inv-stock':   if (localId) navigate(`/local/${localId}/inventario/stock`, { state: navState }); break
@@ -330,11 +340,47 @@ function Sidebar({ collapsed, onToggle }) {
   )
 }
 
+/* ── AlertBell — campana con badge de alertas pendientes en el header ── */
+function AlertBell({ localId }) {
+  const navigate  = useNavigate()
+  const { pathname, state: locState } = useLocation()
+  const { pendingCount } = useAlerts(localId)
+
+  if (!localId) return null
+
+  const navState = locState?.local ? { local: locState.local } : { local: { id: localId } }
+  const isActive = pathname.includes('/administrativo/alertas')
+
+  return (
+    <button
+      onClick={() => navigate(`/local/${localId}/administrativo/alertas`, { state: navState })}
+      title={pendingCount > 0 ? `${pendingCount} alerta(s) pendiente(s)` : 'Alertas'}
+      className={cn(
+        'relative flex items-center justify-center w-9 h-9 rounded-lg transition-colors',
+        isActive
+          ? 'bg-amber-100 text-amber-700'
+          : 'text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))] hover:text-[hsl(var(--foreground))]',
+      )}
+    >
+      <Bell size={18} />
+      {pendingCount > 0 && (
+        <span className="absolute -top-0.5 -right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-bold text-white leading-none">
+          {pendingCount > 99 ? '99+' : pendingCount}
+        </span>
+      )}
+    </button>
+  )
+}
+
 /* ── AppShell — persistent layout via Outlet ────────────────────── */
 function AppShell() {
   const [collapsed, setCollapsed] = useState(() => {
     try { return window.localStorage.getItem('appSidebarCollapsed') === '1' } catch { return false }
   })
+
+  const { pathname } = useLocation()
+  const localIdMatch = pathname.match(/\/local\/([^/]+)/)
+  const localId = localIdMatch ? localIdMatch[1] : null
 
   const handleToggle = () => {
     setCollapsed((v) => {
@@ -348,6 +394,11 @@ function AppShell() {
     <div className="flex h-screen bg-[hsl(var(--background))]">
       <Sidebar collapsed={collapsed} onToggle={handleToggle} />
       <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
+        {localId && (
+          <div className="shrink-0 flex items-center justify-end gap-2 px-4 py-2 border-b border-[hsl(var(--border))] bg-white">
+            <AlertBell localId={localId} />
+          </div>
+        )}
         <Outlet />
       </div>
     </div>

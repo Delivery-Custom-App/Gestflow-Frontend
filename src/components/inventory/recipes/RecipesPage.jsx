@@ -25,6 +25,7 @@ function RecipesPage() {
   const [searchTerm, setSearchTerm] = useState('')
   const [statusFilter, setStatusFilter] = useState(null)
   const [categories, setCategories] = useState([])
+  const [saveError, setSaveError] = useState('')
 
   useEffect(() => {
     const loadCategories = async () => {
@@ -70,6 +71,7 @@ function RecipesPage() {
   }
 
   const handleSaveRecipe = async (formData) => {
+    setSaveError('')
     try {
       const transformedData = {
         categoryId: formData.category_id,
@@ -99,6 +101,8 @@ function RecipesPage() {
       await fetchKpis()
     } catch (err) {
       console.error('Error saving recipe:', err)
+      setSaveError(err?.message || 'Error al guardar la receta')
+      throw err
     }
   }
 
@@ -198,8 +202,10 @@ function RecipesPage() {
           onCancel={() => {
             setShowCreateModal(false)
             setEditingRecipe(null)
+            setSaveError('')
           }}
           localId={localId}
+          externalError={saveError}
         />
 
         {showDetailModal && selectedRecipe && (

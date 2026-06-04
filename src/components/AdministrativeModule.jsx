@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useSelectedLocal } from '../hooks/useSelectedLocal'
+import { useAlerts } from '../hooks/useAlerts'
 import LoadingSpinner from './LoadingSpinner'
 import IncomeChart from './charts/IncomeChart'
 import ExpenseBreakdown from './charts/ExpenseBreakdown'
@@ -26,7 +27,7 @@ const sections = [
   { id: 'rendiciones', label: 'Rendiciones',     subtitle: 'Resumen de transferencias dueno a local' },
   { id: 'reportes',    label: 'Reportes',        subtitle: 'Ventas, flujo y comparativas por periodo' },
   { id: 'flujo-caja',  label: 'Flujo de Caja',  subtitle: 'Resumen monetario por periodo de tiempo' },
-  { id: 'alertas',     label: 'Alertas',         subtitle: 'Seccion reservada para otro desarrollador' },
+  { id: 'alertas',     label: 'Alertas',         subtitle: 'Sistema de alertas administrativas del local' },
   { id: 'bonos',       label: 'Bonos',           subtitle: 'Resumen de bonos por meta cumplida' },
 ]
 
@@ -403,16 +404,155 @@ function FlujoCajaContent({ dashboard, cajas, loading, error }) {
   )
 }
 
-function AlertasContent({ dashboard, loading, error }) {
-  const stateNode = <SectionState loading={loading} error={error} isEmpty={!dashboard && !loading && !error} emptyMessage="No hay datos de alertas para este local" />
-  if (loading || error || (!dashboard && !loading && !error)) return stateNode
+const SEVERITY_CONFIG = {
+  critical: { label: 'Crítica',  cls: 'border-red-200 bg-red-50',    badge: 'bg-red-100 text-red-700'    },
+  high:     { label: 'Alta',     cls: 'border-orange-200 bg-orange-50', badge: 'bg-orange-100 text-orange-700' },
+  medium:   { label: 'Media',    cls: 'border-amber-200 bg-amber-50', badge: 'bg-amber-100 text-amber-700' },
+  low:      { label: 'Baja',     cls: 'border-blue-200 bg-blue-50',   badge: 'bg-blue-100 text-blue-700'   },
+}
+
+function AlertCard({ alert, onResolve, resolving }) {
+  const cfg = SEVERITY_CONFIG[alert.severity] || SEVERITY_CONFIG.medium
+  const date = alert.created_at
+    ? new Date(alert.created_at).toLocaleString('es-CL', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
+    : ''
+
   return (
-    <Panel title="Alertas del Sistema" sub="Esta sección funcional corresponde a otro desarrollador. Aquí solo mostramos el agregado disponible en dashboard." accent="warning">
-      <div className="flex justify-between text-sm">
-        <span className="text-[hsl(var(--muted-foreground))]">Alertas activas</span>
-        <strong>{toNumber(dashboard?.active_alerts)}</strong>
+    <article className={cn('rounded-xl border p-4 shadow-sm', cfg.cls)}>
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 mb-1 flex-wrap">
+            <span className={cn('inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide', cfg.badge)}>
+              {cfg.label}
+            </span>
+            {alert.status === 'resolved' && (
+              <span className="inline-flex items-center rounded-full bg-green-100 text-green-700 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide">
+                Resuelta
+              </span>
+            )}
+            <span className="text-[10px] text-[hsl(var(--muted-foreground))]">{date}</span>
+          </div>
+          <h4 className="text-sm font-bold text-[hsl(var(--foreground))]">{alert.title}</h4>
+          <p className="mt-0.5 text-xs text-[hsl(var(--muted-foreground))]">{alert.message}</p>
+        </div>
+        {alert.status === 'pending' && (
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={resolving === alert.id}
+            onClick={() => onResolve(alert.id)}
+            className="shrink-0 text-xs h-7"
+          >
+            {resolving === alert.id ? 'Resolviendo…' : 'Resolver'}
+          </Button>
+        )}
       </div>
-    </Panel>
+    </article>
+  )
+}
+
+function AlertasContent({ localId }) {
+  const { alerts, loading, error, pendingCount, resolveAlert, evaluateAlerts } = useAlerts(localId)
+  const [filter, setFilter] = useState('pending')
+  const [resolving, setResolving] = useState(null)
+  const [evaluating, setEvaluating] = useState(false)
+  const [evalResult, setEvalResult] = useState(null)
+
+  const filtered = filter === 'all' ? alerts : alerts.filter((a) => a.status === filter)
+
+  const handleResolve = async (alertId) => {
+    setResolving(alertId)
+    try {
+      await resolveAlert(alertId)
+    } catch (e) {
+      console.error('Error al resolver alerta:', e)
+    } finally {
+      setResolving(null)
+    }
+  }
+
+  const handleEvaluate = async () => {
+    setEvaluating(true)
+    setEvalResult(null)
+    try {
+      const result = await evaluateAlerts()
+      setEvalResult(result)
+    } catch (e) {
+      console.error('Error al evaluar alertas:', e)
+    } finally {
+      setEvaluating(false)
+    }
+  }
+
+  if (loading) return <SectionState loading={true} error={null} isEmpty={false} emptyMessage="" />
+  if (error) return <SectionState loading={false} error={error} isEmpty={false} emptyMessage="" />
+
+  return (
+    <div className="space-y-5">
+      {/* KPIs */}
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-3">
+        <KpiCard label="Alertas Pendientes" value={pendingCount} sub="Requieren atención" accent="warning" />
+        <KpiCard label="Resueltas"          value={alerts.filter((a) => a.status === 'resolved').length} sub="Total historial" />
+        <KpiCard label="Total Historial"    value={alerts.length} sub="Todas las alertas" accent="blue" />
+      </div>
+
+      {/* Toolbar */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex gap-1.5">
+          {[
+            { key: 'pending',  label: 'Pendientes' },
+            { key: 'resolved', label: 'Resueltas' },
+            { key: 'all',      label: 'Todas' },
+          ].map(({ key, label }) => (
+            <button
+              key={key}
+              onClick={() => setFilter(key)}
+              className={cn(
+                'px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors',
+                filter === key
+                  ? 'bg-[hsl(var(--primary))] text-white'
+                  : 'bg-[hsl(var(--muted))] text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--border))]',
+              )}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        <Button
+          size="sm"
+          variant="outline"
+          disabled={evaluating}
+          onClick={handleEvaluate}
+          className="text-xs"
+        >
+          {evaluating ? 'Evaluando reglas…' : 'Evaluar reglas ahora'}
+        </Button>
+      </div>
+
+      {/* Eval result feedback */}
+      {evalResult && (
+        <div className={cn('rounded-lg border p-3 text-xs', evalResult.alerts_created > 0 ? 'border-amber-200 bg-amber-50 text-amber-800' : 'border-green-200 bg-green-50 text-green-800')}>
+          {evalResult.alerts_created > 0
+            ? `Se generaron ${evalResult.alerts_created} nueva(s) alerta(s).`
+            : 'Todo en orden. No se detectaron condiciones de alerta.'}
+        </div>
+      )}
+
+      {/* Alert list */}
+      <Panel title={`Alertas — ${filter === 'pending' ? 'Pendientes' : filter === 'resolved' ? 'Resueltas' : 'Todas'}`} sub="Actualización automática cada 30 segundos">
+        {filtered.length === 0 ? (
+          <p className="text-sm text-[hsl(var(--muted-foreground))]">
+            {filter === 'pending' ? 'No hay alertas pendientes. El sistema está operando con normalidad.' : 'No hay alertas en este filtro.'}
+          </p>
+        ) : (
+          <div className="space-y-3">
+            {filtered.map((alert) => (
+              <AlertCard key={alert.id} alert={alert} onResolve={handleResolve} resolving={resolving} />
+            ))}
+          </div>
+        )}
+      </Panel>
+    </div>
   )
 }
 
@@ -461,7 +601,7 @@ function renderSectionContent(activeSection, payload) {
       return <FlujoCajaContent dashboard={{ ...flujoDashboard, expenses_breakdown: flujoExpenseData }} cajas={payload.cajas} loading={payload.loading} error={payload.error} />
     }
     case 'alertas':
-      return <AlertasContent dashboard={payload.dashboard} loading={payload.loading} error={payload.error} />
+      return <AlertasContent localId={payload.localId} />
     case 'bonos':
       return <BonosContent dashboard={payload.dashboard} loading={payload.loading} error={payload.error} />
     default: {
@@ -499,7 +639,7 @@ function AdministrativeModule() {
       try {
         const { token, businessId } = await getAuthContext()
         const updates = {}
-        if (['dashboard', 'flujo-caja', 'alertas', 'bonos'].includes(activeSection)) {
+        if (['dashboard', 'flujo-caja', 'bonos'].includes(activeSection)) {
           updates.dashboard = await getLocalDashboard(localId, token)
         }
         if (activeSection === 'ventas') {
@@ -560,7 +700,7 @@ function AdministrativeModule() {
           <SectionActions activeSection={activeSection} />
         </div>
 
-        {renderSectionContent(activeSection, { ...sectionData, loading, error: sectionError })}
+        {renderSectionContent(activeSection, { ...sectionData, loading, error: sectionError, localId })}
       </main>
     </>
   )

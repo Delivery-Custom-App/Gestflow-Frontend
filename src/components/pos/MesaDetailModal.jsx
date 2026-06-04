@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useMesaDetail } from '../../hooks/useMesaDetail'
-import { useMenuPOS } from '../../hooks/useMenuPOS'
 import { useOrderManagement } from '../../hooks/useOrderManagement'
+import { apiRequest } from '../../lib/apiClient'
 import {
   Dialog,
   DialogContent,
@@ -10,263 +10,279 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Badge } from '@/components/ui/badge'
 
-const LoadingSpinner = () => (
-  <div className="flex flex-col items-center gap-2 py-8 text-[hsl(var(--muted-foreground))]">
-    <div className="w-6 h-6 border-2 border-[hsl(var(--primary))] border-t-transparent rounded-full animate-spin" />
-    <p className="text-sm">Cargando...</p>
+const Spinner = () => (
+  <div className="flex flex-col items-center gap-2 py-10 text-[hsl(var(--muted-foreground))]">
+    <div className="w-5 h-5 border-2 border-[hsl(var(--primary))] border-t-transparent rounded-full animate-spin" />
+    <p className="text-xs">Cargando...</p>
   </div>
 )
 
-export default function MesaDetailModal({ mesa, localId, onClose, onTableUpdated }) {
-  const { detail, loading: detailLoading, error: detailError, refresh } = useMesaDetail(mesa.id)
-  const { data: menuData, loading: menuLoading, fetch: fetchMenu } = useMenuPOS(localId)
-  const { createOrder, updateOrderStatus, loading: orderLoading, error: orderError } = useOrderManagement()
+const statusLabel = { pending: 'Pendiente', preparing: 'Preparando', ready: 'En Cobro' }
+const statusColor = {
+  pending:   'bg-yellow-100 text-yellow-700',
+  preparing: 'bg-blue-100 text-blue-700',
+  ready:     'bg-green-100 text-green-700',
+}
 
-  const [selectedProducts, setSelectedProducts] = useState({})
-  const [showAddProductForm, setShowAddProductForm] = useState(false)
-  const [isProcessingPayment, setIsProcessingPayment] = useState(false)
-  const [successMessage, setSuccessMessage] = useState('')
+export default function MesaDetailModal({ mesa, localId, onClose, onTableUpdated }) {
+  const { detail, loading: detailLoading, refresh } = useMesaDetail(mesa.id)
+  const { createOrder } = useOrderManagement()
+
+  const [recipes, setRecipes]         = useState([])
+  const [recipesByCategory, setRecipesByCategory] = useState([])
+  const [recipesLoading, setRecipesLoading] = useState(false)
+  const [selectedQtys, setSelectedQtys] = useState({})
+  const [showMenu, setShowMenu]       = useState(false)
+  const [processing, setProcessing]   = useState(false)
+  const [success, setSuccess]         = useState('')
+  const [error, setError]             = useState('')
+
+  const fetchRecipes = useCallback(async () => {
+    if (!localId) return
+    setRecipesLoading(true)
+    try {
+      const data = await apiRequest(`/recipes?local_id=${localId}&is_active=true`)
+      const list = Array.isArray(data) ? data : []
+      setRecipes(list)
+      // Group by category name
+      const groups = {}
+      list.forEach(r => {
+        const cat = r.category_name || r.category_id || 'Sin categoría'
+        if (!groups[cat]) groups[cat] = []
+        groups[cat].push(r)
+      })
+      setRecipesByCategory(Object.entries(groups))
+    } catch {
+      setRecipes([])
+      setRecipesByCategory([])
+    } finally {
+      setRecipesLoading(false)
+    }
+  }, [localId])
 
   useEffect(() => {
-    if (showAddProductForm && !menuData) {
-      fetchMenu({})
-    }
-  }, [showAddProductForm, menuData, fetchMenu])
+    if (showMenu && recipes.length === 0) fetchRecipes()
+  }, [showMenu, recipes.length, fetchRecipes])
 
-  const calculateTotal = () => {
-    if (!detail?.active_orders || detail.active_orders.length === 0) return 0
-    return detail.active_orders.reduce((sum, order) => {
-      const orderTotal = (order.items || []).reduce((orderSum, item) => orderSum + item.total_price, 0)
-      return sum + orderTotal
-    }, 0)
+  const totalItems = Object.values(selectedQtys).reduce((s, q) => s + q, 0)
+
+  const subtotal = Object.entries(selectedQtys).reduce((s, [id, qty]) => {
+    const r = recipes.find(r => String(r.id) === id)
+    return s + (r?.price_sale || 0) * qty
+  }, 0)
+
+  const orderTotal = (detail?.active_orders || []).reduce((sum, order) =>
+    sum + (order.items || []).reduce((s, i) => s + i.total_price, 0), 0)
+
+  const handleQty = (id, qty) => {
+    setSelectedQtys(prev => {
+      const next = { ...prev }
+      if (qty <= 0) delete next[id]
+      else next[id] = qty
+      return next
+    })
   }
 
-  const handleProductQtyChange = (productId, quantity) => {
-    if (quantity <= 0) {
-      const newSelected = { ...selectedProducts }
-      delete newSelected[productId]
-      setSelectedProducts(newSelected)
-    } else {
-      setSelectedProducts(prev => ({ ...prev, [productId]: quantity }))
-    }
-  }
-
-  const handleAddProducts = async () => {
-    if (Object.keys(selectedProducts).length === 0) {
-      alert('Selecciona al menos un producto')
-      return
-    }
-
+  const handleConfirm = async () => {
+    if (!totalItems) { setError('Selecciona al menos un plato'); return }
+    setProcessing(true)
+    setError('')
     try {
-      setIsProcessingPayment(true)
-
-      const items = Object.entries(selectedProducts).map(([productId, quantity]) => {
-        const product = (menuData?.products || []).find(p => String(p.id) === String(productId))
+      const items = Object.entries(selectedQtys).map(([recipeId, quantity]) => {
+        const recipe = recipes.find(r => String(r.id) === recipeId)
         return {
-          product_id: productId,
+          recipe_id: recipeId,
+          item_name: recipe?.name || 'Plato',
           quantity,
-          unit_price: product?.price || 0,
+          unit_price: Math.round(recipe?.price_sale || 0),
         }
       })
-
-      const orderData = {
-        local_id: localId,
-        mesa_id: mesa.id,
-        source: 'dine-in',
-        payment_method: 'CASH',
-        items,
-      }
-
-      await createOrder(orderData)
-      setSuccessMessage('✓ Productos agregados a la orden')
-      setSelectedProducts({})
-      setShowAddProductForm(false)
+      await createOrder({ local_id: localId, mesa_id: mesa.id, source: 'dine-in', payment_method: 'CASH', items })
+      setSuccess('✓ Orden creada correctamente')
+      setSelectedQtys({})
+      setShowMenu(false)
       refresh()
-      setTimeout(() => setSuccessMessage(''), 2000)
+      onTableUpdated?.()
+      setTimeout(() => setSuccess(''), 3000)
     } catch (err) {
-      console.error('Error adding products:', err)
-      alert(`Error: ${err.message || 'No se pudieron agregar los productos'}`)
+      setError(err?.message || 'Error al crear la orden')
     } finally {
-      setIsProcessingPayment(false)
+      setProcessing(false)
     }
-  }
-
-  const handleProceedToPayment = async () => {
-    if (!detail?.active_orders || detail.active_orders.length === 0) {
-      alert('No hay órdenes para procesar')
-      return
-    }
-
-    if (!window.confirm('¿Confirmar pago y cerrar la mesa?')) return
-
-    try {
-      setIsProcessingPayment(true)
-
-      for (const order of detail.active_orders) {
-        await updateOrderStatus(order.id, 'completed')
-      }
-
-      setSuccessMessage('✓ Mesa cerrada - Pago procesado')
-      setTimeout(() => {
-        onTableUpdated?.()
-        onClose()
-      }, 1500)
-    } catch (err) {
-      console.error('Error processing payment:', err)
-      alert(`Error: ${err.message || 'Error procesando pago'}`)
-    } finally {
-      setIsProcessingPayment(false)
-    }
-  }
-
-  if (detailLoading) {
-    return (
-      <Dialog open onOpenChange={onClose}>
-        <DialogContent className="max-w-lg">
-          <LoadingSpinner />
-        </DialogContent>
-      </Dialog>
-    )
   }
 
   return (
     <Dialog open onOpenChange={onClose}>
-      <DialogContent className="max-w-lg max-h-[85vh] flex flex-col">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            {mesa.name}
-            <span className="text-xs font-normal text-[hsl(var(--muted-foreground))]">
-              {mesa.zona || 'General'} • {mesa.capacidad} personas
-            </span>
+      <DialogContent className="max-w-xl max-h-[88vh] flex flex-col p-0 gap-0">
+
+        {/* Header */}
+        <DialogHeader className="px-5 pt-5 pb-3 border-b border-[hsl(var(--border))]">
+          <DialogTitle className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="text-base font-semibold">{mesa.name}</span>
+              <span className="text-xs text-[hsl(var(--muted-foreground))] font-normal">
+                {mesa.zona || 'General'} · {mesa.capacidad} personas
+              </span>
+            </div>
+            {!!orderTotal && (
+              <span className="text-sm font-bold text-[hsl(var(--primary))]">
+                Total: ${orderTotal.toLocaleString('es-CL')}
+              </span>
+            )}
           </DialogTitle>
         </DialogHeader>
 
-        {/* Messages */}
-        {successMessage && (
-          <div className="px-1 py-2 rounded-lg bg-green-50 border border-green-200 text-sm text-green-700">
-            {successMessage}
+        {/* Mensajes */}
+        {success && (
+          <div className="mx-5 mt-3 px-3 py-2 rounded-lg bg-green-50 border border-green-200 text-sm text-green-700">
+            {success}
           </div>
         )}
-        {detailError && (
-          <div className="px-3 py-2 rounded-lg bg-red-50 border border-red-200 text-sm text-[hsl(var(--destructive))]">
-            Error: {detailError}
-          </div>
-        )}
-        {orderError && (
-          <div className="px-3 py-2 rounded-lg bg-red-50 border border-red-200 text-sm text-[hsl(var(--destructive))]">
-            Error: {orderError}
+        {error && (
+          <div className="mx-5 mt-3 px-3 py-2 rounded-lg bg-red-50 border border-red-200 text-sm text-red-600">
+            {error}
           </div>
         )}
 
-        {/* Content */}
-        <div className="flex-1 overflow-y-auto space-y-4 pr-1">
-          {/* Órdenes actuales */}
-          <section className="space-y-2">
-            <h3 className="text-sm font-semibold text-[hsl(var(--foreground))]">Órdenes Actuales</h3>
-            {!detail?.active_orders || detail.active_orders.length === 0 ? (
-              <p className="text-sm text-[hsl(var(--muted-foreground))]">No hay órdenes en esta mesa</p>
-            ) : (
-              <div className="space-y-3">
-                {detail.active_orders.map((order, idx) => (
-                  <div key={order.id} className="border border-[hsl(var(--border))] rounded-lg p-3 space-y-2">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <Badge className="bg-[hsl(var(--primary))] text-white text-xs w-5 h-5 flex items-center justify-center p-0 rounded-full">
-                          {idx + 1}
-                        </Badge>
-                        <span className="text-xs text-[hsl(var(--muted-foreground))]">{order.status}</span>
-                      </div>
+        {/* Body */}
+        <div className="flex-1 overflow-y-auto min-h-0">
+
+          {/* Órdenes activas */}
+          {detailLoading ? <Spinner /> : (
+            <div className="px-5 pt-4 pb-2 space-y-3">
+              {!detail?.active_orders?.length ? (
+                <p className="text-sm text-[hsl(var(--muted-foreground))] text-center py-4">
+                  No hay órdenes en esta mesa aún
+                </p>
+              ) : (
+                detail.active_orders.map((order, idx) => (
+                  <div key={order.id} className="rounded-xl border border-[hsl(var(--border))] overflow-hidden">
+                    <div className="flex items-center justify-between px-4 py-2 bg-[hsl(var(--accent))]">
+                      <span className="text-xs font-semibold text-[hsl(var(--muted-foreground))] uppercase tracking-wide">
+                        Orden {idx + 1}
+                      </span>
+                      <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${statusColor[order.status] || 'bg-gray-100 text-gray-600'}`}>
+                        {statusLabel[order.status] || order.status}
+                      </span>
                     </div>
-                    <div className="space-y-1">
+                    <div className="divide-y divide-[hsl(var(--border))]">
                       {(order.items || []).map(item => (
-                        <div key={item.id} className="flex items-center justify-between text-sm">
-                          <span className="text-[hsl(var(--foreground))]">{item.product_name}</span>
-                          <div className="flex items-center gap-2 text-[hsl(var(--muted-foreground))]">
-                            <span>{item.quantity}x</span>
-                            <span className="font-medium text-[hsl(var(--foreground))]">${item.total_price}</span>
+                        <div key={item.id} className="flex items-center justify-between px-4 py-2">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs w-5 h-5 flex items-center justify-center rounded-full bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))] font-bold">
+                              {item.quantity}
+                            </span>
+                            <span className="text-sm text-[hsl(var(--foreground))]">{item.product_name}</span>
                           </div>
+                          <span className="text-sm font-medium text-[hsl(var(--foreground))]">
+                            ${item.total_price?.toLocaleString('es-CL')}
+                          </span>
                         </div>
                       ))}
                     </div>
                   </div>
-                ))}
-              </div>
-            )}
-          </section>
+                ))
+              )}
+            </div>
+          )}
 
-          {/* Formulario agregar productos */}
-          {showAddProductForm && (
-            <section className="space-y-2">
-              <h3 className="text-sm font-semibold text-[hsl(var(--foreground))]">Agregar Productos</h3>
-              {menuLoading ? (
-                <LoadingSpinner />
-              ) : !menuData?.products || menuData.products.length === 0 ? (
-                <p className="text-sm text-[hsl(var(--muted-foreground))]">No hay productos disponibles</p>
+          {/* Menú de recetas */}
+          {showMenu && (
+            <div className="px-5 pb-4">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-sm font-semibold text-[hsl(var(--foreground))]">Menú</h3>
+                {totalItems > 0 && (
+                  <span className="text-xs text-[hsl(var(--primary))] font-medium">
+                    {totalItems} plato{totalItems !== 1 ? 's' : ''} · ${subtotal.toLocaleString('es-CL')}
+                  </span>
+                )}
+              </div>
+
+              {recipesLoading ? <Spinner /> : !recipes.length ? (
+                <p className="text-sm text-[hsl(var(--muted-foreground))] text-center py-4">
+                  No hay recetas disponibles
+                </p>
               ) : (
-                <div className="space-y-2 max-h-52 overflow-y-auto border border-[hsl(var(--border))] rounded-lg p-2">
-                  {menuData.products.map(product => (
-                    <div key={product.id} className="flex items-center justify-between gap-3 p-2 rounded-lg hover:bg-[hsl(var(--accent))] transition-colors">
-                      <div>
-                        <p className="text-sm font-medium text-[hsl(var(--foreground))]">{product.name}</p>
-                        <p className="text-xs text-[hsl(var(--muted-foreground))]">${product.price}</p>
+                <div className="space-y-4">
+                  {recipesByCategory.map(([category, items]) => (
+                    <div key={category}>
+                      <p className="text-xs font-semibold text-[hsl(var(--muted-foreground))] uppercase tracking-wide mb-2">
+                        {category}
+                      </p>
+                      <div className="rounded-xl border border-[hsl(var(--border))] divide-y divide-[hsl(var(--border))] overflow-hidden">
+                        {items.map(recipe => {
+                          const qty = selectedQtys[recipe.id] || 0
+                          return (
+                            <div key={recipe.id} className="flex items-center justify-between px-4 py-3 hover:bg-[hsl(var(--accent))] transition-colors">
+                              <div className="min-w-0 flex-1 mr-3">
+                                <p className="text-sm font-medium text-[hsl(var(--foreground))] truncate">
+                                  {recipe.name}
+                                </p>
+                                {recipe.description && (
+                                  <p className="text-xs text-[hsl(var(--muted-foreground))] truncate">{recipe.description}</p>
+                                )}
+                                <p className="text-xs font-semibold text-[hsl(var(--primary))] mt-0.5">
+                                  ${(recipe.price_sale || 0).toLocaleString('es-CL')}
+                                </p>
+                              </div>
+                              {/* Qty control */}
+                              <div className="flex items-center gap-2 shrink-0">
+                                {qty > 0 && (
+                                  <button
+                                    onClick={() => handleQty(recipe.id, qty - 1)}
+                                    className="w-7 h-7 rounded-full border border-[hsl(var(--border))] flex items-center justify-center text-sm font-bold text-[hsl(var(--foreground))] hover:bg-[hsl(var(--accent))] transition-colors"
+                                  >
+                                    −
+                                  </button>
+                                )}
+                                {qty > 0 && (
+                                  <span className="w-5 text-center text-sm font-bold text-[hsl(var(--primary))]">{qty}</span>
+                                )}
+                                <button
+                                  onClick={() => handleQty(recipe.id, qty + 1)}
+                                  className="w-7 h-7 rounded-full bg-[hsl(var(--primary))] flex items-center justify-center text-white text-sm font-bold hover:bg-[hsl(var(--primary))]/90 transition-colors"
+                                >
+                                  +
+                                </button>
+                              </div>
+                            </div>
+                          )
+                        })}
                       </div>
-                      <Input
-                        type="number"
-                        min="0"
-                        max="99"
-                        value={selectedProducts[product.id] || 0}
-                        onChange={e => handleProductQtyChange(product.id, parseInt(e.target.value) || 0)}
-                        className="w-16 h-7 text-xs text-center"
-                      />
                     </div>
                   ))}
                 </div>
               )}
-            </section>
+            </div>
           )}
         </div>
 
-        {/* Total */}
-        <div className="flex items-center justify-between px-1 py-2 border-t border-[hsl(var(--border))]">
-          <span className="text-sm font-medium text-[hsl(var(--foreground))]">Total:</span>
-          <span className="text-lg font-bold text-[hsl(var(--primary))]">${calculateTotal()}</span>
-        </div>
-
-        {/* Actions */}
-        <DialogFooter className="flex-col sm:flex-row gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setShowAddProductForm(!showAddProductForm)}
-            disabled={isProcessingPayment}
-          >
-            {showAddProductForm ? 'Cancelar' : '+ Agregar Productos'}
-          </Button>
-
-          {showAddProductForm && (
-            <Button
-              size="sm"
-              onClick={handleAddProducts}
-              disabled={isProcessingPayment || Object.keys(selectedProducts).length === 0}
-              className="bg-[hsl(var(--primary))] hover:bg-[hsl(var(--primary))]/90 text-white"
-            >
-              {isProcessingPayment ? 'Procesando...' : 'Confirmar Productos'}
-            </Button>
+        {/* Footer */}
+        <DialogFooter className="px-5 py-4 border-t border-[hsl(var(--border))] flex-col gap-2">
+          {showMenu && totalItems > 0 && (
+            <div className="flex items-center justify-between w-full text-sm mb-1">
+              <span className="text-[hsl(var(--muted-foreground))]">
+                {totalItems} plato{totalItems !== 1 ? 's' : ''} seleccionado{totalItems !== 1 ? 's' : ''}
+              </span>
+              <span className="font-bold text-[hsl(var(--primary))]">${subtotal.toLocaleString('es-CL')}</span>
+            </div>
           )}
-
-          {!showAddProductForm && (detail?.active_orders?.length > 0) && (
-            <Button
-              size="sm"
-              onClick={handleProceedToPayment}
-              disabled={isProcessingPayment}
-              className="bg-green-600 hover:bg-green-700 text-white"
-            >
-              {isProcessingPayment ? 'Procesando...' : '💳 Proceder a Pago'}
+          <div className="flex gap-2 w-full justify-end">
+            <Button variant="outline" size="sm" onClick={() => { setShowMenu(!showMenu); setError('') }} disabled={processing}>
+              {showMenu ? '✕ Cerrar Menú' : '＋ Agregar del Menú'}
             </Button>
-          )}
+            {showMenu && totalItems > 0 && (
+              <Button
+                size="sm"
+                onClick={handleConfirm}
+                disabled={processing}
+                className="bg-[hsl(var(--primary))] hover:bg-[hsl(var(--primary))]/90 text-white"
+              >
+                {processing ? 'Confirmando...' : `Confirmar Orden · $${subtotal.toLocaleString('es-CL')}`}
+              </Button>
+            )}
+          </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>

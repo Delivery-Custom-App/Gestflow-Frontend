@@ -14,7 +14,7 @@ import {
 } from '@/components/ui/table'
 import { Plus, Trash2 } from 'lucide-react'
 
-function CreateRecipeModal({ isOpen, recipe, categories, onSave, onCancel, localId }) {
+function CreateRecipeModal({ isOpen, recipe, categories, onSave, onCancel, localId, externalError }) {
   const [formData, setFormData] = useState({
     category_id: '',
     name: '',
@@ -417,13 +417,20 @@ function CreateRecipeModal({ isOpen, recipe, categories, onSave, onCancel, local
           )}
         </div>
 
-        <DialogFooter className="shrink-0 px-6 py-4 border-t border-[hsl(var(--border))]">
-          <Button type="button" variant="outline" onClick={onCancel} disabled={savingLoading}>
-            Cancelar
-          </Button>
-          <Button type="button" onClick={handleSave} disabled={savingLoading}>
-            {savingLoading ? 'Guardando...' : recipe ? 'Actualizar' : 'Crear Receta'}
-          </Button>
+        <DialogFooter className="shrink-0 px-6 py-4 border-t border-[hsl(var(--border))] flex-col gap-2">
+          {externalError && (
+            <p className="w-full rounded-lg border border-red-200 bg-red-50 text-red-700 text-xs px-3 py-2 text-left">
+              {externalError}
+            </p>
+          )}
+          <div className="flex gap-2 justify-end w-full">
+            <Button type="button" variant="outline" onClick={onCancel} disabled={savingLoading}>
+              Cancelar
+            </Button>
+            <Button type="button" onClick={handleSave} disabled={savingLoading}>
+              {savingLoading ? 'Guardando...' : recipe ? 'Actualizar' : 'Crear Receta'}
+            </Button>
+          </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>

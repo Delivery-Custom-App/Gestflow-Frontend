@@ -124,7 +124,10 @@ function MesaCard({ mesa, index, onMesaSelect, onEditMesa, onDeleteMesa }) {
           onClick={handleOpen}
           disabled={!mesa.is_active}
         >
-          {stateKey === 'inactiva' ? 'Inactiva' : 'Abrir Mesa'}
+          {stateKey === 'libre' && 'Abrir Mesa'}
+          {stateKey === 'ocupada' && 'Orden'}
+          {stateKey === 'en_cobro' && 'Ver Orden'}
+          {stateKey === 'inactiva' && 'Inactiva'}
         </button>
 
         <div className="flex items-center gap-1 ml-1">
