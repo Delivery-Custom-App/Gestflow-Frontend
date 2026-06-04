@@ -1,9 +1,10 @@
-import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { RefreshCw, Search, UtensilsCrossed, Clock } from 'lucide-react'
 import { useKitchenOrders } from '../../hooks/useKitchenOrders'
 
 // ── Constants ─────────────────────────────────────────────────────
-const DELAY_THRESHOLD_MIN = 20
+const DELAY_THRESHOLD_MIN = 15
+const READY_DISMISS_SECS  = 30
 
 const STATUS_CFG = {
   PENDING:   { label: 'Nueva Orden', headerBg: 'bg-[#3d4a5c]',   pillBg: 'bg-[#3d4a5c]'   },
@@ -237,6 +238,26 @@ export default function KitchenDisplay({ localId, mesas = [] }) {
   const [search, setSearch] = useState('')
   const [refreshing, setRefreshing] = useState(false)
 
+  // Track when each order first became READY (for 30s auto-dismiss)
+  const readyAtRef = useRef({})
+  const [, forceRender] = useState(0)
+
+  useSecondTick()
+
+  useEffect(() => {
+    const now = Date.now()
+    orders.forEach(o => {
+      if (o.status === 'READY' && !readyAtRef.current[o.id]) {
+        readyAtRef.current[o.id] = now
+      }
+    })
+    // Clean up dismissed orders no longer in list
+    const ids = new Set(orders.map(o => o.id))
+    Object.keys(readyAtRef.current).forEach(id => {
+      if (!ids.has(id)) delete readyAtRef.current[id]
+    })
+  }, [orders])
+
   // Build mesa lookup map
   const mesaMap = useMemo(() => {
     const m = {}
@@ -244,11 +265,18 @@ export default function KitchenDisplay({ localId, mesas = [] }) {
     return m
   }, [mesas])
 
-  // Enrich orders with display status
-  const enrichedOrders = useMemo(() =>
-    orders.map(o => ({ ...o, displayStatus: resolveDisplayStatus(o) })),
-    [orders]
-  )
+  // Enrich orders with display status + filter READY orders after 30s
+  const enrichedOrders = useMemo(() => {
+    const now = Date.now()
+    return orders
+      .map(o => ({ ...o, displayStatus: resolveDisplayStatus(o) }))
+      .filter(o => {
+        if (o.status !== 'READY') return true
+        const readyAt = readyAtRef.current[o.id]
+        if (!readyAt) return true
+        return (now - readyAt) / 1000 < READY_DISMISS_SECS
+      })
+  }, [orders])
 
   // Filter by search
   const filteredOrders = useMemo(() => {
