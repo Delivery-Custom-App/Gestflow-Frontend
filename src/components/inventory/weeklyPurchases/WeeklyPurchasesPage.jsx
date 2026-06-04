@@ -104,21 +104,21 @@ const STATUS_VARIANT = {
 }
 
 /* ── Modal nueva orden ───────────────────────────────────────── */
-function NewWeeklyOrderModal({ open, businessId, localId, onClose, onCreated, supplierSearchDebounced = '', supplierCategoryFilter = '' }) {
-  const [suppliers, setSuppliers] = useState([])
-  const [supplierId, setSupplierId] = useState('')
-  const [weekDate, setWeekDate] = useState(() => mondayOfWeekContaining(new Date().toISOString().slice(0, 10)))
-  const [lines, setLines] = useState([])
-  const [availableProducts, setAvailableProducts] = useState([])
-  const [pickerOpen, setPickerOpen] = useState(false)
-  const [pickerSelected, setPickerSelected] = useState(new Set())
-  const [pickerSearch, setPickerSearch] = useState('')
-  const [loadingSup, setLoadingSup] = useState(false)
-  const [loadingProducts, setLoadingProducts] = useState(false)
-  const [submitting, setSubmitting] = useState(false)
-  const [error, setError] = useState('')
+function NewWeeklyOrderModal({ open, businessId, localId, onClose, onCreated }) {
+  const [step,             setStep]             = useState('select') // 'select' | 'review'
+  const [suppliers,        setSuppliers]        = useState([])
+  const [supplierId,       setSupplierId]       = useState('')
+  const [deliveryDate,     setDeliveryDate]     = useState(() => new Date().toISOString().slice(0, 10))
+  const [availableProducts,setAvailableProducts]= useState([])
+  const [pickerSelected,   setPickerSelected]   = useState(new Set())
+  const [pickerSearch,     setPickerSearch]     = useState('')
+  const [lines,            setLines]            = useState([])
+  const [loadingSup,       setLoadingSup]       = useState(false)
+  const [loadingProducts,  setLoadingProducts]  = useState(false)
+  const [submitting,       setSubmitting]       = useState(false)
+  const [error,            setError]            = useState('')
 
-  // Load suppliers list
+  /* ── Cargar proveedores al abrir ── */
   useEffect(() => {
     if (!open || !businessId) { setError(''); return }
     let cancelled = false
@@ -126,10 +126,7 @@ function NewWeeklyOrderModal({ open, businessId, localId, onClose, onCreated, su
       setLoadingSup(true)
       setError('')
       try {
-        const filters = {}
-        if (supplierSearchDebounced?.trim()) filters.search = supplierSearchDebounced.trim()
-        if (supplierCategoryFilter?.trim()) filters.category = supplierCategoryFilter.trim()
-        const rows = await getSuppliersWithMetricsForBusiness(businessId, filters)
+        const rows = await getSuppliersWithMetricsForBusiness(businessId)
         if (!cancelled) setSuppliers(Array.isArray(rows) ? rows : [])
       } catch (e) {
         if (!cancelled) setError(e?.message || 'No se pudieron cargar proveedores.')
@@ -138,33 +135,27 @@ function NewWeeklyOrderModal({ open, businessId, localId, onClose, onCreated, su
       }
     })()
     return () => { cancelled = true }
-  }, [open, businessId, supplierSearchDebounced, supplierCategoryFilter])
+  }, [open, businessId])
 
-  // Reset everything when modal closes
+  /* ── Reset al cerrar ── */
   useEffect(() => {
     if (!open) {
+      setStep('select')
       setSupplierId('')
-      setLines([])
+      setDeliveryDate(new Date().toISOString().slice(0, 10))
       setAvailableProducts([])
-      setPickerOpen(false)
       setPickerSelected(new Set())
       setPickerSearch('')
+      setLines([])
       setError('')
     }
   }, [open])
 
-  // Keep supplierId valid when supplier list changes
-  useEffect(() => {
-    if (!supplierId) return
-    if (!suppliers.some((s) => String(s.id) === String(supplierId))) setSupplierId('')
-  }, [suppliers, supplierId])
-
-  // Load available products when supplier selected — lines always start empty
+  /* ── Cargar productos al seleccionar proveedor ── */
   useEffect(() => {
     if (!open || !supplierId || !businessId) {
-      setLines([])
       setAvailableProducts([])
-      setPickerOpen(false)
+      setPickerSelected(new Set())
       return
     }
     let cancelled = false
@@ -178,18 +169,11 @@ function NewWeeklyOrderModal({ open, businessId, localId, onClose, onCreated, su
         ])
         if (cancelled) return
         const fromDetail = linesFromSupplierDetail(detail)
-        const products = fromDetail.length > 0 ? fromDetail : linesFromPurchaseHistory(history)
+        const products   = fromDetail.length > 0 ? fromDetail : linesFromPurchaseHistory(history)
         setAvailableProducts(products)
-        setLines([])
-        setPickerOpen(false)
         setPickerSelected(new Set())
-        setPickerSearch('')
       } catch (e) {
-        if (!cancelled) {
-          setAvailableProducts([])
-          setLines([])
-          setError(e?.message || 'No se pudieron cargar productos del proveedor.')
-        }
+        if (!cancelled) { setAvailableProducts([]); setError(e?.message || 'No se pudieron cargar productos.') }
       } finally {
         if (!cancelled) setLoadingProducts(false)
       }
@@ -197,59 +181,44 @@ function NewWeeklyOrderModal({ open, businessId, localId, onClose, onCreated, su
     return () => { cancelled = true }
   }, [open, supplierId, businessId])
 
-  const togglePickerProduct = (productId) => {
+  /* ── Helpers selección ── */
+  const toggleProduct = (pid) =>
     setPickerSelected((prev) => {
       const next = new Set(prev)
-      if (next.has(productId)) next.delete(productId)
-      else next.add(productId)
+      next.has(pid) ? next.delete(pid) : next.add(pid)
+      return next
+    })
+
+  const filteredProducts = useMemo(() => {
+    const q = pickerSearch.trim().toLowerCase()
+    return q ? availableProducts.filter((p) => (p.product_name || '').toLowerCase().includes(q)) : availableProducts
+  }, [availableProducts, pickerSearch])
+
+  const allSelected = filteredProducts.length > 0 && filteredProducts.every((p) => pickerSelected.has(String(p.product_id)))
+  const toggleAll   = () => {
+    setPickerSelected((prev) => {
+      const next = new Set(prev)
+      if (allSelected) filteredProducts.forEach((p) => next.delete(String(p.product_id)))
+      else              filteredProducts.forEach((p) => next.add(String(p.product_id)))
       return next
     })
   }
 
-  const toggleSelectAll = () => {
-    const filtered = pickerFilteredProducts
-    const allSelected = filtered.length > 0 && filtered.every((p) => pickerSelected.has(String(p.product_id)))
-    if (allSelected) {
-      setPickerSelected((prev) => {
-        const next = new Set(prev)
-        for (const p of filtered) next.delete(String(p.product_id))
-        return next
-      })
-    } else {
-      setPickerSelected((prev) => {
-        const next = new Set(prev)
-        for (const p of filtered) next.add(String(p.product_id))
-        return next
-      })
-    }
+  /* ── Paso 1 → Paso 2 ── */
+  const handleContinue = () => {
+    if (pickerSelected.size === 0) { setError('Selecciona al menos un producto.'); return }
+    setError('')
+    const selected = availableProducts.filter((p) => pickerSelected.has(String(p.product_id)))
+    setLines(selected.map((p) => ({ ...p, quantity_ordered: 1 })))
+    setStep('review')
   }
 
-  const confirmPickerSelection = () => {
-    if (pickerSelected.size === 0) return
-    setLines((prev) => {
-      const next = [...prev]
-      for (const p of availableProducts) {
-        const pid = String(p.product_id)
-        if (!pickerSelected.has(pid)) continue
-        if (!next.some((l) => String(l.product_id) === pid)) {
-          next.push({ ...p, quantity_ordered: 1 })
-        }
-      }
-      return next
-    })
-    setPickerOpen(false)
-    setPickerSelected(new Set())
-    setPickerSearch('')
-  }
-
-  const removeLine = (idx) => setLines((prev) => prev.filter((_, i) => i !== idx))
-
+  /* ── Líneas: qty ── */
   const changeQty = (idx, delta) =>
     setLines((prev) => {
       const copy = [...prev]
       if (!copy[idx]) return prev
-      const newQty = Math.max(1, Math.round(Number(copy[idx].quantity_ordered) + delta))
-      copy[idx] = { ...copy[idx], quantity_ordered: newQty }
+      copy[idx] = { ...copy[idx], quantity_ordered: Math.max(1, Math.round(Number(copy[idx].quantity_ordered) + delta)) }
       return copy
     })
 
@@ -257,44 +226,34 @@ function NewWeeklyOrderModal({ open, businessId, localId, onClose, onCreated, su
     setLines((prev) => {
       const copy = [...prev]
       if (!copy[idx]) return prev
-      const parsed = parseInt(raw, 10)
-      copy[idx] = { ...copy[idx], quantity_ordered: Number.isFinite(parsed) && parsed > 0 ? parsed : 1 }
+      const n = parseInt(raw.replace(/\D/g, ''), 10)
+      copy[idx] = { ...copy[idx], quantity_ordered: Number.isFinite(n) && n > 0 ? n : 1 }
       return copy
     })
 
-  const unaddedProducts = availableProducts.filter(
-    (p) => !lines.some((l) => String(l.product_id) === String(p.product_id)),
-  )
+  const removeLine = (idx) => setLines((prev) => prev.filter((_, i) => i !== idx))
 
-  const pickerFilteredProducts = useMemo(() => {
-    const q = pickerSearch.trim().toLowerCase()
-    if (!q) return unaddedProducts
-    return unaddedProducts.filter((p) => (p.product_name || '').toLowerCase().includes(q))
-  }, [unaddedProducts, pickerSearch])
+  const lineTotal  = (l) => Math.round(Number(l.quantity_ordered)) * Math.round(Number(l.unit_price_clp))
+  const grandTotal = lines.reduce((s, l) => s + lineTotal(l), 0)
 
-  const lineTotal = (line) =>
-    Math.round(Number(line.quantity_ordered)) * Math.round(Number(line.unit_price_clp))
-
-  const grandTotal = lines.reduce((sum, l) => sum + lineTotal(l), 0)
-
-  const handleSubmit = async (ev) => {
-    ev.preventDefault()
+  /* ── Submit ── */
+  const handleSubmit = async () => {
     if (!supplierId || !businessId) return
-    const validLines = lines.filter((l) => l.product_id && Number(l.quantity_ordered) > 0)
-    if (!validLines.length) { setError('Agrega al menos un producto con cantidad mayor a cero.'); return }
+    const valid = lines.filter((l) => l.product_id && Number(l.quantity_ordered) > 0)
+    if (!valid.length) { setError('Ajusta las cantidades antes de continuar.'); return }
     setSubmitting(true)
     setError('')
     try {
       const body = {
-        business_id: businessId,
-        local_id: localId || undefined,
-        supplier_id: supplierId,
-        week_start_date: mondayOfWeekContaining(weekDate),
-        items: validLines.map((l) => ({
-          product_id: l.product_id,
+        business_id:     businessId,
+        local_id:        localId || undefined,
+        supplier_id:     supplierId,
+        week_start_date: mondayOfWeekContaining(deliveryDate),
+        items: valid.map((l) => ({
+          product_id:       l.product_id,
           quantity_ordered: Math.round(Number(l.quantity_ordered)),
-          unit_price_clp: Math.max(0, Math.round(Number(l.unit_price_clp) || 0)),
-          line_notes: l.line_notes || undefined,
+          unit_price_clp:   Math.max(0, Math.round(Number(l.unit_price_clp) || 0)),
+          line_notes:       l.line_notes || undefined,
         })),
       }
       const created = await postWeeklyPurchaseOrder(body)
@@ -307,114 +266,99 @@ function NewWeeklyOrderModal({ open, businessId, localId, onClose, onCreated, su
     }
   }
 
-  const selectCls = 'h-9 w-full rounded-md border border-[hsl(var(--border))] bg-white px-3 py-1 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary)/0.3)]'
-  const colTemplate = '1fr 128px 104px 88px 32px'
+  const selectCls   = 'h-9 w-full rounded-md border border-[hsl(var(--border))] bg-white px-3 py-1 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary)/0.3)]'
+  const colTemplate = '1fr 120px 100px 88px 32px'
 
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) onClose() }}>
       <DialogContent
         className="max-w-2xl w-full flex flex-col overflow-hidden p-0"
-        style={{ maxHeight: 'min(92vh, 820px)' }}
+        style={{ maxHeight: 'min(92vh, 860px)' }}
         onInteractOutside={(e) => {
-          const original = e.detail?.originalEvent ?? e
-          const target = original?.target
-          if (target instanceof Element && target.closest('[data-calendar-panel="true"]')) e.preventDefault()
+          const t = (e.detail?.originalEvent ?? e)?.target
+          if (t instanceof Element && t.closest('[data-calendar-panel="true"]')) e.preventDefault()
         }}
       >
+        {/* Header */}
         <DialogHeader className="shrink-0">
           <DialogTitle className="flex items-center gap-2">
             <CalendarDays size={18} aria-hidden="true" />
-            Nueva orden semanal
+            Solicitud de Orden
           </DialogTitle>
           <p className="text-sm text-[hsl(var(--muted-foreground))]">
-            Planificá la compra por semana y proveedor.
+            {step === 'select'
+              ? 'Ingresar datos necesarios para solicitud de nuevos productos'
+              : 'Ajusta las cantidades y confirma el borrador'}
           </p>
         </DialogHeader>
 
         <div className="flex-1 overflow-y-auto min-h-0">
-          <form id="new-order-form" onSubmit={handleSubmit} className="flex flex-col gap-5 px-7 py-5">
-            {error && (
-              <div className="flex gap-2 items-start rounded-md bg-red-50 border border-red-200 text-red-700 text-sm px-3 py-2" role="alert">
-                <AlertTriangle size={16} className="shrink-0 mt-0.5" />
-                <p>{error}</p>
-              </div>
-            )}
-
-            {/* Week + supplier */}
-            <div className="grid grid-cols-2 gap-4">
-              <div className="flex flex-col gap-1.5">
-                <ModernDateField
-                  id="wp-new-order-week"
-                  label="Semana de compra"
-                  value={weekDate}
-                  onChange={(iso) => setWeekDate(iso || weekDate)}
-                />
-                <span className="text-xs text-[hsl(var(--muted-foreground))]">Se usará el lunes de esa semana.</span>
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="wp-modal-supplier">Proveedor</Label>
-                <select id="wp-modal-supplier" value={supplierId} onChange={(ev) => setSupplierId(ev.target.value)} required disabled={loadingSup} className={selectCls}>
-                  <option value="">{loadingSup ? 'Cargando…' : '— Seleccionar —'}</option>
-                  {suppliers.map((s) => <option key={String(s.id)} value={String(s.id)}>{s.name || s.id}</option>)}
-                </select>
-              </div>
-            </div>
-
-            {/* Products section */}
-            {supplierId && (
-              <div className="flex flex-col gap-3">
-
-                {/* Row: title + add button */}
-                <div className="flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2">
-                    <h3 className="text-sm font-semibold">Productos del pedido</h3>
-                    {lines.length > 0 && (
-                      <Badge variant="secondary">{lines.length} producto{lines.length === 1 ? '' : 's'}</Badge>
-                    )}
-                  </div>
-                  {!loadingProducts && unaddedProducts.length > 0 && (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setPickerOpen((o) => !o)}
-                      className="gap-1.5 shrink-0"
-                    >
-                      <Plus size={14} />
-                      Agregar producto
-                    </Button>
-                  )}
+          {/* ════ PASO 1: Selección ════ */}
+          {step === 'select' && (
+            <div className="flex flex-col gap-5 px-7 py-5">
+              {error && (
+                <div className="flex gap-2 items-start rounded-md bg-red-50 border border-red-200 text-red-700 text-sm px-3 py-2" role="alert">
+                  <AlertTriangle size={16} className="shrink-0 mt-0.5" /><p>{error}</p>
                 </div>
+              )}
 
-                {/* Loading */}
-                {loadingProducts && (
-                  <div className="flex items-center gap-2 text-sm text-[hsl(var(--muted-foreground))]">
-                    <span className="inline-block w-4 h-4 rounded-full border-2 border-[hsl(var(--primary))] border-t-transparent animate-spin" />
-                    Cargando productos del proveedor…
+              {/* Proveedor + Día de entrega */}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="wp-modal-supplier">Proveedor <span className="text-red-500">*</span></Label>
+                  <select
+                    id="wp-modal-supplier"
+                    value={supplierId}
+                    onChange={(ev) => setSupplierId(ev.target.value)}
+                    disabled={loadingSup}
+                    className={selectCls}
+                  >
+                    <option value="">{loadingSup ? 'Cargando…' : '— Seleccionar —'}</option>
+                    {suppliers.map((s) => (
+                      <option key={String(s.id)} value={String(s.id)}>{s.name || s.id}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <ModernDateField
+                    id="wp-delivery-date"
+                    label="Día de entrega de la solicitud"
+                    value={deliveryDate}
+                    onChange={(iso) => setDeliveryDate(iso || deliveryDate)}
+                  />
+                </div>
+              </div>
+
+              {/* Productos para solicitud */}
+              {supplierId && (
+                <div className="flex flex-col gap-3">
+                  <div>
+                    <h3 className="text-sm font-semibold text-[hsl(var(--foreground))]">Productos para solicitud</h3>
+                    <p className="text-xs text-[hsl(var(--muted-foreground))] mt-0.5">Seleccione Productos del Proveedor</p>
                   </div>
-                )}
 
-                {/* Product picker — multi-select list */}
-                {pickerOpen && unaddedProducts.length > 0 && (
-                  <div className="rounded-md border border-[hsl(var(--border))] overflow-hidden shadow-sm">
-                    {/* Header */}
-                    <div className="flex items-center justify-between gap-2 px-3 py-2 bg-[hsl(var(--muted)/0.4)] border-b border-[hsl(var(--border))]">
-                      <span className="text-xs font-semibold text-[hsl(var(--muted-foreground))] uppercase tracking-wide">
-                        Seleccionar productos ({unaddedProducts.length} disponibles)
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => { setPickerOpen(false); setPickerSelected(new Set()); setPickerSearch('') }}
-                        aria-label="Cerrar selector"
-                        className="text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] p-0.5 rounded"
-                      >
-                        <X size={14} />
-                      </button>
+                  {/* Loading */}
+                  {loadingProducts && (
+                    <div className="flex items-center gap-2 text-sm text-[hsl(var(--muted-foreground))] py-2">
+                      <span className="w-4 h-4 rounded-full border-2 border-[hsl(var(--primary))] border-t-transparent animate-spin shrink-0" />
+                      Cargando productos del proveedor…
                     </div>
+                  )}
 
-                    {/* Search inside picker */}
-                    {unaddedProducts.length > 4 && (
-                      <div className="px-3 py-2 border-b border-[hsl(var(--border)/0.6)] bg-white">
+                  {/* Sin productos */}
+                  {!loadingProducts && availableProducts.length === 0 && (
+                    <div className="flex gap-2 items-start rounded-md bg-amber-50 border border-amber-200 px-4 py-3">
+                      <AlertTriangle size={16} className="text-amber-500 shrink-0 mt-0.5" />
+                      <p className="text-sm text-amber-800">No hay productos en inventario ni historial para este proveedor.</p>
+                    </div>
+                  )}
+
+                  {/* Lista de productos */}
+                  {!loadingProducts && availableProducts.length > 0 && (
+                    <div className="rounded-lg border border-[hsl(var(--border))] overflow-hidden">
+
+                      {/* Buscador */}
+                      <div className="px-3 py-2.5 border-b border-[hsl(var(--border))] bg-[hsl(var(--muted)/0.3)]">
                         <div className="relative">
                           <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[hsl(var(--muted-foreground))]" />
                           <input
@@ -423,199 +367,188 @@ function NewWeeklyOrderModal({ open, businessId, localId, onClose, onCreated, su
                             value={pickerSearch}
                             onChange={(e) => setPickerSearch(e.target.value)}
                             autoComplete="off"
-                            className="h-8 w-full rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--muted)/0.3)] pl-8 pr-3 text-xs focus:outline-none focus:ring-1 focus:ring-[hsl(var(--primary)/0.4)]"
+                            className="h-8 w-full rounded-md border border-[hsl(var(--border))] bg-white pl-8 pr-3 text-sm focus:outline-none focus:ring-1 focus:ring-[hsl(var(--primary)/0.4)]"
                           />
                         </div>
                       </div>
-                    )}
 
-                    {/* Select all row */}
-                    {pickerFilteredProducts.length > 1 && (
-                      <div className="flex items-center gap-2 px-3 py-1.5 bg-[hsl(var(--muted)/0.2)] border-b border-[hsl(var(--border)/0.4)]">
-                        <input
-                          type="checkbox"
-                          id="picker-select-all"
-                          checked={pickerFilteredProducts.length > 0 && pickerFilteredProducts.every((p) => pickerSelected.has(String(p.product_id)))}
-                          onChange={toggleSelectAll}
-                          className="h-3.5 w-3.5 accent-[hsl(var(--primary))]"
-                        />
-                        <label htmlFor="picker-select-all" className="text-xs text-[hsl(var(--muted-foreground))] cursor-pointer select-none">
-                          Seleccionar todos
-                          {pickerSearch && ` (${pickerFilteredProducts.length} resultado${pickerFilteredProducts.length === 1 ? '' : 's'})`}
-                        </label>
-                      </div>
-                    )}
-
-                    {/* Product rows */}
-                    <div className="max-h-52 overflow-y-auto divide-y divide-[hsl(var(--border)/0.4)] bg-white">
-                      {pickerFilteredProducts.length === 0 ? (
-                        <p className="text-xs text-[hsl(var(--muted-foreground))] text-center py-4">Sin resultados para "{pickerSearch}"</p>
-                      ) : pickerFilteredProducts.map((p) => {
-                        const pid = String(p.product_id)
-                        const checked = pickerSelected.has(pid)
-                        return (
-                          <label
-                            key={pid}
-                            htmlFor={`picker-${pid}`}
-                            className={`flex items-center gap-3 px-3 py-2.5 cursor-pointer transition-colors select-none ${checked ? 'bg-[hsl(var(--primary)/0.07)]' : 'hover:bg-[hsl(var(--accent)/0.5)]'}`}
-                          >
-                            <input
-                              type="checkbox"
-                              id={`picker-${pid}`}
-                              checked={checked}
-                              onChange={() => togglePickerProduct(pid)}
-                              className="h-3.5 w-3.5 shrink-0 accent-[hsl(var(--primary))]"
-                            />
-                            <div className="min-w-0 flex-1">
-                              <p className="text-sm font-medium truncate">{p.product_name}</p>
-                              <p className="text-xs text-[hsl(var(--muted-foreground))]">{formatMoneyClp(p.unit_price_clp)} / u.</p>
-                            </div>
+                      {/* Seleccionar todos */}
+                      {filteredProducts.length > 1 && (
+                        <div className="flex items-center gap-2.5 px-4 py-2 border-b border-[hsl(var(--border)/0.5)] bg-[hsl(var(--muted)/0.15)]">
+                          <input
+                            type="checkbox"
+                            id="sel-all"
+                            checked={allSelected}
+                            onChange={toggleAll}
+                            className="h-4 w-4 rounded accent-[hsl(var(--primary))] cursor-pointer"
+                          />
+                          <label htmlFor="sel-all" className="text-xs font-medium text-[hsl(var(--muted-foreground))] cursor-pointer select-none">
+                            Seleccionar todos ({filteredProducts.length})
                           </label>
-                        )
-                      })}
-                    </div>
-
-                    {/* Footer — confirm */}
-                    <div className="flex items-center justify-between gap-3 px-3 py-2.5 bg-[hsl(var(--muted)/0.3)] border-t border-[hsl(var(--border))]">
-                      <span className="text-xs text-[hsl(var(--muted-foreground))]">
-                        {pickerSelected.size === 0
-                          ? 'Ningún producto seleccionado'
-                          : `${pickerSelected.size} producto${pickerSelected.size === 1 ? '' : 's'} seleccionado${pickerSelected.size === 1 ? '' : 's'}`}
-                      </span>
-                      <Button
-                        type="button"
-                        size="sm"
-                        disabled={pickerSelected.size === 0}
-                        onClick={confirmPickerSelection}
-                        className="gap-1.5"
-                      >
-                        <Plus size={13} />
-                        Agregar seleccionados
-                      </Button>
-                    </div>
-                  </div>
-                )}
-
-                {/* No products from supplier */}
-                {!loadingProducts && availableProducts.length === 0 && (
-                  <div className="flex gap-2 items-start rounded-md bg-amber-50 border border-amber-200 px-4 py-3">
-                    <AlertTriangle size={18} className="text-amber-500 shrink-0 mt-0.5" />
-                    <div>
-                      <strong className="text-sm">Sin productos disponibles</strong>
-                      <p className="text-xs text-[hsl(var(--muted-foreground))] mt-0.5">
-                        No hay productos en inventario ni historial para este proveedor.
-                      </p>
-                    </div>
-                  </div>
-                )}
-
-                {/* Empty lines hint */}
-                {!loadingProducts && lines.length === 0 && availableProducts.length > 0 && !pickerOpen && (
-                  <p className="text-sm text-[hsl(var(--muted-foreground))] text-center py-2">
-                    Usá <strong>Agregar producto</strong> para elegir qué pedir.
-                  </p>
-                )}
-
-                {/* Lines table */}
-                {lines.length > 0 && (
-                  <div className="rounded-md border border-[hsl(var(--border))] overflow-hidden">
-                    {/* Header */}
-                    <div
-                      className="grid gap-2 px-3 py-2 bg-[hsl(var(--muted)/0.3)] border-b border-[hsl(var(--border))] text-xs font-semibold text-[hsl(var(--muted-foreground))] uppercase tracking-wide"
-                      style={{ gridTemplateColumns: colTemplate }}
-                    >
-                      <span>Producto</span>
-                      <span className="text-center">Cantidad</span>
-                      <span className="text-right">Precio unit.</span>
-                      <span className="text-right">Total</span>
-                      <span />
-                    </div>
-
-                    {/* Rows */}
-                    <div className="divide-y divide-[hsl(var(--border)/0.4)] bg-white">
-                      {lines.map((line, idx) => (
-                        <div
-                          key={String(line.product_id)}
-                          className="grid items-center gap-2 px-3 py-2.5"
-                          style={{ gridTemplateColumns: colTemplate }}
-                        >
-                          {/* Name */}
-                          <span className="text-sm font-medium truncate" title={line.product_name}>{line.product_name}</span>
-
-                          {/* Qty stepper */}
-                          <div className="flex items-center justify-center gap-1">
-                            <button
-                              type="button"
-                              onClick={() => changeQty(idx, -1)}
-                              disabled={Number(line.quantity_ordered) <= 1}
-                              aria-label="Disminuir cantidad"
-                              className="w-7 h-7 flex items-center justify-center rounded-md border border-[hsl(var(--border))] bg-white hover:bg-[hsl(var(--accent))] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                            >
-                              <Minus size={12} />
-                            </button>
-                            <input
-                              type="number"
-                              min="1"
-                              step="1"
-                              value={line.quantity_ordered}
-                              onChange={(ev) => setQtyDirect(idx, ev.target.value)}
-                              aria-label={`Cantidad de ${line.product_name}`}
-                              className="w-12 h-7 text-center rounded-md border border-[hsl(var(--border))] bg-white text-sm font-medium focus:outline-none focus:ring-1 focus:ring-[hsl(var(--primary)/0.5)] [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-                            />
-                            <button
-                              type="button"
-                              onClick={() => changeQty(idx, 1)}
-                              aria-label="Aumentar cantidad"
-                              className="w-7 h-7 flex items-center justify-center rounded-md border border-[hsl(var(--border))] bg-white hover:bg-[hsl(var(--accent))] transition-colors"
-                            >
-                              <Plus size={12} />
-                            </button>
-                          </div>
-
-                          {/* Unit price — readonly */}
-                          <span className="text-sm text-right text-[hsl(var(--muted-foreground))] select-none">
-                            {formatMoneyClp(line.unit_price_clp)}
-                          </span>
-
-                          {/* Line total */}
-                          <span className="text-sm text-right font-semibold">
-                            {formatMoneyClp(lineTotal(line))}
-                          </span>
-
-                          {/* Remove */}
-                          <button
-                            type="button"
-                            onClick={() => removeLine(idx)}
-                            aria-label={`Eliminar ${line.product_name}`}
-                            className="flex items-center justify-center w-7 h-7 rounded-md text-[hsl(var(--muted-foreground))] hover:text-red-600 hover:bg-red-50 transition-colors"
-                          >
-                            <X size={14} />
-                          </button>
+                          {pickerSelected.size > 0 && (
+                            <span className="ml-auto text-xs font-semibold text-[hsl(var(--primary))]">
+                              {pickerSelected.size} seleccionado{pickerSelected.size !== 1 ? 's' : ''}
+                            </span>
+                          )}
                         </div>
-                      ))}
-                    </div>
+                      )}
 
-                    {/* Grand total */}
+                      {/* Filas de productos */}
+                      <div className="max-h-56 overflow-y-auto divide-y divide-[hsl(var(--border)/0.3)] bg-white [&::-webkit-scrollbar]:hidden [scrollbar-width:none]">
+                        {filteredProducts.length === 0 ? (
+                          <p className="text-sm text-[hsl(var(--muted-foreground))] text-center py-6">Sin resultados para "{pickerSearch}"</p>
+                        ) : filteredProducts.map((p) => {
+                          const pid     = String(p.product_id)
+                          const checked = pickerSelected.has(pid)
+                          return (
+                            <label
+                              key={pid}
+                              htmlFor={`p-${pid}`}
+                              className={`flex items-center gap-3 px-4 py-3 cursor-pointer transition-colors select-none ${
+                                checked
+                                  ? 'bg-[hsl(var(--primary)/0.06)] border-l-2 border-l-[hsl(var(--primary))]'
+                                  : 'hover:bg-[hsl(var(--accent)/0.4)] border-l-2 border-l-transparent'
+                              }`}
+                            >
+                              <input
+                                type="checkbox"
+                                id={`p-${pid}`}
+                                checked={checked}
+                                onChange={() => toggleProduct(pid)}
+                                className="h-4 w-4 rounded accent-[hsl(var(--primary))] shrink-0"
+                              />
+                              <div className="min-w-0 flex-1">
+                                <p className={`text-sm font-medium truncate ${checked ? 'text-[hsl(var(--primary))]' : 'text-[hsl(var(--foreground))]'}`}>
+                                  {p.product_name}
+                                </p>
+                              </div>
+                              <span className="text-xs font-semibold text-[hsl(var(--muted-foreground))] shrink-0 bg-[hsl(var(--muted))] px-2 py-0.5 rounded-full">
+                                {formatMoneyClp(p.unit_price_clp)} / u.
+                              </span>
+                            </label>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ════ PASO 2: Revisión de cantidades ════ */}
+          {step === 'review' && (
+            <div className="flex flex-col gap-5 px-7 py-5">
+              {error && (
+                <div className="flex gap-2 items-start rounded-md bg-red-50 border border-red-200 text-red-700 text-sm px-3 py-2" role="alert">
+                  <AlertTriangle size={16} className="shrink-0 mt-0.5" /><p>{error}</p>
+                </div>
+              )}
+
+              {/* Tabla de líneas */}
+              <div className="rounded-lg border border-[hsl(var(--border))] overflow-hidden">
+                {/* Header */}
+                <div
+                  className="grid gap-2 px-4 py-2.5 bg-[hsl(var(--muted)/0.3)] border-b border-[hsl(var(--border))] text-xs font-semibold text-[hsl(var(--muted-foreground))] uppercase tracking-wide"
+                  style={{ gridTemplateColumns: colTemplate }}
+                >
+                  <span>Producto</span>
+                  <span className="text-center">Cantidad</span>
+                  <span className="text-right">Costo unit.</span>
+                  <span className="text-right">Total</span>
+                  <span />
+                </div>
+
+                {/* Filas */}
+                <div className="divide-y divide-[hsl(var(--border)/0.4)] bg-white">
+                  {lines.map((line, idx) => (
                     <div
-                      className="grid items-center gap-2 px-3 py-2 border-t border-[hsl(var(--border))] bg-[hsl(var(--muted)/0.2)]"
+                      key={String(line.product_id)}
+                      className="grid items-center gap-2 px-4 py-3"
                       style={{ gridTemplateColumns: colTemplate }}
                     >
-                      <span className="text-xs font-semibold text-[hsl(var(--muted-foreground))] uppercase tracking-wide col-span-3 text-right">Total pedido</span>
-                      <span className="text-sm font-bold text-right text-[hsl(var(--primary))]">{formatMoneyClp(grandTotal)}</span>
-                      <span />
+                      <span className="text-sm font-medium truncate" title={line.product_name}>{line.product_name}</span>
+
+                      {/* Stepper */}
+                      <div className="flex items-center justify-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => changeQty(idx, -1)}
+                          disabled={Number(line.quantity_ordered) <= 1}
+                          className="w-7 h-7 flex items-center justify-center rounded-md border border-[hsl(var(--border))] bg-white hover:bg-[hsl(var(--accent))] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                        >
+                          <Minus size={12} />
+                        </button>
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          value={line.quantity_ordered}
+                          onChange={(ev) => setQtyDirect(idx, ev.target.value)}
+                          className="w-12 h-7 text-center rounded-md border border-[hsl(var(--border))] bg-white text-sm font-medium focus:outline-none focus:ring-1 focus:ring-[hsl(var(--primary)/0.5)]"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => changeQty(idx, 1)}
+                          className="w-7 h-7 flex items-center justify-center rounded-md border border-[hsl(var(--border))] bg-white hover:bg-[hsl(var(--accent))] transition-colors"
+                        >
+                          <Plus size={12} />
+                        </button>
+                      </div>
+
+                      <span className="text-sm text-right text-[hsl(var(--muted-foreground))]">
+                        {formatMoneyClp(line.unit_price_clp)}
+                      </span>
+                      <span className="text-sm text-right font-semibold text-[hsl(var(--foreground))]">
+                        {formatMoneyClp(lineTotal(line))}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => removeLine(idx)}
+                        className="flex items-center justify-center w-7 h-7 rounded-md text-[hsl(var(--muted-foreground))] hover:text-red-600 hover:bg-red-50 transition-colors"
+                      >
+                        <X size={14} />
+                      </button>
                     </div>
-                  </div>
-                )}
+                  ))}
+                </div>
+
+                {/* Total */}
+                <div
+                  className="grid items-center gap-2 px-4 py-2.5 border-t border-[hsl(var(--border))] bg-[hsl(var(--muted)/0.2)]"
+                  style={{ gridTemplateColumns: colTemplate }}
+                >
+                  <span className="text-xs font-semibold text-[hsl(var(--muted-foreground))] uppercase tracking-wide col-span-3 text-right">Total pedido</span>
+                  <span className="text-sm font-bold text-right text-[hsl(var(--primary))]">{formatMoneyClp(grandTotal)}</span>
+                  <span />
+                </div>
               </div>
-            )}
-          </form>
+            </div>
+          )}
         </div>
 
+        {/* Footer */}
         <DialogFooter className="shrink-0">
-          <Button type="button" variant="outline" onClick={onClose}>Cancelar</Button>
-          <Button type="submit" form="new-order-form" disabled={submitting || !supplierId || lines.length === 0}>
-            {submitting ? 'Creando…' : 'Crear borrador'}
-          </Button>
+          {step === 'select' ? (
+            <>
+              <Button type="button" variant="outline" onClick={onClose}>Cancelar</Button>
+              <Button
+                type="button"
+                onClick={handleContinue}
+                disabled={!supplierId || loadingProducts || pickerSelected.size === 0}
+              >
+                Continuar →
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button type="button" variant="outline" onClick={() => { setStep('select'); setError('') }}>
+                ← Volver
+              </Button>
+              <Button type="button" onClick={handleSubmit} disabled={submitting || lines.length === 0}>
+                {submitting ? 'Creando…' : 'Crear borrador'}
+              </Button>
+            </>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -900,10 +833,6 @@ function WeeklyPurchasesPage() {
                       </p>
                     )}
                   </div>
-                  <Button type="button" variant="outline" size="sm" onClick={() => loadOrders()} aria-label="Actualizar listado" className="gap-1.5 shrink-0">
-                    <RefreshCw size={14} />
-                    Actualizar
-                  </Button>
                 </div>
               </CardHeader>
               <CardContent className="pt-0 px-0 pb-0">
@@ -914,24 +843,23 @@ function WeeklyPurchasesPage() {
                     <Table>
                       <TableHeader>
                         <TableRow>
-                          <TableHead>Semana (lunes)</TableHead>
+                          <TableHead>Día de entrega</TableHead>
                           <TableHead>Proveedor</TableHead>
                           <TableHead>Estado</TableHead>
-                          <TableHead>Total estimado</TableHead>
-                          <TableHead>Total recibido</TableHead>
+                          <TableHead>Costo Estimado</TableHead>
                           <TableHead />
                         </TableRow>
                       </TableHeader>
                       <TableBody>
                         {orders.length === 0 ? (
                           <TableRow>
-                            <TableCell colSpan={6} className="text-center text-[hsl(var(--muted-foreground))] py-10">
+                            <TableCell colSpan={5} className="text-center text-[hsl(var(--muted-foreground))] py-10">
                               No hay órdenes con los filtros actuales.
                             </TableCell>
                           </TableRow>
                         ) : (
                           orders.map((o) => (
-                            <TableRow key={String(o.id)} className="cursor-pointer hover:bg-[hsl(var(--accent)/0.5)]" onClick={() => openDetail(o.id)}>
+                            <TableRow key={String(o.id)}>
                               <TableCell className="font-medium">{formatWeekLong(o.week_start_date)}</TableCell>
                               <TableCell>{supplierNames[String(o.supplier_id)] || o.supplier_id || '—'}</TableCell>
                               <TableCell>
@@ -940,9 +868,8 @@ function WeeklyPurchasesPage() {
                                 </Badge>
                               </TableCell>
                               <TableCell>{formatMoneyClp(o.total_estimated_clp)}</TableCell>
-                              <TableCell>{formatReceivedCell(o)}</TableCell>
-                              <TableCell>
-                                <Button type="button" variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); openDetail(o.id) }}>
+                              <TableCell className="text-right">
+                                <Button type="button" variant="outline" size="sm" onClick={() => openDetail(o.id)}>
                                   Ver detalle →
                                 </Button>
                               </TableCell>

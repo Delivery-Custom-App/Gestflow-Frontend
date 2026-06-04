@@ -71,7 +71,7 @@ const ACCORDIONS = [
       { key: 'inv-hub',     label: 'Estado Actual Inventario', icon: PackageOpen  },
       { key: 'inv-prov',    label: 'Proveedores',        icon: Truck        },
       { key: 'inv-stock',   label: 'Stock de productos', icon: Package      },
-      { key: 'inv-compras', label: 'Pedidos semanales',  icon: ShoppingCart },
+      { key: 'inv-compras', label: 'Pedidos',             icon: ShoppingCart },
       { key: 'inv-recetas', label: 'Recetas',            icon: BookMarked   },
     ],
   },
