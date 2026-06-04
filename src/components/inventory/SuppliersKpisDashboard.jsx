@@ -112,7 +112,7 @@ function SuppliersKpisDashboard() {
         return
       }
       setResolvedBusinessId(businessId)
-      const rows = await getSuppliersWithMetricsForBusiness(businessId)
+      const rows = await getSuppliersWithMetricsForBusiness(businessId, { localId })
       setSuppliersRows(Array.isArray(rows) ? rows : [])
     } catch (e) {
       setSuppliersRows([])
@@ -438,6 +438,7 @@ function SuppliersKpisDashboard() {
           open={registerOpen}
           onClose={() => setRegisterOpen(false)}
           businessId={resolvedBusinessId}
+          localId={localId}
           onSuccess={() => { load(); loadSuppliersList() }}
         />
 

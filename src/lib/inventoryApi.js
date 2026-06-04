@@ -103,12 +103,15 @@ export function getLocalById(localId) {
 
 /**
  * Listado de proveedores con métricas agregadas (HU-68): unidades en inventario y valor estimado (CLP).
- * GET /suppliers?business_id=
- * @param {{ search?: string, category?: string }} [filters] - HU-85: nombre y categoría (combinables)
+ * GET /suppliers?business_id=&local_id=
+ * @param {{ search?: string, category?: string, localId?: string }} [filters]
  */
 export function buildSuppliersWithMetricsPath(businessId, filters = {}) {
   const params = new URLSearchParams()
   params.set('business_id', String(businessId))
+  if (filters.localId && String(filters.localId).trim()) {
+    params.set('local_id', String(filters.localId).trim())
+  }
   if (filters.search && String(filters.search).trim()) {
     params.set('search', String(filters.search).trim())
   }

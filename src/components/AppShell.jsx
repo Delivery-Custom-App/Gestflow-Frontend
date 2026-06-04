@@ -7,14 +7,14 @@ import { cn } from '@/lib/utils'
 import {
   LayoutDashboard, Store, ChevronDown, ChevronLeft, ChevronRight,
   DollarSign, FileText, BarChart3, Wallet, Bell, Gift,
-  Table2, BookOpen, Monitor, ChefHat, ClipboardList,
+  Table2, ChefHat,
   Package, Truck, ShoppingCart, BookMarked, PackageOpen,
   LogOut, Utensils,
 } from 'lucide-react'
 
 /* ── key sets for accordion auto-open ──────────────────────────── */
 const ADMIN_KEYS = new Set(['administracion', 'ventas', 'rendiciones', 'reportes', 'flujo-caja', 'alertas', 'bonos'])
-const POS_KEYS   = new Set(['pos', 'pos-mesas', 'pos-menu', 'pos-bar', 'pos-cocina', 'pos-pedidos'])
+const POS_KEYS   = new Set(['pos', 'pos-mesas', 'pos-kitchen', 'pos-reportes'])
 const INV_KEYS   = new Set(['inv-hub', 'inv-prov', 'inv-stock', 'inv-compras', 'inv-recetas'])
 
 /* ── active-key derived from pathname ──────────────────────────── */
@@ -24,6 +24,8 @@ function deriveActiveKey(pathname) {
   if (pathname.includes('/inventario/compras-semanales')) return 'inv-compras'
   if (pathname.includes('/inventario/recipes'))         return 'inv-recetas'
   if (pathname.includes('/inventario'))                 return 'inv-hub'
+  if (pathname.includes('/pos/reportes'))               return 'pos-reportes'
+  if (pathname.includes('/pos/cocina'))                 return 'pos-kitchen'
   if (pathname.includes('/pos'))                        return 'pos-mesas'
   if (pathname.includes('/administrativo/ventas'))      return 'ventas'
   if (pathname.includes('/administrativo/rendiciones')) return 'rendiciones'
@@ -56,11 +58,9 @@ const ACCORDIONS = [
     label: 'POS Restaurante',
     icon: Table2,
     items: [
-      { key: 'pos-mesas',   label: 'Gestión de Mesas', icon: Table2        },
-      { key: 'pos-menu',    label: 'Menú',              icon: BookOpen,      disabled: true },
-      { key: 'pos-bar',     label: 'Pantalla Bar',      icon: Monitor,       disabled: true },
-      { key: 'pos-cocina',  label: 'Pantalla Cocina',   icon: ChefHat,       disabled: true },
-      { key: 'pos-pedidos', label: 'Toma de Pedidos',   icon: ClipboardList, disabled: true },
+      { key: 'pos-mesas',    label: 'Gestión de Mesas', icon: Table2    },
+      { key: 'pos-kitchen',  label: 'Cocina',            icon: ChefHat   },
+      { key: 'pos-reportes', label: 'Reportes',          icon: BarChart3 },
     ],
   },
   {
@@ -90,8 +90,10 @@ function Sidebar({ collapsed, onToggle }) {
 
   /* manually-toggled accordion overrides */
   const [userOpen, setUserOpen] = useState({ administracion: false, pos: false, inventario: false })
+  const [userClosed, setUserClosed] = useState({ administracion: false, pos: false, inventario: false })
 
   const isOpen = (key) => {
+    if (userClosed[key]) return false
     if (key === 'administracion' && ADMIN_KEYS.has(activeKey)) return true
     if (key === 'pos'            && POS_KEYS.has(activeKey))   return true
     if (key === 'inventario'     && INV_KEYS.has(activeKey))   return true
@@ -99,11 +101,14 @@ function Sidebar({ collapsed, onToggle }) {
   }
 
   const toggleAccordion = (key) => {
-    const autoOpen =
-      (key === 'administracion' && ADMIN_KEYS.has(activeKey)) ||
-      (key === 'pos'            && POS_KEYS.has(activeKey))   ||
-      (key === 'inventario'     && INV_KEYS.has(activeKey))
-    if (!autoOpen) setUserOpen((p) => ({ ...p, [key]: !p[key] }))
+    const open = isOpen(key)
+    if (open) {
+      setUserClosed(p => ({ ...p, [key]: true }))
+      setUserOpen(p => ({ ...p, [key]: false }))
+    } else {
+      setUserClosed(p => ({ ...p, [key]: false }))
+      setUserOpen(p => ({ ...p, [key]: true }))
+    }
   }
 
   const goAccordion = (key) => {
@@ -120,8 +125,12 @@ function Sidebar({ collapsed, onToggle }) {
     switch (item.key) {
       case 'locales':   navigate('/admin'); break
       case 'dashboard': navigate(localId ? `/local/${localId}/dashboard` : '/admin', { state: navState }); break
-      case 'pos-mesas': case 'pos-menu': case 'pos-bar': case 'pos-cocina': case 'pos-pedidos':
+      case 'pos-mesas':
         if (localId) navigate(`/local/${localId}/pos`, { state: navState }); break
+      case 'pos-kitchen':
+        if (localId) navigate(`/local/${localId}/pos/cocina`, { state: navState }); break
+      case 'pos-reportes':
+        if (localId) navigate(`/local/${localId}/pos/reportes`, { state: navState }); break
       case 'inv-hub':     if (localId) navigate(`/local/${localId}/inventario`, { state: navState }); break
       case 'inv-prov':    if (localId) navigate(`/local/${localId}/inventario/proveedores`, { state: navState }); break
       case 'inv-stock':   if (localId) navigate(`/local/${localId}/inventario/stock`, { state: navState }); break

@@ -12,6 +12,7 @@ import WeeklyPurchaseDetailPage from '../components/inventory/weeklyPurchases/We
 import RecipesPage from '../components/inventory/recipes/RecipesPage'
 import POSModule from '../components/pos/POSModule'
 import MesaDetail from '../components/pos/MesaDetail'
+import ReportesPage from '../components/pos/ReportesPage'
 import WorkerLocalSelector from '../components/WorkerLocalSelector'
 import { WORKER_ROLES } from '../constants/roles'
 import { isSuperAdminRole } from '../auth/roleLabel'
@@ -67,6 +68,8 @@ function AdminAppRoutes({ variant }) {
         <Route path="/local/:localId/inventario" element={<InventoryHub />} />
         <Route path="/local/:localId/administrativo/:sectionId?" element={<AdministrativeModule />} />
         <Route path="/local/:localId/pos" element={<POSModule />} />
+        <Route path="/local/:localId/pos/cocina" element={<POSModule />} />
+        <Route path="/local/:localId/pos/reportes" element={<ReportesPage />} />
         <Route path="/local/:localId/pos/mesa/:mesaId" element={<MesaDetail />} />
         <Route path="/local/:localId/dashboard" element={<LocalDashboard />} />
         <Route path="/local/:localId" element={<LocalModulesHomeRedirect />} />
@@ -88,6 +91,7 @@ function WorkerAppRoutes() {
     <Routes>
       <Route path="/" element={<WorkerLocalSelector />} />
       <Route path="/local/:localId/pos" element={<POSModule />} />
+      <Route path="/local/:localId/pos/cocina" element={<POSModule />} />
       <Route path="/local/:localId/pos/mesa/:mesaId" element={<MesaDetail />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
