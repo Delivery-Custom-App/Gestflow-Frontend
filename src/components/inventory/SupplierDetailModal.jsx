@@ -20,6 +20,15 @@ function displayStr(value) {
   return s || '—'
 }
 
+function formatDate(value) {
+  if (!value) return '—'
+  try {
+    return new Date(value).toLocaleDateString('es-CL', { day: '2-digit', month: 'long', year: 'numeric' })
+  } catch {
+    return String(value)
+  }
+}
+
 /**
  * Modal de detalle de proveedor (HU-69): datos de contacto, KPIs y productos en inventario.
  */
@@ -101,8 +110,8 @@ function SupplierDetailModal({ open, supplierId, businessId, onClose }) {
   return (
     <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) onClose() }}>
       <DialogContent
-        className="max-w-2xl w-full flex flex-col overflow-hidden p-0"
-        style={{ maxHeight: 'min(92vh, 820px)' }}
+        className="max-w-3xl w-full flex flex-col overflow-hidden p-0"
+        style={{ maxHeight: 'min(92vh, 900px)' }}
       >
         {/* Fixed header */}
         <DialogHeader className="shrink-0 px-7 pt-6 pb-4 border-b border-[hsl(var(--border))]">
@@ -133,16 +142,18 @@ function SupplierDetailModal({ open, supplierId, businessId, onClose }) {
                 {/* Contact grid */}
                 <dl className="grid grid-cols-2 gap-x-8 gap-y-4 text-sm">
                   {[
-                    ['RUT', detail.rut],
-                    ['Teléfono', detail.phone],
-                    ['Email', detail.email],
-                    ['Dirección', detail.address],
-                    ['Contacto', detail.contact_name],
-                    ['Categoría', detail.category],
+                    ['RUT', displayStr(detail.rut)],
+                    ['Teléfono', displayStr(detail.phone)],
+                    ['Correo electrónico', displayStr(detail.email)],
+                    ['Dirección', displayStr(detail.address)],
+                    ['Contacto', displayStr(detail.contact_name)],
+                    ['Categoría', displayStr(detail.category)],
+                    ['Inicio de la prestación de servicios', formatDate(detail.start_date)],
+                    ['Fecha de ingreso al sistema', formatDate(detail.created_at)],
                   ].map(([label, val]) => (
                     <div key={label} className="flex flex-col gap-0.5">
                       <dt className="text-xs font-semibold text-[hsl(var(--muted-foreground))] uppercase tracking-wide">{label}</dt>
-                      <dd className="text-[hsl(var(--foreground))] font-medium">{displayStr(val)}</dd>
+                      <dd className="text-[hsl(var(--foreground))] font-medium">{val}</dd>
                     </div>
                   ))}
                 </dl>

@@ -1,13 +1,11 @@
 import { useCallback, useEffect, useState } from 'react'
-import { getAuthContext } from '../../lib/apiClient'
+import { apiRequest, getAuthContext } from '../../lib/apiClient'
 import {
   getInventorySuppliersForLocal,
   getLocalById,
   postInventoryNewProduct,
   postSupplier,
-  resolveCategoryNameForLocal,
 } from '../../lib/inventoryApi'
-import CategoryTypeahead from './CategoryTypeahead'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
@@ -22,28 +20,36 @@ import {
 
 const UNITS = [
   { value: 'unidad', label: 'Unidad' },
-  { value: 'kg', label: 'kg' },
-  { value: 'g', label: 'g' },
-  { value: 'L', label: 'L' },
-  { value: 'ml', label: 'ml' },
+  { value: 'kg',     label: 'kg'     },
+  { value: 'g',      label: 'g'      },
+  { value: 'L',      label: 'L'      },
+  { value: 'ml',     label: 'ml'     },
 ]
 
+/* Solo dígitos, sin signo, sin flechas */
+const numInputCls =
+  'h-9 w-full rounded-md border border-[hsl(var(--border))] px-3 text-sm shadow-sm ' +
+  'focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary)/0.3)] ' +
+  '[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none'
+
 function NuevoProductoModal({ open, localId, onClose, onSuccess }) {
-  const [submitting, setSubmitting] = useState(false)
-  const [error, setError] = useState('')
-  const [productName, setProductName] = useState('')
-  const [category, setCategory] = useState('')
-  const [unit, setUnit] = useState('unidad')
-  const [currentStock, setCurrentStock] = useState('0')
-  const [minStock, setMinStock] = useState('0')
-  const [maxStock, setMaxStock] = useState('0')
-  const [unitCost, setUnitCost] = useState('')
-  const [supplierId, setSupplierId] = useState('')
-  const [suppliers, setSuppliers] = useState([])
+  const [submitting,      setSubmitting]      = useState(false)
+  const [error,           setError]           = useState('')
+  const [productName,     setProductName]     = useState('')
+  const [categoryId,      setCategoryId]      = useState('')
+  const [unit,            setUnit]            = useState('unidad')
+  const [currentStock,    setCurrentStock]    = useState('0')
+  const [minStock,        setMinStock]        = useState('0')
+  const [maxStock,        setMaxStock]        = useState('0')
+  const [unitCost,        setUnitCost]        = useState('')
+  const [supplierId,      setSupplierId]      = useState('')
+  const [suppliers,       setSuppliers]       = useState([])
   const [suppliersLoading, setSuppliersLoading] = useState(false)
-  const [suppliersError, setSuppliersError] = useState('')
+  const [suppliersError,  setSuppliersError]  = useState('')
   const [newSupplierName, setNewSupplierName] = useState('')
-  const [addingSupplier, setAddingSupplier] = useState(false)
+  const [addingSupplier,  setAddingSupplier]  = useState(false)
+  const [categories,      setCategories]      = useState([])
+  const [catsLoading,     setCatsLoading]     = useState(false)
 
   const loadSuppliers = useCallback(async () => {
     if (!localId) return
@@ -70,6 +76,14 @@ function NuevoProductoModal({ open, localId, onClose, onSuccess }) {
     if (!open) return
     setError('')
     setSubmitting(false)
+    setProductName('')
+    setCategoryId('')
+    setUnit('unidad')
+    setCurrentStock('0')
+    setMinStock('0')
+    setMaxStock('0')
+    setUnitCost('')
+    setNewSupplierName('')
   }, [open])
 
   useEffect(() => {
@@ -77,11 +91,19 @@ function NuevoProductoModal({ open, localId, onClose, onSuccess }) {
       setSuppliers([])
       setSupplierId('')
       setSuppliersError('')
-      setNewSupplierName('')
       return
     }
     loadSuppliers()
   }, [open, localId, loadSuppliers])
+
+  useEffect(() => {
+    if (!open || !localId) { setCategories([]); return }
+    setCatsLoading(true)
+    apiRequest(`/categories?local_id=${localId}`)
+      .then((data) => setCategories(Array.isArray(data) ? data : []))
+      .catch(() => setCategories([]))
+      .finally(() => setCatsLoading(false))
+  }, [open, localId])
 
   const handleAddSupplier = async (e) => {
     e?.preventDefault()
@@ -108,32 +130,35 @@ function NuevoProductoModal({ open, localId, onClose, onSuccess }) {
     }
   }
 
+  const onlyDigits = (val) => val.replace(/\D/g, '')
+
   const handleSubmit = async (e) => {
     e.preventDefault()
     setError('')
+
+    const selectedCat = categories.find((c) => String(c.id) === categoryId)
+    const categoryName = selectedCat ? selectedCat.name.toLowerCase() : ''
+
     const cost = Number(unitCost)
-    if (!productName.trim() || !category.trim()) { setError('Completa nombre y categoría.'); return }
-    if (!supplierId) { setError('Selecciona un proveedor o agrega uno nuevo.'); return }
+    if (!productName.trim())  { setError('Ingresa el nombre del producto.'); return }
+    if (!categoryId)          { setError('Selecciona una categoría.'); return }
+    if (!supplierId)          { setError('Selecciona un proveedor o agrega uno nuevo.'); return }
     if (!Number.isFinite(cost) || cost <= 0) { setError('El costo unitario debe ser mayor que 0.'); return }
+
     setSubmitting(true)
     try {
-      const resolvedCategory = await resolveCategoryNameForLocal(localId, category)
-      setCategory(resolvedCategory)
       await postInventoryNewProduct(localId, {
         productName: productName.trim(),
-        category: resolvedCategory,
+        category:    categoryName,
         unit,
         currentStock: Number(currentStock) || 0,
-        minStock: Number(minStock) || 0,
-        maxStock: Number(maxStock) || 0,
-        unitCost: Math.round(cost),
+        minStock:     Number(minStock)     || 0,
+        maxStock:     Number(maxStock)     || 0,
+        unitCost:     Math.round(cost),
         supplierId,
       })
       onSuccess?.()
       onClose?.()
-      setProductName(''); setCategory(''); setUnit('unidad')
-      setCurrentStock('0'); setMinStock('0'); setMaxStock('0')
-      setUnitCost(''); setSupplierId(suppliers[0]?.id != null ? String(suppliers[0].id) : '')
     } catch (err) {
       setError(err?.message || 'No se pudo crear el producto.')
     } finally {
@@ -146,15 +171,16 @@ function NuevoProductoModal({ open, localId, onClose, onSuccess }) {
   return (
     <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) onClose?.() }}>
       <DialogContent
-        className="max-w-xl w-full flex flex-col overflow-hidden p-0"
-        style={{ maxHeight: 'min(92vh, 680px)' }}
+        className="max-w-2xl w-full flex flex-col overflow-hidden p-0"
+        style={{ maxHeight: 'min(92vh, 760px)' }}
       >
-        <DialogHeader className="shrink-0 px-6 pt-6 pb-2">
+        <DialogHeader className="shrink-0 px-7 pt-6 pb-3 border-b border-[hsl(var(--border))]">
           <DialogTitle>Nuevo producto</DialogTitle>
+          <p className="text-sm text-[hsl(var(--muted-foreground))]">Ingrese los datos del producto</p>
         </DialogHeader>
 
         <div className="flex-1 overflow-y-auto min-h-0">
-          <form id="np-form" onSubmit={handleSubmit} className="flex flex-col gap-5 px-6 py-4">
+          <form id="np-form" onSubmit={handleSubmit} className="flex flex-col gap-5 px-7 py-5">
 
             {error && (
               <p className="rounded-md bg-red-50 border border-red-200 text-red-700 text-sm px-3 py-2" role="alert">
@@ -170,31 +196,47 @@ function NuevoProductoModal({ open, localId, onClose, onSuccess }) {
             {/* Nombre + Categoría */}
             <div className="grid grid-cols-2 gap-4">
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="np-name">Nombre</Label>
+                <Label htmlFor="np-name">Nombre <span className="text-red-500">*</span></Label>
                 <Input
                   id="np-name"
                   value={productName}
                   onChange={(ev) => setProductName(ev.target.value)}
-                  placeholder="Ej: Tomate cherry"
+                  placeholder="Ingrese datos"
                   required
                   disabled={submitting}
                 />
               </div>
               <div className="flex flex-col gap-1.5">
-                <Label>Categoría</Label>
-                <CategoryTypeahead
-                  localId={localId}
-                  value={category}
-                  onChange={setCategory}
-                  disabled={submitting}
-                />
+                <Label htmlFor="np-category">Categoría <span className="text-red-500">*</span></Label>
+                <select
+                  id="np-category"
+                  value={categoryId}
+                  onChange={(e) => setCategoryId(e.target.value)}
+                  disabled={catsLoading || submitting}
+                  className={
+                    'h-9 w-full rounded-md border border-[hsl(var(--border))] px-3 text-sm shadow-sm bg-white ' +
+                    'focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary)/0.3)]'
+                  }
+                >
+                  <option value="">
+                    {catsLoading ? 'Cargando categorías…' : 'Selecciona una categoría'}
+                  </option>
+                  {categories.map((cat) => (
+                    <option key={cat.id} value={String(cat.id)}>
+                      {cat.name}
+                    </option>
+                  ))}
+                  {!catsLoading && categories.length === 0 && (
+                    <option value="" disabled>Sin categorías disponibles</option>
+                  )}
+                </select>
               </div>
             </div>
 
-            {/* Formato de medida + Costo unitario */}
+            {/* Formato del Producto + Costo unitario */}
             <div className="grid grid-cols-2 gap-4">
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="np-unit">Formato de medida</Label>
+                <Label htmlFor="np-unit">Formato del Producto</Label>
                 <Select value={unit} onValueChange={setUnit} disabled={submitting}>
                   <SelectTrigger id="np-unit" className="h-9 text-sm">
                     <SelectValue />
@@ -207,17 +249,17 @@ function NuevoProductoModal({ open, localId, onClose, onSuccess }) {
                 </Select>
               </div>
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="np-unit-cost">Costo unitario (CLP)</Label>
-                <Input
+                <Label htmlFor="np-unit-cost">Costo unitario (CLP) <span className="text-red-500">*</span></Label>
+                <input
                   id="np-unit-cost"
-                  type="number"
-                  min={1}
-                  step={1}
+                  type="text"
+                  inputMode="numeric"
                   value={unitCost}
-                  onChange={(ev) => setUnitCost(ev.target.value)}
+                  onChange={(ev) => setUnitCost(onlyDigits(ev.target.value))}
                   placeholder="0"
                   required
                   disabled={submitting}
+                  className={numInputCls}
                 />
               </div>
             </div>
@@ -225,43 +267,43 @@ function NuevoProductoModal({ open, localId, onClose, onSuccess }) {
             {/* Niveles de stock */}
             <fieldset className="border border-[hsl(var(--border))] rounded-lg px-4 pb-4 pt-2">
               <legend className="text-xs font-semibold text-[hsl(var(--muted-foreground))] uppercase tracking-wide px-1">
-                Niveles de stock
+                Niveles de stock actuales
               </legend>
-              <div className="grid grid-cols-3 gap-4 mt-2">
+              <div className="grid grid-cols-3 gap-4 mt-3">
                 <div className="flex flex-col gap-1.5">
                   <Label htmlFor="np-stock-current">Actual</Label>
-                  <Input
+                  <input
                     id="np-stock-current"
-                    type="number"
-                    min={0}
-                    step={1}
+                    type="text"
+                    inputMode="numeric"
                     value={currentStock}
-                    onChange={(ev) => setCurrentStock(ev.target.value)}
+                    onChange={(ev) => setCurrentStock(onlyDigits(ev.target.value))}
                     disabled={submitting}
+                    className={numInputCls}
                   />
                 </div>
                 <div className="flex flex-col gap-1.5">
                   <Label htmlFor="np-stock-min">Mínimo</Label>
-                  <Input
+                  <input
                     id="np-stock-min"
-                    type="number"
-                    min={0}
-                    step={1}
+                    type="text"
+                    inputMode="numeric"
                     value={minStock}
-                    onChange={(ev) => setMinStock(ev.target.value)}
+                    onChange={(ev) => setMinStock(onlyDigits(ev.target.value))}
                     disabled={submitting}
+                    className={numInputCls}
                   />
                 </div>
                 <div className="flex flex-col gap-1.5">
                   <Label htmlFor="np-stock-max">Máximo</Label>
-                  <Input
+                  <input
                     id="np-stock-max"
-                    type="number"
-                    min={0}
-                    step={1}
+                    type="text"
+                    inputMode="numeric"
                     value={maxStock}
-                    onChange={(ev) => setMaxStock(ev.target.value)}
+                    onChange={(ev) => setMaxStock(onlyDigits(ev.target.value))}
                     disabled={submitting}
+                    className={numInputCls}
                   />
                 </div>
               </div>
@@ -269,9 +311,9 @@ function NuevoProductoModal({ open, localId, onClose, onSuccess }) {
 
             {/* Proveedor */}
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="np-supplier">Proveedor</Label>
+              <Label htmlFor="np-supplier">Proveedor <span className="text-red-500">*</span></Label>
               <Select
-                value={supplierId || undefined}
+                value={supplierId}
                 onValueChange={setSupplierId}
                 disabled={suppliersLoading || suppliers.length === 0 || submitting}
               >
@@ -318,7 +360,7 @@ function NuevoProductoModal({ open, localId, onClose, onSuccess }) {
           </form>
         </div>
 
-        <DialogFooter className="shrink-0 px-6 py-4 border-t border-[hsl(var(--border))]">
+        <DialogFooter className="shrink-0 px-7 py-4 border-t border-[hsl(var(--border))]">
           <Button type="button" variant="outline" onClick={onClose} disabled={submitting}>
             Cancelar
           </Button>

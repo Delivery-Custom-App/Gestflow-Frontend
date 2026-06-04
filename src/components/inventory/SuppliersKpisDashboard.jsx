@@ -154,14 +154,16 @@ function SuppliersKpisDashboard() {
   }, [resolvedBusinessId, rowActionId, load])
 
   const availableYears = useMemo(() => {
-    const set = new Set([CURRENT_YEAR])
+    let minYear = CURRENT_YEAR
     for (const row of suppliersRows) {
       const raw = row.start_date || row.created_at
       if (!raw) continue
       const y = new Date(raw).getFullYear()
-      if (Number.isFinite(y) && y > 1900 && y <= CURRENT_YEAR + 1) set.add(y)
+      if (Number.isFinite(y) && y > 1900 && y < minYear) minYear = y
     }
-    return Array.from(set).sort((a, b) => a - b)
+    const years = []
+    for (let y = minYear; y <= CURRENT_YEAR; y++) years.push(y)
+    return years
   }, [suppliersRows])
 
   useEffect(() => { load() },             [load])
@@ -194,31 +196,6 @@ function SuppliersKpisDashboard() {
 
           {canAccess && (
             <div className="flex items-center gap-3 flex-wrap">
-              {/* Period selector */}
-              <div className="flex items-center gap-0 rounded-lg border border-[hsl(var(--border))] bg-white overflow-hidden shadow-sm">
-                <select
-                  value={year}
-                  onChange={(e) => setYear(Number(e.target.value))}
-                  className="h-9 border-0 bg-transparent px-3 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-inset focus:ring-[hsl(var(--primary)/0.3)] cursor-pointer"
-                  aria-label="Año"
-                >
-                  {availableYears.map((y) => (
-                    <option key={y} value={y}>{y}</option>
-                  ))}
-                </select>
-                <div className="w-px h-5 bg-[hsl(var(--border))]" />
-                <select
-                  value={month}
-                  onChange={(e) => setMonth(Number(e.target.value))}
-                  className="h-9 border-0 bg-transparent px-3 text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-inset focus:ring-[hsl(var(--primary)/0.3)] cursor-pointer"
-                  aria-label="Mes"
-                >
-                  {MONTH_NAMES.map((name, i) => (
-                    <option key={name} value={i + 1}>{name}</option>
-                  ))}
-                </select>
-              </div>
-
               {resolvedBusinessId && (
                 <Button
                   type="button"

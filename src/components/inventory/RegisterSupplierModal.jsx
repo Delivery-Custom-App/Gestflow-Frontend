@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react'
-import { getAuthContext } from '../../lib/apiClient'
+import { apiRequest, getAuthContext } from '../../lib/apiClient'
 import { postSupplier } from '../../lib/providersApi'
 import ModernDateField from './ModernDateField'
 import {
   formatRutForDisplay,
   normalizeRutInput,
   validateChileRutMessage,
+  validateRutTypeConsistency,
 } from '../../utils/chileRut'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
@@ -29,17 +30,28 @@ function normalizeChileMobileDigits(value) {
 
 function RegisterSupplierModal({ open, onClose, onSuccess, businessId, localId }) {
   const [form,        setFormState] = useState(INITIAL)
+  const [rutType,     setRutType]   = useState('comercial')
   const [submitting,  setSubmitting] = useState(false)
   const [error,       setError]      = useState('')
   const [fieldErrors, setFieldErrors] = useState({})
+  const [categories,  setCategories]  = useState([])
+  const [catsLoading, setCatsLoading] = useState(false)
 
   useEffect(() => {
     if (!open) return
     setFormState(INITIAL)
+    setRutType('comercial')
     setError('')
     setFieldErrors({})
     setSubmitting(false)
-  }, [open])
+
+    if (!localId) return
+    setCatsLoading(true)
+    apiRequest(`/categories?local_id=${localId}`)
+      .then((data) => setCategories(Array.isArray(data) ? data : []))
+      .catch(() => setCategories([]))
+      .finally(() => setCatsLoading(false))
+  }, [open, localId])
 
   const setField = (key, value) => {
     setFormState((prev) => ({ ...prev, [key]: value }))
@@ -60,7 +72,7 @@ function RegisterSupplierModal({ open, onClose, onSuccess, businessId, localId }
       ['category',     'Categoría'],
       ['contact_name', 'Contacto'],
       ['phone',        'Teléfono'],
-      ['email',        'Email'],
+      ['email',        'Correo electrónico'],
     ]
     for (const [key, label] of req) {
       if (!String(form[key] ?? '').trim()) next[key] = `${label} es obligatorio.`
@@ -68,6 +80,10 @@ function RegisterSupplierModal({ open, onClose, onSuccess, businessId, localId }
     if (!next.rut) {
       const rutErr = validateChileRutMessage(form.rut)
       if (rutErr) next.rut = rutErr
+      else {
+        const rangeErr = validateRutTypeConsistency(form.rut, rutType)
+        if (rangeErr) next.rut = rangeErr
+      }
     }
     if (!next.phone) {
       const digits = normalizeChileMobileDigits(form.phone)
@@ -77,12 +93,12 @@ function RegisterSupplierModal({ open, onClose, onSuccess, businessId, localId }
       const emailVal = String(form.email).trim()
       const emailRegex = /^[^\s@]+@[^\s@]+\.[a-zA-Z]{2,}$/
       if (!emailRegex.test(emailVal)) {
-        next.email = 'Ingresa un email válido (ej: proveedor@empresa.cl).'
+        next.email = 'Ingresa un correo válido (ej: proveedor@empresa.cl).'
       } else {
         const tld = emailVal.split('.').pop().toLowerCase()
         const reservedTlds = ['test', 'local', 'localhost', 'example', 'invalid', 'internal']
         if (reservedTlds.includes(tld)) {
-          next.email = `El dominio ".${tld}" no es válido. Usa un email real (ej: proveedor@gmail.com).`
+          next.email = `El dominio ".${tld}" no es válido. Usa un correo real (ej: proveedor@gmail.com).`
         }
       }
     }
@@ -139,12 +155,16 @@ function RegisterSupplierModal({ open, onClose, onSuccess, businessId, localId }
     `h-10 w-full rounded-md border px-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary)/0.3)] ${
       fe(key) ? 'border-red-400' : 'border-[hsl(var(--border))]'
     }`
+  const selectCls = (key) =>
+    `h-10 w-full rounded-md border px-3 text-sm shadow-sm bg-white focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary)/0.3)] ${
+      fe(key) ? 'border-red-400' : 'border-[hsl(var(--border))]'
+    }`
 
   return (
     <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) onClose?.() }}>
       <DialogContent
         className="max-w-2xl w-full flex flex-col overflow-hidden p-0"
-        style={{ maxHeight: 'min(92vh, 780px)' }}
+        style={{ maxHeight: 'min(92vh, 820px)' }}
         onInteractOutside={(e) => {
           const original = e.detail?.originalEvent ?? e
           const target = original?.target
@@ -155,9 +175,9 @@ function RegisterSupplierModal({ open, onClose, onSuccess, businessId, localId }
       >
         {/* Fixed header */}
         <DialogHeader className="shrink-0">
-          <DialogTitle>Registrar proveedor</DialogTitle>
+          <DialogTitle>Registro de Proveedores</DialogTitle>
           <p className="text-sm text-[hsl(var(--muted-foreground))]">
-            Complete los datos del nuevo proveedor
+            Ingrese los datos del Proveedor
           </p>
         </DialogHeader>
 
@@ -171,63 +191,104 @@ function RegisterSupplierModal({ open, onClose, onSuccess, businessId, localId }
               </p>
             )}
 
-            {/* Name */}
+            {/* Nombre comercial */}
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="rs-name">Nombre comercial <span className="text-red-500">*</span></Label>
+              <Label htmlFor="rs-name">Nombre Comercial <span className="text-red-500">*</span></Label>
               <input
                 id="rs-name"
                 value={form.name}
                 onChange={(e) => setField('name', e.target.value)}
-                placeholder="Ej: Distribuidora XYZ"
+                placeholder="Ingrese datos"
                 autoComplete="organization"
                 className={inputCls('name')}
               />
               {fe('name') && <span className="text-xs text-red-500">{fe('name')}</span>}
             </div>
 
-            {/* RUT + Category row */}
-            <div className="grid grid-cols-2 gap-3">
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="rs-rut">RUT <span className="text-red-500">*</span></Label>
-                <input
-                  id="rs-rut"
-                  value={formatRutForDisplay(form.rut)}
-                  onChange={(e) => setField('rut', normalizeRutInput(e.target.value))}
-                  placeholder="12.345.678-9"
-                  autoComplete="off"
-                  inputMode="text"
-                  className={inputCls('rut')}
-                />
-                {fe('rut') && <span className="text-xs text-red-500">{fe('rut')}</span>}
+            {/* RUT type + RUT */}
+            <div className="flex flex-col gap-1.5">
+              {/* Tipo de RUT */}
+              <div className="flex items-center gap-4 mb-1">
+                <span className="text-sm font-medium text-[hsl(var(--foreground))]">Tipo de RUT</span>
+                <label className="flex items-center gap-1.5 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="rutType"
+                    value="comercial"
+                    checked={rutType === 'comercial'}
+                    onChange={() => setRutType('comercial')}
+                    className="accent-[hsl(var(--primary))]"
+                  />
+                  <span className="text-sm">RUT Comercial</span>
+                </label>
+                <label className="flex items-center gap-1.5 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="rutType"
+                    value="personal"
+                    checked={rutType === 'personal'}
+                    onChange={() => setRutType('personal')}
+                    className="accent-[hsl(var(--primary))]"
+                  />
+                  <span className="text-sm">RUT Personal</span>
+                </label>
               </div>
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="rs-category">Categoría <span className="text-red-500">*</span></Label>
-                <input
-                  id="rs-category"
-                  value={form.category}
-                  onChange={(e) => setField('category', e.target.value)}
-                  placeholder="Ej: Lácteos"
-                  className={inputCls('category')}
-                />
-                {fe('category') && <span className="text-xs text-red-500">{fe('category')}</span>}
-              </div>
+
+              <Label htmlFor="rs-rut">
+                {rutType === 'comercial' ? 'RUT Comercial' : 'RUT Personal'} <span className="text-red-500">*</span>
+              </Label>
+              <input
+                id="rs-rut"
+                value={formatRutForDisplay(form.rut)}
+                onChange={(e) => setField('rut', normalizeRutInput(e.target.value))}
+                placeholder="12.345.678-9"
+                autoComplete="off"
+                inputMode="text"
+                className={inputCls('rut')}
+              />
+              {fe('rut') && <span className="text-xs text-red-500">{fe('rut')}</span>}
             </div>
 
-            {/* Address */}
+            {/* Categoría */}
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="rs-category">Categorías <span className="text-red-500">*</span></Label>
+              <select
+                id="rs-category"
+                value={form.category}
+                onChange={(e) => setField('category', e.target.value)}
+                disabled={catsLoading}
+                className={selectCls('category')}
+              >
+                <option value="">
+                  {catsLoading ? 'Cargando categorías…' : 'Selecciona una categoría'}
+                </option>
+                {categories.map((cat) => (
+                  <option key={cat.id} value={cat.name}>
+                    {cat.name}
+                  </option>
+                ))}
+                {!catsLoading && categories.length === 0 && (
+                  <option value="" disabled>Sin categorías disponibles</option>
+                )}
+              </select>
+              {fe('category') && <span className="text-xs text-red-500">{fe('category')}</span>}
+            </div>
+
+            {/* Dirección */}
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="rs-address">Dirección <span className="text-red-500">*</span></Label>
               <input
                 id="rs-address"
                 value={form.address}
                 onChange={(e) => setField('address', e.target.value)}
-                placeholder="Ej: Av. Providencia 1234, Santiago"
+                placeholder="Ingrese Datos"
                 autoComplete="street-address"
                 className={inputCls('address')}
               />
               {fe('address') && <span className="text-xs text-red-500">{fe('address')}</span>}
             </div>
 
-            {/* Contact + Phone row */}
+            {/* Contacto + Teléfono */}
             <div className="grid grid-cols-2 gap-3">
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="rs-contact">Contacto <span className="text-red-500">*</span></Label>
@@ -235,7 +296,7 @@ function RegisterSupplierModal({ open, onClose, onSuccess, businessId, localId }
                   id="rs-contact"
                   value={form.contact_name}
                   onChange={(e) => setField('contact_name', e.target.value)}
-                  placeholder="Nombre completo"
+                  placeholder="Ingrese Nombre del contacto"
                   autoComplete="name"
                   className={inputCls('contact_name')}
                 />
@@ -262,9 +323,9 @@ function RegisterSupplierModal({ open, onClose, onSuccess, businessId, localId }
               </div>
             </div>
 
-            {/* Email */}
+            {/* Correo electrónico */}
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="rs-email">Email <span className="text-red-500">*</span></Label>
+              <Label htmlFor="rs-email">Correo electrónico <span className="text-red-500">*</span></Label>
               <input
                 id="rs-email"
                 type="email"
@@ -277,9 +338,9 @@ function RegisterSupplierModal({ open, onClose, onSuccess, businessId, localId }
               {fe('email') && <span className="text-xs text-red-500">{fe('email')}</span>}
             </div>
 
-            {/* Start date */}
+            {/* Inicio de la prestación de servicios */}
             <ModernDateField
-              label="Fecha desde (histórico proveedor)"
+              label="Inicio de la prestación de servicios"
               value={form.start_date}
               onChange={(iso) => setField('start_date', iso)}
               disabled={submitting}

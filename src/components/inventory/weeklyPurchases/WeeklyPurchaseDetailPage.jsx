@@ -9,6 +9,7 @@ import {
   patchWeeklyPurchaseLineReception,
   patchWeeklyPurchaseOrder,
 } from '../../../lib/providersApi'
+import { getInventoryStockList, patchInventoryStock } from '../../../lib/inventoryApi'
 import { useAuth } from '../../../context/AuthContext'
 import { formatCLPDisplay as formatMoneyClp } from '../../../lib/formatCLP'
 import InventoryShell from '../InventoryShell'
@@ -63,6 +64,7 @@ function WeeklyPurchaseDetailPage() {
   const [savingStatus, setSavingStatus] = useState(false)
 
   const [recvInputs, setRecvInputs] = useState({})
+  const [markingDelivered, setMarkingDelivered] = useState(false)
 
   const resolveBusiness = useLocalBusinessId(localId)
 
@@ -156,6 +158,45 @@ function WeeklyPurchaseDetailPage() {
     }
   }
 
+  const markAsDelivered = async () => {
+    if (!businessId || !orderId || !localId || !order) return
+    if (!window.confirm('¿Marcar como entregada? El stock de cada producto se sumará con la cantidad pedida.')) return
+    setMarkingDelivered(true)
+    setActionError('')
+    try {
+      // Obtener inventario actual del local para mapear product_id → inventory_id + stock_current
+      const invList = await getInventoryStockList(localId, {})
+      const invByProduct = {}
+      for (const row of (Array.isArray(invList) ? invList : [])) {
+        if (row.product_id) invByProduct[String(row.product_id)] = row
+      }
+
+      const items = Array.isArray(order.items) ? order.items : []
+      const warnings = []
+
+      for (const item of items) {
+        const inv = invByProduct[String(item.product_id)]
+        if (!inv?.inventory_id) {
+          warnings.push(`"${item.product_name_snapshot || item.product_id}" no encontrado en inventario — omitido`)
+          continue
+        }
+        const newStock = (Number(inv.stock_current) || 0) + (Number(item.quantity_ordered) || 0)
+        await patchInventoryStock(localId, inv.inventory_id, { stock: newStock })
+      }
+
+      const updated = await patchWeeklyPurchaseOrder(orderId, businessId, { status: 'received' })
+      setOrder(updated)
+
+      if (warnings.length > 0) {
+        setActionError(`Entregado con advertencias: ${warnings.join(' • ')}`)
+      }
+    } catch (e) {
+      setActionError(e?.message || 'No se pudo marcar como entregado.')
+    } finally {
+      setMarkingDelivered(false)
+    }
+  }
+
   const registerReception = async (itemId) => {
     if (!businessId || !orderId || !itemId) return
     const raw = recvInputs[String(itemId)]
@@ -198,10 +239,6 @@ function WeeklyPurchaseDetailPage() {
             <h1 className="text-2xl font-bold text-[hsl(var(--foreground))]">Orden de compra semanal</h1>
             {order ? (
               <div className="flex flex-wrap items-center gap-2">
-                <span className="text-sm text-[hsl(var(--muted-foreground))]">
-                  Semana (lunes): <strong className="text-[hsl(var(--foreground))]">{order.week_start_date}</strong>
-                </span>
-                <span className="text-[hsl(var(--muted-foreground)/0.4)]">·</span>
                 <span className="inline-flex items-center px-3 py-0.5 rounded-full bg-[hsl(var(--primary)/0.12)] text-[hsl(var(--primary))] text-sm font-bold tracking-wide">
                   {supplierName || order.supplier_id}
                 </span>
@@ -241,28 +278,32 @@ function WeeklyPurchaseDetailPage() {
         {!loading && order && !error ? (
           <>
 
-            <div className="flex flex-wrap gap-3 items-end rounded-xl border border-[hsl(var(--border))] bg-white p-4 shadow-sm">
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="wp-status">Cambiar estado</Label>
-                <select
-                  id="wp-status"
-                  value={statusEdit}
-                  onChange={(ev) => setStatusEdit(ev.target.value)}
-                  className={selectClass}
-                >
-                  {Object.entries(STATUS_LABELS).map(([k, v]) => (
-                    <option key={k} value={k}>{v}</option>
-                  ))}
-                </select>
-              </div>
-              <Button type="button" onClick={() => applyStatus()} disabled={savingStatus}>
-                {savingStatus ? 'Guardando…' : 'Guardar estado'}
-              </Button>
-              {order.status === 'draft' ? (
+            {/* Banner demo */}
+            <div className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5 text-amber-800 text-sm">
+              <span className="font-bold shrink-0">⚠ Demo</span>
+              <span>Esta sección está en desarrollo. Las acciones a continuación son funcionales pero la interfaz es preliminar.</span>
+            </div>
+
+            {/* Acciones */}
+            <div className="flex flex-wrap gap-3 items-center">
+              {order.status === 'draft' && (
                 <Button type="button" variant="destructive" onClick={() => removeDraft()}>
-                  Eliminar borrador
+                  Eliminar Borrador
                 </Button>
-              ) : null}
+              )}
+              <Button type="button" variant="outline" onClick={() => window.print()} title="Demo — impresión no implementada">
+                Imprimir Borrador
+              </Button>
+              {order.status !== 'received' && order.status !== 'cancelled' && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={markAsDelivered}
+                  disabled={markingDelivered}
+                >
+                  {markingDelivered ? 'Actualizando stock…' : 'Marcar como entregado'}
+                </Button>
+              )}
             </div>
 
             <div className="rounded-md border border-[hsl(var(--border))] overflow-x-auto">
