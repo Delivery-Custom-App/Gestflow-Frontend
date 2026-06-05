@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Outlet, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import { useTheme } from '../context/ThemeContext'
 import { useAlerts } from '../hooks/useAlerts'
 import { motion, AnimatePresence } from 'framer-motion'
 import { cn } from '@/lib/utils'
@@ -9,7 +10,7 @@ import {
   DollarSign, FileText, BarChart3, Wallet, Bell, Gift,
   Table2, ChefHat,
   Package, Truck, ShoppingCart, BookMarked, PackageOpen,
-  LogOut, Utensils, HelpCircle, Phone, Mail, X,
+  LogOut, Utensils, HelpCircle, Phone, Mail, Moon, Sun, Menu, Users,
 } from 'lucide-react'
 
 /* ── key sets for accordion auto-open ──────────────────────────── */
@@ -19,21 +20,22 @@ const INV_KEYS   = new Set(['inv-hub', 'inv-prov', 'inv-stock', 'inv-compras', '
 
 /* ── active-key derived from pathname ──────────────────────────── */
 function deriveActiveKey(pathname) {
-  if (pathname.includes('/inventario/proveedores'))     return 'inv-prov'
-  if (pathname.includes('/inventario/stock'))           return 'inv-stock'
+  if (pathname.includes('/inventario/proveedores'))       return 'inv-prov'
+  if (pathname.includes('/inventario/stock'))             return 'inv-stock'
   if (pathname.includes('/inventario/compras-semanales')) return 'inv-compras'
-  if (pathname.includes('/inventario/recipes'))         return 'inv-recetas'
-  if (pathname.includes('/inventario'))                 return 'inv-hub'
-  if (pathname.includes('/pos/cocina'))                 return 'pos-kitchen'
-  if (pathname.includes('/pos'))                        return 'pos-mesas'
-  if (pathname.includes('/administrativo/ventas'))      return 'ventas'
-  if (pathname.includes('/administrativo/rendiciones')) return 'rendiciones'
-  if (pathname.includes('/administrativo/reportes'))    return 'reportes'
-  if (pathname.includes('/administrativo/flujo-caja'))  return 'flujo-caja'
-  if (pathname.includes('/administrativo/alertas'))     return 'alertas'
-  if (pathname.includes('/administrativo/bonos'))       return 'bonos'
-  if (pathname.includes('/administrativo'))             return 'administracion'
-  if (pathname.includes('/dashboard'))                  return 'dashboard'
+  if (pathname.includes('/inventario/recipes'))           return 'inv-recetas'
+  if (pathname.includes('/inventario'))                   return 'inv-hub'
+  if (pathname.includes('/pos/cocina'))                   return 'pos-kitchen'
+  if (pathname.includes('/pos'))                          return 'pos-mesas'
+  if (pathname.includes('/administrativo/ventas'))        return 'ventas'
+  if (pathname.includes('/administrativo/rendiciones'))   return 'rendiciones'
+  if (pathname.includes('/administrativo/reportes'))      return 'reportes'
+  if (pathname.includes('/administrativo/flujo-caja'))    return 'flujo-caja'
+  if (pathname.includes('/administrativo/alertas'))       return 'alertas'
+  if (pathname.includes('/administrativo/bonos'))         return 'bonos'
+  if (pathname.includes('/administrativo'))               return 'administracion'
+  if (pathname.includes('/usuarios'))                    return 'usuarios'
+  if (pathname.includes('/dashboard'))                    return 'dashboard'
   return 'locales'
 }
 
@@ -67,18 +69,18 @@ const ACCORDIONS = [
     icon: PackageOpen,
     items: [
       { key: 'inv-hub',     label: 'Estado Actual Inventario', icon: PackageOpen  },
-      { key: 'inv-prov',    label: 'Proveedores',        icon: Truck        },
-      { key: 'inv-stock',   label: 'Stock de productos', icon: Package      },
-      { key: 'inv-compras', label: 'Pedidos',             icon: ShoppingCart },
-      { key: 'inv-recetas', label: 'Recetas',            icon: BookMarked   },
+      { key: 'inv-prov',    label: 'Proveedores',              icon: Truck        },
+      { key: 'inv-stock',   label: 'Stock de productos',       icon: Package      },
+      { key: 'inv-compras', label: 'Pedidos',                  icon: ShoppingCart },
+      { key: 'inv-recetas', label: 'Recetas',                  icon: BookMarked   },
     ],
   },
 ]
 
 /* ── Sidebar ────────────────────────────────────────────────────── */
-function Sidebar({ collapsed, onToggle }) {
+function Sidebar({ collapsed, onToggle, onClose }) {
   const { user, userRole, logout } = useAuth()
-  const navigate   = useNavigate()
+  const navigate = useNavigate()
   const { pathname, state: locState } = useLocation()
 
   const localIdMatch = pathname.match(/\/local\/([^/]+)/)
@@ -87,8 +89,6 @@ function Sidebar({ collapsed, onToggle }) {
   const navState  = locState?.local ? { local: locState.local } : localId ? { local: { id: localId } } : {}
 
   const [helpOpen, setHelpOpen] = useState(false)
-
-  /* manually-toggled accordion overrides */
   const [userOpen, setUserOpen] = useState({ administracion: false, pos: false, inventario: false })
   const [userClosed, setUserClosed] = useState({ administracion: false, pos: false, inventario: false })
 
@@ -122,28 +122,29 @@ function Sidebar({ collapsed, onToggle }) {
   }
 
   const goItem = (item) => {
+    onClose?.()
     switch (item.key) {
       case 'locales':   navigate('/admin'); break
+      case 'usuarios':  navigate('/usuarios'); break
       case 'dashboard': navigate(localId ? `/local/${localId}/dashboard` : '/admin', { state: navState }); break
-      case 'pos-mesas':
-        if (localId) navigate(`/local/${localId}/pos`, { state: navState }); break
-      case 'pos-kitchen':
-        if (localId) navigate(`/local/${localId}/pos/cocina`, { state: navState }); break
-      case 'inv-hub':     if (localId) navigate(`/local/${localId}/inventario`, { state: navState }); break
-      case 'inv-prov':    if (localId) navigate(`/local/${localId}/inventario/proveedores`, { state: navState }); break
-      case 'inv-stock':   if (localId) navigate(`/local/${localId}/inventario/stock`, { state: navState }); break
-      case 'inv-compras': if (localId) navigate(`/local/${localId}/inventario/compras-semanales`, { state: navState }); break
-      case 'inv-recetas': if (localId) navigate(`/local/${localId}/inventario/recipes`, { state: navState }); break
+      case 'pos-mesas':     if (localId) navigate(`/local/${localId}/pos`, { state: navState }); break
+      case 'pos-kitchen':   if (localId) navigate(`/local/${localId}/pos/cocina`, { state: navState }); break
+      case 'inv-hub':       if (localId) navigate(`/local/${localId}/inventario`, { state: navState }); break
+      case 'inv-prov':      if (localId) navigate(`/local/${localId}/inventario/proveedores`, { state: navState }); break
+      case 'inv-stock':     if (localId) navigate(`/local/${localId}/inventario/stock`, { state: navState }); break
+      case 'inv-compras':   if (localId) navigate(`/local/${localId}/inventario/compras-semanales`, { state: navState }); break
+      case 'inv-recetas':   if (localId) navigate(`/local/${localId}/inventario/recipes`, { state: navState }); break
       default:
         if (ADMIN_KEYS.has(item.key) && localId)
           navigate(`/local/${localId}/administrativo/${item.key}`, { state: navState })
     }
   }
 
-  /* DESCUBRIR items — Dashboard only when a local is selected */
+  const isAdmin = userRole && ['ADMIN', 'SUPERADMIN'].includes(String(userRole).toUpperCase())
   const discoverItems = [
     { key: 'locales',   label: 'Tus Locales', icon: Store },
     ...(localId ? [{ key: 'dashboard', label: 'Dashboard', icon: LayoutDashboard }] : []),
+    ...(isAdmin ? [{ key: 'usuarios', label: 'Usuarios', icon: Users }] : []),
   ]
 
   const navBtn = (item, small = false) => {
@@ -230,7 +231,7 @@ function Sidebar({ collapsed, onToggle }) {
           {discoverItems.map((item) => navBtn(item))}
         </div>
 
-        {/* Accordions — only when a local is selected */}
+        {/* Accordions */}
         {localId && ACCORDIONS.map((section) => {
           const open = isOpen(section.key)
           const hasActive = activeKey === section.key || section.items.some((i) => activeKey === i.key)
@@ -301,9 +302,8 @@ function Sidebar({ collapsed, onToggle }) {
         })}
       </nav>
 
-      {/* User + Logout */}
+      {/* Footer */}
       <div className="px-2 pb-4 border-t border-white/15 pt-3">
-
         {/* Help button */}
         <button
           onClick={() => { if (collapsed) { onToggle(); setHelpOpen(true) } else { setHelpOpen((v) => !v) } }}
@@ -365,6 +365,7 @@ function Sidebar({ collapsed, onToggle }) {
             </motion.div>
           )}
         </AnimatePresence>
+
         <button
           onClick={logout}
           title={collapsed ? 'Cerrar sesión' : undefined}
@@ -387,9 +388,9 @@ function Sidebar({ collapsed, onToggle }) {
   )
 }
 
-/* ── AlertBell — campana con badge de alertas pendientes en el header ── */
+/* ── AlertBell ──────────────────────────────────────────────────── */
 function AlertBell({ localId }) {
-  const navigate  = useNavigate()
+  const navigate = useNavigate()
   const { pathname, state: locState } = useLocation()
   const { pendingCount } = useAlerts(localId)
 
@@ -405,7 +406,7 @@ function AlertBell({ localId }) {
       className={cn(
         'relative flex items-center justify-center w-9 h-9 rounded-lg transition-colors',
         isActive
-          ? 'bg-amber-100 text-amber-700'
+          ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'
           : 'text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))] hover:text-[hsl(var(--foreground))]',
       )}
     >
@@ -419,15 +420,20 @@ function AlertBell({ localId }) {
   )
 }
 
-/* ── AppShell — persistent layout via Outlet ────────────────────── */
+/* ── AppShell ───────────────────────────────────────────────────── */
 function AppShell() {
   const [collapsed, setCollapsed] = useState(() => {
     try { return window.localStorage.getItem('appSidebarCollapsed') === '1' } catch { return false }
   })
+  const [mobileOpen, setMobileOpen] = useState(false)
+  const { darkMode, toggleDarkMode } = useTheme()
 
   const { pathname } = useLocation()
   const localIdMatch = pathname.match(/\/local\/([^/]+)/)
   const localId = localIdMatch ? localIdMatch[1] : null
+
+  /* Cierra el drawer móvil al cambiar de ruta */
+  useEffect(() => { setMobileOpen(false) }, [pathname])
 
   const handleToggle = () => {
     setCollapsed((v) => {
@@ -439,13 +445,66 @@ function AppShell() {
 
   return (
     <div className="flex h-screen bg-[hsl(var(--background))]">
-      <Sidebar collapsed={collapsed} onToggle={handleToggle} />
-      <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
-        {localId && (
-          <div className="shrink-0 flex items-center justify-end gap-2 px-4 py-2 border-b border-[hsl(var(--border))] bg-white">
-            <AlertBell localId={localId} />
-          </div>
+
+      {/* Overlay backdrop (solo móvil) */}
+      <AnimatePresence>
+        {mobileOpen && (
+          <motion.div
+            key="mobile-backdrop"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="fixed inset-0 bg-black/50 z-30 md:hidden"
+            onClick={() => setMobileOpen(false)}
+          />
         )}
+      </AnimatePresence>
+
+      {/* Sidebar — overlay en móvil, sticky en desktop */}
+      <div
+        className={cn(
+          'fixed inset-y-0 left-0 z-40 transition-transform duration-300 ease-in-out',
+          'md:relative md:z-auto md:translate-x-0',
+          mobileOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0',
+        )}
+      >
+        <Sidebar
+          collapsed={mobileOpen ? false : collapsed}
+          onToggle={handleToggle}
+          onClose={() => setMobileOpen(false)}
+        />
+      </div>
+
+      {/* Contenido principal */}
+      <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
+        {/* Top bar — hamburger (móvil) + alertas + toggle modo noche */}
+        <div className="shrink-0 flex items-center gap-2 px-3 py-2 border-b border-[hsl(var(--border))] bg-[hsl(var(--card))]">
+          {/* Hamburger — solo móvil */}
+          <button
+            className="md:hidden flex items-center justify-center w-9 h-9 rounded-lg text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))] transition-colors"
+            onClick={() => setMobileOpen(true)}
+            aria-label="Abrir menú"
+          >
+            <Menu size={20} />
+          </button>
+
+          <div className="flex-1" />
+
+          {/* Acciones derechas */}
+          <div className="flex items-center gap-1">
+            {localId && <AlertBell localId={localId} />}
+            <button
+              onClick={toggleDarkMode}
+              className="flex items-center justify-center w-9 h-9 rounded-lg text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))] hover:text-[hsl(var(--foreground))] transition-colors"
+              title={darkMode ? 'Cambiar a modo claro' : 'Cambiar a modo noche'}
+              aria-label={darkMode ? 'Modo claro' : 'Modo noche'}
+            >
+              {darkMode ? <Sun size={18} /> : <Moon size={18} />}
+            </button>
+          </div>
+        </div>
+
         <Outlet />
       </div>
     </div>
