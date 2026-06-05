@@ -12,6 +12,7 @@ import { getStockAlertLevel } from './stockAlertUtils'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { cn } from '@/lib/utils'
 import { motion } from 'framer-motion'
 import { formatCLPDisplay as formatMoney } from '../../lib/formatCLP'
 import {
@@ -240,8 +241,8 @@ function InventoryHub() {
                     {/* Summary pills */}
                     <div className="flex gap-2 mb-1">
                       {[
-                        { level: 'critical', label: 'Crítico', color: 'bg-red-100 text-red-700 border-red-200' },
-                        { level: 'low',      label: 'Bajo',    color: 'bg-amber-100 text-amber-700 border-amber-200' },
+                        { level: 'critical', label: 'Crítico', color: 'bg-red-100 text-red-700 border-red-200 dark:bg-red-900/30 dark:text-red-400 dark:border-red-800/50' },
+                        { level: 'low',      label: 'Bajo',    color: 'bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-800/50' },
                       ].map(({ level, label, color }) => {
                         const cnt = alerts.filter((a) => a.level === level).length
                         if (!cnt) return null
@@ -258,9 +259,12 @@ function InventoryHub() {
                       {alerts.slice(0, 8).map((a) => (
                         <div
                           key={a.id}
-                          className={`flex items-center gap-3 px-5 py-3 ${
-                            a.level === 'critical' ? 'bg-red-50/60' : 'bg-amber-50/60'
-                          }`}
+                          className={cn(
+                            'flex items-center gap-3 px-5 py-3',
+                            a.level === 'critical'
+                              ? 'bg-red-50/60 dark:bg-red-900/15'
+                              : 'bg-amber-50/60 dark:bg-amber-900/15',
+                          )}
                         >
                           <span className={a.level === 'critical' ? 'text-red-500' : 'text-amber-500'} aria-hidden="true">
                             {a.level === 'critical' ? <AlertTriangle size={17} /> : <Info size={17} />}
@@ -272,11 +276,12 @@ function InventoryHub() {
                             </p>
                           </div>
                           <Badge
-                            className={`shrink-0 text-xs px-2 py-0.5 ${
+                            className={cn(
+                              'shrink-0 text-xs px-2 py-0.5 border',
                               a.level === 'critical'
-                                ? 'bg-red-100 text-red-700 hover:bg-red-100 border border-red-200'
-                                : 'bg-amber-100 text-amber-700 hover:bg-amber-100 border border-amber-200'
-                            }`}
+                                ? 'bg-red-100 text-red-700 hover:bg-red-100 border-red-200 dark:bg-red-900/30 dark:text-red-400 dark:border-red-800/50'
+                                : 'bg-amber-100 text-amber-700 hover:bg-amber-100 border-amber-200 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-800/50',
+                            )}
                           >
                             {a.level === 'critical' ? 'Crítico' : 'Bajo'}
                           </Badge>

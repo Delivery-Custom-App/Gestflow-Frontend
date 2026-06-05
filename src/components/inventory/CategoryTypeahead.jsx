@@ -61,7 +61,7 @@ function CategoryTypeahead({ localId, value, onChange, disabled, 'aria-invalid':
         disabled={disabled || saving}
         placeholder="Escribe la categoría y pulsa Enter para guardarla"
         className={cn(
-          'h-9 w-full rounded-md border border-[hsl(var(--border))] bg-white px-3 py-1 text-sm shadow-sm placeholder:text-[hsl(var(--muted-foreground))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary)/0.3)] disabled:opacity-50',
+          'h-9 w-full rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3 py-1 text-sm shadow-sm placeholder:text-[hsl(var(--muted-foreground))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary)/0.3)] disabled:opacity-50',
           ariaInvalid && 'border-[hsl(var(--destructive))]'
         )}
       />

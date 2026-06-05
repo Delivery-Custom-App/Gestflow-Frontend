@@ -201,7 +201,7 @@ export default function OrdenView({ mesa, localId, onBack, onTableUpdated }) {
 
       <div className="flex flex-col h-full">
         {/* Breadcrumb + acciones */}
-        <div className="flex items-center justify-between px-6 py-3 border-b border-[hsl(var(--border))] bg-white shrink-0">
+        <div className="flex items-center justify-between px-6 py-3 border-b border-[hsl(var(--border))] bg-[hsl(var(--card))] shrink-0">
           <div className="flex items-center gap-2 text-sm">
             <button
               onClick={onBack}
@@ -268,7 +268,7 @@ export default function OrdenView({ mesa, localId, onBack, onTableUpdated }) {
               <div className="lg:col-span-2 space-y-4">
 
                 {/* Información general */}
-                <div className="bg-white border border-[hsl(var(--border))] rounded-xl p-5">
+                <div className="bg-[hsl(var(--card))] border border-[hsl(var(--border))] rounded-xl p-5">
                   <h3 className="text-sm font-semibold text-[hsl(var(--foreground))] mb-4">
                     Información General
                   </h3>
@@ -307,7 +307,7 @@ export default function OrdenView({ mesa, localId, onBack, onTableUpdated }) {
                 </div>
 
                 {/* Detalle del pedido + facturación */}
-                <div className="bg-white border border-[hsl(var(--border))] rounded-xl p-5">
+                <div className="bg-[hsl(var(--card))] border border-[hsl(var(--border))] rounded-xl p-5">
                   <h3 className="text-sm font-semibold text-[hsl(var(--foreground))] mb-4">
                     Detalle del Pedido
                   </h3>
@@ -393,7 +393,7 @@ export default function OrdenView({ mesa, localId, onBack, onTableUpdated }) {
               </div>
 
               {/* Columna derecha: órdenes activas */}
-              <div className="bg-white border border-[hsl(var(--border))] rounded-xl p-5 h-fit">
+              <div className="bg-[hsl(var(--card))] border border-[hsl(var(--border))] rounded-xl p-5 h-fit">
                 <h3 className="text-sm font-semibold text-[hsl(var(--foreground))] mb-4">Órdenes</h3>
 
                 {!detail?.active_orders?.length ? (

@@ -266,7 +266,7 @@ function NewWeeklyOrderModal({ open, businessId, localId, onClose, onCreated }) 
     }
   }
 
-  const selectCls   = 'h-9 w-full rounded-md border border-[hsl(var(--border))] bg-white px-3 py-1 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary)/0.3)]'
+  const selectCls   = 'h-9 w-full rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3 py-1 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary)/0.3)]'
   const colTemplate = '1fr 120px 100px 88px 32px'
 
   return (
@@ -367,7 +367,7 @@ function NewWeeklyOrderModal({ open, businessId, localId, onClose, onCreated }) 
                             value={pickerSearch}
                             onChange={(e) => setPickerSearch(e.target.value)}
                             autoComplete="off"
-                            className="h-8 w-full rounded-md border border-[hsl(var(--border))] bg-white pl-8 pr-3 text-sm focus:outline-none focus:ring-1 focus:ring-[hsl(var(--primary)/0.4)]"
+                            className="h-8 w-full rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--card))] pl-8 pr-3 text-sm focus:outline-none focus:ring-1 focus:ring-[hsl(var(--primary)/0.4)]"
                           />
                         </div>
                       </div>
@@ -394,7 +394,7 @@ function NewWeeklyOrderModal({ open, businessId, localId, onClose, onCreated }) 
                       )}
 
                       {/* Filas de productos */}
-                      <div className="max-h-56 overflow-y-auto divide-y divide-[hsl(var(--border)/0.3)] bg-white [&::-webkit-scrollbar]:hidden [scrollbar-width:none]">
+                      <div className="max-h-56 overflow-y-auto divide-y divide-[hsl(var(--border)/0.3)] bg-[hsl(var(--card))] [&::-webkit-scrollbar]:hidden [scrollbar-width:none]">
                         {filteredProducts.length === 0 ? (
                           <p className="text-sm text-[hsl(var(--muted-foreground))] text-center py-6">Sin resultados para "{pickerSearch}"</p>
                         ) : filteredProducts.map((p) => {
@@ -460,7 +460,7 @@ function NewWeeklyOrderModal({ open, businessId, localId, onClose, onCreated }) 
                 </div>
 
                 {/* Filas */}
-                <div className="divide-y divide-[hsl(var(--border)/0.4)] bg-white">
+                <div className="divide-y divide-[hsl(var(--border)/0.4)] bg-[hsl(var(--card))]">
                   {lines.map((line, idx) => (
                     <div
                       key={String(line.product_id)}
@@ -475,7 +475,7 @@ function NewWeeklyOrderModal({ open, businessId, localId, onClose, onCreated }) 
                           type="button"
                           onClick={() => changeQty(idx, -1)}
                           disabled={Number(line.quantity_ordered) <= 1}
-                          className="w-7 h-7 flex items-center justify-center rounded-md border border-[hsl(var(--border))] bg-white hover:bg-[hsl(var(--accent))] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                          className="w-7 h-7 flex items-center justify-center rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--card))] hover:bg-[hsl(var(--accent))] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                         >
                           <Minus size={12} />
                         </button>
@@ -484,12 +484,12 @@ function NewWeeklyOrderModal({ open, businessId, localId, onClose, onCreated }) 
                           inputMode="numeric"
                           value={line.quantity_ordered}
                           onChange={(ev) => setQtyDirect(idx, ev.target.value)}
-                          className="w-12 h-7 text-center rounded-md border border-[hsl(var(--border))] bg-white text-sm font-medium focus:outline-none focus:ring-1 focus:ring-[hsl(var(--primary)/0.5)]"
+                          className="w-12 h-7 text-center rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--card))] text-sm font-medium focus:outline-none focus:ring-1 focus:ring-[hsl(var(--primary)/0.5)]"
                         />
                         <button
                           type="button"
                           onClick={() => changeQty(idx, 1)}
-                          className="w-7 h-7 flex items-center justify-center rounded-md border border-[hsl(var(--border))] bg-white hover:bg-[hsl(var(--accent))] transition-colors"
+                          className="w-7 h-7 flex items-center justify-center rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--card))] hover:bg-[hsl(var(--accent))] transition-colors"
                         >
                           <Plus size={12} />
                         </button>
@@ -714,7 +714,7 @@ function WeeklyPurchasesPage() {
   const openDetail = (orderId) =>
     navigate(`/local/${localId}/inventario/compras-semanales/${orderId}`, { state: { local: selectedLocal } })
 
-  const selectCls = 'h-9 w-full rounded-md border border-[hsl(var(--border))] bg-white px-3 py-1 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary)/0.3)]'
+  const selectCls = 'h-9 w-full rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3 py-1 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary)/0.3)]'
 
   return (
     <InventoryShell>
@@ -772,7 +772,7 @@ function WeeklyPurchasesPage() {
                         onChange={(ev) => setSupplierSearchInput(ev.target.value)}
                         placeholder="Nombre…"
                         autoComplete="off"
-                        className="h-9 w-full rounded-md border border-[hsl(var(--border))] bg-white pl-8 pr-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary)/0.3)]"
+                        className="h-9 w-full rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--card))] pl-8 pr-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary)/0.3)]"
                       />
                     </div>
                   </div>

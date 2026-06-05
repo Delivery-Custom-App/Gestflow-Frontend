@@ -1,5 +1,8 @@
 @import "tailwindcss";
 
+/* Enables dark: utility prefix when <html class="dark"> */
+@custom-variant dark (&:where(.dark, .dark *));
+
 @utility no-scrollbar {
   -ms-overflow-style: none;
   scrollbar-width: none;
@@ -76,6 +79,36 @@
     --mesa-inactiva:  214 20% 69%;
 
     --radius: 0.625rem;
+  }
+
+  .dark {
+    --background:        220 13% 10%;
+    --foreground:        210 20% 94%;
+
+    --card:              220 13% 14%;
+    --card-foreground:   210 20% 94%;
+
+    --popover:           220 13% 14%;
+    --popover-foreground: 210 20% 94%;
+
+    --primary:           160 60% 30%;
+    --primary-foreground: 150 60% 95%;
+
+    --secondary:         220 13% 18%;
+    --secondary-foreground: 210 20% 94%;
+
+    --muted:             220 13% 18%;
+    --muted-foreground:  220 9% 60%;
+
+    --accent:            220 13% 20%;
+    --accent-foreground: 210 20% 94%;
+
+    --destructive:       0 62% 45%;
+    --destructive-foreground: 0 0% 98%;
+
+    --border:            220 13% 22%;
+    --input:             220 13% 22%;
+    --ring:              160 60% 30%;
   }
 
   * {
@@ -165,6 +198,64 @@
 [role="dialog"][data-state="closed"] > * {
   animation: modal-out 0.16s cubic-bezier(0.4, 0, 1, 1) both;
 }
+
+/* ── Dark mode: override hardcoded light colours ─────────────── */
+/*    Components using hsl(var(--xxx)) adapt automatically.      */
+/*    These rules cover hardcoded Tailwind bg-* classes.         */
+.dark .bg-white          { background-color: hsl(var(--card)) !important; }
+.dark .bg-white\/80      { background-color: hsl(var(--card) / 0.85) !important; }
+.dark .bg-white\/92      { background-color: hsl(220 13% 8% / 0.95) !important; }
+
+/* Light pastel chip/icon backgrounds → subtle dark tints */
+.dark .bg-emerald-50     { background-color: rgb(6 78 59 / 0.2) !important; }
+.dark .bg-amber-50       { background-color: rgb(120 53 15 / 0.2) !important; }
+.dark .bg-red-50         { background-color: rgb(127 29 29 / 0.2) !important; }
+.dark .bg-blue-50        { background-color: rgb(23 37 84 / 0.2) !important; }
+.dark .bg-violet-50      { background-color: rgb(46 16 101 / 0.2) !important; }
+.dark .bg-pink-50        { background-color: rgb(80 7 36 / 0.2) !important; }
+.dark .bg-amber-100      { background-color: rgb(120 53 15 / 0.25) !important; }
+.dark .bg-emerald-100    { background-color: rgb(6 78 59 / 0.25) !important; }
+.dark .bg-red-100        { background-color: rgb(127 29 29 / 0.25) !important; }
+
+/* Accent borders: keep visible on dark */
+.dark .border-blue-200   { border-color: rgb(37 99 235 / 0.35) !important; }
+.dark .border-red-200    { border-color: rgb(239 68 68 / 0.35) !important; }
+.dark .border-amber-200  { border-color: rgb(217 119 6 / 0.35) !important; }
+
+/* Text colours that may be invisible on dark */
+.dark .text-amber-700    { color: rgb(251 191 36) !important; }
+.dark .text-emerald-700  { color: rgb(52 211 153) !important; }
+.dark .text-green-700    { color: rgb(74 222 128) !important; }
+.dark .text-red-700      { color: rgb(248 113 113) !important; }
+.dark .text-blue-700     { color: rgb(96 165 250) !important; }
+.dark .text-violet-700   { color: rgb(167 139 250) !important; }
+.dark .text-gray-900     { color: hsl(var(--foreground)) !important; }
+.dark .text-gray-800     { color: hsl(var(--foreground)) !important; }
+.dark .text-gray-700     { color: hsl(var(--muted-foreground)) !important; }
+.dark .text-gray-600     { color: hsl(var(--muted-foreground)) !important; }
+.dark .text-gray-500     { color: hsl(var(--muted-foreground)) !important; }
+.dark .text-black        { color: hsl(var(--foreground)) !important; }
+.dark .text-slate-900    { color: hsl(var(--foreground)) !important; }
+.dark .text-slate-700    { color: hsl(var(--muted-foreground)) !important; }
+.dark .text-slate-600    { color: hsl(var(--muted-foreground)) !important; }
+
+/* Más fondos claros → oscuros */
+.dark .bg-gray-50        { background-color: hsl(var(--background)) !important; }
+.dark .bg-gray-100       { background-color: hsl(var(--muted)) !important; }
+.dark .bg-gray-200       { background-color: hsl(var(--secondary)) !important; }
+.dark .bg-slate-50       { background-color: hsl(var(--background)) !important; }
+.dark .bg-slate-100      { background-color: hsl(var(--muted)) !important; }
+.dark .bg-sky-50         { background-color: rgb(7 89 133 / 0.2) !important; }
+.dark .bg-teal-50        { background-color: rgb(13 148 136 / 0.15) !important; }
+.dark .bg-indigo-50      { background-color: rgb(49 46 129 / 0.2) !important; }
+.dark .bg-orange-50      { background-color: rgb(124 45 18 / 0.2) !important; }
+.dark .bg-yellow-50      { background-color: rgb(113 63 18 / 0.2) !important; }
+.dark .bg-purple-50      { background-color: rgb(59 7 100 / 0.2) !important; }
+
+/* Bordes grises */
+.dark .border-gray-200   { border-color: hsl(var(--border)) !important; }
+.dark .border-gray-300   { border-color: hsl(var(--border)) !important; }
+.dark .border-emerald-200 { border-color: rgb(6 78 59 / 0.4) !important; }
 
 /* ── Sidebar nav items hover ────────────────────────────────── */
 nav button {

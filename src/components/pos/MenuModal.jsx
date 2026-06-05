@@ -101,7 +101,7 @@ export default function MenuModal({ localId, onClose }) {
               />
             </div>
             <select
-              className="h-8 text-xs rounded-md border border-[hsl(var(--border))] bg-white px-2 focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary))]/30"
+              className="h-8 text-xs rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-2 focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary))]/30"
               value={selectedCat}
               onChange={(e) => setSelectedCat(e.target.value)}
               aria-label="Filtrar por categoría"

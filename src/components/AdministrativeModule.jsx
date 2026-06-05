@@ -96,7 +96,7 @@ function Panel({ title, sub, accent, children }) {
     blue:    'border-blue-200 bg-blue-50',
     red:     'border-red-200 bg-red-50',
     warning: 'border-amber-200 bg-amber-50',
-  }[accent] || 'border-[hsl(var(--border))] bg-white'
+  }[accent] || 'border-[hsl(var(--border))] bg-[hsl(var(--card))]'
 
   return (
     <article className={cn('rounded-xl border p-5 shadow-sm', accentCls)}>
@@ -109,7 +109,7 @@ function Panel({ title, sub, accent, children }) {
 
 function RowCard({ title, sub, meta, pill }) {
   return (
-    <article className="flex items-start justify-between gap-3 rounded-lg border border-[hsl(var(--border))] bg-white p-3">
+    <article className="flex items-start justify-between gap-3 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-3">
       <div className="flex-1 min-w-0">
         <strong className="block text-sm font-bold text-[hsl(var(--foreground))]">{title}</strong>
         {sub && <p className="mt-0.5 text-xs text-[hsl(var(--muted-foreground))]">{sub}</p>}
@@ -188,7 +188,7 @@ function SectionActions({ activeSection, onNuevoGasto, onNuevaTransferencia }) {
 function SectionState({ loading, error, isEmpty, emptyMessage }) {
   if (!loading && !error && !isEmpty) return null
   return (
-    <div className={cn('rounded-xl border p-6', error ? 'border-red-200 bg-red-50 text-red-700' : 'border-[hsl(var(--border))] bg-white')}>
+    <div className={cn('rounded-xl border p-6', error ? 'border-red-200 bg-red-50 text-red-700' : 'border-[hsl(var(--border))] bg-[hsl(var(--card))]')}>
       {loading && <LoadingSpinner message="Cargando..." />}
       {!loading && error && <p className="text-sm">Error al cargar sección: {error}</p>}
       {!loading && !error && isEmpty && <p className="text-sm text-[hsl(var(--muted-foreground))]">{emptyMessage}</p>}
@@ -688,7 +688,7 @@ function SetGoalForm({ localId, onSaved }) {
         <input
           type="number" min="1" value={amount} onChange={e => setAmount(e.target.value)}
           placeholder="Ej. 3000000"
-          className="h-9 w-full rounded-md border border-[hsl(var(--border))] bg-white px-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary)/0.3)]"
+          className="h-9 w-full rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary)/0.3)]"
           required
         />
       </div>
@@ -773,11 +773,11 @@ function NuevoGastoModal({ localId, onClose, onSaved }) {
     } catch (e) { setErr(e?.message || 'Error al guardar'); setSaving(false) }
   }
 
-  const inputCls = 'h-9 w-full rounded-md border border-[hsl(var(--border))] bg-white px-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary)/0.3)]'
+  const inputCls = 'h-9 w-full rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary)/0.3)]'
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6 flex flex-col gap-4">
+      <div className="bg-[hsl(var(--card))] rounded-xl shadow-xl w-full max-w-md p-6 flex flex-col gap-4">
         <div className="flex items-center justify-between">
           <h2 className="text-base font-bold text-[hsl(var(--foreground))]">Nuevo Gasto</h2>
           <button onClick={onClose} className="text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]">✕</button>
@@ -838,11 +838,11 @@ function ReportarTransferenciaModal({ localId, onClose, onSaved }) {
     } catch (e) { setErr(e?.message || 'Error al guardar'); setSaving(false) }
   }
 
-  const inputCls = 'h-9 w-full rounded-md border border-[hsl(var(--border))] bg-white px-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary)/0.3)]'
+  const inputCls = 'h-9 w-full rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary)/0.3)]'
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6 flex flex-col gap-4">
+      <div className="bg-[hsl(var(--card))] rounded-xl shadow-xl w-full max-w-md p-6 flex flex-col gap-4">
         <div className="flex items-center justify-between">
           <h2 className="text-base font-bold text-[hsl(var(--foreground))]">Reportar Transferencia</h2>
           <button onClick={onClose} className="text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]">✕</button>
@@ -994,7 +994,7 @@ function AdministrativeModule() {
           onSaved={() => setRefreshKey(k => k + 1)}
         />
       )}
-      <header className="shrink-0 flex items-center justify-between border-b border-[hsl(var(--border))] bg-white px-6 py-3 shadow-sm">
+      <header className="shrink-0 flex items-center justify-between border-b border-[hsl(var(--border))] bg-[hsl(var(--card))] px-6 py-3 shadow-sm">
         <div>
           <h1 className="text-base font-bold text-[hsl(var(--primary))]">{activeSectionMeta.label}</h1>
           <p className="text-xs text-[hsl(var(--muted-foreground))]">

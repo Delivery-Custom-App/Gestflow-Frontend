@@ -103,7 +103,7 @@ function RecipesPage() {
     }
   }
 
-  const selectClass = 'h-9 rounded-md border border-[hsl(var(--border))] bg-white px-3 py-1 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary)/0.3)]'
+  const selectClass = 'h-9 rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3 py-1 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary)/0.3)]'
 
   return (
     <InventoryShell>
@@ -139,7 +139,7 @@ function RecipesPage() {
               { label: 'Costo Promedio', value: `$${formatCLP(kpis.total_cost_average)}`, color: 'text-[hsl(var(--foreground))]' },
               { label: 'Margen Promedio', value: `${kpis.profit_margin_average?.toFixed(1)}%`, color: 'text-[hsl(var(--primary))]' },
             ].map(({ label, value, color }) => (
-              <article key={label} className="flex flex-col gap-0.5 rounded-xl border border-[hsl(var(--border))] bg-white shadow-sm px-4 py-3">
+              <article key={label} className="flex flex-col gap-0.5 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] shadow-sm px-4 py-3">
                 <span className="text-xs text-[hsl(var(--muted-foreground))]">{label}</span>
                 <span className={`text-xl font-bold ${color}`}>{value}</span>
               </article>

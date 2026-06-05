@@ -16,7 +16,7 @@ export default function ReportesPage() {
 
   return (
     <>
-      <header className="flex items-center justify-between px-6 h-14 shrink-0 border-b border-[hsl(var(--border))] bg-white">
+      <header className="flex items-center justify-between px-6 h-14 shrink-0 border-b border-[hsl(var(--border))] bg-[hsl(var(--card))]">
         <div className="flex items-center gap-4">
           <Button
             variant="ghost"
@@ -130,7 +130,7 @@ function Top5Item({ item, rank, maxUnits = 1 }) {
   const rankClass = rankColors[rank] || 'bg-[hsl(var(--accent))] text-[hsl(var(--muted-foreground))]'
 
   return (
-    <li className="flex items-start gap-3 p-3 rounded-lg border border-[hsl(var(--border))] bg-white">
+    <li className="flex items-start gap-3 p-3 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--card))]">
       <span className={`w-6 h-6 flex items-center justify-center rounded-full text-xs font-bold shrink-0 mt-0.5 ${rankClass}`}>
         {rank}
       </span>

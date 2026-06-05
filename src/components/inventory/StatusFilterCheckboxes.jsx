@@ -6,21 +6,21 @@ const OPTIONS = [
     label: 'Crítico',
     activeClass: 'bg-red-500 text-white border-red-500',
     inactiveClass:
-      'border-[hsl(var(--border))] text-[hsl(var(--muted-foreground))] bg-white hover:bg-red-50 hover:text-red-700 hover:border-red-300',
+      'border-[hsl(var(--border))] text-[hsl(var(--muted-foreground))] bg-[hsl(var(--card))] hover:bg-red-50 hover:text-red-700 hover:border-red-300',
   },
   {
     value: 'BAJO',
     label: 'Bajo',
     activeClass: 'bg-amber-500 text-white border-amber-500',
     inactiveClass:
-      'border-[hsl(var(--border))] text-[hsl(var(--muted-foreground))] bg-white hover:bg-amber-50 hover:text-amber-700 hover:border-amber-300',
+      'border-[hsl(var(--border))] text-[hsl(var(--muted-foreground))] bg-[hsl(var(--card))] hover:bg-amber-50 hover:text-amber-700 hover:border-amber-300',
   },
   {
     value: 'OPTIMO',
     label: 'Óptimo',
     activeClass: 'bg-emerald-500 text-white border-emerald-500',
     inactiveClass:
-      'border-[hsl(var(--border))] text-[hsl(var(--muted-foreground))] bg-white hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-300',
+      'border-[hsl(var(--border))] text-[hsl(var(--muted-foreground))] bg-[hsl(var(--card))] hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-300',
   },
 ]
 

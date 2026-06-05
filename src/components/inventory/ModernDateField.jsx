@@ -211,7 +211,7 @@ function ModernDateField({ id, label, value, onChange, disabled, 'aria-label': a
           aria-labelledby={label ? `${fieldId}-lbl` : undefined}
           aria-label={!label ? (ariaLabel || 'Fecha') : undefined}
           onClick={() => setOpen((o) => !o)}
-          className="inline-flex items-center gap-2 h-10 px-3 rounded-md border border-[hsl(var(--border))] bg-white text-sm shadow-sm hover:bg-[hsl(var(--accent))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary)/0.3)] disabled:opacity-50 min-w-[180px]"
+          className="inline-flex items-center gap-2 h-10 px-3 rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--card))] text-sm shadow-sm hover:bg-[hsl(var(--accent))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary)/0.3)] disabled:opacity-50 min-w-[180px]"
         >
           <Calendar size={16} className="text-[hsl(var(--muted-foreground))] shrink-0" />
           <span>{value ? formatDisplay(value) : 'Seleccionar fecha'}</span>
@@ -228,7 +228,7 @@ function ModernDateField({ id, label, value, onChange, disabled, 'aria-label': a
           style={panelBox}
           onMouseDown={(e) => { e.stopPropagation(); e.nativeEvent?.stopImmediatePropagation() }}
           onPointerDown={(e) => { e.stopPropagation(); e.nativeEvent?.stopImmediatePropagation() }}
-          className="bg-white rounded-xl border border-[hsl(var(--border))] shadow-2xl p-4 flex flex-col gap-3"
+          className="bg-[hsl(var(--card))] rounded-xl border border-[hsl(var(--border))] shadow-2xl p-4 flex flex-col gap-3"
         >
           {/* Month / year navigation */}
           <div className="flex items-center gap-2">
@@ -247,7 +247,7 @@ function ModernDateField({ id, label, value, onChange, disabled, 'aria-label': a
                 value={viewMo}
                 onChange={(e) => setMonth(e.target.value)}
                 aria-label="Mes"
-                className="h-8 rounded-lg border border-[hsl(var(--border))] bg-white px-2 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary)/0.3)] cursor-pointer"
+                className="h-8 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-2 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary)/0.3)] cursor-pointer"
               >
                 {MONTH_OPTIONS.map((opt) => (
                   <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -259,7 +259,7 @@ function ModernDateField({ id, label, value, onChange, disabled, 'aria-label': a
                 value={viewY}
                 onChange={(e) => setYear(e.target.value)}
                 aria-label="Año"
-                className="h-8 rounded-lg border border-[hsl(var(--border))] bg-white px-2 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary)/0.3)] cursor-pointer w-20"
+                className="h-8 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-2 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary)/0.3)] cursor-pointer w-20"
               >
                 {YEAR_OPTIONS.map((yr) => (
                   <option key={yr} value={yr}>{yr}</option>

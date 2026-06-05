@@ -158,7 +158,7 @@ function RegisterSupplierModal({ open, onClose, onSuccess, businessId, localId }
       fe(key) ? 'border-red-400' : 'border-[hsl(var(--border))]'
     }`
   const selectCls = (key) =>
-    `h-10 w-full rounded-md border px-3 text-sm shadow-sm bg-white focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary)/0.3)] ${
+    `h-10 w-full rounded-md border px-3 text-sm shadow-sm bg-[hsl(var(--card))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary)/0.3)] ${
       fe(key) ? 'border-red-400' : 'border-[hsl(var(--border))]'
     }`
 

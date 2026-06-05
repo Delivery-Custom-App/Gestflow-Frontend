@@ -158,7 +158,7 @@ export default function MesaDetail() {
   return (
     <main className="min-h-screen bg-[hsl(var(--background))]">
       {/* Header */}
-      <header className="sticky top-0 z-10 flex items-center gap-4 px-4 lg:px-6 h-14 bg-white border-b border-[hsl(var(--border))]">
+      <header className="sticky top-0 z-10 flex items-center gap-4 px-4 lg:px-6 h-14 bg-[hsl(var(--card))] border-b border-[hsl(var(--border))]">
         <button
           className="flex items-center gap-1 text-sm text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--primary))] transition-colors"
           onClick={handleGoBack}
@@ -181,7 +181,7 @@ export default function MesaDetail() {
             { label: 'Estado', value: getStateName(mesa.state), highlight: true },
             { label: 'Tipo', value: mesa.is_delivery ? 'Delivery' : 'Dine-In' },
           ].map(({ label, value, highlight }) => (
-            <div key={label} className="bg-white rounded-xl border border-[hsl(var(--border))] p-3 text-center">
+            <div key={label} className="bg-[hsl(var(--card))] rounded-xl border border-[hsl(var(--border))] p-3 text-center">
               <p className="text-[10px] uppercase tracking-widest text-[hsl(var(--muted-foreground))] mb-1">{label}</p>
               <p className={`text-sm font-semibold ${highlight ? 'text-[hsl(var(--primary))]' : 'text-[hsl(var(--foreground))]'}`}>
                 {value}
@@ -192,7 +192,7 @@ export default function MesaDetail() {
 
         {/* KPIs */}
         <section className="grid grid-cols-2 gap-3">
-          <article className="bg-white rounded-xl border border-[hsl(var(--border))] p-4 flex items-center gap-3">
+          <article className="bg-[hsl(var(--card))] rounded-xl border border-[hsl(var(--border))] p-4 flex items-center gap-3">
             <div className="w-9 h-9 flex items-center justify-center rounded-lg bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))] shrink-0">
               <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" className="w-5 h-5">
                 <rect x="3" y="3" width="7" height="7" rx="1" stroke="currentColor" strokeWidth="1.5" />
@@ -206,7 +206,7 @@ export default function MesaDetail() {
               <p className="text-xs text-[hsl(var(--muted-foreground))]">Productos</p>
             </div>
           </article>
-          <article className="bg-white rounded-xl border border-[hsl(var(--border))] p-4 flex items-center gap-3">
+          <article className="bg-[hsl(var(--card))] rounded-xl border border-[hsl(var(--border))] p-4 flex items-center gap-3">
             <div className="w-9 h-9 flex items-center justify-center rounded-lg bg-green-100 text-green-700 shrink-0">
               <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" className="w-5 h-5">
                 <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="1.5" />
@@ -221,7 +221,7 @@ export default function MesaDetail() {
         </section>
 
         {/* Órdenes + Agregados */}
-        <section className="bg-white rounded-xl border border-[hsl(var(--border))] p-4 space-y-4">
+        <section className="bg-[hsl(var(--card))] rounded-xl border border-[hsl(var(--border))] p-4 space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-semibold text-[hsl(var(--foreground))]">Órdenes Activas</h2>
             <Button
@@ -318,7 +318,7 @@ export default function MesaDetail() {
       </div>
 
       {/* Footer */}
-      <footer className="sticky bottom-0 px-4 lg:px-6 py-3 bg-white border-t border-[hsl(var(--border))]">
+      <footer className="sticky bottom-0 px-4 lg:px-6 py-3 bg-[hsl(var(--card))] border-t border-[hsl(var(--border))]">
         <Button variant="outline" size="sm" onClick={handleGoBack}>
           ← Volver a Visualización
         </Button>

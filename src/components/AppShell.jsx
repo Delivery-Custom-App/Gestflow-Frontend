@@ -12,6 +12,8 @@ import {
   Package, Truck, ShoppingCart, BookMarked, PackageOpen,
   LogOut, Utensils, HelpCircle, Phone, Mail, Moon, Sun, Menu, Users,
 } from 'lucide-react'
+import CoachMark from './onboarding/CoachMark'
+import { isSuperAdminRole } from '../auth/roleLabel'
 
 /* ── key sets for accordion auto-open ──────────────────────────── */
 const ADMIN_KEYS = new Set(['administracion', 'ventas', 'rendiciones', 'reportes', 'flujo-caja', 'alertas', 'bonos'])
@@ -80,6 +82,7 @@ const ACCORDIONS = [
 /* ── Sidebar ────────────────────────────────────────────────────── */
 function Sidebar({ collapsed, onToggle, onClose }) {
   const { user, userRole, logout } = useAuth()
+  const isSuperAdmin = isSuperAdminRole(userRole)
   const navigate = useNavigate()
   const { pathname, state: locState } = useLocation()
 
@@ -140,11 +143,10 @@ function Sidebar({ collapsed, onToggle, onClose }) {
     }
   }
 
-  const isAdmin = userRole && ['ADMIN', 'SUPERADMIN'].includes(String(userRole).toUpperCase())
   const discoverItems = [
-    { key: 'locales',   label: 'Tus Locales', icon: Store },
+    ...(isSuperAdmin ? [{ key: 'locales', label: 'Tus Locales', icon: Store }] : []),
     ...(localId ? [{ key: 'dashboard', label: 'Dashboard', icon: LayoutDashboard }] : []),
-    ...(isAdmin ? [{ key: 'usuarios', label: 'Usuarios', icon: Users }] : []),
+    ...(isSuperAdmin ? [{ key: 'usuarios', label: 'Usuarios', icon: Users }] : []),
   ]
 
   const navBtn = (item, small = false) => {
@@ -154,6 +156,7 @@ function Sidebar({ collapsed, onToggle, onClose }) {
     return (
       <button
         key={item.key}
+        data-onboarding={`nav-${item.key}`}
         onClick={() => !isDisabled && goItem(item)}
         title={collapsed ? item.label : undefined}
         disabled={isDisabled}
@@ -240,6 +243,7 @@ function Sidebar({ collapsed, onToggle, onClose }) {
             <div key={section.key} className="mb-1">
               <div className="flex items-center gap-0">
                 <button
+                  data-onboarding={`nav-${section.key}`}
                   onClick={() => {
                     if (collapsed) { onToggle(); setUserOpen((p) => ({ ...p, [section.key]: true })) }
                     else goAccordion(section.key)
@@ -507,6 +511,8 @@ function AppShell() {
 
         <Outlet />
       </div>
+
+      <CoachMark />
     </div>
   )
 }

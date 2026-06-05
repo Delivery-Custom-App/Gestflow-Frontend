@@ -190,7 +190,7 @@ function CompleteCustomizer({ item, qty, customization, onChange, availableProdu
                       ? 'border-[hsl(var(--border))] bg-[hsl(var(--muted)/0.3)] text-[hsl(var(--muted-foreground))] opacity-50 cursor-not-allowed'
                       : selected
                         ? 'border-[hsl(var(--primary))] bg-[hsl(var(--primary))] text-white shadow-sm'
-                        : 'border-[hsl(var(--border))] bg-white hover:border-[hsl(var(--primary))] hover:text-[hsl(var(--primary))]',
+                        : 'border-[hsl(var(--border))] bg-[hsl(var(--card))] hover:border-[hsl(var(--primary))] hover:text-[hsl(var(--primary))]',
                   ].join(' ')}>
                   {e.label}
                   {!available && <span className="block text-[10px] font-normal opacity-70">Sin stock</span>}
@@ -217,7 +217,7 @@ function CompleteCustomizer({ item, qty, customization, onChange, availableProdu
                       ? 'border-[hsl(var(--border))] bg-[hsl(var(--muted)/0.3)] text-[hsl(var(--muted-foreground))] opacity-50 cursor-not-allowed'
                       : selected
                         ? 'border-[hsl(var(--primary))] bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))] font-semibold'
-                        : 'border-[hsl(var(--border))] bg-white hover:border-[hsl(var(--primary)/0.5)] hover:text-[hsl(var(--primary))]',
+                        : 'border-[hsl(var(--border))] bg-[hsl(var(--card))] hover:border-[hsl(var(--primary)/0.5)] hover:text-[hsl(var(--primary))]',
                   ].join(' ')}>
                   <span className="truncate">{a.label}</span>
                   <span className={`shrink-0 text-[10px] font-semibold ${selected ? 'text-[hsl(var(--primary))]' : 'text-[hsl(var(--muted-foreground))]'}`}>
@@ -308,7 +308,7 @@ function SandwichCustomizer({ item, qty, customization, onChange, availableProdu
                       ? 'border-[hsl(var(--border))] bg-[hsl(var(--muted)/0.3)] text-[hsl(var(--muted-foreground))] opacity-50 cursor-not-allowed'
                       : selected
                         ? 'border-[hsl(var(--primary))] bg-[hsl(var(--primary))] text-white shadow-sm'
-                        : 'border-[hsl(var(--border))] bg-white hover:border-[hsl(var(--primary))] hover:text-[hsl(var(--primary))]',
+                        : 'border-[hsl(var(--border))] bg-[hsl(var(--card))] hover:border-[hsl(var(--primary))] hover:text-[hsl(var(--primary))]',
                   ].join(' ')}>
                   {p.label}
                   {!available && <span className="block text-[10px] font-normal opacity-70">Sin stock</span>}
@@ -338,7 +338,7 @@ function SandwichCustomizer({ item, qty, customization, onChange, availableProdu
                       ? 'border-[hsl(var(--border))] bg-[hsl(var(--muted)/0.3)] text-[hsl(var(--muted-foreground))] opacity-50 cursor-not-allowed'
                       : selected
                         ? 'border-[hsl(var(--primary))] bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))] font-semibold'
-                        : 'border-[hsl(var(--border))] bg-white hover:border-[hsl(var(--primary)/0.5)] hover:text-[hsl(var(--primary))]',
+                        : 'border-[hsl(var(--border))] bg-[hsl(var(--card))] hover:border-[hsl(var(--primary)/0.5)] hover:text-[hsl(var(--primary))]',
                   ].join(' ')}>
                   <span className="truncate">{a.label}</span>
                   <span className={`shrink-0 text-[10px] font-semibold ${selected ? 'text-[hsl(var(--primary))]' : 'text-[hsl(var(--muted-foreground))]'}`}>

@@ -56,11 +56,13 @@ function AdminDashboard() {
   return (
     <>
       <div className="flex-1 overflow-y-auto">
-        <LocalsGrid
-          locales={locales}
-          onLocalSelect={(local) => navigate(`/local/${local.id}/dashboard`, { state: { local } })}
-          onCreateLocal={() => setIsModalOpen(true)}
-        />
+        <div data-onboarding="locales-grid">
+          <LocalsGrid
+            locales={locales}
+            onLocalSelect={(local) => navigate(`/local/${local.id}/dashboard`, { state: { local } })}
+            onCreateLocal={() => setIsModalOpen(true)}
+          />
+        </div>
       </div>
       <CreateLocalModal
         isOpen={isModalOpen}

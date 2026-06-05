@@ -85,7 +85,7 @@ function RecipesList({
           <article
             key={recipe.id}
             className={cn(
-              'rounded-xl border bg-white shadow-sm p-4 flex flex-col gap-3',
+              'rounded-xl border bg-[hsl(var(--card))] shadow-sm p-4 flex flex-col gap-3',
               !recipe.is_active && 'opacity-60',
             )}
           >

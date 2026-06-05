@@ -198,7 +198,7 @@ function Top5Item({ item, rank }) {
   const rankClass = rankColors[rank] || 'bg-[hsl(var(--accent))] text-[hsl(var(--muted-foreground))]'
 
   return (
-    <li className="flex items-start gap-3 p-3 rounded-lg border border-[hsl(var(--border))] bg-white">
+    <li className="flex items-start gap-3 p-3 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--card))]">
       <span className={`w-6 h-6 flex items-center justify-center rounded-full text-xs font-bold shrink-0 mt-0.5 ${rankClass}`}>
         {rank}
       </span>

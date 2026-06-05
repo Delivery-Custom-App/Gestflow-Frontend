@@ -69,7 +69,7 @@ function MenuCategoryInput({ localId, selectedName, onResolve, disabled, error }
         disabled={disabled || resolving}
         onClick={() => setOpen(o => !o)}
         className={`h-9 w-full rounded-md border px-3 text-sm text-left flex items-center justify-between shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary)/0.3)] disabled:opacity-50 ${
-          error ? 'border-red-400' : 'border-[hsl(var(--border))] bg-white hover:border-[hsl(var(--primary)/0.5)]'
+          error ? 'border-red-400' : 'border-[hsl(var(--border))] bg-[hsl(var(--card))] hover:border-[hsl(var(--primary)/0.5)]'
         }`}
       >
         <span className={selectedName ? 'text-[hsl(var(--foreground))]' : 'text-[hsl(var(--muted-foreground))]'}>
@@ -82,7 +82,7 @@ function MenuCategoryInput({ localId, selectedName, onResolve, disabled, error }
       </button>
 
       {open && (
-        <ul className="absolute top-full mt-1 left-0 right-0 z-50 rounded-md border border-[hsl(var(--border))] bg-white shadow-lg overflow-hidden">
+        <ul className="absolute top-full mt-1 left-0 right-0 z-50 rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--card))] shadow-lg overflow-hidden">
           {MENU_CATEGORIES.map(cat => (
             <li key={cat}>
               <button
@@ -248,7 +248,7 @@ function CreateRecipeModal({ isOpen, recipe, onSave, onCancel, localId, external
     }`
 
   const selectCls = (key) =>
-    `h-9 w-full rounded-md border px-3 text-sm shadow-sm bg-white focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary)/0.3)] ${
+    `h-9 w-full rounded-md border px-3 text-sm shadow-sm bg-[hsl(var(--card))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary)/0.3)] ${
       errors[key] ? 'border-red-400' : 'border-[hsl(var(--border))]'
     }`
 
@@ -310,7 +310,7 @@ function CreateRecipeModal({ isOpen, recipe, onSave, onCancel, localId, external
               onChange={(e) => setField('description', e.target.value)}
               placeholder="Ingrese Descripcion"
               rows={2}
-              className="w-full rounded-md border border-[hsl(var(--border))] bg-white px-3 py-2 text-sm shadow-sm resize-none focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary)/0.3)]"
+              className="w-full rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3 py-2 text-sm shadow-sm resize-none focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary)/0.3)]"
             />
           </div>
 
@@ -393,7 +393,7 @@ function CreateRecipeModal({ isOpen, recipe, onSave, onCancel, localId, external
                       <span />
                     </div>
 
-                    <div className="divide-y divide-[hsl(var(--border)/0.3)] bg-white">
+                    <div className="divide-y divide-[hsl(var(--border)/0.3)] bg-[hsl(var(--card))]">
                       {ingredients.map((ing) => {
                         const subtotal = (Number(ing.quantity_required) || 0) * Number(ing.unit_cost_clp || 0)
                         return (
@@ -418,7 +418,7 @@ function CreateRecipeModal({ isOpen, recipe, onSave, onCancel, localId, external
                               className={`h-8 w-full text-center rounded-md border text-sm focus:outline-none focus:ring-1 focus:ring-[hsl(var(--primary)/0.5)] ${
                                 ing.is_sauce
                                   ? 'border-[hsl(var(--border))] bg-[hsl(var(--muted)/0.4)] text-[hsl(var(--muted-foreground))] cursor-not-allowed'
-                                  : 'border-[hsl(var(--border))] bg-white'
+                                  : 'border-[hsl(var(--border))] bg-[hsl(var(--card))]'
                               }`}
                             />
                             <select
@@ -428,7 +428,7 @@ function CreateRecipeModal({ isOpen, recipe, onSave, onCancel, localId, external
                               className={`h-8 w-full rounded-md border px-2 text-sm focus:outline-none focus:ring-1 focus:ring-[hsl(var(--primary)/0.5)] ${
                                 ing.is_sauce
                                   ? 'border-[hsl(var(--border))] bg-[hsl(var(--muted)/0.4)] text-[hsl(var(--muted-foreground))] cursor-not-allowed'
-                                  : 'border-[hsl(var(--border))] bg-white'
+                                  : 'border-[hsl(var(--border))] bg-[hsl(var(--card))]'
                               }`}
                             >
                               {UNITS.map((u) => (
@@ -483,7 +483,7 @@ function CreateRecipeModal({ isOpen, recipe, onSave, onCancel, localId, external
                 ['Precio de venta',   fmt(salePrice)],
                 ['Margen',            `${margin.toFixed(1)}%`, margin >= 30],
               ].map(([label, val, isGood]) => (
-                <div key={label} className="flex justify-between items-center bg-white rounded-md px-3 py-2 shadow-sm">
+                <div key={label} className="flex justify-between items-center bg-[hsl(var(--card))] rounded-md px-3 py-2 shadow-sm">
                   <span className="text-xs text-[hsl(var(--muted-foreground))]">{label}</span>
                   <span className={`text-sm font-bold ${isGood === true ? 'text-emerald-600' : isGood === false ? 'text-red-500' : 'text-[hsl(var(--foreground))]'}`}>
                     {val}

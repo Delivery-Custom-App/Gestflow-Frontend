@@ -70,7 +70,7 @@ export default function MesasFilters({ mesas = [], onFilteredMesasChange = null 
   const tieneFilterosActivos = filters.nombre.trim() !== '' || filters.estado !== '' || filters.zona !== ''
 
   return (
-    <div className="bg-white border border-[hsl(var(--border))] rounded-xl p-4 space-y-3">
+    <div className="bg-[hsl(var(--card))] border border-[hsl(var(--border))] rounded-xl p-4 space-y-3">
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-semibold text-[hsl(var(--foreground))]">Filtros de Mesas</h3>
         {tieneFilterosActivos && (
@@ -113,7 +113,7 @@ export default function MesasFilters({ mesas = [], onFilteredMesasChange = null 
             id="filter-estado"
             value={filters.estado}
             onChange={handleEstadoChange}
-            className="w-full h-8 text-xs rounded-md border border-[hsl(var(--border))] bg-white px-2 focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary))]/30"
+            className="w-full h-8 text-xs rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-2 focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary))]/30"
           >
             <option value="">Todos</option>
             {estadoOptions.map((estado) => (
@@ -136,7 +136,7 @@ export default function MesasFilters({ mesas = [], onFilteredMesasChange = null 
             id="filter-zona"
             value={filters.zona}
             onChange={handleZonaChange}
-            className="w-full h-8 text-xs rounded-md border border-[hsl(var(--border))] bg-white px-2 focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary))]/30"
+            className="w-full h-8 text-xs rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-2 focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary))]/30"
           >
             <option value="">Todas</option>
             {zonaOptions.map((zona) => (
