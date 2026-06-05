@@ -74,16 +74,24 @@ const STEPS = {
   ],
 }
 
-// Ruta a la que navegar al LLEGAR a cada paso (no al salir)
-// Siempre volvemos al dashboard para los pasos del sidebar,
-// así los accordions quedan cerrados y todos los ítems son visibles
-const getArrivalRoute = (step, localId) => {
+// Superadmin: ruta al LLEGAR a cada paso
+const getSuperadminArrivalRoute = (step, localId) => {
   const map = {
-    1: localId ? `/local/${localId}/dashboard` : null,  // entra al local → Dashboard visible en sidebar
-    2: '/usuarios',                                       // muestra Usuarios
-    3: localId ? `/local/${localId}/dashboard` : null,  // dashboard → accordion cerrado → Administración visible
-    4: localId ? `/local/${localId}/dashboard` : null,  // dashboard → accordion cerrado → POS visible
-    5: localId ? `/local/${localId}/dashboard` : null,  // dashboard → accordion cerrado → Inventario visible
+    1: localId ? `/local/${localId}/dashboard` : null,
+    2: '/usuarios',
+    3: localId ? `/local/${localId}/dashboard` : null,
+    4: localId ? `/local/${localId}/dashboard` : null,
+    5: localId ? `/local/${localId}/dashboard` : null,
+  }
+  return map[step] ?? null
+}
+
+// Admin: los pasos 1-3 del sidebar necesitan dashboard base (accordion cerrado)
+const getAdminArrivalRoute = (step, localId) => {
+  const map = {
+    1: localId ? `/local/${localId}/dashboard` : null,
+    2: localId ? `/local/${localId}/dashboard` : null,
+    3: localId ? `/local/${localId}/dashboard` : null,
   }
   return map[step] ?? null
 }
@@ -91,23 +99,31 @@ const getArrivalRoute = (step, localId) => {
 const OnboardingContext = createContext(null)
 
 export function OnboardingProvider({ children }) {
-  const { user, userRole } = useAuth()
+  const { user, userRole, assignedLocalId } = useAuth()
   const navigate = useNavigate()
   const { locales } = useLocals()
   const [step, setStep] = useState(0)
   const [active, setActive] = useState(false)
   const localIdRef = useRef(null)
-  const navigatedRef = useRef(false)
 
   const storageKey = user?.id ? `siba_onboarding_${user.id}` : null
+  const isSuperadmin = isSuperAdminRole(userRole)
+  const isAdmin = !isSuperadmin && !WORKER_ROLES.includes(userRole)
 
-  const steps = isSuperAdminRole(userRole)
+  const steps = isSuperadmin
     ? STEPS.superadmin
     : WORKER_ROLES.includes(userRole)
     ? STEPS.worker
     : STEPS.admin
 
-  // Captura el localId del primer local
+  // Para superadmin: captura el localId del primer local via API
+  // Para admin: usa su local asignado del JWT
+  useEffect(() => {
+    if (assignedLocalId && !localIdRef.current) {
+      localIdRef.current = assignedLocalId
+    }
+  }, [assignedLocalId])
+
   useEffect(() => {
     if (locales?.length > 0 && !localIdRef.current) {
       localIdRef.current = locales[0].id
@@ -124,15 +140,17 @@ export function OnboardingProvider({ children }) {
     }
   }, [storageKey, userRole])
 
-  // Navega al LLEGAR a cada paso (superadmin only)
+  // Navega al LLEGAR a cada paso (superadmin y admin)
   useEffect(() => {
-    if (!active || !isSuperAdminRole(userRole)) return
+    if (!active) return
     const localId = localIdRef.current
-    const route = getArrivalRoute(step, localId)
-    if (route) {
-      navigatedRef.current = true
-      navigate(route)
+    let route = null
+    if (isSuperadmin) {
+      route = getSuperadminArrivalRoute(step, localId)
+    } else if (isAdmin) {
+      route = getAdminArrivalRoute(step, localId)
     }
+    if (route) navigate(route)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active, step])
 

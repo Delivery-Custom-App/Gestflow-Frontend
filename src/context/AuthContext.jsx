@@ -138,6 +138,8 @@ export function AppAuthProvider({ children }) {
       setUserRole(null)
       setEmail('')
       setPassword('')
+      // Limpia la URL para que el próximo login arranque desde /
+      window.history.replaceState({}, document.title, '/')
     }
   }, [])
 
@@ -146,6 +148,7 @@ export function AppAuthProvider({ children }) {
     return {
       user: user ?? null,
       userRole: role,
+      assignedLocalId: user?.user_metadata?.local_id ?? null,
       logout,
       isWorker: role != null && WORKER_ROLES.includes(role),
       isInventoryAdmin: isInventoryAdminRole(role),
