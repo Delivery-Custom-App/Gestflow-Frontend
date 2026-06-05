@@ -14,6 +14,8 @@ import POSModule from '../components/pos/POSModule'
 import MesaDetail from '../components/pos/MesaDetail'
 import ReportesPage from '../components/pos/ReportesPage'
 import WorkerLocalSelector from '../components/WorkerLocalSelector'
+import UserManagementPage from '../components/UserManagementPage'
+import UsersListPage from '../components/UsersListPage'
 import { WORKER_ROLES } from '../constants/roles'
 import { isSuperAdminRole } from '../auth/roleLabel'
 import { useAuth } from '../context/AuthContext'
@@ -52,6 +54,8 @@ function AdminAppRoutes({ variant }) {
       <Route element={<AdminLayout />}>
         {homeAtRoot && <Route path="/" element={<AdminDashboard />} />}
         <Route path="/admin" element={<AdminDashboard />} />
+        <Route path="/usuarios" element={<UsersListPage />} />
+        <Route path="/usuarios/crear" element={<UserManagementPage />} />
         <Route path="/local/:localId/inventario/stock" element={<StockControlDashboard />} />
         <Route path="/local/:localId/inventario/recipes" element={<RecipesPage />} />
         <Route path="/local/:localId/inventario/compras-semanales/:orderId" element={<WeeklyPurchaseDetailPage />} />
