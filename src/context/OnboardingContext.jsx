@@ -5,38 +5,32 @@ import { useLocals } from '../hooks/useLocals'
 import { isSuperAdminRole } from '../auth/roleLabel'
 import { WORKER_ROLES } from '../constants/roles'
 
-// getPath recibe el localId del primer local y devuelve la ruta a navegar al avanzar ese paso
 const STEPS = {
   superadmin: [
     {
       target: 'locales-grid',
       title: 'Tus Locales',
-      desc: 'Aquí ves todos tus locales. Presiona Siguiente y entraremos al primero para mostrarte el resto.',
-      getPath: (localId) => `/local/${localId}/dashboard`,
-    },
-    {
-      target: 'nav-usuarios',
-      title: 'Gestión de Usuarios',
-      desc: 'Crea y administra el equipo asignando roles: Empleado, Admin o Superadmin.',
-      getPath: () => '/usuarios',
+      desc: 'Aquí ves todos tus locales. Selecciona uno para empezar a gestionarlo.',
     },
     {
       target: 'nav-dashboard',
       title: 'Dashboard del Local',
       desc: 'Métricas en tiempo real: ventas del día, stock crítico, hora pico y comparativos semanales.',
-      getPath: (localId) => `/local/${localId}/dashboard`,
+    },
+    {
+      target: 'nav-usuarios',
+      title: 'Gestión de Usuarios',
+      desc: 'Crea y administra el equipo asignando roles: Empleado, Admin o Superadmin.',
     },
     {
       target: 'nav-administracion',
       title: 'Administración',
       desc: 'Flujo de caja, rendiciones, reportes y bonos de cada local desde aquí.',
-      getPath: (localId) => `/local/${localId}/administrativo/ventas`,
     },
     {
       target: 'nav-inventario',
       title: 'Inventario',
       desc: 'Controla stock, proveedores, pedidos de insumos y gestiona las recetas del menú.',
-      // último paso — no navega, solo cierra
     },
   ],
   admin: [
@@ -49,13 +43,11 @@ const STEPS = {
       target: 'nav-administracion',
       title: 'Administración',
       desc: 'Revisa flujo de caja, rendiciones, alertas y bonos de tu local.',
-      getPath: (localId) => `/local/${localId}/administrativo/ventas`,
     },
     {
       target: 'nav-pos',
       title: 'POS Restaurante',
       desc: 'Gestiona las mesas y las órdenes activas. La vista cocina avanza los pedidos en curso.',
-      getPath: (localId) => `/local/${localId}/pos`,
     },
     {
       target: 'nav-inventario',
@@ -77,6 +69,19 @@ const STEPS = {
   ],
 }
 
+// Ruta a la que navegar al LLEGAR a cada paso (no al salir)
+// Siempre volvemos al dashboard para los pasos del sidebar,
+// así los accordions quedan cerrados y todos los ítems son visibles
+const getArrivalRoute = (step, localId) => {
+  const map = {
+    1: localId ? `/local/${localId}/dashboard` : null,  // entra al local → muestra Dashboard en sidebar
+    2: '/usuarios',                                       // muestra Usuarios
+    3: localId ? `/local/${localId}/dashboard` : null,  // vuelve al dashboard → accordion cerrado → Administración visible
+    4: localId ? `/local/${localId}/dashboard` : null,  // vuelve al dashboard → accordion cerrado → Inventario visible
+  }
+  return map[step] ?? null
+}
+
 const OnboardingContext = createContext(null)
 
 export function OnboardingProvider({ children }) {
@@ -85,8 +90,8 @@ export function OnboardingProvider({ children }) {
   const { locales } = useLocals()
   const [step, setStep] = useState(0)
   const [active, setActive] = useState(false)
-  // Guardamos el localId del primer local cuando se navega en paso 1
   const localIdRef = useRef(null)
+  const navigatedRef = useRef(false)
 
   const storageKey = user?.id ? `siba_onboarding_${user.id}` : null
 
@@ -96,6 +101,14 @@ export function OnboardingProvider({ children }) {
     ? STEPS.worker
     : STEPS.admin
 
+  // Captura el localId del primer local
+  useEffect(() => {
+    if (locales?.length > 0 && !localIdRef.current) {
+      localIdRef.current = locales[0].id
+    }
+  }, [locales])
+
+  // Detecta primera sesión
   useEffect(() => {
     if (!storageKey || !userRole) return
     const done = localStorage.getItem(storageKey)
@@ -105,30 +118,26 @@ export function OnboardingProvider({ children }) {
     }
   }, [storageKey, userRole])
 
-  // Captura el localId del primer local cuando esté disponible
+  // Navega al LLEGAR a cada paso (superadmin only)
   useEffect(() => {
-    if (locales?.length > 0 && !localIdRef.current) {
-      localIdRef.current = locales[0].id
+    if (!active || !isSuperAdminRole(userRole)) return
+    const localId = localIdRef.current
+    const route = getArrivalRoute(step, localId)
+    if (route) {
+      navigatedRef.current = true
+      navigate(route)
     }
-  }, [locales])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active, step])
 
   const next = useCallback(() => {
-    const currentStep = steps[step]
-    const localId = localIdRef.current
-
-    // Navegar si el paso define getPath (excepto el último paso)
-    if (currentStep?.getPath && localId) {
-      const path = currentStep.getPath(localId)
-      if (path) navigate(path)
-    }
-
     if (step >= steps.length - 1) {
       setActive(false)
       if (storageKey) localStorage.setItem(storageKey, '1')
     } else {
       setStep((s) => s + 1)
     }
-  }, [step, steps, storageKey, navigate])
+  }, [step, steps.length, storageKey])
 
   const skip = useCallback(() => {
     setActive(false)

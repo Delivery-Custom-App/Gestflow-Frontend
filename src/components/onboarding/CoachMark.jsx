@@ -138,28 +138,38 @@ export default function CoachMark() {
 
   const currentStep = steps?.[step]
 
-  // Poll for the target element in case it hasn't rendered yet
+  // Espera que el DOM se estabilice tras navegación, luego busca el elemento
   useEffect(() => {
     if (!active || !currentStep) { setRect(null); return }
 
+    setRect(null) // limpia para evitar que se muestre en posición vieja
+
+    let cancelled = false
     let attempts = 0
-    const try_ = () => {
-      const r = getRect(currentStep.target)
-      if (r) { setRect(r); return }
-      if (attempts++ < 20) setTimeout(try_, 150)
-    }
-    try_()
+
+    // Delay inicial: deja que React Router y animaciones del sidebar se resuelvan
+    const startDelay = setTimeout(() => {
+      const try_ = () => {
+        if (cancelled) return
+        const r = getRect(currentStep.target)
+        if (r) { setRect(r); return }
+        if (attempts++ < 30) setTimeout(try_, 150)
+      }
+      try_()
+    }, 350)
 
     const onResize = () => setTick((t) => t + 1)
     window.addEventListener('resize', onResize)
     window.addEventListener('scroll', onResize, true)
     return () => {
+      cancelled = true
+      clearTimeout(startDelay)
       window.removeEventListener('resize', onResize)
       window.removeEventListener('scroll', onResize, true)
     }
-  }, [active, currentStep, step, tick])
+  }, [active, step]) // solo step, no currentStep (evita re-trigger por referencia)
 
-  // Re-read rect when tick changes
+  // Re-lee posición al hacer resize/scroll
   useEffect(() => {
     if (!active || !currentStep) return
     const r = getRect(currentStep.target)
