@@ -128,7 +128,7 @@ export default function POSModule() {
   return (
     <>
       {/* Topbar */}
-      <header className="flex items-center justify-between px-6 h-14 shrink-0 border-b border-[hsl(var(--border))] bg-white">
+      <header className="flex items-center justify-between px-6 h-14 shrink-0 border-b border-[hsl(var(--border))] bg-[hsl(var(--card))]">
         <div className="flex items-center gap-3">
           {activeView === 'cocina' && (
             <Button
@@ -137,6 +137,17 @@ export default function POSModule() {
               onClick={() => navigate(`/local/${localId}/pos`, { state: locState })}
             >
               ← Mesas
+            </Button>
+          )}
+          {activeView === 'mesas' && (
+            <Button
+              data-onboarding="pos-kitchen-btn"
+              variant="ghost"
+              size="sm"
+              onClick={() => navigate(`/local/${localId}/pos/cocina`, { state: locState })}
+              className="text-xs"
+            >
+              🍳 Vista Cocina
             </Button>
           )}
           <div>
@@ -164,7 +175,7 @@ export default function POSModule() {
         ) : activeView === 'mesas' ? (
           <div className="space-y-6">
             <MesasKPICards localId={localId} onRefreshReady={(fn) => { kpiRefreshRef.current = fn }} />
-            <section className="space-y-4">
+            <section className="space-y-4" data-onboarding="pos-mesas-grid">
               <h3 className="text-base font-semibold text-[hsl(var(--foreground))]">Visualización de Mesas</h3>
               <MesasFilters mesas={mesas} onFilteredMesasChange={handleFilteredMesasChange} />
               <MesasVisualization

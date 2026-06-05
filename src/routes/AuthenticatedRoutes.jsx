@@ -16,6 +16,7 @@ import ReportesPage from '../components/pos/ReportesPage'
 import WorkerLocalSelector from '../components/WorkerLocalSelector'
 import UserManagementPage from '../components/UserManagementPage'
 import UsersListPage from '../components/UsersListPage'
+import { OnboardingProvider } from '../context/OnboardingContext'
 import { WORKER_ROLES } from '../constants/roles'
 import { isSuperAdminRole } from '../auth/roleLabel'
 import { useAuth } from '../context/AuthContext'
@@ -113,7 +114,11 @@ export default function AuthenticatedApp() {
 
   return (
     <ErrorBoundary>
-      <Router future={ROUTER_FUTURE_FLAGS}>{routes}</Router>
+      <Router future={ROUTER_FUTURE_FLAGS}>
+        <OnboardingProvider>
+          {routes}
+        </OnboardingProvider>
+      </Router>
     </ErrorBoundary>
   )
 }

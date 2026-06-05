@@ -12,6 +12,7 @@ import {
   Package, Truck, ShoppingCart, BookMarked, PackageOpen,
   LogOut, Utensils, HelpCircle, Phone, Mail, Moon, Sun, Menu, Users,
 } from 'lucide-react'
+import CoachMark from './onboarding/CoachMark'
 
 /* ── key sets for accordion auto-open ──────────────────────────── */
 const ADMIN_KEYS = new Set(['administracion', 'ventas', 'rendiciones', 'reportes', 'flujo-caja', 'alertas', 'bonos'])
@@ -154,6 +155,7 @@ function Sidebar({ collapsed, onToggle, onClose }) {
     return (
       <button
         key={item.key}
+        data-onboarding={`nav-${item.key}`}
         onClick={() => !isDisabled && goItem(item)}
         title={collapsed ? item.label : undefined}
         disabled={isDisabled}
@@ -240,6 +242,7 @@ function Sidebar({ collapsed, onToggle, onClose }) {
             <div key={section.key} className="mb-1">
               <div className="flex items-center gap-0">
                 <button
+                  data-onboarding={`nav-${section.key}`}
                   onClick={() => {
                     if (collapsed) { onToggle(); setUserOpen((p) => ({ ...p, [section.key]: true })) }
                     else goAccordion(section.key)
@@ -507,6 +510,8 @@ function AppShell() {
 
         <Outlet />
       </div>
+
+      <CoachMark />
     </div>
   )
 }

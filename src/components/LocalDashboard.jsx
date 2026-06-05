@@ -137,7 +137,7 @@ function LocalDashboard() {
 
   return (
     <>
-      <header className="shrink-0 bg-white border-b border-[hsl(var(--border))] px-6 py-3 flex items-center justify-between shadow-sm">
+      <header className="shrink-0 bg-[hsl(var(--card))] border-b border-[hsl(var(--border))] px-4 sm:px-6 py-3 flex items-center justify-between shadow-sm">
         <div>
           <h1 className="text-base font-bold text-[hsl(var(--foreground))]">{localName}</h1>
           <p className="text-xs text-[hsl(var(--muted-foreground))]">Panel general</p>
@@ -145,7 +145,7 @@ function LocalDashboard() {
       </header>
 
       <div className="flex-1 overflow-y-auto">
-        <PageTransition className="flex flex-col gap-6 p-6 max-w-6xl mx-auto pb-10">
+        <PageTransition className="flex flex-col gap-6 p-3 sm:p-6 max-w-6xl mx-auto pb-10">
 
           {/* Resumen Financiero */}
           <section>
@@ -157,8 +157,8 @@ function LocalDashboard() {
               className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3"
               variants={STAGGER} initial="hidden" animate="visible"
             >
-              {finCards.map((k) => (
-                <motion.div key={k.label} variants={ITEM}>
+              {finCards.map((k, idx) => (
+                <motion.div key={k.label} variants={ITEM} data-onboarding={idx === 0 ? 'dashboard-ventas-card' : undefined}>
                   <KpiCard {...k} loading={dashLoading} />
                 </motion.div>
               ))}
@@ -166,8 +166,8 @@ function LocalDashboard() {
           </section>
 
           {/* Charts row */}
-          <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
-            <Card className="lg:col-span-3">
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+            <Card className="md:col-span-3">
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm">Tendencia de Ingresos</CardTitle>
               </CardHeader>
@@ -184,7 +184,7 @@ function LocalDashboard() {
               </CardContent>
             </Card>
 
-            <Card className="lg:col-span-2">
+            <Card className="md:col-span-2">
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm">Distribución de Stock</CardTitle>
               </CardHeader>
