@@ -84,6 +84,32 @@ export function validateChileRutMessage(value) {
 }
 
 /**
+ * Valida que el número de RUT sea consistente con el tipo declarado.
+ * En Chile, personas naturales tienen cuerpo < 50.000.000.
+ * Empresas/personas jurídicas tienen cuerpo >= 50.000.000.
+ * El algoritmo Módulo 11 es idéntico para ambos tipos.
+ *
+ * @param {string} rut  - RUT ya normalizado (sin puntos/guión)
+ * @param {'personal'|'comercial'} type
+ * @returns {string | null} mensaje de advertencia o null si es consistente
+ */
+export function validateRutTypeConsistency(rut, type) {
+  const raw = String(rut || '').replace(/[^0-9K]/gi, '').toUpperCase()
+  if (raw.length < 2) return null
+  const bodyStr = raw.slice(0, -1).replace(/\D/g, '')
+  const bodyNum = parseInt(bodyStr, 10)
+  if (!Number.isFinite(bodyNum)) return null
+
+  if (type === 'personal' && bodyNum >= 50_000_000) {
+    return 'Este número de RUT corresponde a una empresa. Selecciona "RUT Comercial".'
+  }
+  if (type === 'comercial' && bodyNum < 50_000_000) {
+    return 'Este número de RUT corresponde a una persona natural. Selecciona "RUT Personal".'
+  }
+  return null
+}
+
+/**
  * @param {string} phone
  * @returns {string | null} error message or null
  */

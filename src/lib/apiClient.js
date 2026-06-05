@@ -196,3 +196,18 @@ export async function apiRequest(path, options = {}) {
 
   return response.json()
 }
+
+export async function createUser({ name, email, password, role, local_id, business_id }) {
+  return apiRequest('/auth/admin/create-user', {
+    method: 'POST',
+    body: { name, email, password, role, local_id: local_id || null, business_id: business_id || null },
+  })
+}
+
+export async function listUsers(businessId) {
+  return apiRequest(businessId ? `/users?business_id=${businessId}` : '/users')
+}
+
+export async function deleteUser(id) {
+  return apiRequest(`/users/${id}`, { method: 'DELETE' })
+}

@@ -31,7 +31,7 @@ export default function LoginPage({ onShowRegister }) {
         backgroundAttachment: 'fixed',
       }}
     >
-      <div className="pointer-events-none absolute inset-0 bg-white/92" />
+      <div className="pointer-events-none absolute inset-0 bg-white/92 dark:bg-gray-950/95" />
 
       <div className="relative flex flex-col items-center gap-3 text-center">
         <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-[hsl(var(--primary))] shadow-lg">
@@ -43,7 +43,7 @@ export default function LoginPage({ onShowRegister }) {
 
       <section
         aria-label="Formulario de inicio de sesión"
-        className="relative w-full max-w-md rounded-2xl border border-[hsl(var(--primary-border,150,50%,75%))] bg-white/80 p-7 shadow-xl backdrop-blur-sm"
+        className="relative w-full max-w-md rounded-2xl border border-[hsl(var(--border))] bg-white/80 dark:bg-[hsl(var(--card))/90] p-7 shadow-xl backdrop-blur-sm"
       >
         <h2 className="mb-5 text-center text-2xl font-bold text-[hsl(var(--foreground))]">Iniciar Sesión</h2>
 

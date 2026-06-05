@@ -1,25 +1,29 @@
 import { useState, useRef } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useParams, useNavigate, useLocation } from 'react-router-dom'
 import { useSelectedLocal } from '../../hooks/useSelectedLocal'
 import { useMesasConEstado } from '../../hooks/useMesasConEstado'
 import MesasKPICards from './MesasKPICards'
 import MesasFilters from './MesasFilters'
 import MesasVisualization from './MesasVisualization'
+import KitchenDisplay from './KitchenDisplay'
 import CreateMesaModal from './CreateMesaModal'
 import EditMesaModal from './EditMesaModal'
 import DeleteMesaModal from './DeleteMesaModal'
-import ReportesModal from './ReportesModal'
-import MenuModal from './MenuModal'
 import MesaDetailModal from './MesaDetailModal'
+import OrdenView from './OrdenView'
 import { useAuth } from '../../context/AuthContext'
+import { useTheme } from '../../context/ThemeContext'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
+import { Sun, Moon, LogOut } from 'lucide-react'
 
 export default function POSModule() {
-  const { isWorker } = useAuth()
+  const { isWorker, logout } = useAuth()
+  const { darkMode, toggleDarkMode } = useTheme()
   const navigate = useNavigate()
+  const { state: locState, pathname } = useLocation()
   const { localId } = useParams()
   const { mesas, loading: mesasLoading, createMesa, updateMesa, deleteMesa, refresh: refreshMesas } = useMesasConEstado(localId)
+  const activeView = pathname.endsWith('/cocina') ? 'cocina' : 'mesas'
   const [showModal, setShowModal] = useState(false)
   const [filteredMesas, setFilteredMesas] = useState([])
   const [editingMesa, setEditingMesa] = useState(null)
@@ -29,10 +33,9 @@ export default function POSModule() {
   const [isUpdating, setIsUpdating] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState(null)
-  const [showReportes, setShowReportes] = useState(false)
-  const [showMenu, setShowMenu] = useState(false)
   const [selectedMesaDetail, setSelectedMesaDetail] = useState(null)
   const [showMesaDetail, setShowMesaDetail] = useState(false)
+  const [selectedOrdenMesa, setSelectedOrdenMesa] = useState(null)
   const kpiRefreshRef = useRef(null)
 
   const selectedLocal = useSelectedLocal(localId, 'locales-only')
@@ -43,13 +46,24 @@ export default function POSModule() {
   }
 
   const handleMesaSelect = (mesa) => {
-    setSelectedMesaDetail(mesa)
-    setShowMesaDetail(true)
+    const state = mesa.state || 'libre'
+    if (state === 'ocupada' || state === 'en_cobro') {
+      setSelectedOrdenMesa(mesa)
+    } else {
+      setSelectedMesaDetail(mesa)
+      setShowMesaDetail(true)
+    }
   }
 
   const handleMesaDetailClose = () => {
     setShowMesaDetail(false)
     setSelectedMesaDetail(null)
+  }
+
+  const handleOrdenViewBack = () => {
+    setSelectedOrdenMesa(null)
+    refreshMesas()
+    if (kpiRefreshRef.current) kpiRefreshRef.current()
   }
 
   const handleTableUpdated = () => {
@@ -117,39 +131,121 @@ export default function POSModule() {
   return (
     <>
       {/* Topbar */}
-      <header className="flex items-center justify-between px-6 h-14 shrink-0 border-b border-[hsl(var(--border))] bg-white">
-        <div>
-          <h2 className="text-sm font-semibold text-[hsl(var(--foreground))] leading-none">
-            {selectedLocal?.name || 'Local'}
-          </h2>
-          <p className="text-xs text-[hsl(var(--muted-foreground))]">Punto de venta</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={() => setShowMenu(true)}>🍽 Menú</Button>
-          {!isWorker && (
-            <Button variant="outline" size="sm" onClick={() => setShowReportes(true)}>📊 Reportes</Button>
+      <header className="flex items-center justify-between px-6 h-14 shrink-0 border-b border-[hsl(var(--border))] bg-[hsl(var(--card))]">
+        <div className="flex items-center gap-3">
+          {activeView === 'cocina' && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => navigate(`/local/${localId}/pos`, { state: locState })}
+            >
+              ← Mesas
+            </Button>
           )}
-          {!isWorker && (
+          {activeView === 'mesas' && (
+            <button
+              data-onboarding="pos-kitchen-btn"
+              onClick={() => navigate(`/local/${localId}/pos/cocina`, { state: locState })}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                background: '#059669',
+                color: '#fff',
+                border: 'none',
+                borderRadius: 8,
+                padding: '5px 12px',
+                fontSize: 12,
+                fontWeight: 600,
+                cursor: 'pointer',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              🍳 Vista Cocina
+            </button>
+          )}
+          <div>
+            <h2 className="text-sm font-semibold text-[hsl(var(--foreground))] leading-none">
+              {selectedLocal?.name || 'Local'}
+            </h2>
+            <p className="text-xs text-[hsl(var(--muted-foreground))]">Punto de venta</p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          {/* Botón día / noche */}
+          <button
+            onClick={toggleDarkMode}
+            title={darkMode ? 'Cambiar a modo día' : 'Cambiar a modo noche'}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: 34,
+              height: 34,
+              borderRadius: 8,
+              border: '1px solid hsl(var(--border))',
+              background: 'hsl(var(--card))',
+              cursor: 'pointer',
+              color: darkMode ? '#facc15' : '#6b7280',
+            }}
+          >
+            {darkMode ? <Sun size={16} /> : <Moon size={16} />}
+          </button>
+
+          {/* Cerrar sesión */}
+          <button
+            onClick={logout}
+            title="Cerrar sesión"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: 34,
+              height: 34,
+              borderRadius: 8,
+              border: '1px solid hsl(var(--border))',
+              background: 'hsl(var(--card))',
+              cursor: 'pointer',
+              color: '#ef4444',
+            }}
+          >
+            <LogOut size={16} />
+          </button>
+
+          {!isWorker && activeView === 'mesas' && !selectedOrdenMesa && (
             <Button size="sm" onClick={() => setShowModal(true)}>+ Nueva Mesa</Button>
           )}
         </div>
       </header>
 
       {/* Main */}
-      <main className="flex-1 overflow-y-auto p-4 lg:p-6 space-y-6">
-        <MesasKPICards localId={localId} onRefreshReady={(fn) => { kpiRefreshRef.current = fn }} />
-
-        <section className="space-y-4">
-          <h3 className="text-base font-semibold text-[hsl(var(--foreground))]">Visualización de Mesas</h3>
-          <MesasFilters mesas={mesas} onFilteredMesasChange={handleFilteredMesasChange} />
-          <MesasVisualization
-            mesas={filteredMesas.length > 0 ? filteredMesas : mesas}
-            loading={mesasLoading}
-            onMesaSelect={handleMesaSelect}
-            onEditMesa={isWorker ? null : handleEditMesa}
-            onDeleteMesa={isWorker ? null : handleDeleteMesa}
+      <main className="flex-1 overflow-y-auto p-4 lg:p-6 flex flex-col min-h-0">
+        {selectedOrdenMesa ? (
+          <OrdenView
+            mesa={selectedOrdenMesa}
+            localId={localId}
+            onBack={handleOrdenViewBack}
+            onTableUpdated={handleTableUpdated}
           />
-        </section>
+        ) : activeView === 'mesas' ? (
+          <div className="space-y-6">
+            <MesasKPICards localId={localId} onRefreshReady={(fn) => { kpiRefreshRef.current = fn }} />
+            <section className="space-y-4" data-onboarding="pos-mesas-grid">
+              <h3 className="text-base font-semibold text-[hsl(var(--foreground))]">Visualización de Mesas</h3>
+              <MesasFilters mesas={mesas} onFilteredMesasChange={handleFilteredMesasChange} />
+              <MesasVisualization
+                mesas={filteredMesas.length > 0 ? filteredMesas : mesas}
+                loading={mesasLoading}
+                onMesaSelect={handleMesaSelect}
+                onEditMesa={isWorker ? null : handleEditMesa}
+                onDeleteMesa={isWorker ? null : handleDeleteMesa}
+              />
+            </section>
+          </div>
+        ) : (
+          <KitchenDisplay localId={localId} mesas={mesas} />
+        )}
       </main>
 
       {showModal && (
@@ -183,14 +279,6 @@ export default function POSModule() {
           isDeleting={isDeleting}
           error={deleteError}
         />
-      )}
-
-      {showMenu && (
-        <MenuModal localId={localId} onClose={() => setShowMenu(false)} />
-      )}
-
-      {showReportes && (
-        <ReportesModal localId={localId} onClose={() => setShowReportes(false)} />
       )}
 
       {showMesaDetail && selectedMesaDetail && (

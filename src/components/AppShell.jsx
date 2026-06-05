@@ -1,39 +1,44 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Outlet, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import { isSuperAdminRole } from '../auth/roleLabel'
+import { useTheme } from '../context/ThemeContext'
+import { useAlerts } from '../hooks/useAlerts'
 import { motion, AnimatePresence } from 'framer-motion'
 import { cn } from '@/lib/utils'
 import {
   LayoutDashboard, Store, ChevronDown, ChevronLeft, ChevronRight,
   DollarSign, FileText, BarChart3, Wallet, Bell, Gift,
-  Table2, BookOpen, Monitor, ChefHat, ClipboardList,
+  Table2, ChefHat,
   Package, Truck, ShoppingCart, BookMarked, PackageOpen,
-  LogOut, Utensils, Users,
+  LogOut, Utensils, HelpCircle, Phone, Mail, Moon, Sun, Menu, Users, RotateCcw,
 } from 'lucide-react'
+import CoachMark from './onboarding/CoachMark'
+import { useOnboarding } from '../context/OnboardingContext'
+import { isSuperAdminRole } from '../auth/roleLabel'
 
 /* ── key sets for accordion auto-open ──────────────────────────── */
 const ADMIN_KEYS = new Set(['administracion', 'ventas', 'rendiciones', 'reportes', 'flujo-caja', 'alertas', 'bonos'])
-const POS_KEYS   = new Set(['pos', 'pos-mesas', 'pos-menu', 'pos-bar', 'pos-cocina', 'pos-pedidos'])
+const POS_KEYS   = new Set(['pos', 'pos-mesas', 'pos-kitchen'])
 const INV_KEYS   = new Set(['inv-hub', 'inv-prov', 'inv-stock', 'inv-compras', 'inv-recetas'])
 
 /* ── active-key derived from pathname ──────────────────────────── */
 function deriveActiveKey(pathname) {
-  if (pathname === '/admin/usuarios')                   return 'usuarios'
-  if (pathname.includes('/inventario/proveedores'))     return 'inv-prov'
-  if (pathname.includes('/inventario/stock'))           return 'inv-stock'
+  if (pathname.includes('/inventario/proveedores'))       return 'inv-prov'
+  if (pathname.includes('/inventario/stock'))             return 'inv-stock'
   if (pathname.includes('/inventario/compras-semanales')) return 'inv-compras'
-  if (pathname.includes('/inventario/recipes'))         return 'inv-recetas'
-  if (pathname.includes('/inventario'))                 return 'inv-hub'
-  if (pathname.includes('/pos'))                        return 'pos-mesas'
-  if (pathname.includes('/administrativo/ventas'))      return 'ventas'
-  if (pathname.includes('/administrativo/rendiciones')) return 'rendiciones'
-  if (pathname.includes('/administrativo/reportes'))    return 'reportes'
-  if (pathname.includes('/administrativo/flujo-caja'))  return 'flujo-caja'
-  if (pathname.includes('/administrativo/alertas'))     return 'alertas'
-  if (pathname.includes('/administrativo/bonos'))       return 'bonos'
-  if (pathname.includes('/administrativo'))             return 'administracion'
-  if (pathname.includes('/dashboard'))                  return 'dashboard'
+  if (pathname.includes('/inventario/recipes'))           return 'inv-recetas'
+  if (pathname.includes('/inventario'))                   return 'inv-hub'
+  if (pathname.includes('/pos/cocina'))                   return 'pos-kitchen'
+  if (pathname.includes('/pos'))                          return 'pos-mesas'
+  if (pathname.includes('/administrativo/ventas'))        return 'ventas'
+  if (pathname.includes('/administrativo/rendiciones'))   return 'rendiciones'
+  if (pathname.includes('/administrativo/reportes'))      return 'reportes'
+  if (pathname.includes('/administrativo/flujo-caja'))    return 'flujo-caja'
+  if (pathname.includes('/administrativo/alertas'))       return 'alertas'
+  if (pathname.includes('/administrativo/bonos'))         return 'bonos'
+  if (pathname.includes('/administrativo'))               return 'administracion'
+  if (pathname.includes('/usuarios'))                    return 'usuarios'
+  if (pathname.includes('/dashboard'))                    return 'dashboard'
   return 'locales'
 }
 
@@ -57,11 +62,8 @@ const ACCORDIONS = [
     label: 'POS Restaurante',
     icon: Table2,
     items: [
-      { key: 'pos-mesas',   label: 'Gestión de Mesas', icon: Table2        },
-      { key: 'pos-menu',    label: 'Menú',              icon: BookOpen,      disabled: true },
-      { key: 'pos-bar',     label: 'Pantalla Bar',      icon: Monitor,       disabled: true },
-      { key: 'pos-cocina',  label: 'Pantalla Cocina',   icon: ChefHat,       disabled: true },
-      { key: 'pos-pedidos', label: 'Toma de Pedidos',   icon: ClipboardList, disabled: true },
+      { key: 'pos-mesas',   label: 'Gestión de Mesas', icon: Table2  },
+      { key: 'pos-kitchen', label: 'Cocina',            icon: ChefHat },
     ],
   },
   {
@@ -70,18 +72,20 @@ const ACCORDIONS = [
     icon: PackageOpen,
     items: [
       { key: 'inv-hub',     label: 'Estado Actual Inventario', icon: PackageOpen  },
-      { key: 'inv-prov',    label: 'Proveedores',        icon: Truck        },
-      { key: 'inv-stock',   label: 'Stock de productos', icon: Package      },
-      { key: 'inv-compras', label: 'Pedidos semanales',  icon: ShoppingCart },
-      { key: 'inv-recetas', label: 'Recetas',            icon: BookMarked   },
+      { key: 'inv-prov',    label: 'Proveedores',              icon: Truck        },
+      { key: 'inv-stock',   label: 'Stock de productos',       icon: Package      },
+      { key: 'inv-compras', label: 'Pedidos',                  icon: ShoppingCart },
+      { key: 'inv-recetas', label: 'Recetas',                  icon: BookMarked   },
     ],
   },
 ]
 
 /* ── Sidebar ────────────────────────────────────────────────────── */
-function Sidebar({ collapsed, onToggle, isSuperAdmin }) {
+function Sidebar({ collapsed, onToggle, onClose }) {
   const { user, userRole, logout } = useAuth()
-  const navigate   = useNavigate()
+  const { restart: restartTour } = useOnboarding()
+  const isSuperAdmin = isSuperAdminRole(userRole)
+  const navigate = useNavigate()
   const { pathname, state: locState } = useLocation()
 
   const localIdMatch = pathname.match(/\/local\/([^/]+)/)
@@ -89,10 +93,12 @@ function Sidebar({ collapsed, onToggle, isSuperAdmin }) {
   const activeKey = deriveActiveKey(pathname)
   const navState  = locState?.local ? { local: locState.local } : localId ? { local: { id: localId } } : {}
 
-  /* manually-toggled accordion overrides */
+  const [helpOpen, setHelpOpen] = useState(false)
   const [userOpen, setUserOpen] = useState({ administracion: false, pos: false, inventario: false })
+  const [userClosed, setUserClosed] = useState({ administracion: false, pos: false, inventario: false })
 
   const isOpen = (key) => {
+    if (userClosed[key]) return false
     if (key === 'administracion' && ADMIN_KEYS.has(activeKey)) return true
     if (key === 'pos'            && POS_KEYS.has(activeKey))   return true
     if (key === 'inventario'     && INV_KEYS.has(activeKey))   return true
@@ -100,11 +106,14 @@ function Sidebar({ collapsed, onToggle, isSuperAdmin }) {
   }
 
   const toggleAccordion = (key) => {
-    const autoOpen =
-      (key === 'administracion' && ADMIN_KEYS.has(activeKey)) ||
-      (key === 'pos'            && POS_KEYS.has(activeKey))   ||
-      (key === 'inventario'     && INV_KEYS.has(activeKey))
-    if (!autoOpen) setUserOpen((p) => ({ ...p, [key]: !p[key] }))
+    const open = isOpen(key)
+    if (open) {
+      setUserClosed(p => ({ ...p, [key]: true }))
+      setUserOpen(p => ({ ...p, [key]: false }))
+    } else {
+      setUserClosed(p => ({ ...p, [key]: false }))
+      setUserOpen(p => ({ ...p, [key]: true }))
+    }
   }
 
   const goAccordion = (key) => {
@@ -118,26 +127,26 @@ function Sidebar({ collapsed, onToggle, isSuperAdmin }) {
   }
 
   const goItem = (item) => {
+    onClose?.()
     switch (item.key) {
       case 'locales':   navigate('/admin'); break
-      case 'usuarios':  navigate('/admin/usuarios'); break
+      case 'usuarios':  navigate('/usuarios'); break
       case 'dashboard': navigate(localId ? `/local/${localId}/dashboard` : '/admin', { state: navState }); break
-      case 'pos-mesas': case 'pos-menu': case 'pos-bar': case 'pos-cocina': case 'pos-pedidos':
-        if (localId) navigate(`/local/${localId}/pos`, { state: navState }); break
-      case 'inv-hub':     if (localId) navigate(`/local/${localId}/inventario`, { state: navState }); break
-      case 'inv-prov':    if (localId) navigate(`/local/${localId}/inventario/proveedores`, { state: navState }); break
-      case 'inv-stock':   if (localId) navigate(`/local/${localId}/inventario/stock`, { state: navState }); break
-      case 'inv-compras': if (localId) navigate(`/local/${localId}/inventario/compras-semanales`, { state: navState }); break
-      case 'inv-recetas': if (localId) navigate(`/local/${localId}/inventario/recipes`, { state: navState }); break
+      case 'pos-mesas':     if (localId) navigate(`/local/${localId}/pos`, { state: navState }); break
+      case 'pos-kitchen':   if (localId) navigate(`/local/${localId}/pos/cocina`, { state: navState }); break
+      case 'inv-hub':       if (localId) navigate(`/local/${localId}/inventario`, { state: navState }); break
+      case 'inv-prov':      if (localId) navigate(`/local/${localId}/inventario/proveedores`, { state: navState }); break
+      case 'inv-stock':     if (localId) navigate(`/local/${localId}/inventario/stock`, { state: navState }); break
+      case 'inv-compras':   if (localId) navigate(`/local/${localId}/inventario/compras-semanales`, { state: navState }); break
+      case 'inv-recetas':   if (localId) navigate(`/local/${localId}/inventario/recipes`, { state: navState }); break
       default:
         if (ADMIN_KEYS.has(item.key) && localId)
           navigate(`/local/${localId}/administrativo/${item.key}`, { state: navState })
     }
   }
 
-  /* DESCUBRIR items — Dashboard only when a local is selected */
   const discoverItems = [
-    { key: 'locales',   label: 'Tus Locales', icon: Store },
+    ...(isSuperAdmin ? [{ key: 'locales', label: 'Tus Locales', icon: Store }] : []),
     ...(localId ? [{ key: 'dashboard', label: 'Dashboard', icon: LayoutDashboard }] : []),
     ...(isSuperAdmin ? [{ key: 'usuarios', label: 'Usuarios', icon: Users }] : []),
   ]
@@ -149,6 +158,7 @@ function Sidebar({ collapsed, onToggle, isSuperAdmin }) {
     return (
       <button
         key={item.key}
+        data-onboarding={`nav-${item.key}`}
         onClick={() => !isDisabled && goItem(item)}
         title={collapsed ? item.label : undefined}
         disabled={isDisabled}
@@ -209,21 +219,8 @@ function Sidebar({ collapsed, onToggle, isSuperAdmin }) {
         </button>
       </div>
 
-      {/* User */}
-      <AnimatePresence>
-        {!collapsed && (
-          <motion.div
-            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="px-4 py-3 border-b border-white/15"
-          >
-            <p className="text-xs font-medium text-white truncate">{user?.email}</p>
-            <p className="text-[10px] text-white/60 mt-0.5">{userRole || 'Usuario'}</p>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
       {/* Nav */}
-      <nav className="flex-1 overflow-y-auto py-3 px-2">
+      <nav className="flex-1 overflow-y-auto py-3 px-2 no-scrollbar">
         {/* DESCUBRIR */}
         <div className="mb-3">
           <AnimatePresence>
@@ -239,7 +236,7 @@ function Sidebar({ collapsed, onToggle, isSuperAdmin }) {
           {discoverItems.map((item) => navBtn(item))}
         </div>
 
-        {/* Accordions — only when a local is selected */}
+        {/* Accordions */}
         {localId && ACCORDIONS.map((section) => {
           const open = isOpen(section.key)
           const hasActive = activeKey === section.key || section.items.some((i) => activeKey === i.key)
@@ -248,6 +245,7 @@ function Sidebar({ collapsed, onToggle, isSuperAdmin }) {
             <div key={section.key} className="mb-1">
               <div className="flex items-center gap-0">
                 <button
+                  data-onboarding={`nav-${section.key}`}
                   onClick={() => {
                     if (collapsed) { onToggle(); setUserOpen((p) => ({ ...p, [section.key]: true })) }
                     else goAccordion(section.key)
@@ -310,8 +308,89 @@ function Sidebar({ collapsed, onToggle, isSuperAdmin }) {
         })}
       </nav>
 
-      {/* Logout */}
+      {/* Footer */}
       <div className="px-2 pb-4 border-t border-white/15 pt-3">
+        {/* Replay tutorial button */}
+        <button
+          onClick={() => { onClose?.(); restartTour() }}
+          title={collapsed ? 'Ver tutorial' : undefined}
+          className={cn(
+            'w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-white/60 hover:bg-white/15 hover:text-white transition-colors mb-1',
+            collapsed && 'justify-center px-0',
+          )}
+        >
+          <RotateCcw size={16} className="shrink-0" />
+          <AnimatePresence>
+            {!collapsed && (
+              <motion.span initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex-1 text-left">
+                Ver tutorial
+              </motion.span>
+            )}
+          </AnimatePresence>
+        </button>
+
+        {/* Help button */}
+        <button
+          onClick={() => { if (collapsed) { onToggle(); setHelpOpen(true) } else { setHelpOpen((v) => !v) } }}
+          title={collapsed ? 'Ayuda' : undefined}
+          className={cn(
+            'w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-white/60 hover:bg-white/15 hover:text-white transition-colors mb-1',
+            collapsed && 'justify-center px-0',
+          )}
+        >
+          <HelpCircle size={16} className="shrink-0" />
+          <AnimatePresence>
+            {!collapsed && (
+              <motion.span initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex-1 text-left">
+                Ayuda
+              </motion.span>
+            )}
+          </AnimatePresence>
+        </button>
+
+        {/* Help panel */}
+        <AnimatePresence>
+          {helpOpen && !collapsed && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              transition={{ duration: 0.2 }}
+              className="overflow-hidden mb-2"
+            >
+              <div className="rounded-lg bg-white/10 px-3 py-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-white/40">Soporte</span>
+                  <span className="text-[9px] font-bold bg-amber-400/90 text-amber-900 px-1.5 py-0.5 rounded-full tracking-wide">DEMO</span>
+                </div>
+                <div className="flex items-center gap-2 text-white/80">
+                  <Phone size={12} className="shrink-0 text-white/40" />
+                  <span className="text-xs">+56 9 1234 5678</span>
+                </div>
+                <div className="flex items-center gap-2 text-white/80">
+                  <Mail size={12} className="shrink-0 text-white/40" />
+                  <span className="text-xs truncate">soporte@sibagestion.cl</span>
+                </div>
+                <p className="text-[10px] text-white/30 pt-1 border-t border-white/10">
+                  Versión demo — solo fines de prueba
+                </p>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        <AnimatePresence>
+          {!collapsed && (
+            <motion.div
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              className="px-3 py-2 mb-2 rounded-lg bg-white/10"
+            >
+              <p className="text-xs font-medium text-white truncate">{user?.email}</p>
+              <p className="text-[10px] text-white/60 mt-0.5">{userRole || 'Usuario'}</p>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         <button
           onClick={logout}
           title={collapsed ? 'Cerrar sesión' : undefined}
@@ -334,13 +413,52 @@ function Sidebar({ collapsed, onToggle, isSuperAdmin }) {
   )
 }
 
-/* ── AppShell — persistent layout via Outlet ────────────────────── */
+/* ── AlertBell ──────────────────────────────────────────────────── */
+function AlertBell({ localId }) {
+  const navigate = useNavigate()
+  const { pathname, state: locState } = useLocation()
+  const { pendingCount } = useAlerts(localId)
+
+  if (!localId) return null
+
+  const navState = locState?.local ? { local: locState.local } : { local: { id: localId } }
+  const isActive = pathname.includes('/administrativo/alertas')
+
+  return (
+    <button
+      onClick={() => navigate(`/local/${localId}/administrativo/alertas`, { state: navState })}
+      title={pendingCount > 0 ? `${pendingCount} alerta(s) pendiente(s)` : 'Alertas'}
+      className={cn(
+        'relative flex items-center justify-center w-9 h-9 rounded-lg transition-colors',
+        isActive
+          ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'
+          : 'text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))] hover:text-[hsl(var(--foreground))]',
+      )}
+    >
+      <Bell size={18} />
+      {pendingCount > 0 && (
+        <span className="absolute -top-0.5 -right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-bold text-white leading-none">
+          {pendingCount > 99 ? '99+' : pendingCount}
+        </span>
+      )}
+    </button>
+  )
+}
+
+/* ── AppShell ───────────────────────────────────────────────────── */
 function AppShell() {
-  const { userRole } = useAuth()
-  const isSuperAdmin = isSuperAdminRole(userRole)
   const [collapsed, setCollapsed] = useState(() => {
     try { return window.localStorage.getItem('appSidebarCollapsed') === '1' } catch { return false }
   })
+  const [mobileOpen, setMobileOpen] = useState(false)
+  const { darkMode, toggleDarkMode } = useTheme()
+
+  const { pathname } = useLocation()
+  const localIdMatch = pathname.match(/\/local\/([^/]+)/)
+  const localId = localIdMatch ? localIdMatch[1] : null
+
+  /* Cierra el drawer móvil al cambiar de ruta */
+  useEffect(() => { setMobileOpen(false) }, [pathname])
 
   const handleToggle = () => {
     setCollapsed((v) => {
@@ -352,10 +470,70 @@ function AppShell() {
 
   return (
     <div className="flex h-screen bg-[hsl(var(--background))]">
-      <Sidebar collapsed={collapsed} onToggle={handleToggle} isSuperAdmin={isSuperAdmin} />
+
+      {/* Overlay backdrop (solo móvil) */}
+      <AnimatePresence>
+        {mobileOpen && (
+          <motion.div
+            key="mobile-backdrop"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="fixed inset-0 bg-black/50 z-30 md:hidden"
+            onClick={() => setMobileOpen(false)}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Sidebar — overlay en móvil, sticky en desktop */}
+      <div
+        className={cn(
+          'fixed inset-y-0 left-0 z-40 transition-transform duration-300 ease-in-out',
+          'md:relative md:z-auto md:translate-x-0',
+          mobileOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0',
+        )}
+      >
+        <Sidebar
+          collapsed={mobileOpen ? false : collapsed}
+          onToggle={handleToggle}
+          onClose={() => setMobileOpen(false)}
+        />
+      </div>
+
+      {/* Contenido principal */}
       <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
+        {/* Top bar — hamburger (móvil) + alertas + toggle modo noche */}
+        <div className="shrink-0 flex items-center gap-2 px-3 py-2 border-b border-[hsl(var(--border))] bg-[hsl(var(--card))]">
+          {/* Hamburger — solo móvil */}
+          <button
+            className="md:hidden flex items-center justify-center w-9 h-9 rounded-lg text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))] transition-colors"
+            onClick={() => setMobileOpen(true)}
+            aria-label="Abrir menú"
+          >
+            <Menu size={20} />
+          </button>
+
+          <div className="flex-1" />
+
+          {/* Acciones derechas */}
+          <div className="flex items-center gap-1">
+            {localId && <AlertBell localId={localId} />}
+            <button
+              onClick={toggleDarkMode}
+              className="flex items-center justify-center w-9 h-9 rounded-lg text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))] hover:text-[hsl(var(--foreground))] transition-colors"
+              title={darkMode ? 'Cambiar a modo claro' : 'Cambiar a modo noche'}
+              aria-label={darkMode ? 'Modo claro' : 'Modo noche'}
+            >
+              {darkMode ? <Sun size={18} /> : <Moon size={18} />}
+            </button>
+          </div>
+        </div>
+
         <Outlet />
       </div>
+
+      <CoachMark />
     </div>
   )
 }

@@ -16,7 +16,7 @@ import {
 } from 'recharts'
 import {
   Package, CheckCircle, TrendingDown, AlertTriangle, DollarSign,
-  TrendingUp, Wallet,
+  TrendingUp, Wallet, Clock, XCircle, MapPin, CreditCard,
 } from 'lucide-react'
 
 const PIE_COLORS = ['#16a34a', '#f59e0b', '#ef4444']
@@ -118,9 +118,13 @@ function LocalDashboard() {
   }, [invKpis])
 
   const finCards = [
-    { icon: TrendingUp, label: 'Ventas Hoy',    value: formatMoney(dashboard?.daily_sales),        iconColor: 'text-emerald-600',           iconBg: 'bg-emerald-50', accentColor: 'border-l-emerald-500' },
-    { icon: DollarSign, label: 'Ventas del Mes', value: formatMoney(dashboard?.monthly_sales),     iconColor: 'text-[hsl(var(--primary))]', iconBg: 'bg-emerald-50', accentColor: 'border-l-emerald-700' },
-    { icon: Wallet,     label: 'Flujo de Caja',  value: formatMoney(dashboard?.monthly_cash_flow), iconColor: 'text-blue-600',              iconBg: 'bg-blue-50',    accentColor: 'border-l-blue-500'   },
+    { icon: TrendingUp, label: 'Ventas Hoy',     value: formatMoney(dashboard?.daily_sales),        iconColor: 'text-emerald-600',           iconBg: 'bg-emerald-50', accentColor: 'border-l-emerald-500' },
+    { icon: DollarSign, label: 'Ventas del Mes',  value: formatMoney(dashboard?.monthly_sales),     iconColor: 'text-[hsl(var(--primary))]', iconBg: 'bg-emerald-50', accentColor: 'border-l-emerald-700' },
+    { icon: Wallet,     label: 'Flujo de Caja',   value: formatMoney(dashboard?.monthly_cash_flow), iconColor: 'text-blue-600',              iconBg: 'bg-blue-50',    accentColor: 'border-l-blue-500'   },
+    { icon: DollarSign, label: 'Ticket Promedio',  value: formatMoney(dashboard?.avg_ticket ?? 0),  iconColor: 'text-violet-600',            iconBg: 'bg-violet-50',  accentColor: 'border-l-violet-500' },
+    { icon: XCircle,    label: 'Cancelaciones',   value: `${Number(dashboard?.cancellation_rate ?? 0).toFixed(1)}%`, iconColor: 'text-red-600', iconBg: 'bg-red-50', accentColor: 'border-l-red-500' },
+    { icon: Clock,      label: 'Hora Pico',       value: dashboard?.peak_hour != null ? `${dashboard.peak_hour}:00h` : '—', iconColor: 'text-amber-600', iconBg: 'bg-amber-50', accentColor: 'border-l-amber-500' },
+    { icon: MapPin,     label: 'Mesa Más Activa', value: dashboard?.top_mesa_name ?? '—',           iconColor: 'text-pink-600',              iconBg: 'bg-pink-50',    accentColor: 'border-l-pink-500'   },
   ]
 
   const invCards = [
@@ -133,7 +137,7 @@ function LocalDashboard() {
 
   return (
     <>
-      <header className="shrink-0 bg-white border-b border-[hsl(var(--border))] px-6 py-3 flex items-center justify-between shadow-sm">
+      <header className="shrink-0 bg-[hsl(var(--card))] border-b border-[hsl(var(--border))] px-4 sm:px-6 py-3 flex items-center justify-between shadow-sm">
         <div>
           <h1 className="text-base font-bold text-[hsl(var(--foreground))]">{localName}</h1>
           <p className="text-xs text-[hsl(var(--muted-foreground))]">Panel general</p>
@@ -141,7 +145,7 @@ function LocalDashboard() {
       </header>
 
       <div className="flex-1 overflow-y-auto">
-        <PageTransition className="flex flex-col gap-6 p-6 max-w-6xl mx-auto pb-10">
+        <PageTransition className="flex flex-col gap-6 p-3 sm:p-6 max-w-6xl mx-auto pb-10">
 
           {/* Resumen Financiero */}
           <section>
@@ -150,11 +154,11 @@ function LocalDashboard() {
               <p className="text-xs text-[hsl(var(--muted-foreground))]">Actividad del local</p>
             </div>
             <motion.div
-              className="grid grid-cols-2 lg:grid-cols-4 gap-3"
+              className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3"
               variants={STAGGER} initial="hidden" animate="visible"
             >
-              {finCards.map((k) => (
-                <motion.div key={k.label} variants={ITEM}>
+              {finCards.map((k, idx) => (
+                <motion.div key={k.label} variants={ITEM} data-onboarding={idx === 0 ? 'dashboard-ventas-card' : undefined}>
                   <KpiCard {...k} loading={dashLoading} />
                 </motion.div>
               ))}
@@ -162,8 +166,8 @@ function LocalDashboard() {
           </section>
 
           {/* Charts row */}
-          <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
-            <Card className="lg:col-span-3">
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+            <Card className="md:col-span-3">
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm">Tendencia de Ingresos</CardTitle>
               </CardHeader>
@@ -180,7 +184,7 @@ function LocalDashboard() {
               </CardContent>
             </Card>
 
-            <Card className="lg:col-span-2">
+            <Card className="md:col-span-2">
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm">Distribución de Stock</CardTitle>
               </CardHeader>
@@ -229,6 +233,82 @@ function LocalDashboard() {
             </Card>
           </div>
 
+
+          {/* Comparativo semanal + distribución por pago */}
+          {!dashLoading && dashboard && (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+
+              {/* Comparativo semanal */}
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm">Comparativo Semanal</CardTitle>
+                  <p className="text-xs text-[hsl(var(--muted-foreground))]">Esta semana vs semana anterior</p>
+                </CardHeader>
+                <CardContent>
+                  {dashboard.week_comparison ? (() => {
+                    const wc = dashboard.week_comparison
+                    const pct = Number(wc.change_pct ?? 0)
+                    const isUp = pct >= 0
+                    return (
+                      <div className="space-y-3">
+                        <div className="flex items-end justify-between">
+                          <div>
+                            <p className="text-xs text-[hsl(var(--muted-foreground))]">Esta semana</p>
+                            <p className="text-2xl font-extrabold text-[hsl(var(--foreground))]">{formatMoney(wc.current_week_sales)}</p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-xs text-[hsl(var(--muted-foreground))]">Semana anterior</p>
+                            <p className="text-lg font-bold text-[hsl(var(--muted-foreground))]">{formatMoney(wc.prev_week_sales)}</p>
+                          </div>
+                        </div>
+                        <div className={`rounded-lg px-3 py-2 text-sm font-semibold text-center ${isUp ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>
+                          {isUp ? '▲' : '▼'} {isUp ? '+' : ''}{pct.toFixed(1)}% vs semana anterior
+                        </div>
+                      </div>
+                    )
+                  })() : (
+                    <p className="text-sm text-[hsl(var(--muted-foreground))] py-4 text-center">Sin datos suficientes aún.</p>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Distribución por método de pago */}
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm flex items-center gap-2"><CreditCard size={15} /> Distribución por Pago</CardTitle>
+                  <p className="text-xs text-[hsl(var(--muted-foreground))]">Métodos de pago este mes</p>
+                </CardHeader>
+                <CardContent>
+                  {Array.isArray(dashboard.payment_breakdown) && dashboard.payment_breakdown.length > 0 ? (() => {
+                    const payments = dashboard.payment_breakdown
+                    const total = payments.reduce((s, p) => s + Number(p.total ?? 0), 0)
+                    const LABEL = { cash: 'Efectivo', efectivo: 'Efectivo', debit: 'Débito', debito: 'Débito', credit: 'Crédito', credito: 'Crédito', transfer: 'Transferencia', other: 'Otro' }
+                    return (
+                      <div className="space-y-3">
+                        {payments.map((p) => {
+                          const pct = total > 0 ? (Number(p.total) / total * 100) : 0
+                          const label = LABEL[String(p.method).toLowerCase()] || p.method
+                          return (
+                            <div key={p.method}>
+                              <div className="flex justify-between text-sm mb-1">
+                                <span className="font-medium">{label}</span>
+                                <span className="text-[hsl(var(--muted-foreground))]">{formatMoney(p.total)} · {pct.toFixed(0)}%</span>
+                              </div>
+                              <div className="h-2 w-full overflow-hidden rounded-full bg-[hsl(var(--border))]">
+                                <div className="h-full rounded-full bg-[hsl(var(--primary))]" style={{ width: `${pct}%` }} />
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )
+                  })() : (
+                    <p className="text-sm text-[hsl(var(--muted-foreground))] py-4 text-center">Sin ventas registradas.</p>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+          )}
 
           {/* Resumen de Inventario */}
           <section>

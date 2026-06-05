@@ -8,6 +8,7 @@ import {
   getInventoryStockList,
   patchInventoryProductUnitCost,
   patchInventoryStock,
+  patchProduct,
 } from '../../lib/inventoryApi'
 import InventoryShell from './InventoryShell'
 import LoadingSpinner from '../LoadingSpinner'
@@ -198,6 +199,21 @@ function StockControlDashboard() {
     [localId, load, loadItems, currentFilters, currentPage],
   )
 
+  const handlePatchProductName = useCallback(
+    async (row, newName) => {
+      setActionError('')
+      try {
+        await patchProduct(row.product_id, { name: newName.trim() })
+        await load()
+        await loadItems(currentFilters, currentPage)
+      } catch (e) {
+        setActionError(e?.message || 'No se pudo actualizar el nombre.')
+        throw e
+      }
+    },
+    [load, loadItems, currentFilters, currentPage],
+  )
+
   const handleDeleteItem = useCallback(
     async (row) => {
       if (!localId) return
@@ -372,7 +388,7 @@ function StockControlDashboard() {
                   onChange={(e) => setSearchQuery(e.target.value)}
                   aria-label="Buscar productos por nombre"
                   autoComplete="off"
-                  className="h-9 w-full rounded-md border border-[hsl(var(--border))] bg-white pl-9 pr-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary)/0.3)]"
+                  className="h-9 w-full rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--card))] pl-9 pr-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary)/0.3)]"
                 />
               </div>
               <CategoryFilterSelect value={categoryFilter} onChange={setCategoryFilter} options={categoriesCatalog} />
@@ -390,6 +406,7 @@ function StockControlDashboard() {
               onEmptyAction={() => setModalOpen(true)}
               onPatchStock={handlePatchStock}
               onPatchUnitCost={handlePatchUnitCost}
+              onPatchProductName={handlePatchProductName}
               onDeleteItem={handleDeleteItem}
               statusFilters={statusFilters}
             />

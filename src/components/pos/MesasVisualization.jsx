@@ -92,7 +92,7 @@ function MesaCard({ mesa, index, onMesaSelect, onEditMesa, onDeleteMesa }) {
 
   return (
     <div
-      className={`animate-fade-in-up ${staggerClass} relative flex flex-col rounded-xl border border-[hsl(var(--border))] bg-white shadow-sm overflow-hidden`}
+      className={`animate-fade-in-up ${staggerClass} relative flex flex-col rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] shadow-sm overflow-hidden`}
       style={{ borderLeftColor: borderColor, borderLeftWidth: '4px' }}
     >
       {/* Header */}
@@ -124,7 +124,10 @@ function MesaCard({ mesa, index, onMesaSelect, onEditMesa, onDeleteMesa }) {
           onClick={handleOpen}
           disabled={!mesa.is_active}
         >
-          {stateKey === 'inactiva' ? 'Inactiva' : 'Abrir Mesa'}
+          {stateKey === 'libre' && 'Abrir Mesa'}
+          {stateKey === 'ocupada' && 'Orden'}
+          {stateKey === 'en_cobro' && 'Ver Orden'}
+          {stateKey === 'inactiva' && 'Inactiva'}
         </button>
 
         <div className="flex items-center gap-1 ml-1">

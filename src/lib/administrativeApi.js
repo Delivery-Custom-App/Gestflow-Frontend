@@ -53,3 +53,11 @@ export function getCajasByLocal(localId, token) {
   const path = withQuery('/cajas', { local_id: localId })
   return apiRequest(path, { token })
 }
+
+export function postExpense(body) {
+  return apiRequest('/expenses', { method: 'POST', body })
+}
+
+export function postTransfer(body) {
+  return apiRequest('/transfers', { method: 'POST', body })
+}

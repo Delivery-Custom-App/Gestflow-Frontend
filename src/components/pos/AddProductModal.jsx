@@ -110,7 +110,7 @@ export default function AddProductModal({ orderId, mesaId, localId, onClose, onP
               }}
               disabled={isLoading}
               required
-              className="w-full h-9 text-sm rounded-md border border-[hsl(var(--border))] bg-white px-3 focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary))]/30 disabled:opacity-50"
+              className="w-full h-9 text-sm rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3 focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary))]/30 disabled:opacity-50"
             >
               <option value="">-- Seleccionar --</option>
               {products.map((product) => (

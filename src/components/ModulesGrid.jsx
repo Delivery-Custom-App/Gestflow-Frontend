@@ -83,7 +83,7 @@ function ModulesGrid({ localId, localName }) {
             <div
               key={mod.id}
               className={cn(
-                'animate-fade-in-up group relative overflow-hidden rounded-xl border bg-white shadow-sm transition-all duration-200',
+                'animate-fade-in-up group relative overflow-hidden rounded-xl border bg-[hsl(var(--card))] shadow-sm transition-all duration-200',
                 mod.disabled
                   ? 'opacity-60 cursor-not-allowed'
                   : 'hover:shadow-md hover:-translate-y-1 cursor-pointer',
@@ -98,7 +98,7 @@ function ModulesGrid({ localId, localName }) {
 
               {/* Card header */}
               <div className="flex items-center gap-4 bg-[hsl(var(--primary))] px-5 py-4">
-                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-white/20 text-white">
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-[hsl(var(--card))]/20 text-white">
                   <mod.Icon className="h-5 w-5" />
                 </div>
                 <div className="flex-1 min-w-0">

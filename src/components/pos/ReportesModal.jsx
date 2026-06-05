@@ -1,6 +1,7 @@
-import { useEffect } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { useReportesPOS } from '../../hooks/useReportesPOS'
 import { formatCLP } from '../../lib/formatCLP'
+import { apiRequest } from '../../lib/apiClient'
 import {
   Dialog,
   DialogContent,
@@ -10,13 +11,31 @@ import {
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 
-/** Modal de reportes POS: top producto, bebida y top 5 (datos del backend). */
+/** Modal de reportes POS: top producto, bebida, top 5 y stock bajo. */
 export default function ReportesModal({ localId, onClose }) {
   const { data, loading, error, fetch } = useReportesPOS(localId)
+  const [stockBajo, setStockBajo]     = useState([])
+  const [stockLoading, setStockLoading] = useState(false)
+
+  const fetchStockBajo = useCallback(async () => {
+    if (!localId) return
+    setStockLoading(true)
+    try {
+      const res = await apiRequest(
+        `/inventory/locals/${localId}/products?status=CRITICO&status=BAJO&limit=20&offset=0`
+      )
+      setStockBajo(res?.items || res || [])
+    } catch {
+      setStockBajo([])
+    } finally {
+      setStockLoading(false)
+    }
+  }, [localId])
 
   useEffect(() => {
     fetch()
-  }, [fetch])
+    fetchStockBajo()
+  }, [fetch, fetchStockBajo])
 
   return (
     <Dialog open onOpenChange={onClose}>
@@ -85,6 +104,24 @@ export default function ReportesModal({ localId, onClose }) {
           {!loading && !error && !data && (
             <p className="text-sm text-[hsl(var(--muted-foreground))]">No hay datos disponibles.</p>
           )}
+
+          {/* Stock bajo */}
+          <section className="space-y-2">
+            <h3 className="text-sm font-semibold text-[hsl(var(--foreground))] flex items-center gap-2">
+              <span>⚠️</span> Productos con Stock Bajo
+            </h3>
+            {stockLoading ? (
+              <p className="text-xs text-[hsl(var(--muted-foreground))]">Cargando...</p>
+            ) : stockBajo.length === 0 ? (
+              <p className="text-xs text-[hsl(var(--muted-foreground))]">Todo el inventario está en nivel óptimo.</p>
+            ) : (
+              <div className="rounded-lg border border-[hsl(var(--border))] divide-y divide-[hsl(var(--border))]">
+                {stockBajo.map(item => (
+                  <StockBajoItem key={item.product_id || item.inventory_id} item={item} />
+                ))}
+              </div>
+            )}
+          </section>
         </div>
 
         <DialogFooter>
@@ -128,6 +165,27 @@ function DestacadoCard({ titulo, icono, metric, colorClass, emptyMsg }) {
   )
 }
 
+function StockBajoItem({ item }) {
+  const isCritico = item.stock_status === 'CRITICO'
+  return (
+    <div className="flex items-center justify-between px-3 py-2">
+      <div className="flex items-center gap-2 min-w-0">
+        <span className={`w-2 h-2 rounded-full shrink-0 ${isCritico ? 'bg-red-500' : 'bg-amber-400'}`} />
+        <span className="text-sm truncate">{item.product_name}</span>
+        <span className="text-[10px] text-[hsl(var(--muted-foreground))] shrink-0">{item.category_name}</span>
+      </div>
+      <div className="text-right shrink-0 ml-2">
+        <span className={`text-xs font-bold ${isCritico ? 'text-red-600' : 'text-amber-600'}`}>
+          {item.stock_current} uds
+        </span>
+        <span className="text-[10px] text-[hsl(var(--muted-foreground))] ml-1">
+          / mín {item.stock_min}
+        </span>
+      </div>
+    </div>
+  )
+}
+
 function Top5Item({ item, rank }) {
   const maxUnits = 999
   const barWidth = Math.min((item.units_sold / maxUnits) * 100, 100)
@@ -140,7 +198,7 @@ function Top5Item({ item, rank }) {
   const rankClass = rankColors[rank] || 'bg-[hsl(var(--accent))] text-[hsl(var(--muted-foreground))]'
 
   return (
-    <li className="flex items-start gap-3 p-3 rounded-lg border border-[hsl(var(--border))] bg-white">
+    <li className="flex items-start gap-3 p-3 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--card))]">
       <span className={`w-6 h-6 flex items-center justify-center rounded-full text-xs font-bold shrink-0 mt-0.5 ${rankClass}`}>
         {rank}
       </span>

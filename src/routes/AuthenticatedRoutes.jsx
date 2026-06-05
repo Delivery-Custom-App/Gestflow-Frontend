@@ -12,100 +12,121 @@ import WeeklyPurchaseDetailPage from '../components/inventory/weeklyPurchases/We
 import RecipesPage from '../components/inventory/recipes/RecipesPage'
 import POSModule from '../components/pos/POSModule'
 import MesaDetail from '../components/pos/MesaDetail'
-import WorkerLocalSelector from '../components/WorkerLocalSelector'
-import UserManagement from '../components/UserManagement'
+import ReportesPage from '../components/pos/ReportesPage'
+import UserManagementPage from '../components/UserManagementPage'
+import UsersListPage from '../components/UsersListPage'
+import { OnboardingProvider } from '../context/OnboardingContext'
 import { WORKER_ROLES } from '../constants/roles'
 import { isSuperAdminRole } from '../auth/roleLabel'
 import { useAuth } from '../context/AuthContext'
 
-/** Opt-in a banderas de React Router v7 (menos advertencias en consola durante el desarrollo). */
 const ROUTER_FUTURE_FLAGS = { v7_startTransition: true, v7_relativeSplatPath: true }
 
-/** Persistent layout wrapper — sidebar stays mounted across all admin routes */
 function AdminLayout() {
   return <AppShell />
 }
 
-/** /local/:id sin subruta → redirige al dashboard del local */
 function LocalModulesHomeRedirect() {
   const { localId } = useParams()
   const { state } = useLocation()
   return <Navigate to={`/local/${localId}/dashboard`} replace state={state ?? {}} />
 }
 
-/** Rutas antiguas bajo /proveedores/compras-semanales → URL canónica /inventario/compras-semanales */
-function LegacyProveedoresComprasSemanalesRedirect() {
+function LegacyComprasRedirect() {
   const { localId } = useParams()
   return <Navigate to={`/local/${localId}/inventario/compras-semanales`} replace />
 }
 
-function LegacyProveedoresComprasSemanalesDetailRedirect() {
+function LegacyComprasDetailRedirect() {
   const { localId, orderId } = useParams()
   return <Navigate to={`/local/${localId}/inventario/compras-semanales/${orderId}`} replace />
 }
 
-const PRACTICE_LOCAL_ID =
-  import.meta.env.VITE_PRACTICE_LOCAL_ID || '22222222-2222-4222-8222-222222222222'
-
-/** Atajo de prácticas: /practica/recetas → dashboard de recetas del local demo */
-function RecetasPracticaRedirect() {
-  const local = { id: PRACTICE_LOCAL_ID, name: 'Local práctica recetas' }
+/** Rutas compartidas de local (inventario, POS, admin, dashboard) */
+function LocalRoutes() {
   return (
-    <Navigate
-      to={`/local/${PRACTICE_LOCAL_ID}/inventario/recipes`}
-      replace
-      state={{ local }}
-    />
+    <>
+      <Route path="/local/:localId/inventario/stock" element={<StockControlDashboard />} />
+      <Route path="/local/:localId/inventario/recipes" element={<RecipesPage />} />
+      <Route path="/local/:localId/inventario/compras-semanales/:orderId" element={<WeeklyPurchaseDetailPage />} />
+      <Route path="/local/:localId/inventario/compras-semanales" element={<WeeklyPurchasesPage />} />
+      <Route path="/local/:localId/inventario/proveedores/compras-semanales/:orderId" element={<LegacyComprasDetailRedirect />} />
+      <Route path="/local/:localId/inventario/proveedores/compras-semanales" element={<LegacyComprasRedirect />} />
+      <Route path="/local/:localId/inventario/proveedores" element={<SuppliersKpisDashboard />} />
+      <Route path="/local/:localId/inventario" element={<InventoryHub />} />
+      <Route path="/local/:localId/administrativo/:sectionId?" element={<AdministrativeModule />} />
+      <Route path="/local/:localId/pos" element={<POSModule />} />
+      <Route path="/local/:localId/pos/cocina" element={<POSModule />} />
+      <Route path="/local/:localId/pos/reportes" element={<ReportesPage />} />
+      <Route path="/local/:localId/pos/mesa/:mesaId" element={<MesaDetail />} />
+      <Route path="/local/:localId/dashboard" element={<LocalDashboard />} />
+      <Route path="/local/:localId" element={<LocalModulesHomeRedirect />} />
+    </>
   )
 }
 
-/** @param {'superadmin' | 'admin'} variant */
-function AdminAppRoutes({ variant }) {
-  const homeAtRoot = variant === 'admin'
+/** SUPERADMIN: acceso total — Tus Locales, Usuarios, todos los locales */
+function SuperadminRoutes() {
   return (
     <Routes>
       <Route element={<AdminLayout />}>
-        {homeAtRoot && <Route path="/" element={<AdminDashboard />} />}
+        <Route path="/" element={<Navigate to="/admin" replace />} />
         <Route path="/admin" element={<AdminDashboard />} />
-        {variant === 'superadmin' && <Route path="/admin/usuarios" element={<UserManagement />} />}
-        <Route path="/practica/recetas" element={<RecetasPracticaRedirect />} />
-        <Route path="/local/:localId/inventario/stock" element={<StockControlDashboard />} />
-        <Route path="/local/:localId/inventario/recipes" element={<RecipesPage />} />
-        <Route path="/local/:localId/inventario/compras-semanales/:orderId" element={<WeeklyPurchaseDetailPage />} />
-        <Route path="/local/:localId/inventario/compras-semanales" element={<WeeklyPurchasesPage />} />
-        <Route
-          path="/local/:localId/inventario/proveedores/compras-semanales/:orderId"
-          element={<LegacyProveedoresComprasSemanalesDetailRedirect />}
-        />
-        <Route
-          path="/local/:localId/inventario/proveedores/compras-semanales"
-          element={<LegacyProveedoresComprasSemanalesRedirect />}
-        />
-        <Route path="/local/:localId/inventario/proveedores" element={<SuppliersKpisDashboard />} />
-        <Route path="/local/:localId/inventario" element={<InventoryHub />} />
-        <Route path="/local/:localId/administrativo/:sectionId?" element={<AdministrativeModule />} />
-        <Route path="/local/:localId/pos" element={<POSModule />} />
-        <Route path="/local/:localId/pos/mesa/:mesaId" element={<MesaDetail />} />
-        <Route path="/local/:localId/dashboard" element={<LocalDashboard />} />
-        <Route path="/local/:localId" element={<LocalModulesHomeRedirect />} />
-        {homeAtRoot ? (
-          <Route path="*" element={<Navigate to="/" replace />} />
-        ) : (
-          <>
-            <Route path="/" element={<Navigate to="/admin" replace />} />
-            <Route path="*" element={<Navigate to="/admin" replace />} />
-          </>
-        )}
+        <Route path="/usuarios" element={<UsersListPage />} />
+        <Route path="/usuarios/crear" element={<UserManagementPage />} />
+        {LocalRoutes()}
+        <Route path="*" element={<Navigate to="/admin" replace />} />
       </Route>
     </Routes>
   )
 }
 
-function WorkerAppRoutes() {
+/** ADMIN: acceso solo a SU local — sin Tus Locales, sin Usuarios */
+function AdminRoutes({ assignedLocalId }) {
+  // Si tiene local asignado, home es ese local; si no, muestra selector vacío
+  const home = assignedLocalId
+    ? `/local/${assignedLocalId}/dashboard`
+    : '/admin'
+
   return (
     <Routes>
-      <Route path="/" element={<WorkerLocalSelector />} />
+      <Route element={<AdminLayout />}>
+        <Route path="/" element={<Navigate to={home} replace />} />
+        {/* /admin redirige siempre a su local */}
+        <Route path="/admin" element={<Navigate to={home} replace />} />
+        {/* Bloquea /usuarios */}
+        <Route path="/usuarios" element={<Navigate to={home} replace />} />
+        <Route path="/usuarios/crear" element={<Navigate to={home} replace />} />
+        {LocalRoutes()}
+        <Route path="*" element={<Navigate to={home} replace />} />
+      </Route>
+    </Routes>
+  )
+}
+
+/** TRABAJADOR: solo POS de su local asignado */
+function WorkerRoutes({ assignedLocalId }) {
+  const home = assignedLocalId ? `/local/${assignedLocalId}/pos` : '/'
+
+  if (assignedLocalId) {
+    return (
+      <Routes>
+        <Route path="/" element={<Navigate to={home} replace />} />
+        <Route path="/local/:localId/pos" element={<POSModule />} />
+        <Route path="/local/:localId/pos/cocina" element={<POSModule />} />
+        <Route path="/local/:localId/pos/mesa/:mesaId" element={<MesaDetail />} />
+        <Route path="*" element={<Navigate to={home} replace />} />
+      </Routes>
+    )
+  }
+
+  // Sin local asignado: selector de local (fallback)
+  return (
+    <Routes>
+      <Route path="/" element={<Navigate to="/admin" replace />} />
+      <Route path="/admin" element={<AdminDashboard />} />
       <Route path="/local/:localId/pos" element={<POSModule />} />
+      <Route path="/local/:localId/pos/cocina" element={<POSModule />} />
       <Route path="/local/:localId/pos/mesa/:mesaId" element={<MesaDetail />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
@@ -113,18 +134,24 @@ function WorkerAppRoutes() {
 }
 
 export default function AuthenticatedApp() {
-  const { userRole } = useAuth()
+  const { userRole, assignedLocalId } = useAuth()
 
-  let routes = <AdminAppRoutes variant="admin" />
+  let routes
   if (isSuperAdminRole(userRole)) {
-    routes = <AdminAppRoutes variant="superadmin" />
+    routes = <SuperadminRoutes />
   } else if (WORKER_ROLES.includes(userRole)) {
-    routes = <WorkerAppRoutes />
+    routes = <WorkerRoutes assignedLocalId={assignedLocalId} />
+  } else {
+    routes = <AdminRoutes assignedLocalId={assignedLocalId} />
   }
 
   return (
     <ErrorBoundary>
-      <Router future={ROUTER_FUTURE_FLAGS}>{routes}</Router>
+      <Router future={ROUTER_FUTURE_FLAGS}>
+        <OnboardingProvider>
+          {routes}
+        </OnboardingProvider>
+      </Router>
     </ErrorBoundary>
   )
 }

@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { apiRequest, getOptionalAuthContext } from '../lib/apiClient'
+import { getUserRole } from '../utils/jwt'
 
 /**
  * Hook para obtener locales del backend
@@ -15,21 +16,28 @@ export function useLocals() {
       setLoading(true)
       setError(null)
 
-      const { token, businessId } = await getOptionalAuthContext()
+      const { token, businessId, user } = await getOptionalAuthContext()
 
-      // Guard clause: sin token no se dispara request al backend.
       if (!token) {
         setLocales([])
         return
       }
 
-      if (!businessId) {
-        setError('No se encontro business_id en el token')
+      const role = getUserRole(user, token)
+      const isSuperAdmin = role?.toUpperCase() === 'SUPERADMIN'
+
+      const url = businessId
+        ? `/locals?business_id=${businessId}`
+        : isSuperAdmin
+          ? '/locals'
+          : null
+
+      if (!url) {
         setLocales([])
         return
       }
 
-      const dataLocales = await apiRequest(`/locals?business_id=${businessId}`, { token })
+      const dataLocales = await apiRequest(url, { token })
       setLocales(Array.isArray(dataLocales) ? dataLocales : [])
     } catch (err) {
       console.error('Error obteniendo locales:', err)

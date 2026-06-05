@@ -31,20 +31,18 @@ function RecipesPage() {
   const [searchTerm, setSearchTerm] = useState('')
   const [statusFilter, setStatusFilter] = useState(null)
   const [categories, setCategories] = useState([])
+  const [saveError, setSaveError] = useState('')
 
   useEffect(() => {
     const loadCategories = async () => {
       try {
         const data = await recetasApiRequest(`/recipes/categories?local_id=${localId}`)
         setCategories(Array.isArray(data) ? data : [])
-      } catch (err) {
-        console.error('Error loading categories:', err)
+      } catch {
         setCategories([])
       }
     }
-    if (localId) {
-      loadCategories()
-    }
+    if (localId) loadCategories()
   }, [localId])
 
   useEffect(() => {
@@ -76,6 +74,7 @@ function RecipesPage() {
   }
 
   const handleSaveRecipe = async (formData) => {
+    setSaveError('')
     try {
       const transformedData = {
         categoryId: formData.category_id,
@@ -105,10 +104,12 @@ function RecipesPage() {
       await fetchKpis()
     } catch (err) {
       console.error('Error saving recipe:', err)
+      setSaveError(err?.message || 'Error al guardar la receta')
+      throw err
     }
   }
 
-  const selectClass = 'h-9 rounded-md border border-[hsl(var(--border))] bg-white px-3 py-1 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary)/0.3)]'
+  const selectClass = 'h-9 rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3 py-1 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary)/0.3)]'
 
   return (
     <InventoryShell>
@@ -144,7 +145,7 @@ function RecipesPage() {
               { label: 'Costo Promedio', value: `$${formatCLP(kpis.total_cost_average)}`, color: 'text-[hsl(var(--foreground))]' },
               { label: 'Margen Promedio', value: `${kpis.profit_margin_average?.toFixed(1)}%`, color: 'text-[hsl(var(--primary))]' },
             ].map(({ label, value, color }) => (
-              <article key={label} className="flex flex-col gap-0.5 rounded-xl border border-[hsl(var(--border))] bg-white shadow-sm px-4 py-3">
+              <article key={label} className="flex flex-col gap-0.5 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] shadow-sm px-4 py-3">
                 <span className="text-xs text-[hsl(var(--muted-foreground))]">{label}</span>
                 <span className={`text-xl font-bold ${color}`}>{value}</span>
               </article>
@@ -199,13 +200,14 @@ function RecipesPage() {
         <CreateRecipeModal
           isOpen={showCreateModal}
           recipe={editingRecipe}
-          categories={categories}
           onSave={handleSaveRecipe}
           onCancel={() => {
             setShowCreateModal(false)
             setEditingRecipe(null)
+            setSaveError('')
           }}
           localId={localId}
+          externalError={saveError}
         />
 
         {showDetailModal && selectedRecipe && (

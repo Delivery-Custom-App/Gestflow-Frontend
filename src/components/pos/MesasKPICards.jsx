@@ -56,7 +56,7 @@ const KPI_CONFIG = [
 function KPICard({ config, value, loading, index }) {
   const staggerClass = `stagger-${Math.min(index + 1, 6)}`
   return (
-    <article className={`animate-fade-in-up ${staggerClass} flex items-center gap-3 p-4 bg-white rounded-xl border border-[hsl(var(--border))] shadow-sm`}>
+    <article className={`animate-fade-in-up ${staggerClass} flex items-center gap-3 p-4 bg-[hsl(var(--card))] rounded-xl border border-[hsl(var(--border))] shadow-sm`}>
       <div className={`w-10 h-10 flex items-center justify-center rounded-lg shrink-0 ${config.bgClass} ${config.colorClass}`}>
         {config.icon}
       </div>
