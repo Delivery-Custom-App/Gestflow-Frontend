@@ -74,7 +74,7 @@ function SuperadminRoutes() {
         <Route path="/admin" element={<AdminDashboard />} />
         <Route path="/usuarios" element={<UsersListPage />} />
         <Route path="/usuarios/crear" element={<UserManagementPage />} />
-        <LocalRoutes />
+        {LocalRoutes()}
         <Route path="*" element={<Navigate to="/admin" replace />} />
       </Route>
     </Routes>
@@ -97,7 +97,7 @@ function AdminRoutes({ assignedLocalId }) {
         {/* Bloquea /usuarios */}
         <Route path="/usuarios" element={<Navigate to={home} replace />} />
         <Route path="/usuarios/crear" element={<Navigate to={home} replace />} />
-        <LocalRoutes />
+        {LocalRoutes()}
         <Route path="*" element={<Navigate to={home} replace />} />
       </Route>
     </Routes>

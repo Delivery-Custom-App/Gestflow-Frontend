@@ -130,12 +130,15 @@ export function OnboardingProvider({ children }) {
     }
   }, [locales])
 
-  // Detecta primera sesión
+  // Detecta primera sesión — marca como visto al arrancar para que no repita aunque cierren a mitad
   useEffect(() => {
     if (!storageKey || !userRole) return
     const done = localStorage.getItem(storageKey)
     if (!done) {
-      const t = setTimeout(() => setActive(true), 900)
+      const t = setTimeout(() => {
+        localStorage.setItem(storageKey, '1')
+        setActive(true)
+      }, 900)
       return () => clearTimeout(t)
     }
   }, [storageKey, userRole])
@@ -157,16 +160,14 @@ export function OnboardingProvider({ children }) {
   const next = useCallback(() => {
     if (step >= steps.length - 1) {
       setActive(false)
-      if (storageKey) localStorage.setItem(storageKey, '1')
     } else {
       setStep((s) => s + 1)
     }
-  }, [step, steps.length, storageKey])
+  }, [step, steps.length])
 
   const skip = useCallback(() => {
     setActive(false)
-    if (storageKey) localStorage.setItem(storageKey, '1')
-  }, [storageKey])
+  }, [])
 
   useEffect(() => {
     if (active) setStep(0)

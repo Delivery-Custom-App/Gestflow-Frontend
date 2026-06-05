@@ -59,7 +59,7 @@ function StatusPill({ label, count, pillBg }) {
   return (
     <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-white text-xs font-semibold ${pillBg}`}>
       <span>{label}</span>
-      <span className="bg-white/25 rounded-full w-5 h-5 flex items-center justify-center text-[11px] font-bold leading-none">
+      <span className="bg-[hsl(var(--card))]/25 rounded-full w-5 h-5 flex items-center justify-center text-[11px] font-bold leading-none">
         {String(count).padStart(2, '0')}
       </span>
     </div>
@@ -109,16 +109,16 @@ function OrderCard({ order, mesaMap, onUpdateStatus, tokenIndex }) {
   const overMin = Math.max(0, Math.floor(secs / 60 - DELAY_THRESHOLD_MIN))
 
   return (
-    <div className="bg-white rounded-xl border border-[hsl(var(--border))] shadow-sm overflow-hidden flex flex-col">
+    <div className="bg-[hsl(var(--card))] rounded-xl border border-[hsl(var(--border))] shadow-sm overflow-hidden flex flex-col">
 
       {/* Colored header */}
       <div className={`${cfg.headerBg} px-4 py-3 flex items-center gap-3`}>
-        <div className="w-9 h-9 rounded-full bg-white/20 border border-white/30 flex items-center justify-center shrink-0">
+        <div className="w-9 h-9 rounded-full bg-[hsl(var(--card))]/20 border border-white/30 flex items-center justify-center shrink-0">
           <UtensilsCrossed className="w-4 h-4 text-white" />
         </div>
         <div className="flex-1 min-w-0">
           <p className="text-sm font-bold text-white truncate leading-tight">{mesaName}</p>
-          <span className="inline-block mt-0.5 text-[10px] font-semibold bg-white/20 text-white px-2 py-0.5 rounded-full">
+          <span className="inline-block mt-0.5 text-[10px] font-semibold bg-[hsl(var(--card))]/20 text-white px-2 py-0.5 rounded-full">
             {sourceLabel}
           </span>
         </div>
@@ -337,7 +337,7 @@ export default function KitchenDisplay({ localId, mesas = [] }) {
             placeholder="Buscar mesa u orden..."
             value={search}
             onChange={e => setSearch(e.target.value)}
-            className="h-8 pl-8 pr-3 text-xs rounded-lg border border-[hsl(var(--border))] bg-white focus:outline-none focus:ring-1 focus:ring-[hsl(var(--primary))] w-44"
+            className="h-8 pl-8 pr-3 text-xs rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--card))] focus:outline-none focus:ring-1 focus:ring-[hsl(var(--primary))] w-44"
           />
         </div>
       </div>

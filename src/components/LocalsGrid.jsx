@@ -13,7 +13,7 @@ function LocalCard({ local, index, onSelect }) {
     <button
       type="button"
       onClick={() => onSelect(local, index)}
-      className="group relative w-full text-left overflow-hidden rounded-2xl border border-[hsl(var(--border))] bg-white shadow-sm hover:shadow-xl hover:-translate-y-1.5 transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--primary))]"
+      className="group relative w-full text-left overflow-hidden rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] shadow-sm hover:shadow-xl hover:-translate-y-1.5 transition-all duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--primary))]"
     >
       {/* Header */}
       <div className="relative px-6 py-6 overflow-hidden bg-[hsl(var(--primary))]">
@@ -25,7 +25,7 @@ function LocalCard({ local, index, onSelect }) {
 
         <div className="relative flex items-center gap-4">
           {/* Avatar with initials */}
-          <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-white/20 backdrop-blur-sm border border-white/30">
+          <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-[hsl(var(--card))]/20 backdrop-blur-sm border border-white/30">
             <span className="text-lg font-black text-white tracking-tight">{initials}</span>
           </div>
 
@@ -52,7 +52,7 @@ function LocalsGrid({ locales, onLocalSelect, onCreateLocal }) {
     <div className="min-h-full bg-[hsl(var(--background))]">
       {/* Page hero */}
       <div
-        className="px-6 py-12"
+        className="px-4 sm:px-6 py-8 sm:py-12"
         style={{ background: 'linear-gradient(160deg, hsl(var(--primary)/0.06) 0%, hsl(var(--background)) 70%)' }}
       >
         <div className="mx-auto max-w-5xl">
@@ -80,10 +80,10 @@ function LocalsGrid({ locales, onLocalSelect, onCreateLocal }) {
       </div>
 
       {/* Content */}
-      <div className="px-6 pb-12">
+      <div className="px-4 sm:px-6 pb-12">
         <div className="mx-auto max-w-5xl">
           {locales.length === 0 ? (
-            <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-[hsl(var(--border))] bg-white py-24 text-center">
+            <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-[hsl(var(--border))] bg-[hsl(var(--card))] py-24 text-center">
               <div className="mb-5 flex h-20 w-20 items-center justify-center rounded-2xl bg-[hsl(var(--primary)/0.08)]">
                 <Building2 className="h-10 w-10 text-[hsl(var(--primary))]" />
               </div>

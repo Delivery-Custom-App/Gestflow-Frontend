@@ -18,7 +18,7 @@ const date = (v) => {
   try { return new Date(v).toLocaleDateString('es-CL', { day: '2-digit', month: 'long', year: 'numeric' }) }
   catch { return String(v) }
 }
-const inputCls = 'h-9 w-full rounded-md border border-[hsl(var(--border))] bg-white px-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary)/0.3)]'
+const inputCls = 'h-9 w-full rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary)/0.3)]'
 const fieldCls = 'flex flex-col gap-1'
 const labelCls = 'text-[10px] font-semibold uppercase tracking-widest text-[hsl(var(--muted-foreground))]'
 const valCls   = 'text-sm font-medium text-[hsl(var(--foreground))]'
@@ -190,7 +190,7 @@ function CommercialSection({ supplierId, businessId, detail, onUpdated }) {
       <div className={fieldCls}>
         <Label className={labelCls}>Observaciones</Label>
         <textarea value={notes} onChange={e=>setNotes(e.target.value)} rows={3} placeholder="Notas o condiciones"
-          className="w-full rounded-md border border-[hsl(var(--border))] bg-white px-3 py-2 text-sm shadow-sm resize-none focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary)/0.3)]" />
+          className="w-full rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3 py-2 text-sm shadow-sm resize-none focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary)/0.3)]" />
       </div>
       <Button type="submit" size="sm" disabled={saving} className="self-start">
         {saving ? 'Guardando…' : 'Guardar condiciones'}
@@ -280,7 +280,7 @@ function SupplierDetailModal({ open, supplierId, businessId, onClose }) {
                   ['Productos asociados', detail.purchased_products_count ?? 0, false],
                   ['Total compras (CLP)', fmt(detail.supplier_purchases_total_clp), true],
                 ].map(([label, val, money]) => (
-                  <div key={label} className="rounded-xl border border-[hsl(var(--border))] bg-white px-5 py-4">
+                  <div key={label} className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-5 py-4">
                     <p className="text-xs text-[hsl(var(--muted-foreground))] font-medium mb-1">{label}</p>
                     <p className={`text-2xl font-bold ${money ? 'text-[hsl(var(--primary))]' : ''}`}>{val}</p>
                   </div>

@@ -18,7 +18,7 @@ export default function WorkerLocalSelector() {
   return (
     <main className="min-h-screen bg-[hsl(var(--background))] flex flex-col">
       {/* Header */}
-      <header className="sticky top-0 z-10 border-b border-[hsl(var(--primary))/20] bg-white/95 backdrop-blur-sm shadow-sm">
+      <header className="sticky top-0 z-10 border-b border-[hsl(var(--primary))/20] bg-[hsl(var(--card))]/95 backdrop-blur-sm shadow-sm">
         <div className="mx-auto flex max-w-4xl items-center justify-between px-6 py-4">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[hsl(var(--primary))]">
@@ -65,7 +65,7 @@ export default function WorkerLocalSelector() {
           )}
 
           {!loading && !error && locales.length === 0 && (
-            <div className="rounded-lg border border-[hsl(var(--border))] bg-white px-6 py-10 text-center text-sm text-[hsl(var(--muted-foreground))]">
+            <div className="rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-6 py-10 text-center text-sm text-[hsl(var(--muted-foreground))]">
               No hay locales disponibles para tu cuenta.
             </div>
           )}
@@ -77,7 +77,7 @@ export default function WorkerLocalSelector() {
                   key={local.id}
                   type="button"
                   onClick={() => handleSelectLocal(local)}
-                  className={`animate-fade-in-up stagger-${Math.min(i + 1, 6)} group flex items-center gap-4 rounded-xl border bg-white p-5 text-left shadow-sm transition-all duration-200 hover:shadow-md hover:-translate-y-0.5 hover:border-[hsl(var(--primary))/40] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--ring))]`}
+                  className={`animate-fade-in-up stagger-${Math.min(i + 1, 6)} group flex items-center gap-4 rounded-xl border bg-[hsl(var(--card))] p-5 text-left shadow-sm transition-all duration-200 hover:shadow-md hover:-translate-y-0.5 hover:border-[hsl(var(--primary))/40] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--ring))]`}
                 >
                   <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[hsl(var(--accent))] text-[hsl(var(--primary))] transition-colors group-hover:bg-[hsl(var(--primary))] group-hover:text-white">
                     <Home className="h-6 w-6" />

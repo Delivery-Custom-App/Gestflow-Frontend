@@ -388,7 +388,7 @@ function StockControlDashboard() {
                   onChange={(e) => setSearchQuery(e.target.value)}
                   aria-label="Buscar productos por nombre"
                   autoComplete="off"
-                  className="h-9 w-full rounded-md border border-[hsl(var(--border))] bg-white pl-9 pr-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary)/0.3)]"
+                  className="h-9 w-full rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--card))] pl-9 pr-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary)/0.3)]"
                 />
               </div>
               <CategoryFilterSelect value={categoryFilter} onChange={setCategoryFilter} options={categoriesCatalog} />

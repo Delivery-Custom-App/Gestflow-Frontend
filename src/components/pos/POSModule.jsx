@@ -12,10 +12,13 @@ import DeleteMesaModal from './DeleteMesaModal'
 import MesaDetailModal from './MesaDetailModal'
 import OrdenView from './OrdenView'
 import { useAuth } from '../../context/AuthContext'
+import { useTheme } from '../../context/ThemeContext'
 import { Button } from '@/components/ui/button'
+import { Sun, Moon, LogOut } from 'lucide-react'
 
 export default function POSModule() {
-  const { isWorker } = useAuth()
+  const { isWorker, logout } = useAuth()
+  const { darkMode, toggleDarkMode } = useTheme()
   const navigate = useNavigate()
   const { state: locState, pathname } = useLocation()
   const { localId } = useParams()
@@ -140,15 +143,26 @@ export default function POSModule() {
             </Button>
           )}
           {activeView === 'mesas' && (
-            <Button
+            <button
               data-onboarding="pos-kitchen-btn"
-              variant="ghost"
-              size="sm"
               onClick={() => navigate(`/local/${localId}/pos/cocina`, { state: locState })}
-              className="text-xs"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                background: '#059669',
+                color: '#fff',
+                border: 'none',
+                borderRadius: 8,
+                padding: '5px 12px',
+                fontSize: 12,
+                fontWeight: 600,
+                cursor: 'pointer',
+                whiteSpace: 'nowrap',
+              }}
             >
               🍳 Vista Cocina
-            </Button>
+            </button>
           )}
           <div>
             <h2 className="text-sm font-semibold text-[hsl(var(--foreground))] leading-none">
@@ -158,9 +172,51 @@ export default function POSModule() {
           </div>
         </div>
 
-        {!isWorker && activeView === 'mesas' && !selectedOrdenMesa && (
-          <Button size="sm" onClick={() => setShowModal(true)}>+ Nueva Mesa</Button>
-        )}
+        <div className="flex items-center gap-2">
+          {/* Botón día / noche */}
+          <button
+            onClick={toggleDarkMode}
+            title={darkMode ? 'Cambiar a modo día' : 'Cambiar a modo noche'}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: 34,
+              height: 34,
+              borderRadius: 8,
+              border: '1px solid hsl(var(--border))',
+              background: 'hsl(var(--card))',
+              cursor: 'pointer',
+              color: darkMode ? '#facc15' : '#6b7280',
+            }}
+          >
+            {darkMode ? <Sun size={16} /> : <Moon size={16} />}
+          </button>
+
+          {/* Cerrar sesión */}
+          <button
+            onClick={logout}
+            title="Cerrar sesión"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: 34,
+              height: 34,
+              borderRadius: 8,
+              border: '1px solid hsl(var(--border))',
+              background: 'hsl(var(--card))',
+              cursor: 'pointer',
+              color: '#ef4444',
+            }}
+          >
+            <LogOut size={16} />
+          </button>
+
+          {!isWorker && activeView === 'mesas' && !selectedOrdenMesa && (
+            <Button size="sm" onClick={() => setShowModal(true)}>+ Nueva Mesa</Button>
+          )}
+        </div>
       </header>
 
       {/* Main */}

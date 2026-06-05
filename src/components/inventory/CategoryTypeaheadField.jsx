@@ -91,12 +91,12 @@ function CategoryTypeaheadField({ categories = [], value = '', onConfirm, disabl
             ? 'border-red-400'
             : confirmed
               ? 'border-emerald-400 bg-emerald-50'
-              : 'border-[hsl(var(--border))] bg-white',
+              : 'border-[hsl(var(--border))] bg-[hsl(var(--card))]',
         ].join(' ')}
       />
 
       {open && (
-        <ul className="absolute top-full mt-1 left-0 right-0 z-50 rounded-md border border-[hsl(var(--border))] bg-white shadow-lg overflow-hidden max-h-44 overflow-y-auto">
+        <ul className="absolute top-full mt-1 left-0 right-0 z-50 rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--card))] shadow-lg overflow-hidden max-h-44 overflow-y-auto">
           {suggestions.length > 0 ? (
             suggestions.map((cat) => (
               <li key={cat.id}>
