@@ -69,7 +69,6 @@ function AdminAppRoutes({ variant }) {
         <Route path="/local/:localId/administrativo/:sectionId?" element={<AdministrativeModule />} />
         <Route path="/local/:localId/pos" element={<POSModule />} />
         <Route path="/local/:localId/pos/cocina" element={<POSModule />} />
-        <Route path="/local/:localId/pos/reportes" element={<ReportesPage />} />
         <Route path="/local/:localId/pos/mesa/:mesaId" element={<MesaDetail />} />
         <Route path="/local/:localId/dashboard" element={<LocalDashboard />} />
         <Route path="/local/:localId" element={<LocalModulesHomeRedirect />} />

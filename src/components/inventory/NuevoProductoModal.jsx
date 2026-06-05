@@ -3,9 +3,11 @@ import { apiRequest, getAuthContext } from '../../lib/apiClient'
 import {
   getInventorySuppliersForLocal,
   getLocalById,
+  postCategory,
   postInventoryNewProduct,
   postSupplier,
 } from '../../lib/inventoryApi'
+import CategoryTypeaheadField from './CategoryTypeaheadField'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
@@ -26,6 +28,7 @@ const UNITS = [
   { value: 'ml',     label: 'ml'     },
 ]
 
+
 /* Solo dígitos, sin signo, sin flechas */
 const numInputCls =
   'h-9 w-full rounded-md border border-[hsl(var(--border))] px-3 text-sm shadow-sm ' +
@@ -36,7 +39,7 @@ function NuevoProductoModal({ open, localId, onClose, onSuccess }) {
   const [submitting,      setSubmitting]      = useState(false)
   const [error,           setError]           = useState('')
   const [productName,     setProductName]     = useState('')
-  const [categoryId,      setCategoryId]      = useState('')
+  const [categoryName,    setCategoryName]    = useState('')
   const [unit,            setUnit]            = useState('unidad')
   const [currentStock,    setCurrentStock]    = useState('0')
   const [minStock,        setMinStock]        = useState('0')
@@ -77,7 +80,7 @@ function NuevoProductoModal({ open, localId, onClose, onSuccess }) {
     setError('')
     setSubmitting(false)
     setProductName('')
-    setCategoryId('')
+    setCategoryName('')
     setUnit('unidad')
     setCurrentStock('0')
     setMinStock('0')
@@ -136,20 +139,17 @@ function NuevoProductoModal({ open, localId, onClose, onSuccess }) {
     e.preventDefault()
     setError('')
 
-    const selectedCat = categories.find((c) => String(c.id) === categoryId)
-    const categoryName = selectedCat ? selectedCat.name.toLowerCase() : ''
-
     const cost = Number(unitCost)
-    if (!productName.trim())  { setError('Ingresa el nombre del producto.'); return }
-    if (!categoryId)          { setError('Selecciona una categoría.'); return }
-    if (!supplierId)          { setError('Selecciona un proveedor o agrega uno nuevo.'); return }
+    if (!productName.trim())    { setError('Ingresa el nombre del producto.'); return }
+    if (!categoryName.trim())   { setError('Escribe la categoría y pulsa Enter para confirmarla.'); return }
+    if (!supplierId)            { setError('Selecciona un proveedor o agrega uno nuevo.'); return }
     if (!Number.isFinite(cost) || cost <= 0) { setError('El costo unitario debe ser mayor que 0.'); return }
 
     setSubmitting(true)
     try {
       await postInventoryNewProduct(localId, {
         productName: productName.trim(),
-        category:    categoryName,
+        category:    categoryName.trim(),
         unit,
         currentStock: Number(currentStock) || 0,
         minStock:     Number(minStock)     || 0,
@@ -208,28 +208,28 @@ function NuevoProductoModal({ open, localId, onClose, onSuccess }) {
               </div>
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="np-category">Categoría <span className="text-red-500">*</span></Label>
-                <select
-                  id="np-category"
-                  value={categoryId}
-                  onChange={(e) => setCategoryId(e.target.value)}
-                  disabled={catsLoading || submitting}
-                  className={
-                    'h-9 w-full rounded-md border border-[hsl(var(--border))] px-3 text-sm shadow-sm bg-white ' +
-                    'focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary)/0.3)]'
-                  }
-                >
-                  <option value="">
-                    {catsLoading ? 'Cargando categorías…' : 'Selecciona una categoría'}
-                  </option>
-                  {categories.map((cat) => (
-                    <option key={cat.id} value={String(cat.id)}>
-                      {cat.name}
-                    </option>
-                  ))}
-                  {!catsLoading && categories.length === 0 && (
-                    <option value="" disabled>Sin categorías disponibles</option>
-                  )}
-                </select>
+                {catsLoading ? (
+                  <p className="text-xs text-[hsl(var(--muted-foreground))] py-2">Cargando categorías…</p>
+                ) : (
+                  <CategoryTypeaheadField
+                    categories={categories}
+                    value={categoryName}
+                    onConfirm={async (name) => {
+                      setCategoryName(name)
+                      if (!name || !localId) return
+                      const exists = categories.some(
+                        (c) => c.name.toLowerCase() === name.toLowerCase()
+                      )
+                      if (!exists) {
+                        try {
+                          const created = await postCategory({ local_id: localId, name, is_active: true })
+                          setCategories((prev) => [...prev, created])
+                        } catch { /* no crítico */ }
+                      }
+                    }}
+                    disabled={submitting}
+                  />
+                )}
               </div>
             </div>
 

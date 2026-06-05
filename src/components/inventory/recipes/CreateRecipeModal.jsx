@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react'
-import { getInventoryProductsPage } from '../../../lib/inventoryApi'
+import { useState, useEffect, useRef } from 'react'
+import { getInventoryProductsPage, getCategoriesForLocal, postCategory } from '../../../lib/inventoryApi'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
@@ -17,17 +17,107 @@ const UNITS = [
   { value: 'cucharadita', label: 'CUCHARADITA' },
 ]
 
+// Únicamente estas 2 categorías disponibles para el menú
+const MENU_CATEGORIES = ['Completos', 'Sandwich']
+
+function titleCase(str) {
+  if (!str) return ''
+  return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase()
+}
+
+/** Selector de categoría — solo clic, despliega Completos / Sandwich. */
+function MenuCategoryInput({ localId, selectedName, onResolve, disabled, error }) {
+  const [open, setOpen]           = useState(false)
+  const [resolving, setResolving] = useState(false)
+  const [resolveErr, setResolveErr] = useState('')
+  const wrapperRef = useRef(null)
+
+  useEffect(() => {
+    const handler = (e) => {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
+
+  const resolveCategory = async (name) => {
+    if (!localId) return
+    setResolving(true)
+    setResolveErr('')
+    setOpen(false)
+    try {
+      const existing = await getCategoriesForLocal(localId)
+      const found = (Array.isArray(existing) ? existing : [])
+        .find(c => c.name.toLowerCase() === name.toLowerCase())
+      if (found) {
+        onResolve(found.id, found.name)
+      } else {
+        const created = await postCategory({ local_id: localId, name, is_active: true })
+        onResolve(created.id, created.name)
+      }
+    } catch (err) {
+      setResolveErr(err?.message || 'Error al guardar la categoría')
+    } finally {
+      setResolving(false)
+    }
+  }
+
+  return (
+    <div ref={wrapperRef} className="relative">
+      <button
+        type="button"
+        disabled={disabled || resolving}
+        onClick={() => setOpen(o => !o)}
+        className={`h-9 w-full rounded-md border px-3 text-sm text-left flex items-center justify-between shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary)/0.3)] disabled:opacity-50 ${
+          error ? 'border-red-400' : 'border-[hsl(var(--border))] bg-white hover:border-[hsl(var(--primary)/0.5)]'
+        }`}
+      >
+        <span className={selectedName ? 'text-[hsl(var(--foreground))]' : 'text-[hsl(var(--muted-foreground))]'}>
+          {resolving ? 'Guardando…' : (selectedName || 'Selecciona una categoría')}
+        </span>
+        <svg className={`w-4 h-4 text-[hsl(var(--muted-foreground))] transition-transform ${open ? 'rotate-180' : ''}`}
+          fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+
+      {open && (
+        <ul className="absolute top-full mt-1 left-0 right-0 z-50 rounded-md border border-[hsl(var(--border))] bg-white shadow-lg overflow-hidden">
+          {MENU_CATEGORIES.map(cat => (
+            <li key={cat}>
+              <button
+                type="button"
+                onMouseDown={(e) => { e.preventDefault(); resolveCategory(cat) }}
+                className={`w-full text-left px-3 py-2.5 text-sm transition-colors ${
+                  selectedName === cat
+                    ? 'bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))] font-semibold'
+                    : 'hover:bg-[hsl(var(--accent))]'
+                }`}
+              >
+                {cat}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {resolveErr && <p className="text-xs text-red-500 mt-1">{resolveErr}</p>}
+    </div>
+  )
+}
+
 const isSauce = (product) => {
   const cat = String(product.category_name || '').toLowerCase()
   return cat.includes('salsa') || cat.includes('sauce')
 }
 
-function CreateRecipeModal({ isOpen, recipe, categories, onSave, onCancel, localId, externalError }) {
+function CreateRecipeModal({ isOpen, recipe, onSave, onCancel, localId, externalError }) {
   const [formData, setFormData] = useState({
-    category_id: '',
-    name: '',
-    description: '',
-    price_sale: '',
+    category_id:   '',
+    category_name: '',
+    name:          '',
+    description:   '',
+    price_sale:    '',
     yield_portions: '',
   })
 
@@ -44,6 +134,7 @@ function CreateRecipeModal({ isOpen, recipe, categories, onSave, onCancel, local
     if (recipe) {
       setFormData({
         category_id:    recipe.category_id    || '',
+        category_name:  recipe.category_name  || '',
         name:           recipe.name           || '',
         description:    recipe.description    || '',
         price_sale:     recipe.price_sale     || '',
@@ -51,7 +142,7 @@ function CreateRecipeModal({ isOpen, recipe, categories, onSave, onCancel, local
       })
       setIngredients(recipe.ingredients ? [...recipe.ingredients] : [])
     } else {
-      setFormData({ category_id: '', name: '', description: '', price_sale: '', yield_portions: '' })
+      setFormData({ category_id: '', category_name: '', name: '', description: '', price_sale: '', yield_portions: '' })
       setIngredients([])
     }
 
@@ -68,18 +159,16 @@ function CreateRecipeModal({ isOpen, recipe, categories, onSave, onCancel, local
     return () => { cancelled = true }
   }, [isOpen, recipe, localId])
 
-  /* ── helpers de formulario ── */
   const setField = (key, value) => {
     setFormData((p) => ({ ...p, [key]: value }))
     setErrors((p) => { const n = { ...p }; delete n[key]; return n })
   }
 
-  /* ── Seleccionar producto del dropdown → añade inmediatamente ── */
   const handlePickProduct = (e) => {
     const pid = e.target.value
     setPickedId('')
     if (!pid) return
-    if (ingredients.some((i) => String(i.product_id) === pid)) return // ya está
+    if (ingredients.some((i) => String(i.product_id) === pid)) return
 
     const product = products.find((p) => String(p.product_id) === pid)
     if (!product) return
@@ -102,7 +191,6 @@ function CreateRecipeModal({ isOpen, recipe, categories, onSave, onCancel, local
   const removeIngredient = (pid) =>
     setIngredients((prev) => prev.filter((i) => String(i.product_id) !== pid))
 
-  /* ── Cálculos financieros ── */
   const totalCost = ingredients.reduce(
     (s, i) => s + (Number(i.quantity_required) || 0) * Number(i.unit_cost_clp || 0), 0
   )
@@ -110,14 +198,13 @@ function CreateRecipeModal({ isOpen, recipe, categories, onSave, onCancel, local
   const salePrice = parseFloat(formData.price_sale) || 0
   const margin    = salePrice > 0 ? ((salePrice - totalCost) / salePrice) * 100 : 0
 
-  /* ── Validación ── */
   const validate = () => {
     const e = {}
-    if (!formData.name.trim())           e.name           = 'Nombre requerido'
-    if (!formData.category_id)           e.category_id    = 'Categoría requerida'
-    if (!formData.price_sale || salePrice <= 0) e.price_sale = 'Precio de venta requerido y mayor a 0'
+    if (!formData.name.trim())                    e.name           = 'Nombre requerido'
+    if (!formData.category_id)                    e.category_id    = 'Categoría requerida (escribe y pulsa Enter)'
+    if (!formData.price_sale || salePrice <= 0)   e.price_sale     = 'Precio de venta requerido y mayor a 0'
     if (!formData.yield_portions || portions < 1) e.yield_portions = 'Mínimo 1 porción'
-    if (ingredients.length === 0)        e.ingredients    = 'Agrega al menos 1 ingrediente'
+    if (ingredients.length === 0)                 e.ingredients    = 'Agrega al menos 1 ingrediente'
     for (const ing of ingredients) {
       if (!ing.quantity_required || Number(ing.quantity_required) <= 0) {
         e.ingredients = `Cantidad inválida en "${ing.product_name}"`
@@ -141,11 +228,11 @@ function CreateRecipeModal({ isOpen, recipe, categories, onSave, onCancel, local
         total_cost:             totalCost,
         profit_margin_percent:  margin,
         ingredients:            ingredients.map((i) => ({
-          product_id:       i.product_id,
-          product_name:     i.product_name,
+          product_id:        i.product_id,
+          product_name:      i.product_name,
           quantity_required: Number(i.quantity_required),
-          unit:             i.unit,
-          unit_cost_clp:    i.unit_cost_clp,
+          unit:              i.unit,
+          unit_cost_clp:     i.unit_cost_clp,
         })),
       }
       if (recipe) payload.id = recipe.id
@@ -164,7 +251,6 @@ function CreateRecipeModal({ isOpen, recipe, categories, onSave, onCancel, local
     `h-9 w-full rounded-md border px-3 text-sm shadow-sm bg-white focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary)/0.3)] ${
       errors[key] ? 'border-red-400' : 'border-[hsl(var(--border))]'
     }`
-
 
   return (
     <Dialog open={isOpen} onOpenChange={(o) => { if (!o) onCancel() }}>
@@ -194,21 +280,25 @@ function CreateRecipeModal({ isOpen, recipe, categories, onSave, onCancel, local
             {errors.name && <span className="text-xs text-red-500">{errors.name}</span>}
           </div>
 
-          {/* Categoría */}
+          {/* Categoría — typeahead limitado a Completos / Sandwich */}
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="cr-category">Categoría <span className="text-red-500">*</span></Label>
-            <select
-              id="cr-category"
-              value={formData.category_id}
-              onChange={(e) => setField('category_id', e.target.value)}
-              className={selectCls('category_id')}
-            >
-              <option value="">Selecciona una categoría</option>
-              {categories.map((cat) => (
-                <option key={cat.id} value={cat.id}>{cat.name}</option>
-              ))}
-            </select>
-            {errors.category_id && <span className="text-xs text-red-500">{errors.category_id}</span>}
+            <Label>
+              Categoría <span className="text-red-500">*</span>
+            </Label>
+            <MenuCategoryInput
+              localId={localId}
+              selectedName={formData.category_name}
+              onResolve={(id, name) => {
+                setField('category_id', id)
+                setFormData(p => ({ ...p, category_id: id, category_name: name }))
+                setErrors(p => { const n = { ...p }; delete n.category_id; return n })
+              }}
+              disabled={savingLoading}
+              error={!!errors.category_id}
+            />
+            {errors.category_id && (
+              <span className="text-xs text-red-500">{errors.category_id}</span>
+            )}
           </div>
 
           {/* Descripción */}
@@ -254,7 +344,7 @@ function CreateRecipeModal({ isOpen, recipe, categories, onSave, onCancel, local
             </div>
           </div>
 
-          {/* ── Ingredientes ── */}
+          {/* Ingredientes */}
           <div className="flex flex-col gap-3">
             <div>
               <h3 className="text-sm font-semibold text-[hsl(var(--foreground))]">Ingredientes</h3>
@@ -267,7 +357,6 @@ function CreateRecipeModal({ isOpen, recipe, categories, onSave, onCancel, local
               <p className="text-sm text-[hsl(var(--muted-foreground))] py-2">Cargando productos…</p>
             ) : (
               <>
-                {/* Selector de producto → se añade al instante */}
                 <div className="flex flex-col gap-1.5">
                   <Label htmlFor="cr-pick-product">Seleccione un Producto</Label>
                   <select
@@ -291,11 +380,10 @@ function CreateRecipeModal({ isOpen, recipe, categories, onSave, onCancel, local
                   </select>
                 </div>
 
-                {/* Tabla de ingredientes */}
                 {ingredients.length > 0 && (
                   <div className="rounded-lg border border-[hsl(var(--border))] overflow-hidden">
-                    {/* Header */}
-                    <div className="grid gap-2 px-4 py-2 bg-[hsl(var(--muted)/0.3)] border-b border-[hsl(var(--border))] text-xs font-semibold text-[hsl(var(--muted-foreground))] uppercase tracking-wide"
+                    <div
+                      className="grid gap-2 px-4 py-2 bg-[hsl(var(--muted)/0.3)] border-b border-[hsl(var(--border))] text-xs font-semibold text-[hsl(var(--muted-foreground))] uppercase tracking-wide"
                       style={{ gridTemplateColumns: '1fr 100px 140px 88px 32px' }}
                     >
                       <span>Producto</span>
@@ -305,7 +393,6 @@ function CreateRecipeModal({ isOpen, recipe, categories, onSave, onCancel, local
                       <span />
                     </div>
 
-                    {/* Filas */}
                     <div className="divide-y divide-[hsl(var(--border)/0.3)] bg-white">
                       {ingredients.map((ing) => {
                         const subtotal = (Number(ing.quantity_required) || 0) * Number(ing.unit_cost_clp || 0)
@@ -315,15 +402,12 @@ function CreateRecipeModal({ isOpen, recipe, categories, onSave, onCancel, local
                             className="grid items-center gap-2 px-4 py-2.5"
                             style={{ gridTemplateColumns: '1fr 100px 140px 88px 32px' }}
                           >
-                            {/* Nombre */}
                             <div className="min-w-0">
                               <p className="text-sm font-medium truncate">{ing.product_name}</p>
                               {ing.is_sauce && (
                                 <p className="text-xs text-amber-600 font-medium">Salsa — datos heredados</p>
                               )}
                             </div>
-
-                            {/* Cantidad */}
                             <input
                               type="text"
                               inputMode="decimal"
@@ -337,8 +421,6 @@ function CreateRecipeModal({ isOpen, recipe, categories, onSave, onCancel, local
                                   : 'border-[hsl(var(--border))] bg-white'
                               }`}
                             />
-
-                            {/* Formato de medida */}
                             <select
                               value={ing.unit}
                               onChange={(e) => updateIngredient(ing.product_id, 'unit', e.target.value)}
@@ -353,13 +435,9 @@ function CreateRecipeModal({ isOpen, recipe, categories, onSave, onCancel, local
                                 <option key={u.value} value={u.value}>{u.label}</option>
                               ))}
                             </select>
-
-                            {/* Subtotal */}
                             <span className="text-xs text-right font-semibold text-[hsl(var(--foreground))]">
                               {fmt(subtotal)}
                             </span>
-
-                            {/* Eliminar */}
                             <button
                               type="button"
                               onClick={() => removeIngredient(ing.product_id)}
@@ -372,7 +450,6 @@ function CreateRecipeModal({ isOpen, recipe, categories, onSave, onCancel, local
                       })}
                     </div>
 
-                    {/* Total */}
                     <div
                       className="grid items-center gap-2 px-4 py-2 border-t border-[hsl(var(--border))] bg-[hsl(var(--muted)/0.15)]"
                       style={{ gridTemplateColumns: '1fr 100px 140px 88px 32px' }}
@@ -401,10 +478,10 @@ function CreateRecipeModal({ isOpen, recipe, categories, onSave, onCancel, local
           {ingredients.length > 0 && salePrice > 0 && (
             <div className="grid grid-cols-2 gap-3 rounded-lg border border-[hsl(var(--border))] p-4 bg-[hsl(var(--accent)/0.3)]">
               {[
-                ['Costo total',        fmt(totalCost)],
-                ['Costo por porción',  fmt(totalCost / portions)],
-                ['Precio de venta',    fmt(salePrice)],
-                ['Margen',             `${margin.toFixed(1)}%`, margin >= 30],
+                ['Costo total',       fmt(totalCost)],
+                ['Costo por porción', fmt(totalCost / portions)],
+                ['Precio de venta',   fmt(salePrice)],
+                ['Margen',            `${margin.toFixed(1)}%`, margin >= 30],
               ].map(([label, val, isGood]) => (
                 <div key={label} className="flex justify-between items-center bg-white rounded-md px-3 py-2 shadow-sm">
                   <span className="text-xs text-[hsl(var(--muted-foreground))]">{label}</span>

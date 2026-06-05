@@ -13,6 +13,8 @@ import {
   getOrdersByLocal,
   getRendicionesDashboard,
   getTransfersByLocal,
+  postExpense,
+  postTransfer,
 } from '../lib/administrativeApi'
 import { getAuthContext } from '../lib/apiClient'
 import { enrichDashboardWithChartData, generateIncomeTrendFromOrders, generateExpenseBreakdownFromData } from '../utils/chartDataHelpers'
@@ -38,6 +40,10 @@ function toNumber(value, fallback = 0) {
 
 function safeArray(value) {
   return Array.isArray(value) ? value : []
+}
+
+function _normalizeOrderStatus(status) {
+  return String(status || '').trim().toLowerCase()
 }
 
 function normalizePaymentMethod(method) {
@@ -164,24 +170,15 @@ function AmTable({ headers, rows, emptyMessage }) {
 
 // ── Section helpers ────────────────────────────────────────────
 
-function SectionActions({ activeSection }) {
+function SectionActions({ activeSection, onNuevoGasto, onNuevaTransferencia }) {
   if (activeSection === 'ventas') {
-    return <Button disabled>+ Nueva Venta</Button>
+    return null
   }
   if (activeSection === 'rendiciones') {
     return (
       <div className="flex gap-2">
-        <Button variant="outline" disabled>+ Nuevo Gasto</Button>
-        <Button disabled>Reportar Transferencia</Button>
-      </div>
-    )
-  }
-  if (activeSection === 'reportes' || activeSection === 'flujo-caja') {
-    return (
-      <div className="flex gap-2">
-        <Button variant="outline" disabled>Semana</Button>
-        <Button variant="outline" disabled>Mes</Button>
-        <Button disabled>Periodo Personalizado</Button>
+        <Button variant="outline" onClick={onNuevoGasto}>+ Nuevo Gasto</Button>
+        <Button onClick={onNuevaTransferencia}>Reportar Transferencia</Button>
       </div>
     )
   }
@@ -202,21 +199,41 @@ function SectionState({ loading, error, isEmpty, emptyMessage }) {
 // ── Section content components ─────────────────────────────────
 
 function DashboardContent({ dashboard, loading, error }) {
-  const stateNode = <SectionState loading={loading} error={error} isEmpty={!dashboard && !loading && !error} emptyMessage="No hay datos de dashboard para este local" />
+  const stateNode = <SectionState loading={loading} error={error} isEmpty={!dashboard && !loading && !error} emptyMessage="No hay datos aún. Crea órdenes desde el POS para ver métricas." />
   if (loading || error || (!dashboard && !loading && !error)) return stateNode
 
-  const goal = dashboard?.monthly_goal || {}
-  const progress = Math.max(0, Math.min(100, toNumber(goal.progress_percentage)))
+  const goal       = dashboard?.monthly_goal || {}
+  const progress   = Math.max(0, Math.min(100, toNumber(goal.progress_percentage)))
+  const wc         = dashboard?.week_comparison || null
+  const payments   = Array.isArray(dashboard?.payment_breakdown) ? dashboard.payment_breakdown : []
+  const peakHour   = dashboard?.peak_hour != null ? `${dashboard.peak_hour}:00 – ${dashboard.peak_hour + 1}:00` : '—'
+  const cancelRate = toNumber(dashboard?.cancellation_rate).toFixed(1)
+  const weekChange = wc ? toNumber(wc.change_pct) : null
+  const weekSign   = weekChange !== null ? (weekChange >= 0 ? '+' : '') : ''
+
+  const PAYMENT_LABEL = { cash: 'Efectivo', efectivo: 'Efectivo', debit: 'Débito', debito: 'Débito', credit: 'Crédito', credito: 'Crédito', transfer: 'Transferencia', other: 'Otro' }
+  const payLabel = (m) => PAYMENT_LABEL[String(m).toLowerCase()] || String(m)
 
   return (
     <div className="space-y-5">
+
+      {/* Fila 1 — ventas principales */}
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <KpiCard label="Ventas de Hoy"   value={formatMoney(dashboard?.daily_sales)}      sub="Actualizado en tiempo real" />
-        <KpiCard label="Ventas del Mes"  value={formatMoney(dashboard?.monthly_sales)}     sub={`Meta ${formatMoney(goal.target_amount)}`} />
-        <KpiCard label="Flujo de Caja"   value={formatMoney(dashboard?.monthly_cash_flow)} sub="Ingresos - Gastos" />
-        <KpiCard label="Alertas Activas" value={toNumber(dashboard?.active_alerts)}        sub="Según dashboard" accent="warning" />
+        <KpiCard label="Ventas de Hoy"   value={formatMoney(dashboard?.daily_sales)}      sub="Últimas 24 h" />
+        <KpiCard label="Ventas del Mes"  value={formatMoney(dashboard?.monthly_sales)}    sub={`Meta ${formatMoney(goal.target_amount)}`} />
+        <KpiCard label="Flujo de Caja"   value={formatMoney(dashboard?.monthly_cash_flow)} sub="Ingresos − Gastos" />
+        <KpiCard label="Alertas Activas" value={toNumber(dashboard?.active_alerts)}       sub="Requieren atención" accent="warning" />
       </div>
 
+      {/* Fila 2 — métricas operativas */}
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+        <KpiCard label="Ticket Promedio"   value={formatMoney(dashboard?.avg_ticket)}        sub="Por orden este mes" accent="blue" />
+        <KpiCard label="Cancelaciones"     value={`${cancelRate}%`}                          sub="Órdenes canceladas mes" accent="red" />
+        <KpiCard label="Stock Crítico"     value={toNumber(dashboard?.stock_critical_count)} sub={`${toNumber(dashboard?.stock_out_count)} sin stock`} accent="warning" />
+        <KpiCard label="Mesa Más Activa"   value={dashboard?.top_mesa_name || '—'}           sub="Mayor nº órdenes mes" accent="purple" />
+      </div>
+
+      {/* Fila 3 — meta + cajas */}
       <div className="grid gap-5 lg:grid-cols-2">
         <Panel title="Meta Mensual" sub="Seguimiento del objetivo mensual de ventas">
           <ProgressBar value={progress} />
@@ -228,9 +245,10 @@ function DashboardContent({ dashboard, loading, error }) {
         <Panel title="Cajas y Operación" sub="Estado operativo del local" accent="blue">
           <div className="space-y-2">
             {[
-              ['Cajas activas', toNumber(dashboard?.active_cajas_count || dashboard?.petty_cash?.active_cajas)],
-              ['Total cajas',   toNumber(dashboard?.cajas_count || dashboard?.petty_cash?.total_cajas)],
-              ['Gastos pendientes', formatMoney(dashboard?.pending_expenses_amount)],
+              ['Cajas activas',     toNumber(dashboard?.active_cajas_count || dashboard?.petty_cash?.active_cajas)],
+              ['Total cajas',       toNumber(dashboard?.cajas_count || dashboard?.petty_cash?.total_cajas)],
+              ['Gastos pendientes', formatMoney(dashboard?.petty_cash?.pending_expenses_amount)],
+              ['Hora pico',         peakHour],
             ].map(([label, val]) => (
               <div key={label} className="flex justify-between text-sm">
                 <span className="text-[hsl(var(--muted-foreground))]">{label}</span>
@@ -240,13 +258,90 @@ function DashboardContent({ dashboard, loading, error }) {
           </div>
         </Panel>
       </div>
+
+      {/* Fila 4 — comparativo semanal + pagos */}
+      <div className="grid gap-5 lg:grid-cols-2">
+        <Panel title="Comparativo Semanal" sub="Esta semana vs semana anterior">
+          {wc ? (
+            <div className="space-y-3">
+              <div className="flex items-end justify-between">
+                <div>
+                  <p className="text-xs text-[hsl(var(--muted-foreground))]">Esta semana</p>
+                  <p className="text-xl font-extrabold text-[hsl(var(--foreground))]">{formatMoney(wc.current_week_sales)}</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-xs text-[hsl(var(--muted-foreground))]">Semana anterior</p>
+                  <p className="text-lg font-bold text-[hsl(var(--muted-foreground))]">{formatMoney(wc.prev_week_sales)}</p>
+                </div>
+              </div>
+              <div className={cn('rounded-lg px-3 py-2 text-sm font-semibold text-center',
+                weekChange >= 0 ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700')}>
+                {weekSign}{toNumber(wc.change_pct).toFixed(1)}% vs semana anterior
+              </div>
+            </div>
+          ) : (
+            <p className="text-sm text-[hsl(var(--muted-foreground))]">Sin datos suficientes.</p>
+          )}
+        </Panel>
+
+        <Panel title="Distribución por Pago" sub="Métodos de pago este mes">
+          {payments.length === 0 ? (
+            <p className="text-sm text-[hsl(var(--muted-foreground))]">Sin ventas registradas.</p>
+          ) : (
+            <div className="space-y-2">
+              {payments.map((p) => {
+                const total = payments.reduce((s, x) => s + toNumber(x.total), 0)
+                const pct = total > 0 ? (toNumber(p.total) / total * 100) : 0
+                return (
+                  <div key={p.method}>
+                    <div className="flex justify-between text-sm mb-1">
+                      <span className="font-medium">{payLabel(p.method)}</span>
+                      <span className="text-[hsl(var(--muted-foreground))]">{formatMoney(p.total)} · {pct.toFixed(0)}%</span>
+                    </div>
+                    <div className="h-1.5 w-full overflow-hidden rounded-full bg-[hsl(var(--border))]">
+                      <div className="h-full rounded-full bg-[hsl(var(--primary))]" style={{ width: `${pct}%` }} />
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </Panel>
+      </div>
+
+      {/* Fila 5 — inventario */}
+      <Panel title="Estado de Inventario" sub="Stock del local este mes">
+        <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+          {[
+            { label: 'Crítico (≤25%)',  value: toNumber(dashboard?.stock_critical_count), color: 'text-red-600' },
+            { label: 'Bajo (≤50%)',     value: toNumber(dashboard?.stock_low_count),      color: 'text-amber-600' },
+            { label: 'Sin stock',       value: toNumber(dashboard?.stock_out_count),      color: 'text-red-700 font-extrabold' },
+            { label: 'Valor Inventario',value: formatMoney(dashboard?.inventory_total_value), color: 'text-[hsl(var(--foreground))]' },
+          ].map(({ label, value, color }) => (
+            <div key={label} className="text-center">
+              <p className={cn('text-2xl font-extrabold', color)}>{value}</p>
+              <p className="text-xs text-[hsl(var(--muted-foreground))] mt-0.5">{label}</p>
+            </div>
+          ))}
+        </div>
+      </Panel>
+
     </div>
   )
 }
 
 function VentasContent({ orders, loading, error }) {
-  const list = safeArray(orders)
-  const summary = list.reduce(
+  const all = safeArray(orders)
+
+  // Últimas 24 horas (ventana rodante)
+  const cutoff24h = new Date(Date.now() - 24 * 60 * 60 * 1000)
+  const last24h = all.filter((o) => {
+    if (!o.created_at) return false
+    if (_normalizeOrderStatus(o.status) === 'cancelled') return false
+    return new Date(o.created_at) >= cutoff24h
+  })
+
+  const summary = last24h.reduce(
     (acc, order) => {
       const amount = getOrderAmount(order)
       const method = normalizePaymentMethod(order?.payment_method)
@@ -266,22 +361,24 @@ function VentasContent({ orders, loading, error }) {
   return (
     <div className="space-y-5">
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <KpiCard label="Total Hoy"  value={formatMoney(summary.total)}  sub={`${summary.count} ventas`} />
+        <KpiCard label="Total Hoy"  value={formatMoney(summary.total)}  sub={`${summary.count} venta${summary.count !== 1 ? 's' : ''}`} />
         <KpiCard label="Efectivo"   value={formatMoney(summary.cash)} />
         <KpiCard label="Débito"     value={formatMoney(summary.debit)}   accent="blue" />
         <KpiCard label="Crédito"    value={formatMoney(summary.credit)}  accent="purple" />
       </div>
-      <Panel title="Ventas del Día" sub="Listado obtenido desde /orders por local">
-        {list.length === 0 ? (
-          <p className="text-sm text-[hsl(var(--muted-foreground))]">No hay ventas registradas para este local.</p>
+      <Panel title="Ventas del Día" sub="Órdenes no canceladas de las últimas 24 h">
+        {last24h.length === 0 ? (
+          <p className="text-sm text-[hsl(var(--muted-foreground))]">
+            No hay ventas en las últimas 24 horas.
+          </p>
         ) : (
           <div className="space-y-2">
-            {list.slice(0, 12).map((order) => (
+            {last24h.slice(0, 20).map((order) => (
               <RowCard
                 key={order.id}
                 title={formatMoney(getOrderAmount(order))}
-                sub={`Orden #${String(order.id || '').slice(0, 8)} — ${normalizePaymentMethod(order.payment_method)} — ${formatDateTime(order.created_at)}`}
-                meta={`Estado: ${order.status || 'sin estado'} — Fuente: ${order.source || 'sin fuente'}`}
+                sub={`#${String(order.id || '').slice(0, 8)} — ${normalizePaymentMethod(order.payment_method)} — ${formatDateTime(order.created_at)}`}
+                meta={`Estado: ${order.status || '—'} · Fuente: ${order.source || '—'}`}
                 pill={normalizePaymentMethod(order.payment_method)}
               />
             ))}
@@ -305,7 +402,7 @@ function RendicionesContent({ rendiciones, expenses, transfers, loading, error }
     .slice(0, 12)
 
   const isEmpty = !rendiciones && rows.length === 0 && !loading && !error
-  const stateNode = <SectionState loading={loading} error={error} isEmpty={isEmpty} emptyMessage="No hay datos de rendiciones para este local" />
+  const stateNode = <SectionState loading={loading} error={error} isEmpty={isEmpty} emptyMessage="Sin movimientos aún. Usa los botones 'Nuevo Gasto' y 'Reportar Transferencia' para registrar." />
   if (loading || error || isEmpty) return stateNode
 
   return (
@@ -351,15 +448,11 @@ function ReportesContent({ consolidated, loading, error }) {
         <KpiCard label="Alertas Activas"              value={toNumber(consolidated?.active_alerts)}        sub="Agregado global" accent="warning" />
       </div>
       <div className="grid gap-5 lg:grid-cols-2">
-        <Panel title="Reporte de Ventas" sub="Vista para gráficos por semana, mes, trimestre y año">
-          <div className="flex h-28 items-center justify-center rounded-lg border-2 border-dashed border-[hsl(var(--border))] text-xs text-[hsl(var(--muted-foreground))]">
-            Conectar aquí componente de gráfico de ventas por periodo
-          </div>
+        <Panel title="Tendencia de Ventas" sub="Ingresos diarios del período actual">
+          <IncomeChart data={consolidated?.daily_income_trend || []} />
         </Panel>
-        <Panel title="Reporte de Flujo" sub="Comparativa de flujo de caja por periodos" accent="blue">
-          <div className="flex h-28 items-center justify-center rounded-lg border-2 border-dashed border-blue-200 text-xs text-blue-400">
-            Conectar aquí componente de gráfico de flujo de caja
-          </div>
+        <Panel title="Distribución de Gastos" sub="Desglose por categoría" accent="blue">
+          <ExpenseBreakdown data={consolidated?.expenses_breakdown || []} />
         </Panel>
       </div>
       <Panel title="Top Productos (Consolidado)" sub="Fuente: campo top_products del endpoint consolidado">
@@ -375,7 +468,7 @@ function ReportesContent({ consolidated, loading, error }) {
 
 function FlujoCajaContent({ dashboard, cajas, loading, error }) {
   const cajasList = safeArray(cajas)
-  const stateNode = <SectionState loading={loading} error={error} isEmpty={!dashboard && !loading && !error} emptyMessage="No hay datos de flujo de caja para este local" />
+  const stateNode = <SectionState loading={loading} error={error} isEmpty={!dashboard && !loading && !error} emptyMessage="Sin datos de flujo. Completa órdenes desde el POS y registra gastos para ver gráficos." />
   if (loading || error || (!dashboard && !loading && !error)) return stateNode
 
   return (
@@ -556,27 +649,221 @@ function AlertasContent({ localId }) {
   )
 }
 
-function BonosContent({ dashboard, loading, error }) {
-  const stateNode = <SectionState loading={loading} error={error} isEmpty={!dashboard && !loading && !error} emptyMessage="No hay datos de bonos para este local" />
-  if (loading || error || (!dashboard && !loading && !error)) return stateNode
+function SetGoalForm({ localId, onSaved }) {
+  const [amount,  setAmount]  = useState('')
+  const [saving,  setSaving]  = useState(false)
+  const [err,     setErr]     = useState('')
+  const [ok,      setOk]      = useState(false)
+
+  const handleSubmit = async (e) => {
+    e.preventDefault()
+    const amt = parseInt(amount, 10)
+    if (!amt || amt <= 0) { setErr('Ingresa un monto válido'); return }
+    setSaving(true); setErr(''); setOk(false)
+    try {
+      const now = new Date()
+      // POST crea o actualiza (el backend hace upsert por local_id+mes+año)
+      await apiRequest('/goals', {
+        method: 'POST',
+        body: {
+          local_id:      localId,
+          target_amount: amt,
+          period_month:  now.getMonth() + 1,
+          period_year:   now.getFullYear(),
+        },
+      })
+      setOk(true); setAmount('')
+      onSaved?.()
+    } catch (e) {
+      setErr(e?.message || 'Error al guardar meta')
+    } finally { setSaving(false) }
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="flex items-end gap-3 pt-2">
+      <div className="flex flex-col gap-1 flex-1">
+        <label className="text-xs font-semibold text-[hsl(var(--muted-foreground))] uppercase tracking-wide">
+          Nueva meta mensual (CLP)
+        </label>
+        <input
+          type="number" min="1" value={amount} onChange={e => setAmount(e.target.value)}
+          placeholder="Ej. 3000000"
+          className="h-9 w-full rounded-md border border-[hsl(var(--border))] bg-white px-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary)/0.3)]"
+          required
+        />
+      </div>
+      <Button type="submit" size="sm" disabled={saving}>{saving ? 'Guardando…' : 'Guardar meta'}</Button>
+      {err && <span className="text-xs text-red-600">{err}</span>}
+      {ok  && <span className="text-xs text-emerald-600">✓ Meta guardada</span>}
+    </form>
+  )
+}
+
+function BonosContent({ dashboard, loading, error, localId, onRefresh }) {
+  const stateNode = <SectionState loading={loading} error={error} isEmpty={false} emptyMessage="" />
+  if (loading || error) return stateNode
 
   const goal = dashboard?.monthly_goal || {}
   const progress = Math.max(0, Math.min(100, toNumber(goal.progress_percentage)))
+  const hasGoal = toNumber(goal.target_amount) > 0
 
   return (
     <div className="space-y-5">
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-3">
-        <KpiCard label="Meta Mensual"    value={formatMoney(goal.target_amount)}   sub="Objetivo configurado" />
-        <KpiCard label="Monto Alcanzado" value={formatMoney(goal.achieved_amount)} sub="Ventas acumuladas" accent="blue" />
-        <KpiCard label="Progreso"        value={`${progress.toFixed(1)}%`}          sub="Porcentaje de cumplimiento" accent="purple" />
-      </div>
-      <Panel title="Resumen de Bonos por Meta" sub="Actualmente basado en monthly_goal del dashboard">
-        <ProgressBar value={progress} />
-        <div className="mt-3 flex justify-between text-xs text-[hsl(var(--muted-foreground))]">
-          <span>Restante para meta: {formatMoney(goal.remaining_amount)}</span>
-          <span>Alertas activas: {toNumber(dashboard?.active_alerts)}</span>
+      {hasGoal && (
+        <div className="grid grid-cols-2 gap-4 lg:grid-cols-3">
+          <KpiCard label="Meta Mensual"    value={formatMoney(goal.target_amount)}   sub="Objetivo configurado" />
+          <KpiCard label="Monto Alcanzado" value={formatMoney(goal.achieved_amount)} sub="Ventas acumuladas" accent="blue" />
+          <KpiCard label="Progreso"        value={`${progress.toFixed(1)}%`}          sub="Porcentaje de cumplimiento" accent="purple" />
         </div>
+      )}
+      <Panel title="Meta Mensual de Ventas" sub="Configura el objetivo de ventas para el mes actual">
+        {hasGoal && (
+          <>
+            <ProgressBar value={progress} />
+            <div className="mt-3 flex justify-between text-xs text-[hsl(var(--muted-foreground))]">
+              <span>Alcanzado: {formatMoney(goal.achieved_amount)}</span>
+              <span>Restante: {formatMoney(goal.remaining_amount)}</span>
+            </div>
+          </>
+        )}
+        {!hasGoal && (
+          <p className="text-sm text-[hsl(var(--muted-foreground))] mb-2">
+            No hay meta configurada para este mes. Define una para ver el progreso.
+          </p>
+        )}
+        {localId && <SetGoalForm localId={localId} onSaved={onRefresh} />}
       </Panel>
+    </div>
+  )
+}
+
+// ── Modal Nuevo Gasto ──────────────────────────────────────
+
+const EXPENSE_CATEGORIES = [
+  { value: 'supplies',    label: 'Insumos'       },
+  { value: 'utilities',   label: 'Servicios'     },
+  { value: 'maintenance', label: 'Mantención'    },
+  { value: 'staff',       label: 'Personal'      },
+  { value: 'other',       label: 'Otros'         },
+]
+
+function NuevoGastoModal({ localId, onClose, onSaved }) {
+  const [category,    setCategory]    = useState('other')
+  const [amount,      setAmount]      = useState('')
+  const [description, setDescription] = useState('')
+  const [date,        setDate]        = useState(new Date().toISOString().slice(0, 10))
+  const [saving,      setSaving]      = useState(false)
+  const [err,         setErr]         = useState('')
+
+  const handleSubmit = async (e) => {
+    e.preventDefault()
+    const amt = parseInt(amount, 10)
+    if (!amt || amt <= 0) { setErr('Ingresa un monto válido'); return }
+    setSaving(true); setErr('')
+    try {
+      await postExpense({
+        local_id:     localId,
+        category,
+        amount:       amt,
+        description:  description.trim() || null,
+        expense_date: new Date(date).toISOString(),
+      })
+      onSaved()
+      onClose()
+    } catch (e) { setErr(e?.message || 'Error al guardar'); setSaving(false) }
+  }
+
+  const inputCls = 'h-9 w-full rounded-md border border-[hsl(var(--border))] bg-white px-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary)/0.3)]'
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6 flex flex-col gap-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-base font-bold text-[hsl(var(--foreground))]">Nuevo Gasto</h2>
+          <button onClick={onClose} className="text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]">✕</button>
+        </div>
+        {err && <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-md px-3 py-2">{err}</p>}
+        <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-semibold text-[hsl(var(--muted-foreground))] uppercase tracking-wide">Categoría</label>
+            <select value={category} onChange={e => setCategory(e.target.value)} className={inputCls}>
+              {EXPENSE_CATEGORIES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
+            </select>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-semibold text-[hsl(var(--muted-foreground))] uppercase tracking-wide">Monto (CLP)</label>
+              <input type="number" min="1" value={amount} onChange={e => setAmount(e.target.value)} placeholder="0" className={inputCls} required />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-semibold text-[hsl(var(--muted-foreground))] uppercase tracking-wide">Fecha</label>
+              <input type="date" value={date} onChange={e => setDate(e.target.value)} className={inputCls} required />
+            </div>
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-semibold text-[hsl(var(--muted-foreground))] uppercase tracking-wide">Descripción (opcional)</label>
+            <input type="text" value={description} onChange={e => setDescription(e.target.value)} placeholder="Detalle del gasto" className={inputCls} />
+          </div>
+          <div className="flex gap-2 justify-end pt-1">
+            <Button type="button" variant="outline" onClick={onClose} disabled={saving}>Cancelar</Button>
+            <Button type="submit" disabled={saving}>{saving ? 'Guardando…' : 'Guardar gasto'}</Button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
+// ── Modal Reportar Transferencia ───────────────────────────
+
+function ReportarTransferenciaModal({ localId, onClose, onSaved }) {
+  const [amount,     setAmount]     = useState('')
+  const [receiptUrl, setReceiptUrl] = useState('')
+  const [saving,     setSaving]     = useState(false)
+  const [err,        setErr]        = useState('')
+
+  const handleSubmit = async (e) => {
+    e.preventDefault()
+    const amt = parseInt(amount, 10)
+    if (!amt || amt <= 0) { setErr('Ingresa un monto válido'); return }
+    setSaving(true); setErr('')
+    try {
+      await postTransfer({
+        local_id:    localId,
+        amount:      amt,
+        receipt_url: receiptUrl.trim() || null,
+      })
+      onSaved()
+      onClose()
+    } catch (e) { setErr(e?.message || 'Error al guardar'); setSaving(false) }
+  }
+
+  const inputCls = 'h-9 w-full rounded-md border border-[hsl(var(--border))] bg-white px-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary)/0.3)]'
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6 flex flex-col gap-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-base font-bold text-[hsl(var(--foreground))]">Reportar Transferencia</h2>
+          <button onClick={onClose} className="text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]">✕</button>
+        </div>
+        <p className="text-xs text-[hsl(var(--muted-foreground))]">Registra una transferencia de dinero del dueño al local.</p>
+        {err && <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-md px-3 py-2">{err}</p>}
+        <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-semibold text-[hsl(var(--muted-foreground))] uppercase tracking-wide">Monto (CLP)</label>
+            <input type="number" min="1" value={amount} onChange={e => setAmount(e.target.value)} placeholder="0" className={inputCls} required />
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-semibold text-[hsl(var(--muted-foreground))] uppercase tracking-wide">URL Comprobante (opcional)</label>
+            <input type="url" value={receiptUrl} onChange={e => setReceiptUrl(e.target.value)} placeholder="https://..." className={inputCls} />
+          </div>
+          <div className="flex gap-2 justify-end pt-1">
+            <Button type="button" variant="outline" onClick={onClose} disabled={saving}>Cancelar</Button>
+            <Button type="submit" disabled={saving}>{saving ? 'Guardando…' : 'Reportar transferencia'}</Button>
+          </div>
+        </form>
+      </div>
     </div>
   )
 }
@@ -593,8 +880,14 @@ function renderSectionContent(activeSection, payload) {
       return <VentasContent orders={payload.orders} loading={payload.loading} error={payload.error} />
     case 'rendiciones':
       return <RendicionesContent rendiciones={payload.rendiciones} expenses={payload.expenses} transfers={payload.transfers} loading={payload.loading} error={payload.error} />
-    case 'reportes':
-      return <ReportesContent consolidated={payload.consolidated} loading={payload.loading} error={payload.error} />
+    case 'reportes': {
+      const reportesIncome   = generateIncomeTrendFromOrders(payload.orders)
+      const reportesExpenses = generateExpenseBreakdownFromData(payload.expenses)
+      const enrichedConsolidated = payload.consolidated
+        ? { ...payload.consolidated, daily_income_trend: reportesIncome, expenses_breakdown: reportesExpenses }
+        : null
+      return <ReportesContent consolidated={enrichedConsolidated} loading={payload.loading} error={payload.error} />
+    }
     case 'flujo-caja': {
       const flujoDashboard = enrichDashboardWithChartData(payload.dashboard)
       const flujoExpenseData = generateExpenseBreakdownFromData(payload.expenses)
@@ -603,7 +896,7 @@ function renderSectionContent(activeSection, payload) {
     case 'alertas':
       return <AlertasContent localId={payload.localId} />
     case 'bonos':
-      return <BonosContent dashboard={payload.dashboard} loading={payload.loading} error={payload.error} />
+      return <BonosContent dashboard={payload.dashboard} loading={payload.loading} error={payload.error} localId={payload.localId} onRefresh={payload.onRefresh} />
     default: {
       const defaultDashboard = enrichDashboardWithChartData(payload.dashboard)
       const defaultIncomeData = generateIncomeTrendFromOrders(payload.orders)
@@ -624,6 +917,9 @@ function AdministrativeModule() {
   })
   const [loading, setLoading] = useState(false)
   const [sectionError, setSectionError] = useState('')
+  const [showNuevoGasto, setShowNuevoGasto]             = useState(false)
+  const [showNuevaTransferencia, setShowNuevaTransferencia] = useState(false)
+  const [refreshKey, setRefreshKey] = useState(0)
 
   const selectedLocal = useSelectedLocal(localId, 'state-then-locales')
 
@@ -657,7 +953,14 @@ function AdministrativeModule() {
         }
         if (activeSection === 'reportes') {
           if (!businessId) throw new Error('No se encontró business_id en el token para obtener reportes consolidados')
-          updates.consolidated = await getConsolidatedDashboard(businessId, token)
+          const [consolidated, orders, expenses] = await Promise.all([
+            getConsolidatedDashboard(businessId, token),
+            getOrdersByLocal(localId, token),
+            getExpensesByLocal(localId, token),
+          ])
+          updates.consolidated = consolidated
+          updates.orders       = safeArray(orders)
+          updates.expenses     = safeArray(expenses)
         }
         if (activeSection === 'flujo-caja') {
           updates.cajas = await getCajasByLocal(localId, token)
@@ -671,12 +974,26 @@ function AdministrativeModule() {
     }
     fetchSectionData()
     return () => { ignore = true }
-  }, [localId, activeSection])
+  }, [localId, activeSection, refreshKey])
 
   const handleGoModules = () => navigate('/admin', { state: { local: selectedLocal, focusLocalId: localId } })
 
   return (
     <>
+      {showNuevoGasto && (
+        <NuevoGastoModal
+          localId={localId}
+          onClose={() => setShowNuevoGasto(false)}
+          onSaved={() => setRefreshKey(k => k + 1)}
+        />
+      )}
+      {showNuevaTransferencia && (
+        <ReportarTransferenciaModal
+          localId={localId}
+          onClose={() => setShowNuevaTransferencia(false)}
+          onSaved={() => setRefreshKey(k => k + 1)}
+        />
+      )}
       <header className="shrink-0 flex items-center justify-between border-b border-[hsl(var(--border))] bg-white px-6 py-3 shadow-sm">
         <div>
           <h1 className="text-base font-bold text-[hsl(var(--primary))]">{activeSectionMeta.label}</h1>
@@ -697,10 +1014,20 @@ function AdministrativeModule() {
               Local: {selectedLocal?.name || localId || 'No identificado'}
             </Badge>
           </div>
-          <SectionActions activeSection={activeSection} />
+          <SectionActions
+            activeSection={activeSection}
+            onNuevoGasto={() => setShowNuevoGasto(true)}
+            onNuevaTransferencia={() => setShowNuevaTransferencia(true)}
+          />
         </div>
 
-        {renderSectionContent(activeSection, { ...sectionData, loading, error: sectionError, localId })}
+        {renderSectionContent(activeSection, {
+          ...sectionData,
+          loading,
+          error:    sectionError,
+          localId,
+          onRefresh: () => setRefreshKey(k => k + 1),
+        })}
       </main>
     </>
   )

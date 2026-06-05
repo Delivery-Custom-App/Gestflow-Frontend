@@ -34,10 +34,12 @@ function ProductsTable({
   onEmptyAction,
   onPatchStock,
   onPatchUnitCost,
+  onPatchProductName,
   onDeleteItem,
   statusFilters = [],
 }) {
   const [editingRow, setEditingRow] = useState(null)
+  const [nameDraft, setNameDraft] = useState('')
   const [maxStockDraft, setMaxStockDraft] = useState('')
   const [minStockDraft, setMinStockDraft] = useState('')
   const [costDraft, setCostDraft] = useState('')
@@ -75,6 +77,7 @@ function ProductsTable({
 
   const closeEditModal = () => {
     setEditingRow(null)
+    setNameDraft('')
     setMaxStockDraft('')
     setMinStockDraft('')
     setCostDraft('')
@@ -84,6 +87,7 @@ function ProductsTable({
 
   const openEditModal = (row) => {
     setEditingRow(row)
+    setNameDraft(row.product_name || row.name || '')
     setMaxStockDraft(row.stock_max != null ? String(row.stock_max) : '')
     setMinStockDraft(String(row.stock_min ?? 0))
     setCostDraft(String(Math.round(Number(row.unit_cost_clp ?? 0))))
@@ -92,26 +96,27 @@ function ProductsTable({
 
   const submitRowUpdate = async () => {
     if (!editingRow) return
+
+    const newName      = nameDraft.trim()
     const maxStockValue = maxStockDraft.trim() === '' ? null : Number(maxStockDraft)
     const minStockValue = Number(minStockDraft)
     const unitCostValue = Number(costDraft)
 
+    if (!newName) { setFormError('El nombre no puede estar vacío.'); return }
     if (maxStockValue !== null && (!Number.isFinite(maxStockValue) || maxStockValue < 0)) {
-      setFormError('El stock máximo debe ser un número válido mayor o igual a 0.')
-      return
+      setFormError('El stock máximo debe ser un número válido mayor o igual a 0.'); return
     }
     if (!Number.isFinite(minStockValue) || minStockValue < 0) {
-      setFormError('El stock mínimo debe ser un número válido mayor o igual a 0.')
-      return
+      setFormError('El stock mínimo debe ser un número válido mayor o igual a 0.'); return
     }
     if (!Number.isFinite(unitCostValue) || unitCostValue <= 0) {
-      setFormError('El costo unitario debe ser un número válido mayor a 0.')
-      return
+      setFormError('El costo unitario debe ser un número válido mayor a 0.'); return
     }
 
-    const nextMaxStock = maxStockValue !== null ? Math.floor(maxStockValue) : null
-    const nextMinStock = Math.floor(minStockValue)
-    const nextUnitCost = Math.round(unitCostValue)
+    const nextMaxStock   = maxStockValue !== null ? Math.floor(maxStockValue) : null
+    const nextMinStock   = Math.floor(minStockValue)
+    const nextUnitCost   = Math.round(unitCostValue)
+    const currentName    = (editingRow.product_name || editingRow.name || '').trim()
     const currentMaxStock = editingRow.stock_max != null ? Number(editingRow.stock_max) : null
     const currentMinStock = Number(editingRow.stock_min ?? 0)
     const currentUnitCost = Math.round(Number(editingRow.unit_cost_clp ?? 0))
@@ -119,16 +124,21 @@ function ProductsTable({
     setSaving(true)
     setFormError('')
     try {
+      if (onPatchProductName && newName !== currentName) {
+        await onPatchProductName(editingRow, newName)
+      }
+
       const stockPatchBody = {}
       if (nextMaxStock !== null && nextMaxStock !== currentMaxStock) stockPatchBody.max_stock = nextMaxStock
       if (nextMinStock !== currentMinStock) stockPatchBody.min_stock = nextMinStock
-
       if (onPatchStock && Object.keys(stockPatchBody).length > 0) {
         await onPatchStock(editingRow, stockPatchBody)
       }
+
       if (onPatchUnitCost && nextUnitCost !== currentUnitCost) {
         await onPatchUnitCost(editingRow, nextUnitCost)
       }
+
       closeEditModal()
     } catch (e) {
       setFormError(e?.message || 'No se pudieron guardar los cambios.')
@@ -334,55 +344,77 @@ function ProductsTable({
 
       {/* Edit modal */}
       <Dialog open={!!editingRow} onOpenChange={(open) => { if (!open) closeEditModal() }}>
-        <DialogContent className="max-w-xl w-full">
-          <DialogHeader>
-            <DialogTitle>Editar producto</DialogTitle>
-            {editingRow ? (
-              <p className="text-sm text-[hsl(var(--muted-foreground))] mt-0.5">
+        <DialogContent className="max-w-md w-full p-0 gap-0 overflow-hidden">
+
+          {/* Header */}
+          <DialogHeader className="px-7 pt-6 pb-4 border-b border-[hsl(var(--border))]">
+            <DialogTitle className="text-base">Editar producto</DialogTitle>
+            {editingRow && (
+              <p className="text-sm text-[hsl(var(--muted-foreground))] mt-0.5 font-medium">
                 {editingRow.product_name || editingRow.name || 'Producto'}
               </p>
-            ) : null}
+            )}
           </DialogHeader>
-          <div className="flex flex-col gap-5 py-1">
-            {formError ? (
-              <p className="rounded-md bg-red-50 border border-red-200 text-red-700 text-sm px-3 py-2" role="alert">
+
+          {/* Body */}
+          <div className="px-7 py-6 flex flex-col gap-5">
+            {formError && (
+              <p className="rounded-md bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-2.5" role="alert">
                 {formError}
               </p>
-            ) : null}
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="edit-max-stock">Stock Máximo</Label>
-              <p className="text-xs text-[hsl(var(--muted-foreground))] -mt-0.5">
-                Límite superior para calcular el nivel de stock. Dejar vacío si no aplica.
-              </p>
+            )}
+
+            {/* Nombre */}
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="edit-name" className="text-sm font-semibold">Nombre</Label>
               <Input
-                id="edit-max-stock"
-                type="number"
-                min={0}
-                placeholder="Sin límite"
-                value={maxStockDraft}
-                onChange={(e) => setMaxStockDraft(e.target.value)}
+                id="edit-name"
+                value={nameDraft}
+                onChange={(e) => setNameDraft(e.target.value)}
+                placeholder="Nombre del producto"
                 disabled={saving}
+                className="h-10"
               />
             </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="edit-min-stock">Stock Mínimo</Label>
-              <p className="text-xs text-[hsl(var(--muted-foreground))] -mt-0.5">
-                Umbral de alerta de stock bajo.
-              </p>
-              <Input
-                id="edit-min-stock"
-                type="number"
-                min={0}
-                value={minStockDraft}
-                onChange={(e) => setMinStockDraft(e.target.value)}
-                disabled={saving}
-              />
+
+            {/* Stock mín + máx en grid */}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="edit-min-stock" className="text-sm font-semibold">
+                  Stock Mínimo
+                </Label>
+                <Input
+                  id="edit-min-stock"
+                  type="number"
+                  min={0}
+                  value={minStockDraft}
+                  onChange={(e) => setMinStockDraft(e.target.value)}
+                  disabled={saving}
+                  className="h-10"
+                />
+              </div>
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="edit-max-stock" className="text-sm font-semibold">
+                  Stock Máximo
+                </Label>
+                <Input
+                  id="edit-max-stock"
+                  type="number"
+                  min={0}
+                  placeholder="Sin límite"
+                  value={maxStockDraft}
+                  onChange={(e) => setMaxStockDraft(e.target.value)}
+                  disabled={saving}
+                  className="h-10"
+                />
+              </div>
             </div>
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="edit-cost">Costo Unitario (CLP)</Label>
-              <p className="text-xs text-[hsl(var(--muted-foreground))] -mt-0.5">
-                Precio de costo del producto. Afecta el valor total del inventario.
-              </p>
+
+            {/* Costo unitario */}
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="edit-cost" className="text-sm font-semibold">
+                Costo Unitario (CLP)
+              </Label>
               <Input
                 id="edit-cost"
                 type="number"
@@ -391,61 +423,55 @@ function ProductsTable({
                 value={costDraft}
                 onChange={(e) => setCostDraft(e.target.value)}
                 disabled={saving}
+                className="h-10"
               />
             </div>
           </div>
-          <DialogFooter className="flex items-center gap-2 pt-2">
-            <Button
-              type="button"
-              onClick={submitRowUpdate}
-              disabled={saving || deleting || confirmDelete}
-            >
-              {saving ? 'Guardando...' : 'Guardar cambios'}
-            </Button>
 
-            {confirmDelete ? (
-              <div className="flex items-center gap-2 flex-1">
-                <span className="text-xs text-red-600 font-medium">¿Confirmar eliminación?</span>
-                <Button
-                  type="button"
-                  variant="destructive"
-                  size="sm"
-                  disabled={deleting}
-                  onClick={async () => {
-                    if (!editingRow || !onDeleteItem) return
-                    setDeleting(true)
-                    try {
-                      await onDeleteItem(editingRow)
-                      closeEditModal()
-                    } catch (e) {
-                      setFormError(e?.message || 'No se pudo eliminar.')
-                      setConfirmDelete(false)
-                    } finally {
-                      setDeleting(false)
-                    }
-                  }}
-                >
-                  {deleting ? 'Eliminando...' : 'Sí, eliminar'}
-                </Button>
-                <Button type="button" variant="ghost" size="sm" onClick={() => setConfirmDelete(false)} disabled={deleting}>
-                  No
-                </Button>
+          {/* Footer */}
+          <div className="px-7 pb-6 flex flex-col gap-3">
+
+            {/* Confirmar eliminar */}
+            {confirmDelete && (
+              <div className="rounded-lg bg-red-50 border border-red-200 px-4 py-3 flex items-center justify-between gap-3">
+                <span className="text-sm text-red-700 font-medium">¿Eliminar este producto?</span>
+                <div className="flex gap-2">
+                  <Button type="button" variant="destructive" size="sm" disabled={deleting}
+                    onClick={async () => {
+                      if (!editingRow || !onDeleteItem) return
+                      setDeleting(true)
+                      try { await onDeleteItem(editingRow); closeEditModal() }
+                      catch (e) { setFormError(e?.message || 'No se pudo eliminar.'); setConfirmDelete(false) }
+                      finally { setDeleting(false) }
+                    }}>
+                    {deleting ? 'Eliminando...' : 'Confirmar'}
+                  </Button>
+                  <Button type="button" variant="outline" size="sm" onClick={() => setConfirmDelete(false)} disabled={deleting}>
+                    No
+                  </Button>
+                </div>
               </div>
-            ) : (
-              <Button
-                type="button"
-                variant="destructive"
-                disabled={saving || deleting}
-                onClick={() => setConfirmDelete(true)}
-              >
-                Eliminar
-              </Button>
             )}
 
-            <Button type="button" variant="outline" onClick={closeEditModal} disabled={saving || deleting}>
-              Cancelar
-            </Button>
-          </DialogFooter>
+            {/* Botones principales */}
+            <div className="flex items-center justify-between gap-3">
+              <Button type="button" variant="outline" onClick={closeEditModal} disabled={saving || deleting}>
+                Cancelar
+              </Button>
+              <div className="flex gap-2">
+                {!confirmDelete && (
+                  <Button type="button" variant="destructive" disabled={saving || deleting}
+                    onClick={() => setConfirmDelete(true)}>
+                    Eliminar
+                  </Button>
+                )}
+                <Button type="button" onClick={submitRowUpdate} disabled={saving || deleting || confirmDelete}>
+                  {saving ? 'Guardando...' : 'Guardar cambios'}
+                </Button>
+              </div>
+            </div>
+          </div>
+
         </DialogContent>
       </Dialog>
 

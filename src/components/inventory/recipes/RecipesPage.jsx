@@ -32,14 +32,11 @@ function RecipesPage() {
       try {
         const data = await apiRequest(`/categories?local_id=${localId}`)
         setCategories(Array.isArray(data) ? data : [])
-      } catch (err) {
-        console.error('Error loading categories:', err)
+      } catch {
         setCategories([])
       }
     }
-    if (localId) {
-      loadCategories()
-    }
+    if (localId) loadCategories()
   }, [localId])
 
   useEffect(() => {
@@ -197,7 +194,6 @@ function RecipesPage() {
         <CreateRecipeModal
           isOpen={showCreateModal}
           recipe={editingRecipe}
-          categories={categories}
           onSave={handleSaveRecipe}
           onCancel={() => {
             setShowCreateModal(false)

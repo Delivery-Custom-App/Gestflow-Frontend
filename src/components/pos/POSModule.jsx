@@ -147,7 +147,7 @@ export default function POSModule() {
           </div>
         </div>
 
-        {!isWorker && activeView === 'mesas' && (
+        {!isWorker && activeView === 'mesas' && !selectedOrdenMesa && (
           <Button size="sm" onClick={() => setShowModal(true)}>+ Nueva Mesa</Button>
         )}
       </header>
@@ -157,6 +157,7 @@ export default function POSModule() {
         {selectedOrdenMesa ? (
           <OrdenView
             mesa={selectedOrdenMesa}
+            localId={localId}
             onBack={handleOrdenViewBack}
             onTableUpdated={handleTableUpdated}
           />

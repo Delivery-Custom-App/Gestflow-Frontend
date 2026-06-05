@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { apiRequest, getAuthContext } from '../../lib/apiClient'
+import { postCategory } from '../../lib/inventoryApi'
 import { postSupplier } from '../../lib/providersApi'
+import CategoryTypeaheadField from './CategoryTypeaheadField'
 import ModernDateField from './ModernDateField'
 import {
   formatRutForDisplay,
@@ -251,26 +253,30 @@ function RegisterSupplierModal({ open, onClose, onSuccess, businessId, localId }
 
             {/* Categoría */}
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="rs-category">Categorías <span className="text-red-500">*</span></Label>
-              <select
-                id="rs-category"
-                value={form.category}
-                onChange={(e) => setField('category', e.target.value)}
-                disabled={catsLoading}
-                className={selectCls('category')}
-              >
-                <option value="">
-                  {catsLoading ? 'Cargando categorías…' : 'Selecciona una categoría'}
-                </option>
-                {categories.map((cat) => (
-                  <option key={cat.id} value={cat.name}>
-                    {cat.name}
-                  </option>
-                ))}
-                {!catsLoading && categories.length === 0 && (
-                  <option value="" disabled>Sin categorías disponibles</option>
-                )}
-              </select>
+              <Label>Categorías <span className="text-red-500">*</span></Label>
+              {catsLoading ? (
+                <p className="text-xs text-[hsl(var(--muted-foreground))] py-2">Cargando categorías…</p>
+              ) : (
+                <CategoryTypeaheadField
+                  categories={categories}
+                  value={form.category}
+                  onConfirm={async (name) => {
+                    setField('category', name)
+                    if (!name || !localId) return
+                    const exists = categories.some(
+                      (c) => c.name.toLowerCase() === name.toLowerCase()
+                    )
+                    if (!exists) {
+                      try {
+                        const created = await postCategory({ local_id: localId, name, is_active: true })
+                        setCategories((prev) => [...prev, created])
+                      } catch { /* no crítico */ }
+                    }
+                  }}
+                  disabled={submitting}
+                  hasError={!!fe('category')}
+                />
+              )}
               {fe('category') && <span className="text-xs text-red-500">{fe('category')}</span>}
             </div>
 
