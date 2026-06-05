@@ -28,6 +28,11 @@ const STEPS = {
       desc: 'Flujo de caja, rendiciones, reportes y bonos de cada local desde aquí.',
     },
     {
+      target: 'nav-pos',
+      title: 'POS Restaurante',
+      desc: 'Gestiona las mesas y las órdenes activas. La vista cocina avanza los pedidos en curso.',
+    },
+    {
       target: 'nav-inventario',
       title: 'Inventario',
       desc: 'Controla stock, proveedores, pedidos de insumos y gestiona las recetas del menú.',
@@ -74,10 +79,11 @@ const STEPS = {
 // así los accordions quedan cerrados y todos los ítems son visibles
 const getArrivalRoute = (step, localId) => {
   const map = {
-    1: localId ? `/local/${localId}/dashboard` : null,  // entra al local → muestra Dashboard en sidebar
+    1: localId ? `/local/${localId}/dashboard` : null,  // entra al local → Dashboard visible en sidebar
     2: '/usuarios',                                       // muestra Usuarios
-    3: localId ? `/local/${localId}/dashboard` : null,  // vuelve al dashboard → accordion cerrado → Administración visible
-    4: localId ? `/local/${localId}/dashboard` : null,  // vuelve al dashboard → accordion cerrado → Inventario visible
+    3: localId ? `/local/${localId}/dashboard` : null,  // dashboard → accordion cerrado → Administración visible
+    4: localId ? `/local/${localId}/dashboard` : null,  // dashboard → accordion cerrado → POS visible
+    5: localId ? `/local/${localId}/dashboard` : null,  // dashboard → accordion cerrado → Inventario visible
   }
   return map[step] ?? null
 }
