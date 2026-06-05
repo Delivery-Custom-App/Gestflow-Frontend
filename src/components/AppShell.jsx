@@ -9,12 +9,12 @@ import {
   DollarSign, FileText, BarChart3, Wallet, Bell, Gift,
   Table2, ChefHat,
   Package, Truck, ShoppingCart, BookMarked, PackageOpen,
-  LogOut, Utensils,
+  LogOut, Utensils, HelpCircle, Phone, Mail, X,
 } from 'lucide-react'
 
 /* ── key sets for accordion auto-open ──────────────────────────── */
 const ADMIN_KEYS = new Set(['administracion', 'ventas', 'rendiciones', 'reportes', 'flujo-caja', 'alertas', 'bonos'])
-const POS_KEYS   = new Set(['pos', 'pos-mesas', 'pos-kitchen', 'pos-reportes'])
+const POS_KEYS   = new Set(['pos', 'pos-mesas', 'pos-kitchen'])
 const INV_KEYS   = new Set(['inv-hub', 'inv-prov', 'inv-stock', 'inv-compras', 'inv-recetas'])
 
 /* ── active-key derived from pathname ──────────────────────────── */
@@ -24,7 +24,6 @@ function deriveActiveKey(pathname) {
   if (pathname.includes('/inventario/compras-semanales')) return 'inv-compras'
   if (pathname.includes('/inventario/recipes'))         return 'inv-recetas'
   if (pathname.includes('/inventario'))                 return 'inv-hub'
-  if (pathname.includes('/pos/reportes'))               return 'pos-reportes'
   if (pathname.includes('/pos/cocina'))                 return 'pos-kitchen'
   if (pathname.includes('/pos'))                        return 'pos-mesas'
   if (pathname.includes('/administrativo/ventas'))      return 'ventas'
@@ -58,9 +57,8 @@ const ACCORDIONS = [
     label: 'POS Restaurante',
     icon: Table2,
     items: [
-      { key: 'pos-mesas',    label: 'Gestión de Mesas', icon: Table2    },
-      { key: 'pos-kitchen',  label: 'Cocina',            icon: ChefHat   },
-      { key: 'pos-reportes', label: 'Reportes',          icon: BarChart3 },
+      { key: 'pos-mesas',   label: 'Gestión de Mesas', icon: Table2  },
+      { key: 'pos-kitchen', label: 'Cocina',            icon: ChefHat },
     ],
   },
   {
@@ -87,6 +85,8 @@ function Sidebar({ collapsed, onToggle }) {
   const localId  = localIdMatch ? localIdMatch[1] : null
   const activeKey = deriveActiveKey(pathname)
   const navState  = locState?.local ? { local: locState.local } : localId ? { local: { id: localId } } : {}
+
+  const [helpOpen, setHelpOpen] = useState(false)
 
   /* manually-toggled accordion overrides */
   const [userOpen, setUserOpen] = useState({ administracion: false, pos: false, inventario: false })
@@ -129,8 +129,6 @@ function Sidebar({ collapsed, onToggle }) {
         if (localId) navigate(`/local/${localId}/pos`, { state: navState }); break
       case 'pos-kitchen':
         if (localId) navigate(`/local/${localId}/pos/cocina`, { state: navState }); break
-      case 'pos-reportes':
-        if (localId) navigate(`/local/${localId}/pos/reportes`, { state: navState }); break
       case 'inv-hub':     if (localId) navigate(`/local/${localId}/inventario`, { state: navState }); break
       case 'inv-prov':    if (localId) navigate(`/local/${localId}/inventario/proveedores`, { state: navState }); break
       case 'inv-stock':   if (localId) navigate(`/local/${localId}/inventario/stock`, { state: navState }); break
@@ -215,21 +213,8 @@ function Sidebar({ collapsed, onToggle }) {
         </button>
       </div>
 
-      {/* User */}
-      <AnimatePresence>
-        {!collapsed && (
-          <motion.div
-            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="px-4 py-3 border-b border-white/15"
-          >
-            <p className="text-xs font-medium text-white truncate">{user?.email}</p>
-            <p className="text-[10px] text-white/60 mt-0.5">{userRole || 'Usuario'}</p>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
       {/* Nav */}
-      <nav className="flex-1 overflow-y-auto py-3 px-2">
+      <nav className="flex-1 overflow-y-auto py-3 px-2 no-scrollbar">
         {/* DESCUBRIR */}
         <div className="mb-3">
           <AnimatePresence>
@@ -316,8 +301,70 @@ function Sidebar({ collapsed, onToggle }) {
         })}
       </nav>
 
-      {/* Logout */}
+      {/* User + Logout */}
       <div className="px-2 pb-4 border-t border-white/15 pt-3">
+
+        {/* Help button */}
+        <button
+          onClick={() => { if (collapsed) { onToggle(); setHelpOpen(true) } else { setHelpOpen((v) => !v) } }}
+          title={collapsed ? 'Ayuda' : undefined}
+          className={cn(
+            'w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-white/60 hover:bg-white/15 hover:text-white transition-colors mb-1',
+            collapsed && 'justify-center px-0',
+          )}
+        >
+          <HelpCircle size={16} className="shrink-0" />
+          <AnimatePresence>
+            {!collapsed && (
+              <motion.span initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex-1 text-left">
+                Ayuda
+              </motion.span>
+            )}
+          </AnimatePresence>
+        </button>
+
+        {/* Help panel */}
+        <AnimatePresence>
+          {helpOpen && !collapsed && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              transition={{ duration: 0.2 }}
+              className="overflow-hidden mb-2"
+            >
+              <div className="rounded-lg bg-white/10 px-3 py-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-white/40">Soporte</span>
+                  <span className="text-[9px] font-bold bg-amber-400/90 text-amber-900 px-1.5 py-0.5 rounded-full tracking-wide">DEMO</span>
+                </div>
+                <div className="flex items-center gap-2 text-white/80">
+                  <Phone size={12} className="shrink-0 text-white/40" />
+                  <span className="text-xs">+56 9 1234 5678</span>
+                </div>
+                <div className="flex items-center gap-2 text-white/80">
+                  <Mail size={12} className="shrink-0 text-white/40" />
+                  <span className="text-xs truncate">soporte@sibagestion.cl</span>
+                </div>
+                <p className="text-[10px] text-white/30 pt-1 border-t border-white/10">
+                  Versión demo — solo fines de prueba
+                </p>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        <AnimatePresence>
+          {!collapsed && (
+            <motion.div
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              className="px-3 py-2 mb-2 rounded-lg bg-white/10"
+            >
+              <p className="text-xs font-medium text-white truncate">{user?.email}</p>
+              <p className="text-[10px] text-white/60 mt-0.5">{userRole || 'Usuario'}</p>
+            </motion.div>
+          )}
+        </AnimatePresence>
         <button
           onClick={logout}
           title={collapsed ? 'Cerrar sesión' : undefined}

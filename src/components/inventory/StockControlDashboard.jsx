@@ -8,6 +8,7 @@ import {
   getInventoryStockList,
   patchInventoryProductUnitCost,
   patchInventoryStock,
+  patchProduct,
 } from '../../lib/inventoryApi'
 import InventoryShell from './InventoryShell'
 import LoadingSpinner from '../LoadingSpinner'
@@ -196,6 +197,21 @@ function StockControlDashboard() {
       }
     },
     [localId, load, loadItems, currentFilters, currentPage],
+  )
+
+  const handlePatchProductName = useCallback(
+    async (row, newName) => {
+      setActionError('')
+      try {
+        await patchProduct(row.product_id, { name: newName.trim() })
+        await load()
+        await loadItems(currentFilters, currentPage)
+      } catch (e) {
+        setActionError(e?.message || 'No se pudo actualizar el nombre.')
+        throw e
+      }
+    },
+    [load, loadItems, currentFilters, currentPage],
   )
 
   const handleDeleteItem = useCallback(
@@ -390,6 +406,7 @@ function StockControlDashboard() {
               onEmptyAction={() => setModalOpen(true)}
               onPatchStock={handlePatchStock}
               onPatchUnitCost={handlePatchUnitCost}
+              onPatchProductName={handlePatchProductName}
               onDeleteItem={handleDeleteItem}
               statusFilters={statusFilters}
             />

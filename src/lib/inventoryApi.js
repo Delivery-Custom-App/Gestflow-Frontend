@@ -261,6 +261,14 @@ export async function resolveCategoryNameForLocal(localId, rawName) {
   return trimmed
 }
 
+/** PATCH /products/{id} — actualiza campos del producto (name, description, price…). */
+export function patchProduct(productId, body) {
+  return apiRequest(`/products/${encodeURIComponent(String(productId))}`, {
+    method: 'PATCH',
+    body,
+  })
+}
+
 export function postInventoryNewProduct(localId, body) {
   return apiRequest(`/inventory/locals/${localId}/new-product`, {
     method: 'POST',

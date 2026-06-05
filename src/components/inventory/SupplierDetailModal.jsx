@@ -1,246 +1,325 @@
 import { useCallback, useEffect, useState } from 'react'
 import { getSupplierDetailForBusiness, patchSupplier } from '../../lib/providersApi'
-import { formatCLPDisplay as formatMoneyClp } from '../../lib/formatCLP'
+import { formatCLPDisplay as fmt } from '../../lib/formatCLP'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Label } from '@/components/ui/label'
-import { Input } from '@/components/ui/input'
+import { Pencil, X, Check } from 'lucide-react'
 import {
-  Table,
-  TableHeader,
-  TableBody,
-  TableRow,
-  TableHead,
-  TableCell,
+  Table, TableHeader, TableBody,
+  TableRow, TableHead, TableCell,
 } from '@/components/ui/table'
 
-function displayStr(value) {
-  const s = value != null ? String(value).trim() : ''
-  return s || '—'
+/* ─── helpers ─────────────────────────────────────────────── */
+const str  = (v) => (v != null ? String(v).trim() : '') || '—'
+const date = (v) => {
+  if (!v) return '—'
+  try { return new Date(v).toLocaleDateString('es-CL', { day: '2-digit', month: 'long', year: 'numeric' }) }
+  catch { return String(v) }
 }
+const inputCls = 'h-9 w-full rounded-md border border-[hsl(var(--border))] bg-white px-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary)/0.3)]'
+const fieldCls = 'flex flex-col gap-1'
+const labelCls = 'text-[10px] font-semibold uppercase tracking-widest text-[hsl(var(--muted-foreground))]'
+const valCls   = 'text-sm font-medium text-[hsl(var(--foreground))]'
 
-function formatDate(value) {
-  if (!value) return '—'
-  try {
-    return new Date(value).toLocaleDateString('es-CL', { day: '2-digit', month: 'long', year: 'numeric' })
-  } catch {
-    return String(value)
+/* ─── sección datos del proveedor ─────────────────────────── */
+function InfoSection({ detail, supplierId, businessId, onUpdated }) {
+  const [editing, setEditing] = useState(false)
+  const [saving,  setSaving]  = useState(false)
+  const [err,     setErr]     = useState('')
+
+  const [name,    setName]    = useState('')
+  const [phone,   setPhone]   = useState('')
+  const [email,   setEmail]   = useState('')
+  const [address, setAddress] = useState('')
+  const [contact, setContact] = useState('')
+
+  useEffect(() => {
+    setName(detail.name         ?? '')
+    setPhone(detail.phone       ?? '')
+    setEmail(detail.email       ?? '')
+    setAddress(detail.address   ?? '')
+    setContact(detail.contact_name ?? '')
+  }, [detail])
+
+  const openEdit = () => { setErr(''); setEditing(true) }
+  const cancel   = () => {
+    setName(detail.name ?? ''); setPhone(detail.phone ?? '')
+    setEmail(detail.email ?? ''); setAddress(detail.address ?? '')
+    setContact(detail.contact_name ?? '')
+    setErr(''); setEditing(false)
   }
+
+  const save = async (e) => {
+    e.preventDefault()
+    if (!name.trim()) { setErr('El nombre es obligatorio.'); return }
+    setSaving(true); setErr('')
+    try {
+      const updated = await patchSupplier(supplierId, businessId, {
+        name: name.trim(), phone: phone.trim(),
+        email: email.trim(), address: address.trim(), contact_name: contact.trim(),
+      })
+      onUpdated(updated)
+      setEditing(false)
+    } catch (e) { setErr(e?.message || 'Error al guardar.') }
+    finally { setSaving(false) }
+  }
+
+  const ROW = ({ label, value }) => (
+    <div className={fieldCls}>
+      <span className={labelCls}>{label}</span>
+      <span className={valCls}>{value}</span>
+    </div>
+  )
+
+  if (!editing) return (
+    <div className="rounded-xl border border-[hsl(var(--border))] p-5 flex flex-col gap-4">
+      <div className="flex items-center justify-between">
+        <span className="text-xs font-bold uppercase tracking-widest text-[hsl(var(--muted-foreground))]">
+          Datos del proveedor
+        </span>
+        <button
+          onClick={openEdit}
+          className="flex items-center gap-1 text-xs text-[hsl(var(--primary))] font-medium hover:underline"
+        >
+          <Pencil size={12} /> Editar
+        </button>
+      </div>
+      <div className="grid grid-cols-2 gap-x-8 gap-y-4">
+        <ROW label="Nombre"             value={str(detail.name)} />
+        <ROW label="RUT"                value={str(detail.rut)} />
+        <ROW label="Teléfono"          value={str(detail.phone)} />
+        <ROW label="Correo electrónico" value={str(detail.email)} />
+        <ROW label="Contacto"           value={str(detail.contact_name)} />
+        <ROW label="Categoría"          value={str(detail.category)} />
+        <ROW label="Dirección"          value={str(detail.address)} />
+        <ROW label="Inicio servicios"   value={date(detail.start_date)} />
+        <ROW label="Fecha ingreso"      value={date(detail.created_at)} />
+      </div>
+    </div>
+  )
+
+  return (
+    <form onSubmit={save} className="rounded-xl border border-[hsl(var(--primary)/0.4)] p-5 flex flex-col gap-4 bg-[hsl(var(--primary)/0.02)]">
+      <div className="flex items-center justify-between">
+        <span className="text-xs font-bold uppercase tracking-widest text-[hsl(var(--primary))]">
+          Editando datos
+        </span>
+        <button type="button" onClick={cancel} disabled={saving}
+          className="text-xs text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] flex items-center gap-1">
+          <X size={12} /> Cancelar
+        </button>
+      </div>
+
+      {err && <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-md px-3 py-2">{err}</p>}
+
+      <div className="grid grid-cols-2 gap-4">
+        <div className={fieldCls}>
+          <Label className={labelCls}>Nombre *</Label>
+          <input className={inputCls} value={name}    onChange={e => setName(e.target.value)}    placeholder="Nombre comercial" />
+        </div>
+        <div className={fieldCls}>
+          <Label className={labelCls}>Teléfono</Label>
+          <input className={inputCls} value={phone}   onChange={e => setPhone(e.target.value)}   placeholder="+56 9 XXXXXXXX" />
+        </div>
+        <div className={fieldCls}>
+          <Label className={labelCls}>Correo electrónico</Label>
+          <input className={inputCls} type="email" value={email}   onChange={e => setEmail(e.target.value)}   placeholder="correo@proveedor.cl" />
+        </div>
+        <div className={fieldCls}>
+          <Label className={labelCls}>Contacto</Label>
+          <input className={inputCls} value={contact} onChange={e => setContact(e.target.value)} placeholder="Nombre del contacto" />
+        </div>
+      </div>
+      <div className={fieldCls}>
+        <Label className={labelCls}>Dirección</Label>
+        <input className={inputCls} value={address} onChange={e => setAddress(e.target.value)} placeholder="Dirección completa" />
+      </div>
+
+      <div className="flex gap-2 pt-1">
+        <Button type="submit" size="sm" disabled={saving}>
+          {saving ? 'Guardando…' : <><Check size={13} className="mr-1" />Guardar</>}
+        </Button>
+        <Button type="button" size="sm" variant="outline" onClick={cancel} disabled={saving}>
+          Cancelar
+        </Button>
+      </div>
+    </form>
+  )
 }
 
-/**
- * Modal de detalle de proveedor (HU-69): datos de contacto, KPIs y productos en inventario.
- */
+/* ─── sección condiciones comerciales ─────────────────────── */
+function CommercialSection({ supplierId, businessId, detail, onUpdated }) {
+  const [saving, setSaving] = useState(false)
+  const [err,    setErr]    = useState('')
+  const [ok,     setOk]     = useState(false)
+  const [terms,  setTerms]  = useState(detail.payment_terms_days != null ? String(detail.payment_terms_days) : '')
+  const [lead,   setLead]   = useState(detail.delivery_lead_time_days != null ? String(detail.delivery_lead_time_days) : '')
+  const [notes,  setNotes]  = useState(detail.commercial_notes ?? '')
+
+  const save = async (e) => {
+    e.preventDefault(); setErr(''); setSaving(true); setOk(false)
+    try {
+      const body = { commercial_notes: notes.trim() || null }
+      if (terms.trim()) { const n = parseInt(terms,10); if(!Number.isFinite(n)||n<0) throw new Error('Plazo inválido'); body.payment_terms_days = n } else body.payment_terms_days = null
+      if (lead.trim())  { const n = parseInt(lead,10);  if(!Number.isFinite(n)||n<0) throw new Error('Plazo inválido'); body.delivery_lead_time_days = n } else body.delivery_lead_time_days = null
+      const updated = await patchSupplier(supplierId, businessId, body)
+      onUpdated(updated); setOk(true); setTimeout(() => setOk(false), 3000)
+    } catch(e) { setErr(e?.message || 'Error al guardar.') }
+    finally { setSaving(false) }
+  }
+
+  return (
+    <form onSubmit={save} className="rounded-xl border border-[hsl(var(--border))] p-5 flex flex-col gap-4">
+      <span className="text-xs font-bold uppercase tracking-widest text-[hsl(var(--muted-foreground))]">
+        Condiciones comerciales
+      </span>
+      {err && <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-md px-3 py-2">{err}</p>}
+      {ok  && <p className="text-xs text-emerald-600">✓ Guardado correctamente</p>}
+      <div className="grid grid-cols-2 gap-4">
+        <div className={fieldCls}>
+          <Label className={labelCls}>Plazo de pago (días)</Label>
+          <input className={inputCls} type="number" min="0" value={terms} onChange={e=>setTerms(e.target.value)} placeholder="Ej. 30" />
+        </div>
+        <div className={fieldCls}>
+          <Label className={labelCls}>Plazo de entrega (días)</Label>
+          <input className={inputCls} type="number" min="0" value={lead} onChange={e=>setLead(e.target.value)} placeholder="Ej. 3" />
+        </div>
+      </div>
+      <div className={fieldCls}>
+        <Label className={labelCls}>Observaciones</Label>
+        <textarea value={notes} onChange={e=>setNotes(e.target.value)} rows={3} placeholder="Notas o condiciones"
+          className="w-full rounded-md border border-[hsl(var(--border))] bg-white px-3 py-2 text-sm shadow-sm resize-none focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary)/0.3)]" />
+      </div>
+      <Button type="submit" size="sm" disabled={saving} className="self-start">
+        {saving ? 'Guardando…' : 'Guardar condiciones'}
+      </Button>
+    </form>
+  )
+}
+
+/* ─── modal principal ─────────────────────────────────────── */
 function SupplierDetailModal({ open, supplierId, businessId, onClose }) {
   const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
-  const [detail, setDetail] = useState(null)
-  const [commercialSaving, setCommercialSaving] = useState(false)
-  const [commercialError, setCommercialError] = useState('')
-  const [paymentTerms, setPaymentTerms] = useState('')
-  const [leadTime, setLeadTime] = useState('')
-  const [commercialNotes, setCommercialNotes] = useState('')
+  const [error,   setError]   = useState('')
+  const [detail,  setDetail]  = useState(null)
 
   const load = useCallback(async () => {
     if (!supplierId || !businessId) return
-    setError('')
-    setLoading(true)
-    setDetail(null)
+    setError(''); setLoading(true); setDetail(null)
     try {
       const data = await getSupplierDetailForBusiness(supplierId, businessId)
       setDetail(data && typeof data === 'object' ? data : null)
-      if (data && typeof data === 'object') {
-        setPaymentTerms(data.payment_terms_days != null ? String(data.payment_terms_days) : '')
-        setLeadTime(data.delivery_lead_time_days != null ? String(data.delivery_lead_time_days) : '')
-        setCommercialNotes(data.commercial_notes != null ? String(data.commercial_notes) : '')
-      }
     } catch (e) {
-      setDetail(null)
-      setError(e?.message || 'No se pudo cargar el detalle del proveedor.')
-    } finally {
-      setLoading(false)
-    }
+      setError(e?.message || 'No se pudo cargar el proveedor.')
+    } finally { setLoading(false) }
   }, [supplierId, businessId])
 
   useEffect(() => {
-    if (!open || !supplierId || !businessId) {
-      setDetail(null)
-      setError('')
-      setLoading(false)
-      return
-    }
+    if (!open || !supplierId || !businessId) { setDetail(null); setError(''); return }
     load()
   }, [open, supplierId, businessId, load])
 
   if (!open || !supplierId || !businessId) return null
 
   const products = Array.isArray(detail?.purchased_products) ? detail.purchased_products : []
-
-  const saveCommercial = async (ev) => {
-    ev.preventDefault()
-    setCommercialError('')
-    setCommercialSaving(true)
-    try {
-      const body = {}
-      if (paymentTerms.trim() !== '') {
-        const n = parseInt(paymentTerms, 10)
-        if (!Number.isFinite(n) || n < 0) throw new Error('Plazo de pago inválido.')
-        body.payment_terms_days = n
-      } else {
-        body.payment_terms_days = null
-      }
-      if (leadTime.trim() !== '') {
-        const n = parseInt(leadTime, 10)
-        if (!Number.isFinite(n) || n < 0) throw new Error('Plazo de entrega inválido.')
-        body.delivery_lead_time_days = n
-      } else {
-        body.delivery_lead_time_days = null
-      }
-      body.commercial_notes = commercialNotes.trim() || null
-      const updated = await patchSupplier(supplierId, businessId, body)
-      setDetail((prev) => (prev && typeof prev === 'object' ? { ...prev, ...updated } : updated))
-    } catch (e) {
-      setCommercialError(e?.message || 'No se pudieron guardar las condiciones.')
-    } finally {
-      setCommercialSaving(false)
-    }
-  }
+  const handleUpdated = (updated) => setDetail(prev => prev ? { ...prev, ...updated } : updated)
 
   return (
-    <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen) onClose() }}>
+    <Dialog open={open} onOpenChange={(o) => { if (!o) onClose() }}>
       <DialogContent
-        className="max-w-3xl w-full flex flex-col overflow-hidden p-0"
-        style={{ maxHeight: 'min(92vh, 900px)' }}
+        className="max-w-2xl w-full flex flex-col overflow-hidden p-0"
+        style={{ maxHeight: 'min(92vh, 880px)' }}
       >
-        {/* Fixed header */}
-        <DialogHeader className="shrink-0 px-7 pt-6 pb-4 border-b border-[hsl(var(--border))]">
-          <DialogTitle>Detalle del proveedor</DialogTitle>
+        {/* Header */}
+        <DialogHeader className="shrink-0 px-6 pt-5 pb-4 border-b border-[hsl(var(--border))]">
+          <div className="flex items-center gap-3">
+            <DialogTitle className="text-base">
+              {detail ? str(detail.name) : 'Proveedor'}
+            </DialogTitle>
+            {detail && (
+              <Badge variant={detail.is_active === false ? 'destructive' : 'success'}>
+                {detail.is_active === false ? 'Inactivo' : 'Activo'}
+              </Badge>
+            )}
+          </div>
         </DialogHeader>
 
-        {/* Scrollable body — no visible scrollbar */}
-        <div className="flex-1 overflow-y-auto min-h-0 no-scrollbar px-7 py-5">
-          <div className="flex flex-col gap-6">
-            {loading ? (
-              <p className="text-sm text-[hsl(var(--muted-foreground))]" role="status">Cargando…</p>
-            ) : null}
+        {/* Body */}
+        <div className="flex-1 overflow-y-auto min-h-0 px-6 py-5 flex flex-col gap-5">
 
-            {error ? (
-              <p className="rounded-md bg-red-50 border border-red-200 text-red-700 text-sm px-3 py-2">{error}</p>
-            ) : null}
+          {loading && (
+            <p className="text-sm text-[hsl(var(--muted-foreground))]">Cargando…</p>
+          )}
+          {error && (
+            <p className="rounded-md bg-red-50 border border-red-200 text-red-700 text-sm px-3 py-2">{error}</p>
+          )}
 
-            {!loading && !error && detail ? (
-              <>
-                {/* Name + badge */}
-                <div className="flex items-center gap-3">
-                  <h3 className="text-lg font-bold text-[hsl(var(--foreground))]">{displayStr(detail.name)}</h3>
-                  <Badge variant={detail.is_active === false ? 'destructive' : 'success'}>
-                    {detail.is_active === false ? 'Inactivo' : 'Activo'}
-                  </Badge>
-                </div>
+          {!loading && !error && detail && (
+            <>
+              {/* Datos del proveedor */}
+              <InfoSection
+                detail={detail}
+                supplierId={supplierId}
+                businessId={businessId}
+                onUpdated={handleUpdated}
+              />
 
-                {/* Contact grid */}
-                <dl className="grid grid-cols-2 gap-x-8 gap-y-4 text-sm">
-                  {[
-                    ['RUT', displayStr(detail.rut)],
-                    ['Teléfono', displayStr(detail.phone)],
-                    ['Correo electrónico', displayStr(detail.email)],
-                    ['Dirección', displayStr(detail.address)],
-                    ['Contacto', displayStr(detail.contact_name)],
-                    ['Categoría', displayStr(detail.category)],
-                    ['Inicio de la prestación de servicios', formatDate(detail.start_date)],
-                    ['Fecha de ingreso al sistema', formatDate(detail.created_at)],
-                  ].map(([label, val]) => (
-                    <div key={label} className="flex flex-col gap-0.5">
-                      <dt className="text-xs font-semibold text-[hsl(var(--muted-foreground))] uppercase tracking-wide">{label}</dt>
-                      <dd className="text-[hsl(var(--foreground))] font-medium">{val}</dd>
-                    </div>
-                  ))}
-                </dl>
+              {/* Condiciones comerciales */}
+              <CommercialSection
+                supplierId={supplierId}
+                businessId={businessId}
+                detail={detail}
+                onUpdated={handleUpdated}
+              />
 
-                {/* Commercial conditions */}
-                <form onSubmit={saveCommercial} className="flex flex-col gap-4 border border-[hsl(var(--border))] rounded-xl p-5 bg-[hsl(var(--accent)/0.4)]">
-                  <h4 className="font-semibold text-[hsl(var(--foreground))]">Condiciones comerciales</h4>
-                  {commercialError ? (
-                    <p className="rounded-md bg-red-50 border border-red-200 text-red-700 text-sm px-3 py-2">{commercialError}</p>
-                  ) : null}
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="flex flex-col gap-1.5">
-                      <Label htmlFor="sd-payment-terms">Plazo de pago (días)</Label>
-                      <Input id="sd-payment-terms" type="number" min="0" value={paymentTerms}
-                        onChange={(ev) => setPaymentTerms(ev.target.value)} placeholder="Ej. 30" />
-                    </div>
-                    <div className="flex flex-col gap-1.5">
-                      <Label htmlFor="sd-lead-time">Plazo de entrega típico (días)</Label>
-                      <Input id="sd-lead-time" type="number" min="0" value={leadTime}
-                        onChange={(ev) => setLeadTime(ev.target.value)} placeholder="Ej. 3" />
-                    </div>
+              {/* KPIs */}
+              <div className="grid grid-cols-2 gap-4">
+                {[
+                  ['Productos asociados', detail.purchased_products_count ?? 0, false],
+                  ['Total compras (CLP)', fmt(detail.supplier_purchases_total_clp), true],
+                ].map(([label, val, money]) => (
+                  <div key={label} className="rounded-xl border border-[hsl(var(--border))] bg-white px-5 py-4">
+                    <p className="text-xs text-[hsl(var(--muted-foreground))] font-medium mb-1">{label}</p>
+                    <p className={`text-2xl font-bold ${money ? 'text-[hsl(var(--primary))]' : ''}`}>{val}</p>
                   </div>
-                  <div className="flex flex-col gap-1.5">
-                    <Label htmlFor="sd-notes">Observaciones</Label>
-                    <textarea id="sd-notes" value={commercialNotes}
-                      onChange={(ev) => setCommercialNotes(ev.target.value)}
-                      placeholder="Condiciones u notas" rows={3}
-                      className="w-full rounded-md border border-[hsl(var(--border))] bg-white px-3 py-2 text-sm shadow-sm resize-none focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary)/0.3)]"
-                    />
-                  </div>
-                  <Button type="submit" disabled={commercialSaving} className="self-start">
-                    {commercialSaving ? 'Guardando…' : 'Guardar condiciones'}
-                  </Button>
-                </form>
+                ))}
+              </div>
 
-                {/* KPI cards */}
-                <div className="grid grid-cols-2 gap-4">
-                  {[
-                    ['Total productos (unidades)', detail.purchased_products_count ?? 0, false],
-                    ['Total compras (CLP)', formatMoneyClp(detail.supplier_purchases_total_clp), true],
-                  ].map(([label, val, isMoney]) => (
-                    <div key={label} className="flex flex-col gap-1 rounded-xl border border-[hsl(var(--border))] bg-white px-5 py-4">
-                      <span className="text-xs text-[hsl(var(--muted-foreground))] font-medium">{label}</span>
-                      <span className={`text-2xl font-bold ${isMoney ? 'text-[hsl(var(--primary))]' : 'text-[hsl(var(--foreground))]'}`}>
-                        {val}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-
-                {/* Products table */}
+              {/* Productos */}
+              {products.length > 0 && (
                 <div>
-                  <h4 className="font-semibold text-[hsl(var(--foreground))] mb-3">Productos en inventario</h4>
-                  {products.length === 0 ? (
-                    <p className="text-sm text-[hsl(var(--muted-foreground))] bg-[hsl(var(--accent)/0.4)] rounded-lg px-4 py-3">
-                      No hay productos asociados a este proveedor.
-                    </p>
-                  ) : (
-                    <div className="rounded-xl border border-[hsl(var(--border))] overflow-x-auto">
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead>Producto</TableHead>
-                            <TableHead className="text-right">Cantidad</TableHead>
-                            <TableHead className="text-right">Costo unit. (CLP)</TableHead>
-                            <TableHead className="text-right">Subtotal (CLP)</TableHead>
+                  <p className="text-xs font-bold uppercase tracking-widest text-[hsl(var(--muted-foreground))] mb-3">
+                    Productos en inventario
+                  </p>
+                  <div className="rounded-xl border border-[hsl(var(--border))] overflow-hidden">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Producto</TableHead>
+                          <TableHead className="text-right">Cant.</TableHead>
+                          <TableHead className="text-right">Costo unit.</TableHead>
+                          <TableHead className="text-right">Subtotal</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {products.map((p) => (
+                          <TableRow key={String(p.product_id)}>
+                            <TableCell className="font-medium">{str(p.name)}</TableCell>
+                            <TableCell className="text-right">{p.quantity ?? 0}</TableCell>
+                            <TableCell className="text-right">{fmt(p.unit_price_clp)}</TableCell>
+                            <TableCell className="text-right">{fmt(p.line_total_clp)}</TableCell>
                           </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {products.map((p) => (
-                            <TableRow key={String(p.product_id)}>
-                              <TableCell className="font-medium">{displayStr(p.name)}</TableCell>
-                              <TableCell className="text-right">{p.quantity ?? 0}</TableCell>
-                              <TableCell className="text-right">{formatMoneyClp(p.unit_price_clp)}</TableCell>
-                              <TableCell className="text-right">{formatMoneyClp(p.line_total_clp)}</TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    </div>
-                  )}
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
                 </div>
-              </>
-            ) : null}
-          </div>
+              )}
+            </>
+          )}
         </div>
-
       </DialogContent>
     </Dialog>
   )

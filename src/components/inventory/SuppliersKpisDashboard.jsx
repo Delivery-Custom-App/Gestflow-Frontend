@@ -22,7 +22,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import {
   Table, TableHeader, TableBody, TableRow, TableHead, TableCell,
 } from '@/components/ui/table'
-import { Users, CheckCircle, DollarSign, Store, Plus, Clock, Eye, Power, Trash2 } from 'lucide-react'
+import { Users, CheckCircle, DollarSign, Store, Plus, Clock, Pencil, Power, Trash2 } from 'lucide-react'
 
 const MONTH_NAMES = [
   'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
@@ -368,12 +368,12 @@ function SuppliersKpisDashboard() {
                                 <>
                                   <button
                                     type="button"
-                                    title="Ver detalle"
+                                    title="Editar proveedor"
                                     disabled={isBusy}
                                     onClick={() => setDetailId(row.id != null ? String(row.id) : null)}
                                     className="w-8 h-8 flex items-center justify-center rounded-lg text-[hsl(var(--primary))] hover:bg-[hsl(var(--primary)/0.08)] disabled:opacity-40 transition-colors"
                                   >
-                                    <Eye size={16} />
+                                    <Pencil size={16} />
                                   </button>
                                   <button
                                     type="button"
