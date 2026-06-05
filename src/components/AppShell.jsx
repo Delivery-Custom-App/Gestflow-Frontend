@@ -10,9 +10,10 @@ import {
   DollarSign, FileText, BarChart3, Wallet, Bell, Gift,
   Table2, ChefHat,
   Package, Truck, ShoppingCart, BookMarked, PackageOpen,
-  LogOut, Utensils, HelpCircle, Phone, Mail, Moon, Sun, Menu, Users,
+  LogOut, Utensils, HelpCircle, Phone, Mail, Moon, Sun, Menu, Users, RotateCcw,
 } from 'lucide-react'
 import CoachMark from './onboarding/CoachMark'
+import { useOnboarding } from '../context/OnboardingContext'
 import { isSuperAdminRole } from '../auth/roleLabel'
 
 /* ── key sets for accordion auto-open ──────────────────────────── */
@@ -82,6 +83,7 @@ const ACCORDIONS = [
 /* ── Sidebar ────────────────────────────────────────────────────── */
 function Sidebar({ collapsed, onToggle, onClose }) {
   const { user, userRole, logout } = useAuth()
+  const { restart: restartTour } = useOnboarding()
   const isSuperAdmin = isSuperAdminRole(userRole)
   const navigate = useNavigate()
   const { pathname, state: locState } = useLocation()
@@ -308,6 +310,25 @@ function Sidebar({ collapsed, onToggle, onClose }) {
 
       {/* Footer */}
       <div className="px-2 pb-4 border-t border-white/15 pt-3">
+        {/* Replay tutorial button */}
+        <button
+          onClick={() => { onClose?.(); restartTour() }}
+          title={collapsed ? 'Ver tutorial' : undefined}
+          className={cn(
+            'w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-white/60 hover:bg-white/15 hover:text-white transition-colors mb-1',
+            collapsed && 'justify-center px-0',
+          )}
+        >
+          <RotateCcw size={16} className="shrink-0" />
+          <AnimatePresence>
+            {!collapsed && (
+              <motion.span initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex-1 text-left">
+                Ver tutorial
+              </motion.span>
+            )}
+          </AnimatePresence>
+        </button>
+
         {/* Help button */}
         <button
           onClick={() => { if (collapsed) { onToggle(); setHelpOpen(true) } else { setHelpOpen((v) => !v) } }}

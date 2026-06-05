@@ -169,12 +169,17 @@ export function OnboardingProvider({ children }) {
     setActive(false)
   }, [])
 
+  const restart = useCallback(() => {
+    setStep(0)
+    setActive(true)
+  }, [])
+
   useEffect(() => {
     if (active) setStep(0)
   }, [active])
 
   return (
-    <OnboardingContext.Provider value={{ active, step, steps, next, skip }}>
+    <OnboardingContext.Provider value={{ active, step, steps, next, skip, restart }}>
       {children}
     </OnboardingContext.Provider>
   )
