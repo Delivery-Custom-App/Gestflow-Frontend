@@ -1,39 +1,42 @@
-import { createContext, useContext, useState, useCallback, useEffect } from 'react'
+import { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from './AuthContext'
 import { useLocals } from '../hooks/useLocals'
 import { isSuperAdminRole } from '../auth/roleLabel'
 import { WORKER_ROLES } from '../constants/roles'
 
+// getPath recibe el localId del primer local y devuelve la ruta a navegar al avanzar ese paso
 const STEPS = {
-  // Paso 1: grid de locales (navega al primer local al hacer Siguiente)
-  // Pasos 2-5: ítems del sidebar (visibles una vez dentro de un local)
   superadmin: [
     {
       target: 'locales-grid',
       title: 'Tus Locales',
       desc: 'Aquí ves todos tus locales. Presiona Siguiente y entraremos al primero para mostrarte el resto.',
-      navigateToFirstLocal: true,
+      getPath: (localId) => `/local/${localId}/dashboard`,
     },
     {
       target: 'nav-usuarios',
       title: 'Gestión de Usuarios',
       desc: 'Crea y administra el equipo asignando roles: Empleado, Admin o Superadmin.',
+      getPath: () => '/usuarios',
     },
     {
       target: 'nav-dashboard',
       title: 'Dashboard del Local',
       desc: 'Métricas en tiempo real: ventas del día, stock crítico, hora pico y comparativos semanales.',
+      getPath: (localId) => `/local/${localId}/dashboard`,
     },
     {
       target: 'nav-administracion',
       title: 'Administración',
       desc: 'Flujo de caja, rendiciones, reportes y bonos de cada local desde aquí.',
+      getPath: (localId) => `/local/${localId}/administrativo/ventas`,
     },
     {
       target: 'nav-inventario',
       title: 'Inventario',
       desc: 'Controla stock, proveedores, pedidos de insumos y gestiona las recetas del menú.',
+      // último paso — no navega, solo cierra
     },
   ],
   admin: [
@@ -46,11 +49,13 @@ const STEPS = {
       target: 'nav-administracion',
       title: 'Administración',
       desc: 'Revisa flujo de caja, rendiciones, alertas y bonos de tu local.',
+      getPath: (localId) => `/local/${localId}/administrativo/ventas`,
     },
     {
       target: 'nav-pos',
       title: 'POS Restaurante',
       desc: 'Gestiona las mesas y las órdenes activas. La vista cocina avanza los pedidos en curso.',
+      getPath: (localId) => `/local/${localId}/pos`,
     },
     {
       target: 'nav-inventario',
@@ -80,6 +85,8 @@ export function OnboardingProvider({ children }) {
   const { locales } = useLocals()
   const [step, setStep] = useState(0)
   const [active, setActive] = useState(false)
+  // Guardamos el localId del primer local cuando se navega en paso 1
+  const localIdRef = useRef(null)
 
   const storageKey = user?.id ? `siba_onboarding_${user.id}` : null
 
@@ -98,13 +105,21 @@ export function OnboardingProvider({ children }) {
     }
   }, [storageKey, userRole])
 
+  // Captura el localId del primer local cuando esté disponible
+  useEffect(() => {
+    if (locales?.length > 0 && !localIdRef.current) {
+      localIdRef.current = locales[0].id
+    }
+  }, [locales])
+
   const next = useCallback(() => {
     const currentStep = steps[step]
+    const localId = localIdRef.current
 
-    // Si el paso actual pide navegar al primer local, hacerlo antes de avanzar
-    if (currentStep?.navigateToFirstLocal && locales?.length > 0) {
-      const first = locales[0]
-      navigate(`/local/${first.id}/dashboard`, { state: { local: first } })
+    // Navegar si el paso define getPath (excepto el último paso)
+    if (currentStep?.getPath && localId) {
+      const path = currentStep.getPath(localId)
+      if (path) navigate(path)
     }
 
     if (step >= steps.length - 1) {
@@ -113,7 +128,7 @@ export function OnboardingProvider({ children }) {
     } else {
       setStep((s) => s + 1)
     }
-  }, [step, steps, storageKey, locales, navigate])
+  }, [step, steps, storageKey, navigate])
 
   const skip = useCallback(() => {
     setActive(false)
