@@ -132,7 +132,16 @@ function ThresholdsSection({ thresholds, onSave }) {
             type="number"
             min="1"
             value={high}
-            onChange={(e) => { setError(null); setSaved(false); setHigh(e.target.value) }}
+            onChange={(e) => {
+              setError(null); setSaved(false)
+              const val = e.target.value
+              setHigh(val)
+              const h = parseInt(val, 10)
+              const m = parseInt(medium, 10)
+              if (!isNaN(h) && !isNaN(m) && h <= m) {
+                setMedium(String(Math.max(0, h - 1)))
+              }
+            }}
           />
           <p className="text-xs text-[hsl(var(--muted-foreground))]">ventas → rojo</p>
         </div>
