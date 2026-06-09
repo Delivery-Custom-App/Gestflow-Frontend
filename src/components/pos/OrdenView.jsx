@@ -13,6 +13,22 @@ const STATUS_BADGE = {
   cancelled: 'bg-red-100 text-red-600',
 }
 
+const PAYMENT_STATUS_BADGE = {
+  APPROVED:   'bg-green-100 text-green-700',
+  REJECTED:   'bg-red-100 text-red-700',
+  IN_PROCESS: 'bg-yellow-100 text-yellow-700',
+  PENDING:    'bg-gray-100 text-gray-600',
+  CANCELLED:  'bg-red-50 text-red-500',
+}
+
+const PAYMENT_STATUS_LABEL = {
+  APPROVED:   'Aprobado',
+  REJECTED:   'Rechazado',
+  IN_PROCESS: 'En Proceso',
+  PENDING:    'Pendiente',
+  CANCELLED:  'Cancelado',
+}
+
 const STATUS_LABEL = {
   pending:   'Pendiente',
   preparing: 'Preparando',
@@ -282,7 +298,9 @@ export default function OrdenView({ mesa, localId, onBack, onTableUpdated }) {
                     <div>
                       <p className="text-xs text-[hsl(var(--muted-foreground))] mb-0.5">Tipo</p>
                       <p className="text-[hsl(var(--foreground))]">
-                        {firstOrder?.source === 'dine-in' ? 'En Local' : firstOrder?.source || '—'}
+                        {firstOrder?.source === 'dine-in' ? 'En Local'
+                          : firstOrder?.source === 'mercadopago_pos' ? 'MercadoPago POS'
+                          : firstOrder?.source || '—'}
                       </p>
                     </div>
                     <div>
@@ -303,6 +321,26 @@ export default function OrdenView({ mesa, localId, onBack, onTableUpdated }) {
                       <p className="text-xs text-[hsl(var(--muted-foreground))] mb-0.5">Hora</p>
                       <p className="text-[hsl(var(--foreground))]">{fmtTime(firstOrder?.created_at)}</p>
                     </div>
+
+                    {/* AC1: Payment confirmation status */}
+                    {firstOrder?.payment_status && (
+                      <div>
+                        <p className="text-xs text-[hsl(var(--muted-foreground))] mb-0.5">Pago</p>
+                        <span className={`inline-block text-xs font-medium px-2 py-0.5 rounded-full ${PAYMENT_STATUS_BADGE[firstOrder.payment_status] || 'bg-gray-100 text-gray-600'}`}>
+                          {PAYMENT_STATUS_LABEL[firstOrder.payment_status] || firstOrder.payment_status}
+                        </span>
+                      </div>
+                    )}
+
+                    {/* AC4: MercadoPago external transaction ID for 1:1 traceability */}
+                    {firstOrder?.external_transaction_id && (
+                      <div className="col-span-2">
+                        <p className="text-xs text-[hsl(var(--muted-foreground))] mb-0.5">ID Transacción MP</p>
+                        <p className="font-mono text-xs text-[hsl(var(--foreground))] break-all">
+                          {firstOrder.external_transaction_id}
+                        </p>
+                      </div>
+                    )}
                   </div>
                 </div>
 
