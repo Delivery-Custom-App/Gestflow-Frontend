@@ -1,19 +1,71 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useLocals } from '../hooks/useLocals'
-import CreateLocalModal from './CreateLocalModal'
+import { useAuth } from '../context/AuthContext'
+import CreateLocalDrawer from './CreateLocalDrawer'
 import LocalsGrid from './LocalsGrid'
 import LoadingSpinner from './LoadingSpinner'
+import { apiRequest, getOptionalAuthContext } from '../lib/apiClient'
+
+function getDateRange() {
+  let salesDays = 1
+  try {
+    const stored = localStorage.getItem('sibagestion_flow_thresholds')
+    if (stored) {
+      const parsed = JSON.parse(stored)
+      if (typeof parsed.salesDays === 'number' && parsed.salesDays >= 1) salesDays = parsed.salesDays
+    }
+  } catch { /* use default */ }
+
+  const end = new Date()
+  end.setHours(23, 59, 59, 999)
+  const start = new Date()
+  start.setDate(start.getDate() - (salesDays - 1))
+  start.setHours(0, 0, 0, 0)
+  return { dateFrom: start.toISOString(), dateTo: end.toISOString() }
+}
 
 function AdminDashboard() {
-  const navigate = useNavigate()
-  const location = useLocation()
-  const [isModalOpen, setIsModalOpen] = useState(false)
+  const navigate   = useNavigate()
+  const location   = useLocation()
+  const { userRole } = useAuth()
+  const isSuperAdmin = userRole?.toUpperCase() === 'SUPERADMIN'
+
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false)
+  const [salesCounts, setSalesCounts]   = useState({})
   const { locales, loading, error, refetch } = useLocals()
+
+  const fetchSalesCounts = useCallback(async (locals) => {
+    if (!locals.length) return
+    try {
+      const { token } = await getOptionalAuthContext()
+      if (!token) return
+      const { dateFrom, dateTo } = getDateRange()
+      const results = await Promise.all(
+        locals.map((l) =>
+          apiRequest(
+            `/orders?local_id=${l.id}&date_from=${encodeURIComponent(dateFrom)}&date_to=${encodeURIComponent(dateTo)}`,
+            { token }
+          )
+            .then((orders) => ({ id: l.id, count: Array.isArray(orders) ? orders.length : 0 }))
+            .catch(() => ({ id: l.id, count: 0 }))
+        )
+      )
+      const counts = {}
+      results.forEach(({ id, count }) => { counts[id] = count })
+      setSalesCounts(counts)
+    } catch {
+      // silently ignore — indicators simply won't show
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!loading && locales.length) fetchSalesCounts(locales)
+  }, [loading, locales, fetchSalesCounts])
 
   useEffect(() => {
     if (loading) return
-    const st = location.state
+    const st  = location.state
     const fid = st?.focusLocalId
     const loc = st?.local
     if (!fid && !loc?.id) return
@@ -38,7 +90,7 @@ function AdminDashboard() {
   if (loading) {
     return (
       <div className="flex-1 flex items-center justify-center">
-        <LoadingSpinner message="Cargando locales..." />
+        <LoadingSpinner message="Cargando franquicias..." />
       </div>
     )
   }
@@ -53,21 +105,27 @@ function AdminDashboard() {
     )
   }
 
+  const handleRefresh = () => {
+    refetch()
+    fetchSalesCounts(locales)
+  }
+
   return (
     <>
-      <div className="flex-1 overflow-y-auto">
-        <div data-onboarding="locales-grid">
+      <div className="flex-1 overflow-y-auto no-scrollbar">
           <LocalsGrid
             locales={locales}
             onLocalSelect={(local) => navigate(`/local/${local.id}/dashboard`, { state: { local } })}
-            onCreateLocal={() => setIsModalOpen(true)}
+            onCreateLocal={() => setIsDrawerOpen(true)}
+            salesCounts={salesCounts}
+            isSuperAdmin={isSuperAdmin}
+            onRefresh={handleRefresh}
           />
-        </div>
       </div>
-      <CreateLocalModal
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        onSuccess={() => refetch()}
+      <CreateLocalDrawer
+        isOpen={isDrawerOpen}
+        onClose={() => setIsDrawerOpen(false)}
+        onSuccess={handleRefresh}
       />
     </>
   )
