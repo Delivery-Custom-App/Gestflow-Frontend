@@ -11,10 +11,11 @@ import EditMesaModal from './EditMesaModal'
 import DeleteMesaModal from './DeleteMesaModal'
 import MesaDetailModal from './MesaDetailModal'
 import OrdenView from './OrdenView'
+import PrinterConfigModal from './PrinterConfigModal'
 import { useAuth } from '../../context/AuthContext'
 import { useTheme } from '../../context/ThemeContext'
 import { Button } from '@/components/ui/button'
-import { Sun, Moon, LogOut } from 'lucide-react'
+import { Sun, Moon, LogOut, Printer } from 'lucide-react'
 
 export default function POSModule() {
   const { isWorker, logout } = useAuth()
@@ -36,6 +37,7 @@ export default function POSModule() {
   const [selectedMesaDetail, setSelectedMesaDetail] = useState(null)
   const [showMesaDetail, setShowMesaDetail] = useState(false)
   const [selectedOrdenMesa, setSelectedOrdenMesa] = useState(null)
+  const [showPrinterConfig, setShowPrinterConfig] = useState(false)
   const kpiRefreshRef = useRef(null)
 
   const selectedLocal = useSelectedLocal(localId, 'locales-only')
@@ -213,6 +215,26 @@ export default function POSModule() {
             <LogOut size={16} />
           </button>
 
+          {!isWorker && (
+            <button
+              onClick={() => setShowPrinterConfig(true)}
+              title="Configurar ticketera"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                width: 34,
+                height: 34,
+                borderRadius: 8,
+                border: '1px solid hsl(var(--border))',
+                background: 'hsl(var(--card))',
+                cursor: 'pointer',
+                color: '#3b82f6',
+              }}
+            >
+              <Printer size={16} />
+            </button>
+          )}
           {!isWorker && activeView === 'mesas' && !selectedOrdenMesa && (
             <Button size="sm" onClick={() => setShowModal(true)}>+ Nueva Mesa</Button>
           )}
@@ -287,6 +309,13 @@ export default function POSModule() {
           localId={localId}
           onClose={handleMesaDetailClose}
           onTableUpdated={handleTableUpdated}
+        />
+      )}
+
+      {showPrinterConfig && (
+        <PrinterConfigModal
+          localId={localId}
+          onClose={() => setShowPrinterConfig(false)}
         />
       )}
     </>

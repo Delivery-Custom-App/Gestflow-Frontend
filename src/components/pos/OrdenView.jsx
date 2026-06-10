@@ -3,6 +3,7 @@ import { useMesaDetail } from '../../hooks/useMesaDetail'
 import { useOrderManagement } from '../../hooks/useOrderManagement'
 import { apiRequest } from '../../lib/apiClient'
 import MesaDetailModal from './MesaDetailModal'
+import ComandaActions from './ComandaActions'
 import { Button } from '@/components/ui/button'
 
 const STATUS_BADGE = {
@@ -232,7 +233,10 @@ export default function OrdenView({ mesa, localId, onBack, onTableUpdated }) {
             )}
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            {firstOrder?.id && (
+              <ComandaActions orderId={firstOrder.id} size="sm" showLabel={false} />
+            )}
             <Button
               variant="outline"
               size="sm"
