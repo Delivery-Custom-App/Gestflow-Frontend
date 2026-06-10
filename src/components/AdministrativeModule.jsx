@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useSelectedLocal } from '../hooks/useSelectedLocal'
 import { useAlerts } from '../hooks/useAlerts'
@@ -742,6 +743,97 @@ function AlertGroup({ type, typeAlerts, localId, onRefresh }) {
   )
 }
 
+function AlertTrendChart({ alerts }) {
+  const data = useMemo(() => {
+    const days = 14
+    const result = []
+    const today = new Date()
+    today.setHours(23, 59, 59, 999)
+
+    for (let i = days - 1; i >= 0; i--) {
+      const day = new Date(today)
+      day.setDate(today.getDate() - i)
+      day.setHours(23, 59, 59, 999)
+      const label  = day.toLocaleDateString('es-CL', { day: '2-digit', month: '2-digit' })
+      const dayEnd = day.getTime()
+
+      // Pendientes acumuladas al final de ese día: creadas hasta ese día y aún pendientes
+      const pendientes = alerts.filter((a) => {
+        const t = new Date(a.created_at).getTime()
+        return t <= dayEnd && a.status === 'pending'
+      }).length
+
+      // Resueltas acumuladas: creadas hasta ese día y ya resueltas
+      const resueltas = alerts.filter((a) => {
+        const t = new Date(a.created_at).getTime()
+        return t <= dayEnd && a.status === 'resolved'
+      }).length
+
+      result.push({ fecha: label, Pendientes: pendientes, Resueltas: resueltas })
+    }
+    return result
+  }, [alerts])
+
+  const hasData = data.some((d) => d.Pendientes > 0 || d.Resueltas > 0)
+  if (!hasData) return null
+
+  return (
+    <div className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-4 pt-4 pb-2">
+      <p className="text-xs font-semibold text-[hsl(var(--muted-foreground))] uppercase tracking-wider mb-3">
+        Tendencia acumulada — últimos 14 días
+      </p>
+      <ResponsiveContainer width="100%" height={160}>
+        <LineChart data={data} margin={{ top: 4, right: 8, left: -24, bottom: 0 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+          <XAxis
+            dataKey="fecha"
+            tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }}
+            tickLine={false}
+            axisLine={false}
+            interval="preserveStartEnd"
+          />
+          <YAxis
+            allowDecimals={false}
+            tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }}
+            tickLine={false}
+            axisLine={false}
+          />
+          <Tooltip
+            contentStyle={{
+              background: 'hsl(var(--card))',
+              border: '1px solid hsl(var(--border))',
+              borderRadius: 8,
+              fontSize: 12,
+            }}
+            labelStyle={{ color: 'hsl(var(--foreground))', fontWeight: 600 }}
+          />
+          <Legend
+            iconType="circle"
+            iconSize={8}
+            wrapperStyle={{ fontSize: 11, paddingTop: 4 }}
+          />
+          <Line
+            type="monotone"
+            dataKey="Pendientes"
+            stroke="#ef4444"
+            strokeWidth={2}
+            dot={false}
+            activeDot={{ r: 4 }}
+          />
+          <Line
+            type="monotone"
+            dataKey="Resueltas"
+            stroke="#22c55e"
+            strokeWidth={2}
+            dot={false}
+            activeDot={{ r: 4 }}
+          />
+        </LineChart>
+      </ResponsiveContainer>
+    </div>
+  )
+}
+
 function AlertasContent({ localId }) {
   const { alerts, loading, error, pendingCount, refresh } = useAlerts(localId)
   const [filter, setFilter] = useState('pending')
@@ -791,6 +883,9 @@ function AlertasContent({ localId }) {
           </button>
         ))}
       </div>
+
+      {/* Gráfico tendencia */}
+      <AlertTrendChart alerts={alerts} />
 
       {/* Grupos acordeón */}
       {filtered.length === 0 ? (

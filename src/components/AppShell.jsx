@@ -73,7 +73,7 @@ const ACCORDIONS = [
     label: 'Inventario',
     icon: PackageOpen,
     items: [
-      { key: 'inv-hub',     label: 'Estado Actual Inventario', icon: PackageOpen  },
+      { key: 'inv-hub',     label: 'Estado Inventario', icon: PackageOpen  },
       { key: 'inv-prov',    label: 'Proveedores',              icon: Truck        },
       { key: 'inv-stock',   label: 'Stock de productos',       icon: Package      },
       { key: 'inv-compras', label: 'Pedidos',                  icon: ShoppingCart },
@@ -499,7 +499,7 @@ function AppShell() {
   return (
     <div className="flex h-screen bg-[hsl(var(--background))]">
 
-      {/* Controles flotantes — portal directo al body, inmune a cualquier transform */}
+      {/* Controles flotantes — portal a #overlay-root (fuera de #root, inmune a cualquier contexto de React) */}
       <FloatingControls localId={localId} darkMode={darkMode} toggleDarkMode={toggleDarkMode} />
 
       {/* Overlay backdrop (solo móvil) */}
@@ -543,11 +543,11 @@ function AppShell() {
 }
 
 function FloatingControls({ localId, darkMode, toggleDarkMode }) {
-  const [mounted, setMounted] = useState(false)
-  useEffect(() => { setMounted(true) }, [])
-  if (!mounted) return null
+  const [target, setTarget] = useState(null)
+  useEffect(() => { setTarget(document.getElementById('overlay-root')) }, [])
+  if (!target) return null
   return createPortal(
-    <div style={{ position: 'fixed', top: '8px', right: '12px', zIndex: 9999, display: 'flex', alignItems: 'center', gap: '4px' }}>
+    <>
       {localId && <AlertBell localId={localId} />}
       <button
         onClick={toggleDarkMode}
@@ -556,8 +556,8 @@ function FloatingControls({ localId, darkMode, toggleDarkMode }) {
       >
         {darkMode ? <Sun size={18} /> : <Moon size={18} />}
       </button>
-    </div>,
-    document.body
+    </>,
+    target
   )
 }
 
