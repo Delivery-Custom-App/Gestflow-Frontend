@@ -256,3 +256,28 @@ export async function reprintComanda(orderId, printerConfigId = null) {
 export async function getComandaPrints(orderId) {
   return apiRequest(`/comandas/${orderId}/prints`)
 }
+
+// ─── Split Payments / Pago Multi-Comensal (OP-03) ─────────────────────────────
+
+export async function createSplitPayment(orderId, { comensal_label, amount, payment_method, notes }) {
+  return apiRequest(`/orders/${orderId}/split-payments`, {
+    method: 'POST',
+    body: { comensal_label, amount, payment_method, notes },
+  })
+}
+
+export async function listSplitPayments(orderId) {
+  return apiRequest(`/orders/${orderId}/split-payments`)
+}
+
+export async function getSplitPaymentSummary(orderId) {
+  return apiRequest(`/orders/${orderId}/split-payments/summary`)
+}
+
+export async function updateSplitPayment(splitId, updates) {
+  return apiRequest(`/split-payments/${splitId}`, { method: 'PATCH', body: updates })
+}
+
+export async function deleteSplitPayment(splitId) {
+  return apiRequest(`/split-payments/${splitId}`, { method: 'DELETE' })
+}

@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import { useMesaDetail } from '../../hooks/useMesaDetail'
 import { useOrderManagement } from '../../hooks/useOrderManagement'
-import { apiRequest } from '../../lib/apiClient'
+import { apiRequest, getSplitPaymentSummary } from '../../lib/apiClient'
 import MesaDetailModal from './MesaDetailModal'
 import ComandaActions from './ComandaActions'
+import MultiPaymentModal from './MultiPaymentModal'
 import { Button } from '@/components/ui/button'
 
 const STATUS_BADGE = {
@@ -126,10 +127,13 @@ export default function OrdenView({ mesa, localId, onBack, onTableUpdated }) {
   const { detail, loading, error: mesaError, refresh } = useMesaDetail(mesa.id)
   const { updateOrderStatus } = useOrderManagement()
   const hasTransitioned = useRef(false)
-  const [cancelLoading, setCancelLoading]   = useState(false)
-  const [cobrarLoading, setCobrarLoading]   = useState(false)
-  const [errorMsg, setErrorMsg]             = useState('')
-  const [showAddItems, setShowAddItems]     = useState(false)
+  const [cancelLoading, setCancelLoading]       = useState(false)
+  const [cobrarLoading, setCobrarLoading]       = useState(false)
+  const [errorMsg, setErrorMsg]                 = useState('')
+  const [showAddItems, setShowAddItems]         = useState(false)
+  const [showSplitModal, setShowSplitModal]     = useState(false)
+  const [splitFullyPaid, setSplitFullyPaid]     = useState(false)
+  const [hasSplits, setHasSplits]               = useState(false)
 
   // When the view opens, transition PENDING/PREPARING orders → READY (triggers en_cobro)
   useEffect(() => {
@@ -145,6 +149,18 @@ export default function OrdenView({ mesa, localId, onBack, onTableUpdated }) {
       .then(() => { refresh(); onTableUpdated?.() })
       .catch(err => setErrorMsg(err.message || 'Error actualizando estado'))
   }, [detail, onTableUpdated, refresh, updateOrderStatus])
+
+  // AC2: Check split payment state whenever the order view loads or refreshes
+  useEffect(() => {
+    const orderId = detail?.active_orders?.[0]?.id
+    if (!orderId) return
+    getSplitPaymentSummary(orderId)
+      .then(s => {
+        setHasSplits((s.splits || []).length > 0)
+        setSplitFullyPaid(s.is_fully_paid)
+      })
+      .catch(() => {})
+  }, [detail])
 
   const handleCancelOrder = async () => {
     if (!detail?.active_orders?.length) return
@@ -165,6 +181,11 @@ export default function OrdenView({ mesa, localId, onBack, onTableUpdated }) {
 
   const handleCobrar = async () => {
     if (!detail?.active_orders?.length) return
+    // AC2 (OP-03): Block cobrar if there are unresolved split payments
+    if (hasSplits && !splitFullyPaid) {
+      setErrorMsg('Pago dividido incompleto. Aprueba todos los pagos antes de cobrar.')
+      return
+    }
     setCobrarLoading(true)
     setErrorMsg('')
     try {
@@ -216,6 +237,15 @@ export default function OrdenView({ mesa, localId, onBack, onTableUpdated }) {
         />
       )}
 
+      {showSplitModal && firstOrder && (
+        <MultiPaymentModal
+          order={firstOrder}
+          orderTotal={total}
+          onClose={() => { setShowSplitModal(false); refresh() }}
+          onFullyPaid={() => { setSplitFullyPaid(true); setHasSplits(true) }}
+        />
+      )}
+
       <div className="flex flex-col h-full">
         {/* Breadcrumb + acciones */}
         <div className="flex items-center justify-between px-6 py-3 border-b border-[hsl(var(--border))] bg-[hsl(var(--card))] shrink-0">
@@ -237,12 +267,30 @@ export default function OrdenView({ mesa, localId, onBack, onTableUpdated }) {
             {firstOrder?.id && (
               <ComandaActions orderId={firstOrder.id} size="sm" showLabel={false} />
             )}
+            {/* AC1 (OP-03): Dividir pago entre N comensales */}
+            {firstOrder?.id && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowSplitModal(true)}
+                disabled={!detail?.active_orders?.length}
+                className={hasSplits && !splitFullyPaid
+                  ? 'border-yellow-400 text-yellow-700 hover:bg-yellow-50'
+                  : hasSplits && splitFullyPaid
+                  ? 'border-green-400 text-green-700 hover:bg-green-50'
+                  : ''
+                }
+              >
+                {hasSplits && splitFullyPaid ? '✓ Pago Dividido' : '⊘ Dividir Pago'}
+              </Button>
+            )}
             <Button
               variant="outline"
               size="sm"
               onClick={handleCobrar}
-              disabled={cobrarLoading || cancelLoading || !detail?.active_orders?.length}
-              className="bg-green-600 hover:bg-green-700 text-white font-semibold"
+              disabled={cobrarLoading || cancelLoading || !detail?.active_orders?.length || (hasSplits && !splitFullyPaid)}
+              className="bg-green-600 hover:bg-green-700 text-white font-semibold disabled:opacity-50"
+              title={hasSplits && !splitFullyPaid ? 'Aprueba todos los pagos divididos primero' : ''}
             >
               {cobrarLoading ? 'Procesando...' : '💰 Cobrar e imprimir'}
             </Button>
