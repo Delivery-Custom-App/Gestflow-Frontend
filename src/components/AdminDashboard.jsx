@@ -33,6 +33,7 @@ function AdminDashboard() {
 
   const [isDrawerOpen, setIsDrawerOpen] = useState(false)
   const [salesCounts, setSalesCounts]   = useState({})
+  const [deltaCounts, setDeltaCounts]   = useState({})
   const { locales, loading, error, refetch } = useLocals()
 
   const fetchSalesCounts = useCallback(async (locals) => {
@@ -59,9 +60,43 @@ function AdminDashboard() {
     }
   }, [])
 
+  const fetchDeltaCounts = useCallback(async (locals) => {
+    if (!locals.length) return
+    try {
+      const { token } = await getOptionalAuthContext()
+      if (!token) return
+      const now   = new Date()
+      const h1ago = new Date(now.getTime() - 60  * 60 * 1000)
+      const h2ago = new Date(now.getTime() - 120 * 60 * 1000)
+      const results = await Promise.all(
+        locals.map((l) =>
+          apiRequest(
+            `/orders?local_id=${l.id}&date_from=${encodeURIComponent(h2ago.toISOString())}&date_to=${encodeURIComponent(now.toISOString())}`,
+            { token }
+          )
+            .then((orders) => {
+              if (!Array.isArray(orders)) return { id: l.id, current: 0, prev: 0 }
+              const current = orders.filter((o) => new Date(o.created_at) >= h1ago).length
+              const prev    = orders.filter((o) => new Date(o.created_at) <  h1ago).length
+              return { id: l.id, current, prev }
+            })
+            .catch(() => ({ id: l.id, current: 0, prev: 0 }))
+        )
+      )
+      const deltas = {}
+      results.forEach(({ id, current, prev }) => { deltas[id] = { current, prev, delta: current - prev } })
+      setDeltaCounts(deltas)
+    } catch {
+      // silently ignore
+    }
+  }, [])
+
   useEffect(() => {
-    if (!loading && locales.length) fetchSalesCounts(locales)
-  }, [loading, locales, fetchSalesCounts])
+    if (!loading && locales.length) {
+      fetchSalesCounts(locales)
+      fetchDeltaCounts(locales)
+    }
+  }, [loading, locales, fetchSalesCounts, fetchDeltaCounts])
 
   useEffect(() => {
     if (loading) return
@@ -108,6 +143,7 @@ function AdminDashboard() {
   const handleRefresh = () => {
     refetch()
     fetchSalesCounts(locales)
+    fetchDeltaCounts(locales)
   }
 
   return (
@@ -118,6 +154,7 @@ function AdminDashboard() {
             onLocalSelect={(local) => navigate(`/local/${local.id}/dashboard`, { state: { local } })}
             onCreateLocal={() => setIsDrawerOpen(true)}
             salesCounts={salesCounts}
+            deltaCounts={deltaCounts}
             isSuperAdmin={isSuperAdmin}
             onRefresh={handleRefresh}
           />

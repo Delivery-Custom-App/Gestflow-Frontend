@@ -61,3 +61,8 @@ export function postExpense(body) {
 export function postTransfer(body) {
   return apiRequest('/transfers', { method: 'POST', body })
 }
+
+export function getIncomeTrend(localId, token, days = 7) {
+  const path = withQuery(`/dashboard/local/${localId}/trend`, { days })
+  return apiRequest(path, { token })
+}

@@ -51,11 +51,21 @@ export function useKitchenOrders(localId) {
   }, [localId])
 
   const updateOrderStatus = useCallback(async (orderId, newStatus) => {
-    await apiRequest(`/orders/${orderId}`, {
-      method: 'PATCH',
-      body: { status: newStatus },
-    })
-    await fetchOrders()
+    // Optimistic update: muestra el cambio inmediatamente en la UI
+    const ts = new Date().toISOString()
+    setOrders(prev =>
+      prev.map(o =>
+        o.id === orderId ? { ...o, status: newStatus, updated_at: ts } : o
+      )
+    )
+    try {
+      await apiRequest(`/orders/${orderId}`, {
+        method: 'PATCH',
+        body: { status: newStatus },
+      })
+    } finally {
+      await fetchOrders()
+    }
   }, [fetchOrders])
 
   useEffect(() => {

@@ -17,7 +17,7 @@ import { motion } from 'framer-motion'
 import { formatCLPDisplay as formatMoney } from '../../lib/formatCLP'
 import {
   Package, CheckCircle, TrendingDown, AlertTriangle, DollarSign,
-  Info, ArrowRight,
+  Info, ArrowRight, MapPin,
 } from 'lucide-react'
 
 const STAGGER = {
@@ -112,11 +112,6 @@ function InventoryHub() {
   return (
     <InventoryShell>
       <div className="px-6 py-6 flex flex-col gap-6 pb-10">
-        <header>
-          <h2 className="text-2xl font-bold text-[hsl(var(--foreground))]">Estado Actual Inventario</h2>
-          <p className="text-sm text-[hsl(var(--muted-foreground))] mt-0.5">{selectedLocal?.name}</p>
-        </header>
-
         {loading && !kpis && !items.length ? (
           <LoadingSpinner message="Cargando inventario..." />
         ) : (

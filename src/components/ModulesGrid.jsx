@@ -11,7 +11,7 @@ const modules = [
     title: 'Administrativo',
     subtitle: 'Gestión financiera y operativa del negocio',
     Icon: LayoutGrid,
-    features: ['Dashboard', 'Flujo de Caja', 'Ventas', 'Alertas', 'Rendiciones', 'Bonos', 'Reportes'],
+    features: ['Dashboard', 'Caja Virtual', 'Ventas', 'Alertas', 'Rendiciones', 'Bonos', 'Reportes'],
     disabled: false,
   },
   {

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Building2, MapPin, Plus, TrendingUp, Settings, ChevronDown } from 'lucide-react'
+import { Building2, MapPin, Plus, TrendingUp, Settings, ChevronDown, ArrowUp, ArrowDown, Minus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import OpcionesDrawer from './OpcionesDrawer'
 import FranchisesMap from './FranchisesMap'
@@ -31,7 +31,27 @@ function getSalesFlow(count, thresholds) {
   return { label: 'Flujo bajo', dotColor: 'bg-green-500', bg: 'bg-green-50', text: 'text-green-700', border: 'border-green-200' }
 }
 
-function LocalCard({ local, onSelect, salesCount, thresholds }) {
+function DeltaBadge({ delta }) {
+  if (!delta || (delta.current === 0 && delta.prev === 0)) return null
+  const d = delta.delta
+  if (d > 0) return (
+    <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full px-2.5 py-1">
+      <ArrowUp className="h-3 w-3 shrink-0" />+{d} vs 1h ant.
+    </span>
+  )
+  if (d < 0) return (
+    <span className="inline-flex items-center gap-1 text-xs font-semibold text-red-700 bg-red-50 border border-red-200 rounded-full px-2.5 py-1">
+      <ArrowDown className="h-3 w-3 shrink-0" />{d} vs 1h ant.
+    </span>
+  )
+  return (
+    <span className="inline-flex items-center gap-1 text-xs font-semibold text-[hsl(var(--muted-foreground))] bg-[hsl(var(--muted))] border border-[hsl(var(--border))] rounded-full px-2.5 py-1">
+      <Minus className="h-3 w-3 shrink-0" />Estable
+    </span>
+  )
+}
+
+function LocalCard({ local, onSelect, salesCount, thresholds, delta }) {
   const initials = local.name
     .split(' ')
     .slice(0, 2)
@@ -72,14 +92,15 @@ function LocalCard({ local, onSelect, salesCount, thresholds }) {
         </div>
       </div>
 
-      {/* Sales indicator */}
+      {/* Sales indicator + delta */}
       {flow && (
-        <div className="px-5 py-3 border-t border-[hsl(var(--border))]">
+        <div className="px-5 py-3 border-t border-[hsl(var(--border))] flex items-center flex-wrap gap-2">
           <div className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold border ${flow.bg} ${flow.text} ${flow.border}`}>
             <span className={`h-2 w-2 rounded-full shrink-0 ${flow.dotColor} animate-pulse`} />
             <TrendingUp className="h-3 w-3 shrink-0" />
             {salesCount} ventas · {flow.label}
           </div>
+          <DeltaBadge delta={delta} />
         </div>
       )}
     </div>
@@ -87,7 +108,7 @@ function LocalCard({ local, onSelect, salesCount, thresholds }) {
 }
 
 // ── Accordion section for one group of locals ───────────────
-function LocalsAccordion({ title, count, items, onLocalSelect, salesCounts, thresholds, defaultOpen = true }) {
+function LocalsAccordion({ title, count, items, onLocalSelect, salesCounts, deltaCounts, thresholds, defaultOpen = true }) {
   const [isOpen, setIsOpen] = useState(defaultOpen)
 
   return (
@@ -124,6 +145,7 @@ function LocalsAccordion({ title, count, items, onLocalSelect, salesCounts, thre
                   onSelect={onLocalSelect}
                   salesCount={salesCounts[local.id]}
                   thresholds={thresholds}
+                  delta={deltaCounts?.[local.id]}
                 />
               ))}
             </div>
@@ -135,7 +157,7 @@ function LocalsAccordion({ title, count, items, onLocalSelect, salesCounts, thre
 }
 
 // ── Main grid ────────────────────────────────────────────────
-function LocalsGrid({ locales, onLocalSelect, onCreateLocal, salesCounts = {}, isSuperAdmin = false, onRefresh }) {
+function LocalsGrid({ locales, onLocalSelect, onCreateLocal, salesCounts = {}, deltaCounts = {}, isSuperAdmin = false, onRefresh }) {
   const [thresholds,    setThresholds]    = useState(loadThresholds)
   const [showOpciones,  setShowOpciones]  = useState(false)
 
@@ -224,6 +246,7 @@ function LocalsGrid({ locales, onLocalSelect, onCreateLocal, salesCounts = {}, i
                 items={items}
                 onLocalSelect={onLocalSelect}
                 salesCounts={salesCounts}
+                deltaCounts={deltaCounts}
                 thresholds={thresholds}
                 defaultOpen
               />
@@ -235,6 +258,7 @@ function LocalsGrid({ locales, onLocalSelect, onCreateLocal, salesCounts = {}, i
               items={locales}
               onLocalSelect={onLocalSelect}
               salesCounts={salesCounts}
+              deltaCounts={deltaCounts}
               thresholds={thresholds}
               defaultOpen
             />
