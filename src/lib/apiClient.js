@@ -211,3 +211,48 @@ export async function listUsers(businessId) {
 export async function deleteUser(id) {
   return apiRequest(`/users/${id}`, { method: 'DELETE' })
 }
+
+// ─── Printers (OP-02) ─────────────────────────────────────────────────────────
+
+export async function listPrinters(localId) {
+  return apiRequest(`/printers?local_id=${localId}`)
+}
+
+export async function createPrinter({ local_id, name, model, ip_address, port, is_active }) {
+  return apiRequest('/printers', {
+    method: 'POST',
+    body: { local_id, name, model, ip_address, port: Number(port), is_active },
+  })
+}
+
+export async function updatePrinter(id, updates) {
+  return apiRequest(`/printers/${id}`, { method: 'PATCH', body: updates })
+}
+
+export async function deletePrinter(id) {
+  return apiRequest(`/printers/${id}`, { method: 'DELETE' })
+}
+
+export async function testPrinterConnection(id) {
+  return apiRequest(`/printers/${id}/test`, { method: 'POST' })
+}
+
+// ─── Comandas (OP-02) ─────────────────────────────────────────────────────────
+
+export async function printComanda(orderId, printerConfigId = null) {
+  return apiRequest(`/comandas/${orderId}/print`, {
+    method: 'POST',
+    body: printerConfigId ? { printer_config_id: printerConfigId } : {},
+  })
+}
+
+export async function reprintComanda(orderId, printerConfigId = null) {
+  return apiRequest(`/comandas/${orderId}/reprint`, {
+    method: 'POST',
+    body: printerConfigId ? { printer_config_id: printerConfigId } : {},
+  })
+}
+
+export async function getComandaPrints(orderId) {
+  return apiRequest(`/comandas/${orderId}/prints`)
+}
