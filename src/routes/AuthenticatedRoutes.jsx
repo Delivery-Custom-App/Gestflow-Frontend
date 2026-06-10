@@ -1,20 +1,27 @@
+import { lazy, Suspense } from 'react'
 import { BrowserRouter as Router, Routes, Route, Navigate, useParams, useLocation } from 'react-router-dom'
 import AppShell from '../components/AppShell'
 import ErrorBoundary from '../components/ErrorBoundary'
-import AdminDashboard from '../components/AdminDashboard'
-import LocalDashboard from '../components/LocalDashboard'
-import AdministrativeModule from '../components/AdministrativeModule'
-import InventoryHub from '../components/inventory/InventoryHub'
-import StockControlDashboard from '../components/inventory/StockControlDashboard'
-import SuppliersKpisDashboard from '../components/inventory/SuppliersKpisDashboard'
-import WeeklyPurchasesPage from '../components/inventory/weeklyPurchases/WeeklyPurchasesPage'
-import WeeklyPurchaseDetailPage from '../components/inventory/weeklyPurchases/WeeklyPurchaseDetailPage'
-import RecipesPage from '../components/inventory/recipes/RecipesPage'
-import POSModule from '../components/pos/POSModule'
-import MesaDetail from '../components/pos/MesaDetail'
-import ReportesPage from '../components/pos/ReportesPage'
-import UserManagementPage from '../components/UserManagementPage'
-import UsersListPage from '../components/UsersListPage'
+import LoadingPage from '../components/LoadingPage'
+
+// Carga diferida (code-splitting): cada página se compila en su propio chunk y
+// se descarga solo cuando se navega a su ruta. Saca del bundle inicial el código
+// pesado (recharts en dashboards/inventario, módulos admin), reduciendo el bundle
+// principal y el tiempo de carga del POS (AC2, AC3).
+const AdminDashboard = lazy(() => import('../components/AdminDashboard'))
+const LocalDashboard = lazy(() => import('../components/LocalDashboard'))
+const AdministrativeModule = lazy(() => import('../components/AdministrativeModule'))
+const InventoryHub = lazy(() => import('../components/inventory/InventoryHub'))
+const StockControlDashboard = lazy(() => import('../components/inventory/StockControlDashboard'))
+const SuppliersKpisDashboard = lazy(() => import('../components/inventory/SuppliersKpisDashboard'))
+const WeeklyPurchasesPage = lazy(() => import('../components/inventory/weeklyPurchases/WeeklyPurchasesPage'))
+const WeeklyPurchaseDetailPage = lazy(() => import('../components/inventory/weeklyPurchases/WeeklyPurchaseDetailPage'))
+const RecipesPage = lazy(() => import('../components/inventory/recipes/RecipesPage'))
+const POSModule = lazy(() => import('../components/pos/POSModule'))
+const MesaDetail = lazy(() => import('../components/pos/MesaDetail'))
+const ReportesPage = lazy(() => import('../components/pos/ReportesPage'))
+const UserManagementPage = lazy(() => import('../components/UserManagementPage'))
+const UsersListPage = lazy(() => import('../components/UsersListPage'))
 import { OnboardingProvider } from '../context/OnboardingContext'
 import { WORKER_ROLES } from '../constants/roles'
 import { isSuperAdminRole } from '../auth/roleLabel'
@@ -149,7 +156,10 @@ export default function AuthenticatedApp() {
     <ErrorBoundary>
       <Router future={ROUTER_FUTURE_FLAGS}>
         <OnboardingProvider>
-          {routes}
+          {/* Suspense muestra el fallback mientras se descarga el chunk de la ruta. */}
+          <Suspense fallback={<LoadingPage />}>
+            {routes}
+          </Suspense>
         </OnboardingProvider>
       </Router>
     </ErrorBoundary>

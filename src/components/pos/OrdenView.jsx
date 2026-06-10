@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, useMemo, useCallback, memo } from 'react'
 import { useMesaDetail } from '../../hooks/useMesaDetail'
 import { useOrderManagement } from '../../hooks/useOrderManagement'
 import { apiRequest } from '../../lib/apiClient'
@@ -122,7 +122,7 @@ function openPrintWindow({ mesa, firstOrder, allItems, subtotal, iva, total }) {
   }
 }
 
-export default function OrdenView({ mesa, localId, onBack, onTableUpdated }) {
+function OrdenView({ mesa, localId, onBack, onTableUpdated }) {
   const { detail, loading, error: mesaError, refresh } = useMesaDetail(mesa.id)
   const { updateOrderStatus } = useOrderManagement()
   const hasTransitioned = useRef(false)
@@ -146,7 +146,18 @@ export default function OrdenView({ mesa, localId, onBack, onTableUpdated }) {
       .catch(err => setErrorMsg(err.message || 'Error actualizando estado'))
   }, [detail, onTableUpdated, refresh, updateOrderStatus])
 
-  const handleCancelOrder = async () => {
+  // Totales derivados memoizados: se recalculan solo cuando cambia `detail`,
+  // no en cada render (AC4 — carrito de alta frecuencia).
+  const { allItems, subtotal, iva, total, firstOrder } = useMemo(() => {
+    const allItems = (detail?.active_orders || []).flatMap(o => o.items || [])
+    const subtotal = allItems.reduce((s, item) => s + (item.total_price || 0), 0)
+    const iva = Math.round(subtotal * 0.19)
+    const total = subtotal + iva
+    const firstOrder = detail?.active_orders?.[0]
+    return { allItems, subtotal, iva, total, firstOrder }
+  }, [detail])
+
+  const handleCancelOrder = useCallback(async () => {
     if (!detail?.active_orders?.length) return
     if (!window.confirm('¿Cancelar la orden y liberar la mesa?')) return
     setCancelLoading(true)
@@ -161,9 +172,9 @@ export default function OrdenView({ mesa, localId, onBack, onTableUpdated }) {
       setErrorMsg(err.message || 'Error al cancelar la orden')
       setCancelLoading(false)
     }
-  }
+  }, [detail, updateOrderStatus, onTableUpdated, onBack])
 
-  const handleCobrar = async () => {
+  const handleCobrar = useCallback(async () => {
     if (!detail?.active_orders?.length) return
     setCobrarLoading(true)
     setErrorMsg('')
@@ -182,13 +193,7 @@ export default function OrdenView({ mesa, localId, onBack, onTableUpdated }) {
       setErrorMsg(err.message || 'Error al cobrar la orden')
       setCobrarLoading(false)
     }
-  }
-
-  const allItems = (detail?.active_orders || []).flatMap(o => o.items || [])
-  const subtotal = allItems.reduce((s, item) => s + (item.total_price || 0), 0)
-  const iva = Math.round(subtotal * 0.19)
-  const total = subtotal + iva
-  const firstOrder = detail?.active_orders?.[0]
+  }, [detail, updateOrderStatus, mesa, firstOrder, allItems, subtotal, iva, total, onTableUpdated, onBack])
 
   const formatItemName = (item) => item.item_name || item.product_name || '—'
 
@@ -478,4 +483,7 @@ export default function OrdenView({ mesa, localId, onBack, onTableUpdated }) {
     </>
   )
 }
+
+// Memoizado: el carrito no se re-renderiza si no cambian sus props (AC4).
+export default memo(OrdenView)
 

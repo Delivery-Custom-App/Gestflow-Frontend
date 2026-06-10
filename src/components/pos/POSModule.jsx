@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useCallback } from 'react'
 import { useParams, useNavigate, useLocation } from 'react-router-dom'
 import { useSelectedLocal } from '../../hooks/useSelectedLocal'
 import { useMesasConEstado } from '../../hooks/useMesasConEstado'
@@ -47,7 +47,10 @@ export default function POSModule() {
     if (kpiRefreshRef.current) kpiRefreshRef.current()
   }
 
-  const handleMesaSelect = (mesa) => {
+  // Handlers memoizados (useCallback): mantienen referencia estable entre renders
+  // para que los hijos memoizados (MesasVisualization/MesaCard) no re-rendericen
+  // cuando POSModule cambia de estado por otra causa (AC1, H1).
+  const handleMesaSelect = useCallback((mesa) => {
     const state = mesa.state || 'libre'
     if (state === 'ocupada' || state === 'en_cobro') {
       setSelectedOrdenMesa(mesa)
@@ -55,32 +58,32 @@ export default function POSModule() {
       setSelectedMesaDetail(mesa)
       setShowMesaDetail(true)
     }
-  }
+  }, [])
 
-  const handleMesaDetailClose = () => {
+  const handleMesaDetailClose = useCallback(() => {
     setShowMesaDetail(false)
     setSelectedMesaDetail(null)
-  }
+  }, [])
 
-  const handleOrdenViewBack = () => {
+  const handleOrdenViewBack = useCallback(() => {
     setSelectedOrdenMesa(null)
     refreshMesas()
     if (kpiRefreshRef.current) kpiRefreshRef.current()
-  }
+  }, [refreshMesas])
 
-  const handleTableUpdated = () => {
+  const handleTableUpdated = useCallback(() => {
     refreshMesas()
     if (kpiRefreshRef.current) kpiRefreshRef.current()
-  }
+  }, [refreshMesas])
 
-  const handleFilteredMesasChange = (filtered, activeFilters) => {
+  const handleFilteredMesasChange = useCallback((filtered, activeFilters) => {
     setFilteredMesas(filtered)
-  }
+  }, [])
 
-  const handleEditMesa = (mesa) => {
+  const handleEditMesa = useCallback((mesa) => {
     setEditingMesa(mesa)
     setShowEditModal(true)
-  }
+  }, [])
 
   const handleUpdateMesa = async (formData) => {
     try {
@@ -102,11 +105,11 @@ export default function POSModule() {
     }
   }
 
-  const handleDeleteMesa = (mesa) => {
+  const handleDeleteMesa = useCallback((mesa) => {
     setDeleteError(null)
     setDeletingMesa(mesa)
     setShowDeleteModal(true)
-  }
+  }, [])
 
   const handleConfirmDelete = async () => {
     if (!deletingMesa) return

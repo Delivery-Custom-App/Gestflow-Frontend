@@ -32,3 +32,6 @@ docs/
 
 # Agentes y skills de IA — no son parte del código del proyecto
 .agents/
+
+# npm local config (no versionar prefix de máquina del dev)
+.npmrc
