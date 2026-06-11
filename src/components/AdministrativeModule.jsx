@@ -663,6 +663,7 @@ function dateDayLabel(isoString) {
 }
 
 function AlertGroup({ type, typeAlerts, localId, onRefresh }) {
+  const showResolve = type !== 'inventory'
   const navigate = useNavigate()
   const [open, setOpen]           = useState(true)
   const [marking, setMarking]     = useState(false)
@@ -766,7 +767,7 @@ function AlertGroup({ type, typeAlerts, localId, onRefresh }) {
       {open && (
         <div className="px-4 py-3 space-y-3">
           {/* Barra de acciones batch — solo si hay pendientes */}
-          {pendingIds.length > 0 && (
+          {showResolve && pendingIds.length > 0 && (
             <div className="flex items-center gap-2 flex-wrap pb-1 border-b border-[hsl(var(--border)/0.5)]">
               <button type="button" onClick={selectAll} disabled={busy}
                 className="text-[11px] font-semibold text-[hsl(var(--primary))] hover:underline disabled:opacity-50">
@@ -808,7 +809,7 @@ function AlertGroup({ type, typeAlerts, localId, onRefresh }) {
                   key={alert.id}
                   alert={alert}
                   isSelected={selected.has(alert.id)}
-                  onToggleSelect={alert.status === 'pending' ? toggleSelect : null}
+                  onToggleSelect={showResolve && alert.status === 'pending' ? toggleSelect : null}
                 />
               ))}
             </div>
@@ -1487,17 +1488,6 @@ function AdministrativeModule() {
       <main className="flex-1 overflow-y-auto no-scrollbar px-5 py-6">
         <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            {selectedLocal?.name && (
-              <div className="mb-2">
-                <h1 className="text-lg font-extrabold text-[hsl(var(--foreground))] tracking-tight leading-tight">{selectedLocal.name}</h1>
-                {selectedLocal?.address && (
-                  <p className="text-xs text-[hsl(var(--muted-foreground))] flex items-center gap-1 mt-0.5">
-                    <MapPin size={11} className="shrink-0" />
-                    <span>{formatShortAddress(selectedLocal.address)}</span>
-                  </p>
-                )}
-              </div>
-            )}
             <h2 className="text-base font-bold text-[hsl(var(--primary))] tracking-tight">
               {activeSectionMeta.label}
             </h2>

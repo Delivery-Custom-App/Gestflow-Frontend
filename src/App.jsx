@@ -1,3 +1,4 @@
+import { AnimatePresence } from 'framer-motion'
 import LoadingPage from './components/LoadingPage'
 import LoginPage from './components/LoginPage'
 import AuthenticatedApp from './routes/AuthenticatedRoutes'
@@ -8,15 +9,17 @@ import { ThemeProvider } from './context/ThemeContext'
 function AppContent() {
   const { appLoading, user } = useAuth()
 
-  if (appLoading) {
-    return <LoadingPage />
-  }
-
-  if (!user) {
-    return <LoginPage />
-  }
-
-  return <AuthenticatedApp />
+  return (
+    <AnimatePresence mode="wait">
+      {appLoading ? (
+        <LoadingPage key="loading" />
+      ) : !user ? (
+        <LoginPage key="login" />
+      ) : (
+        <AuthenticatedApp key="app" />
+      )}
+    </AnimatePresence>
+  )
 }
 
 function App() {
