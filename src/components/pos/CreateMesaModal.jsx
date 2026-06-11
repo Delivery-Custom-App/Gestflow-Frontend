@@ -1,14 +1,8 @@
-import { useState } from 'react'
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from '@/components/ui/dialog'
+import { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { cn } from '@/lib/utils'
 
 const INITIAL_FORM = { name: '', capacidad: '', zona: '' }
 
@@ -17,26 +11,30 @@ export default function CreateMesaModal({ mesas, onClose, onSubmit }) {
   const [errors, setErrors] = useState({})
   const [submitting, setSubmitting] = useState(false)
   const [serverError, setServerError] = useState('')
+  const [visible, setVisible] = useState(false)
+
+  useEffect(() => { requestAnimationFrame(() => setVisible(true)) }, [])
+
+  const handleClose = () => {
+    setVisible(false)
+    setTimeout(onClose, 300)
+  }
 
   const validate = () => {
     const next = {}
-
     if (!form.name.trim()) {
       next.name = 'El número de mesa es obligatorio'
     } else if (mesas.some((m) => m.name.trim().toLowerCase() === form.name.trim().toLowerCase())) {
       next.name = `Ya existe una mesa con el nombre "${form.name}"`
     }
-
     if (!form.capacidad) {
       next.capacidad = 'La capacidad es obligatoria'
     } else if (Number(form.capacidad) <= 0 || !Number.isInteger(Number(form.capacidad))) {
       next.capacidad = 'Ingresa un número entero mayor a 0'
     }
-
     if (!form.zona.trim()) {
       next.zona = 'La zona es obligatoria'
     }
-
     return next
   }
 
@@ -50,16 +48,12 @@ export default function CreateMesaModal({ mesas, onClose, onSubmit }) {
   const handleSubmit = async (e) => {
     e.preventDefault()
     const validationErrors = validate()
-    if (Object.keys(validationErrors).length > 0) {
-      setErrors(validationErrors)
-      return
-    }
-
+    if (Object.keys(validationErrors).length > 0) { setErrors(validationErrors); return }
     setSubmitting(true)
     setServerError('')
     try {
       await onSubmit({ name: form.name.trim(), capacidad: form.capacidad, zona: form.zona.trim() })
-      onClose()
+      handleClose()
     } catch (err) {
       setServerError(err.message || 'Error al crear la mesa')
     } finally {
@@ -68,32 +62,38 @@ export default function CreateMesaModal({ mesas, onClose, onSubmit }) {
   }
 
   return (
-    <Dialog open onOpenChange={onClose}>
-      <DialogContent className="max-w-lg">
-        <DialogHeader>
-          <DialogTitle>Crear Mesa</DialogTitle>
-        </DialogHeader>
+    <div className="fixed inset-0 z-50">
+      <div
+        className={cn('absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity duration-300', visible ? 'opacity-100' : 'opacity-0')}
+        onClick={handleClose}
+      />
+      <div className={cn('absolute inset-y-0 right-0 w-full max-w-md flex flex-col shadow-2xl bg-[hsl(var(--card))] border-l border-[hsl(var(--border))] overflow-hidden transition-transform duration-300 ease-out', visible ? 'translate-x-0' : 'translate-x-full')}>
 
-        <form onSubmit={handleSubmit} noValidate className="space-y-4 pt-1">
-          {/* Nombre */}
+        {/* Header */}
+        <div className="px-5 pt-5 pb-4 border-b border-[hsl(var(--border))] shrink-0">
+          <h2 className="text-base font-semibold text-[hsl(var(--foreground))]">Crear Mesa</h2>
+        </div>
+
+        {/* Form */}
+        <form id="create-mesa-form" onSubmit={handleSubmit} noValidate className="flex-1 overflow-y-auto no-scrollbar px-5 py-5 space-y-4">
+
           <div className="space-y-1.5">
             <Label htmlFor="mesa-name">
-              Número / Nombre de Mesa <span className="text-[hsl(var(--destructive))]">*</span>
+              Número / Nombre <span className="text-[hsl(var(--destructive))]">*</span>
             </Label>
             <Input
               id="mesa-name"
               name="name"
               type="text"
-              placeholder="Ej: Mesa 1, VIP-A, Terraza 3"
+              placeholder="Ingresar nombre"
               value={form.name}
               onChange={handleChange}
               disabled={submitting}
-              className={errors.name ? 'border-[hsl(var(--destructive))]' : ''}
+              className={cn(errors.name && 'border-[hsl(var(--destructive))]')}
             />
             {errors.name && <p className="text-xs text-[hsl(var(--destructive))]">{errors.name}</p>}
           </div>
 
-          {/* Capacidad */}
           <div className="space-y-1.5">
             <Label htmlFor="mesa-capacidad">
               Capacidad (personas) <span className="text-[hsl(var(--destructive))]">*</span>
@@ -103,16 +103,15 @@ export default function CreateMesaModal({ mesas, onClose, onSubmit }) {
               name="capacidad"
               type="number"
               min="1"
-              placeholder="Ej: 4"
+              placeholder="0"
               value={form.capacidad}
               onChange={handleChange}
               disabled={submitting}
-              className={errors.capacidad ? 'border-[hsl(var(--destructive))]' : ''}
+              className={cn(errors.capacidad && 'border-[hsl(var(--destructive))]')}
             />
             {errors.capacidad && <p className="text-xs text-[hsl(var(--destructive))]">{errors.capacidad}</p>}
           </div>
 
-          {/* Zona */}
           <div className="space-y-1.5">
             <Label htmlFor="mesa-zona">
               Zona <span className="text-[hsl(var(--destructive))]">*</span>
@@ -121,11 +120,11 @@ export default function CreateMesaModal({ mesas, onClose, onSubmit }) {
               id="mesa-zona"
               name="zona"
               type="text"
-              placeholder="Ej: Salón, Terraza, Bar, VIP"
+              placeholder="Ingresar zona"
               value={form.zona}
               onChange={handleChange}
               disabled={submitting}
-              className={errors.zona ? 'border-[hsl(var(--destructive))]' : ''}
+              className={cn(errors.zona && 'border-[hsl(var(--destructive))]')}
             />
             {errors.zona && <p className="text-xs text-[hsl(var(--destructive))]">{errors.zona}</p>}
           </div>
@@ -135,21 +134,23 @@ export default function CreateMesaModal({ mesas, onClose, onSubmit }) {
               {serverError}
             </p>
           )}
-
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={onClose} disabled={submitting}>
-              Cancelar
-            </Button>
-            <Button
-              type="submit"
-              disabled={submitting}
-              className="bg-[hsl(var(--primary))] hover:bg-[hsl(var(--primary))]/90 text-white"
-            >
-              {submitting ? 'Creando...' : 'Crear Mesa'}
-            </Button>
-          </DialogFooter>
         </form>
-      </DialogContent>
-    </Dialog>
+
+        {/* Footer */}
+        <div className="px-5 py-4 border-t border-[hsl(var(--border))] shrink-0 flex gap-3">
+          <Button type="button" variant="outline" onClick={handleClose} disabled={submitting} className="flex-1">
+            Cancelar
+          </Button>
+          <Button
+            type="submit"
+            form="create-mesa-form"
+            disabled={submitting}
+            className="flex-1 bg-[hsl(var(--primary))] hover:bg-[hsl(var(--primary))]/90 text-white"
+          >
+            {submitting ? 'Creando...' : 'Crear Mesa'}
+          </Button>
+        </div>
+      </div>
+    </div>
   )
 }

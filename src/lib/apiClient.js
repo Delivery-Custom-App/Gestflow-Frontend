@@ -169,7 +169,20 @@ export async function apiRequest(path, options = {}) {
     body: body ? JSON.stringify(body) : undefined,
   })
 
-  let response = await makeRequest(token)
+  let response
+
+  try {
+    response = await makeRequest(token)
+  } catch (networkErr) {
+    // True network failure (offline, DNS, CORS, timeout) — no HTTP status
+    const err = new Error('Sin conexión. Verificá tu red e intentá de nuevo.')
+    err.isNetworkError = true
+    err.originalError = networkErr
+    window.dispatchEvent(new CustomEvent('api:network-error', {
+      detail: { message: err.message, path, method },
+    }))
+    throw err
+  }
 
   if (response.status === 401 && retryOnUnauthorized && supabase) {
     const refreshedSession = await getSession(true)
@@ -210,4 +223,74 @@ export async function listUsers(businessId) {
 
 export async function deleteUser(id) {
   return apiRequest(`/users/${id}`, { method: 'DELETE' })
+}
+
+// ─── Printers (OP-02) ─────────────────────────────────────────────────────────
+
+export async function listPrinters(localId) {
+  return apiRequest(`/printers?local_id=${localId}`)
+}
+
+export async function createPrinter({ local_id, name, model, ip_address, port, is_active }) {
+  return apiRequest('/printers', {
+    method: 'POST',
+    body: { local_id, name, model, ip_address, port: Number(port), is_active },
+  })
+}
+
+export async function updatePrinter(id, updates) {
+  return apiRequest(`/printers/${id}`, { method: 'PATCH', body: updates })
+}
+
+export async function deletePrinter(id) {
+  return apiRequest(`/printers/${id}`, { method: 'DELETE' })
+}
+
+export async function testPrinterConnection(id) {
+  return apiRequest(`/printers/${id}/test`, { method: 'POST' })
+}
+
+// ─── Comandas (OP-02) ─────────────────────────────────────────────────────────
+
+export async function printComanda(orderId, printerConfigId = null) {
+  return apiRequest(`/comandas/${orderId}/print`, {
+    method: 'POST',
+    body: printerConfigId ? { printer_config_id: printerConfigId } : {},
+  })
+}
+
+export async function reprintComanda(orderId, printerConfigId = null) {
+  return apiRequest(`/comandas/${orderId}/reprint`, {
+    method: 'POST',
+    body: printerConfigId ? { printer_config_id: printerConfigId } : {},
+  })
+}
+
+export async function getComandaPrints(orderId) {
+  return apiRequest(`/comandas/${orderId}/prints`)
+}
+
+// ─── Split Payments / Pago Multi-Comensal (OP-03) ─────────────────────────────
+
+export async function createSplitPayment(orderId, { comensal_label, amount, payment_method, notes }) {
+  return apiRequest(`/orders/${orderId}/split-payments`, {
+    method: 'POST',
+    body: { comensal_label, amount, payment_method, notes },
+  })
+}
+
+export async function listSplitPayments(orderId) {
+  return apiRequest(`/orders/${orderId}/split-payments`)
+}
+
+export async function getSplitPaymentSummary(orderId) {
+  return apiRequest(`/orders/${orderId}/split-payments/summary`)
+}
+
+export async function updateSplitPayment(splitId, updates) {
+  return apiRequest(`/split-payments/${splitId}`, { method: 'PATCH', body: updates })
+}
+
+export async function deleteSplitPayment(splitId) {
+  return apiRequest(`/split-payments/${splitId}`, { method: 'DELETE' })
 }

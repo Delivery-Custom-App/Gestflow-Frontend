@@ -1,6 +1,8 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
+import { createPortal } from 'react-dom'
 import { Outlet, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import { useLocals } from '../hooks/useLocals'
 import { useTheme } from '../context/ThemeContext'
 import { useAlerts } from '../hooks/useAlerts'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -10,11 +12,13 @@ import {
   DollarSign, FileText, BarChart3, Wallet, Bell, Gift,
   Table2, ChefHat,
   Package, Truck, ShoppingCart, BookMarked, PackageOpen,
-  LogOut, Utensils, HelpCircle, Phone, Mail, Moon, Sun, Menu, Users, RotateCcw,
+  LogOut, Utensils, HelpCircle, Phone, Mail, Moon, Sun, Users, RotateCcw, MapPin,
 } from 'lucide-react'
 import CoachMark from './onboarding/CoachMark'
 import { useOnboarding } from '../context/OnboardingContext'
 import { isSuperAdminRole } from '../auth/roleLabel'
+import { WORKER_ROLES } from '../constants/roles'
+import { formatShortAddress } from '../lib/formatAddress'
 
 /* ── key sets for accordion auto-open ──────────────────────────── */
 const ADMIN_KEYS = new Set(['administracion', 'ventas', 'rendiciones', 'reportes', 'flujo-caja', 'alertas', 'bonos'])
@@ -52,7 +56,7 @@ const ACCORDIONS = [
       { key: 'ventas',      label: 'Ventas',        icon: DollarSign },
       { key: 'rendiciones', label: 'Rendiciones',   icon: FileText   },
       { key: 'reportes',    label: 'Reportes',      icon: BarChart3  },
-      { key: 'flujo-caja',  label: 'Flujo de caja', icon: Wallet     },
+      { key: 'flujo-caja',  label: 'Caja Virtual',  icon: Wallet     },
       { key: 'alertas',     label: 'Alertas',       icon: Bell       },
       { key: 'bonos',       label: 'Bonos',         icon: Gift       },
     ],
@@ -71,7 +75,7 @@ const ACCORDIONS = [
     label: 'Inventario',
     icon: PackageOpen,
     items: [
-      { key: 'inv-hub',     label: 'Estado Actual Inventario', icon: PackageOpen  },
+      { key: 'inv-hub',     label: 'Estado Inventario', icon: PackageOpen  },
       { key: 'inv-prov',    label: 'Proveedores',              icon: Truck        },
       { key: 'inv-stock',   label: 'Stock de productos',       icon: Package      },
       { key: 'inv-compras', label: 'Pedidos',                  icon: ShoppingCart },
@@ -85,13 +89,21 @@ function Sidebar({ collapsed, onToggle, onClose }) {
   const { user, userRole, logout } = useAuth()
   const { restart: restartTour } = useOnboarding()
   const isSuperAdmin = isSuperAdminRole(userRole)
+  const isWorker = WORKER_ROLES.includes(userRole)
   const navigate = useNavigate()
   const { pathname, state: locState } = useLocation()
+  const { locales } = useLocals()
 
   const localIdMatch = pathname.match(/\/local\/([^/]+)/)
   const localId  = localIdMatch ? localIdMatch[1] : null
   const activeKey = deriveActiveKey(pathname)
   const navState  = locState?.local ? { local: locState.local } : localId ? { local: { id: localId } } : {}
+
+  const selectedLocal = useMemo(() => {
+    if (!localId) return null
+    if (locState?.local?.name) return locState.local
+    return locales.find((l) => String(l.id) === String(localId)) ?? null
+  }, [localId, locState, locales])
 
   const [helpOpen, setHelpOpen] = useState(false)
   const [userOpen, setUserOpen] = useState({ administracion: false, pos: false, inventario: false })
@@ -146,10 +158,14 @@ function Sidebar({ collapsed, onToggle, onClose }) {
   }
 
   const discoverItems = [
-    ...(isSuperAdmin ? [{ key: 'locales', label: 'Tus Locales', icon: Store }] : []),
-    ...(localId ? [{ key: 'dashboard', label: 'Dashboard', icon: LayoutDashboard }] : []),
+    ...(isSuperAdmin ? [{ key: 'locales', label: 'Tus Franquicias', icon: Store }] : []),
     ...(isSuperAdmin ? [{ key: 'usuarios', label: 'Usuarios', icon: Users }] : []),
+    ...(!isWorker && localId ? [{ key: 'dashboard', label: 'Dashboard', icon: LayoutDashboard }] : []),
   ]
+
+  const visibleAccordions = isWorker
+    ? ACCORDIONS.filter((s) => s.key === 'pos')
+    : ACCORDIONS
 
   const navBtn = (item, small = false) => {
     const isActive = activeKey === item.key
@@ -196,48 +212,69 @@ function Sidebar({ collapsed, onToggle, onClose }) {
       className="shrink-0 flex flex-col bg-[hsl(var(--primary))] text-white h-screen sticky top-0 overflow-hidden z-20"
     >
       {/* Header */}
-      <div className={cn('flex items-center border-b border-white/15 min-h-[60px]', collapsed ? 'justify-center px-2' : 'px-4 gap-2')}>
-        <AnimatePresence initial={false}>
-          {!collapsed && (
-            <motion.div
-              key="logo-text"
-              initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -8 }}
-              transition={{ duration: 0.15 }}
-              className="flex items-center gap-2 flex-1 min-w-0"
-            >
-              <Utensils size={20} className="shrink-0" />
-              <span className="font-extrabold text-sm tracking-tight truncate">SibaGestion</span>
-            </motion.div>
-          )}
-        </AnimatePresence>
-        <button
-          onClick={onToggle}
-          className="w-8 h-8 flex items-center justify-center rounded-md hover:bg-white/15 transition-colors shrink-0"
-          aria-label={collapsed ? 'Expandir menú' : 'Contraer menú'}
-        >
-          {collapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
-        </button>
+      <div className={cn('border-b border-white/15', collapsed ? 'flex items-center justify-center px-2 min-h-[60px]' : 'px-4 pt-3 pb-3')}>
+        <div className={cn('flex items-center gap-2', collapsed ? '' : 'w-full')}>
+          <AnimatePresence initial={false}>
+            {!collapsed && (
+              <motion.div
+                key="logo-text"
+                initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -8 }}
+                transition={{ duration: 0.15 }}
+                className="flex-1 min-w-0"
+              >
+                {/* Marca */}
+                <div className="flex items-center gap-2 mb-1">
+                  <Utensils size={18} className="shrink-0" />
+                  <span className="font-extrabold text-sm tracking-tight">SibaGestion</span>
+                </div>
+                {/* Local activo */}
+                {selectedLocal && (
+                  <div className="rounded-md bg-white/10 px-2 py-1.5 mt-1">
+                    <p className="text-[11px] font-semibold text-white leading-tight truncate">
+                      {selectedLocal.name}
+                    </p>
+                    {selectedLocal.address && (
+                      <p className="flex items-start gap-1 mt-0.5">
+                        <MapPin size={9} className="shrink-0 mt-0.5 text-white/50" />
+                        <span className="text-[9px] text-white/50 leading-tight line-clamp-2">{formatShortAddress(selectedLocal.address)}</span>
+                      </p>
+                    )}
+                  </div>
+                )}
+              </motion.div>
+            )}
+          </AnimatePresence>
+          <button
+            onClick={onToggle}
+            className="w-8 h-8 flex items-center justify-center rounded-md hover:bg-white/15 transition-colors shrink-0"
+            aria-label={collapsed ? 'Expandir menú' : 'Contraer menú'}
+          >
+            {collapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
+          </button>
+        </div>
       </div>
 
       {/* Nav */}
       <nav className="flex-1 overflow-y-auto py-3 px-2 no-scrollbar">
         {/* DESCUBRIR */}
-        <div className="mb-3">
-          <AnimatePresence>
-            {!collapsed && (
-              <motion.p
-                initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                className="px-3 pb-1 text-[10px] font-bold text-white/40 uppercase tracking-widest"
-              >
-                DESCUBRIR
-              </motion.p>
-            )}
-          </AnimatePresence>
-          {discoverItems.map((item) => navBtn(item))}
-        </div>
+        {discoverItems.length > 0 && (
+          <div className="mb-3">
+            <AnimatePresence>
+              {!collapsed && (
+                <motion.p
+                  initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                  className="px-3 pb-1 text-[10px] font-bold text-white/40 uppercase tracking-widest"
+                >
+                  DESCUBRIR
+                </motion.p>
+              )}
+            </AnimatePresence>
+            {discoverItems.map((item) => navBtn(item))}
+          </div>
+        )}
 
         {/* Accordions */}
-        {localId && ACCORDIONS.map((section) => {
+        {localId && visibleAccordions.map((section) => {
           const open = isOpen(section.key)
           const hasActive = activeKey === section.key || section.items.some((i) => activeKey === i.key)
           const Icon = section.icon
@@ -471,6 +508,9 @@ function AppShell() {
   return (
     <div className="flex h-screen bg-[hsl(var(--background))]">
 
+      {/* Controles flotantes — portal a #overlay-root (fuera de #root, inmune a cualquier contexto de React) */}
+      <FloatingControls localId={localId} darkMode={darkMode} toggleDarkMode={toggleDarkMode} />
+
       {/* Overlay backdrop (solo móvil) */}
       <AnimatePresence>
         {mobileOpen && (
@@ -503,38 +543,32 @@ function AppShell() {
 
       {/* Contenido principal */}
       <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
-        {/* Top bar — hamburger (móvil) + alertas + toggle modo noche */}
-        <div className="shrink-0 flex items-center gap-2 px-3 py-2 border-b border-[hsl(var(--border))] bg-[hsl(var(--card))]">
-          {/* Hamburger — solo móvil */}
-          <button
-            className="md:hidden flex items-center justify-center w-9 h-9 rounded-lg text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))] transition-colors"
-            onClick={() => setMobileOpen(true)}
-            aria-label="Abrir menú"
-          >
-            <Menu size={20} />
-          </button>
-
-          <div className="flex-1" />
-
-          {/* Acciones derechas */}
-          <div className="flex items-center gap-1">
-            {localId && <AlertBell localId={localId} />}
-            <button
-              onClick={toggleDarkMode}
-              className="flex items-center justify-center w-9 h-9 rounded-lg text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))] hover:text-[hsl(var(--foreground))] transition-colors"
-              title={darkMode ? 'Cambiar a modo claro' : 'Cambiar a modo noche'}
-              aria-label={darkMode ? 'Modo claro' : 'Modo noche'}
-            >
-              {darkMode ? <Sun size={18} /> : <Moon size={18} />}
-            </button>
-          </div>
-        </div>
-
         <Outlet />
       </div>
 
       <CoachMark />
     </div>
+  )
+}
+
+function FloatingControls({ localId, darkMode, toggleDarkMode }) {
+  const [target, setTarget] = useState(null)
+  const { userRole } = useAuth()
+  const isWorkerRole = WORKER_ROLES.includes(userRole)
+  useEffect(() => { setTarget(document.getElementById('overlay-root')) }, [])
+  if (!target) return null
+  return createPortal(
+    <>
+      {localId && !isWorkerRole && <AlertBell localId={localId} />}
+      <button
+        onClick={toggleDarkMode}
+        style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '36px', height: '36px', borderRadius: '8px', border: 'none', cursor: 'pointer', background: 'transparent', color: 'hsl(var(--muted-foreground))' }}
+        title={darkMode ? 'Modo claro' : 'Modo noche'}
+      >
+        {darkMode ? <Sun size={18} /> : <Moon size={18} />}
+      </button>
+    </>,
+    target
   )
 }
 

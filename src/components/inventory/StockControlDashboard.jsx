@@ -18,7 +18,7 @@ import CategoryFilterSelect from './CategoryFilterSelect'
 import { motion } from 'framer-motion'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Search, Package, CheckCircle, TrendingDown, AlertTriangle, DollarSign, Plus } from 'lucide-react'
+import { Search, Package, CheckCircle, TrendingDown, AlertTriangle, DollarSign } from 'lucide-react'
 import PageTransition from '../PageTransition'
 import { formatCLPDisplay as formatMoney } from '../../lib/formatCLP'
 
@@ -59,7 +59,7 @@ function StockControlDashboard() {
   const pageSize = 10
 
   useEffect(() => {
-    const t = setTimeout(() => setDebouncedSearch(searchQuery.trim()), 320)
+    const t = setTimeout(() => setDebouncedSearch(searchQuery.trim().toLowerCase()), 320)
     return () => clearTimeout(t)
   }, [searchQuery])
 
@@ -363,8 +363,7 @@ function StockControlDashboard() {
           <CardHeader className="pb-4">
             <div className="flex items-center justify-between gap-3 flex-wrap">
               <CardTitle id="scd-inventory-heading" className="text-base">Inventario de productos</CardTitle>
-              <Button type="button" onClick={() => setModalOpen(true)} className="gap-1.5">
-                <Plus size={16} />
+              <Button type="button" onClick={() => setModalOpen(true)}>
                 Nuevo producto
               </Button>
             </div>

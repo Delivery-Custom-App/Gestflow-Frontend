@@ -9,8 +9,8 @@ const STEPS = {
   superadmin: [
     {
       target: 'locales-grid',
-      title: 'Tus Locales',
-      desc: 'Aquí ves todos tus locales. Selecciona uno para empezar a gestionarlo.',
+      title: 'Tus Franquicias',
+      desc: 'Gestiona todas tus franquicias. Usa "Crear Franquicia" para agregar una nueva o "Opciones" para configurar umbrales de flujo y eliminar locales.',
     },
     {
       target: 'nav-dashboard',

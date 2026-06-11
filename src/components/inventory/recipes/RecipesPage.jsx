@@ -60,11 +60,13 @@ function RecipesPage() {
   const handleDelete = async (recipeId) => {
     await deleteRecipe(recipeId)
     await fetchKpis()
+    await fetchRecipes({ search: searchTerm || null, categoryId: categoryFilter || null, isActive: statusFilter === null ? null : statusFilter === 'active' })
   }
 
   const handleToggleStatus = async (recipeId, isActive) => {
     await toggleRecipeStatus(recipeId, isActive)
     await fetchKpis()
+    await fetchRecipes({ search: searchTerm || null, categoryId: categoryFilter || null, isActive: statusFilter === null ? null : statusFilter === 'active' })
   }
 
   const handleSaveRecipe = async (formData) => {
@@ -126,7 +128,7 @@ function RecipesPage() {
               setShowCreateModal(true)
             }}
           >
-            + Nueva Receta
+            Nueva Receta
           </Button>
         </header>
 
@@ -200,6 +202,8 @@ function RecipesPage() {
             setEditingRecipe(null)
             setSaveError('')
           }}
+          onToggleStatus={editingRecipe ? handleToggleStatus : undefined}
+          onDelete={editingRecipe ? handleDelete : undefined}
           localId={localId}
           externalError={saveError}
         />

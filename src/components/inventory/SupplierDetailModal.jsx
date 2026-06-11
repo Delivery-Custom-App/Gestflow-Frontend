@@ -1,11 +1,10 @@
 import { useCallback, useEffect, useState } from 'react'
 import { getSupplierDetailForBusiness, patchSupplier } from '../../lib/providersApi'
 import { formatCLPDisplay as fmt } from '../../lib/formatCLP'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Label } from '@/components/ui/label'
-import { Pencil, X, Check } from 'lucide-react'
+import { Pencil, X, Check, Power, Trash2 } from 'lucide-react'
 import {
   Table, TableHeader, TableBody,
   TableRow, TableHead, TableCell,
@@ -199,11 +198,12 @@ function CommercialSection({ supplierId, businessId, detail, onUpdated }) {
   )
 }
 
-/* ─── modal principal ─────────────────────────────────────── */
-function SupplierDetailModal({ open, supplierId, businessId, onClose }) {
-  const [loading, setLoading] = useState(false)
-  const [error,   setError]   = useState('')
-  const [detail,  setDetail]  = useState(null)
+/* ─── drawer principal ────────────────────────────────────── */
+function SupplierDetailModal({ open, supplierId, businessId, row, onClose, onToggleActive, onDelete, rowActionId }) {
+  const [loading,          setLoading]          = useState(false)
+  const [error,            setError]            = useState('')
+  const [detail,           setDetail]           = useState(null)
+  const [confirmingDelete, setConfirmingDelete] = useState(false)
 
   const load = useCallback(async () => {
     if (!supplierId || !businessId) return
@@ -217,37 +217,59 @@ function SupplierDetailModal({ open, supplierId, businessId, onClose }) {
   }, [supplierId, businessId])
 
   useEffect(() => {
-    if (!open || !supplierId || !businessId) { setDetail(null); setError(''); return }
+    if (!open || !supplierId || !businessId) { setDetail(null); setError(''); setConfirmingDelete(false); return }
     load()
   }, [open, supplierId, businessId, load])
 
-  if (!open || !supplierId || !businessId) return null
+  const handleClose = () => { setConfirmingDelete(false); onClose() }
+
+  const isBusy    = rowActionId === String(supplierId)
+  const isInactive = (detail?.is_active ?? row?.is_active) === false
 
   const products = Array.isArray(detail?.purchased_products) ? detail.purchased_products : []
   const handleUpdated = (updated) => setDetail(prev => prev ? { ...prev, ...updated } : updated)
 
   return (
-    <Dialog open={open} onOpenChange={(o) => { if (!o) onClose() }}>
-      <DialogContent
-        className="max-w-2xl w-full flex flex-col overflow-hidden p-0"
-        style={{ maxHeight: 'min(92vh, 880px)' }}
+    <>
+      {/* Overlay */}
+      <div
+        className={`fixed inset-0 bg-black/60 transition-opacity duration-300 ${
+          open ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
+        }`}
+        style={{ zIndex: 500 }}
+        onClick={handleClose}
+      />
+
+      {/* Drawer panel */}
+      <div
+        className={`fixed inset-y-0 right-0 w-full max-w-2xl bg-[hsl(var(--card))] shadow-2xl border-l border-[hsl(var(--border))] flex flex-col transform transition-transform duration-300 ease-in-out ${
+          open ? 'translate-x-0' : 'translate-x-full'
+        }`}
+        style={{ zIndex: 501 }}
       >
         {/* Header */}
-        <DialogHeader className="shrink-0 px-6 pt-5 pb-4 border-b border-[hsl(var(--border))]">
+        <div className="flex items-center justify-between px-6 py-5 border-b border-[hsl(var(--border))] shrink-0">
           <div className="flex items-center gap-3">
-            <DialogTitle className="text-base">
+            <h2 className="text-base font-bold text-[hsl(var(--foreground))]">
               {detail ? str(detail.name) : 'Proveedor'}
-            </DialogTitle>
-            {detail && (
-              <Badge variant={detail.is_active === false ? 'destructive' : 'success'}>
-                {detail.is_active === false ? 'Inactivo' : 'Activo'}
+            </h2>
+            {(detail || row) && (
+              <Badge variant={isInactive ? 'destructive' : 'success'}>
+                {isInactive ? 'Inactivo' : 'Activo'}
               </Badge>
             )}
           </div>
-        </DialogHeader>
+          <button
+            type="button"
+            onClick={handleClose}
+            className="rounded-lg p-2 hover:bg-[hsl(var(--muted))] transition-colors"
+          >
+            <X className="h-4 w-4 text-[hsl(var(--muted-foreground))]" />
+          </button>
+        </div>
 
-        {/* Body */}
-        <div className="flex-1 overflow-y-auto min-h-0 px-6 py-5 flex flex-col gap-5">
+        {/* Scrollable body */}
+        <div className="flex-1 overflow-y-auto px-6 py-5 flex flex-col gap-5">
 
           {loading && (
             <p className="text-sm text-[hsl(var(--muted-foreground))]">Cargando…</p>
@@ -258,7 +280,6 @@ function SupplierDetailModal({ open, supplierId, businessId, onClose }) {
 
           {!loading && !error && detail && (
             <>
-              {/* Datos del proveedor */}
               <InfoSection
                 detail={detail}
                 supplierId={supplierId}
@@ -266,7 +287,6 @@ function SupplierDetailModal({ open, supplierId, businessId, onClose }) {
                 onUpdated={handleUpdated}
               />
 
-              {/* Condiciones comerciales */}
               <CommercialSection
                 supplierId={supplierId}
                 businessId={businessId}
@@ -320,8 +340,65 @@ function SupplierDetailModal({ open, supplierId, businessId, onClose }) {
             </>
           )}
         </div>
-      </DialogContent>
-    </Dialog>
+
+        {/* Footer acciones */}
+        {row && (
+          <div className="shrink-0 border-t border-[hsl(var(--border))] px-6 py-4 flex flex-col gap-3">
+            <span className="text-xs font-bold uppercase tracking-widest text-[hsl(var(--muted-foreground))]">
+              Opciones del proveedor
+            </span>
+
+            {confirmingDelete ? (
+              <div className="flex items-center gap-3">
+                <span className="text-sm text-red-600 font-medium">¿Eliminar este proveedor?</span>
+                <Button
+                  type="button"
+                  variant="destructive"
+                  size="sm"
+                  disabled={isBusy}
+                  onClick={() => onDelete?.(row)}
+                >
+                  {isBusy ? '…' : 'Eliminar'}
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setConfirmingDelete(false)}
+                >
+                  Cancelar
+                </Button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={isBusy}
+                  onClick={() => onToggleActive?.(row)}
+                  className={`gap-1.5 ${isInactive ? 'text-emerald-600 border-emerald-200 hover:bg-emerald-50' : 'text-amber-500 border-amber-200 hover:bg-amber-50'}`}
+                >
+                  <Power size={14} />
+                  {isInactive ? 'Habilitar proveedor' : 'Deshabilitar proveedor'}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={isBusy}
+                  onClick={() => setConfirmingDelete(true)}
+                  className="gap-1.5 text-red-500 border-red-200 hover:bg-red-50"
+                >
+                  <Trash2 size={14} />
+                  Eliminar
+                </Button>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </>
   )
 }
 

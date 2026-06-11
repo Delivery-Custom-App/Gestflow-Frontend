@@ -2,10 +2,8 @@ import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useMenuPOS } from '../../hooks/useMenuPOS'
 import { apiRequest } from '../../lib/apiClient'
 import { formatCLP } from '../../lib/formatCLP'
-import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
-} from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
+import { cn } from '@/lib/utils'
 
 /* ─── constantes ──────────────────────────────────────────── */
 // Cambio de embutido suma este recargo al precio base
@@ -375,8 +373,15 @@ export default function MesaDetailModal({ mesa, localId, onClose, onTableUpdated
   const [customizations, setCustomizations] = useState({})     // { itemKey: {embutido, agregados} }
 
   const [processing, setProcessing] = useState(false)
-  const [success, setSuccess]       = useState('')
   const [error, setError]           = useState('')
+
+  const [visible, setVisible] = useState(false)
+  useEffect(() => { requestAnimationFrame(() => setVisible(true)) }, [])
+
+  const handleClose = () => {
+    setVisible(false)
+    setTimeout(onClose, 300)
+  }
 
   /* cargas iniciales */
   useEffect(() => {
@@ -490,30 +495,47 @@ export default function MesaDetailModal({ mesa, localId, onClose, onTableUpdated
 
   const loading = recipesLoading || menuLoading
 
-  /* ─── PASO 2: personalización ─────────────────────────────── */
-  if (step === 'customize') {
-    return (
-      <Dialog open onOpenChange={onClose}>
-        <DialogContent className="max-w-lg max-h-[90vh] flex flex-col p-0 gap-0">
-          <DialogHeader className="px-5 pt-5 pb-3 border-b border-[hsl(var(--border))]">
-            <DialogTitle className="flex items-center gap-2">
-              <button onClick={() => setStep('select')} className="text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] mr-1">
-                ←
-              </button>
-              <span className="text-base font-semibold">{mesa.name}</span>
-              <span className="text-xs text-[hsl(var(--muted-foreground))] font-normal">Personalización</span>
-            </DialogTitle>
-          </DialogHeader>
+  /* ─── un solo return para ambos pasos — evita doble slide ─── */
+  return (
+    <div className="fixed inset-0 z-50">
+      <div
+        className={cn('absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity duration-300', visible ? 'opacity-100' : 'opacity-0')}
+        onClick={handleClose}
+      />
+      <div className={cn('absolute inset-y-0 right-0 w-full max-w-lg flex flex-col shadow-2xl bg-[hsl(var(--card))] border-l border-[hsl(var(--border))] overflow-hidden transition-transform duration-300 ease-out', visible ? 'translate-x-0' : 'translate-x-full')}>
 
-          {error && (
-            <div className="mx-5 mt-3 px-3 py-2 rounded-lg bg-red-50 border border-red-200 text-sm text-red-600">
-              {error}<button className="ml-2 underline text-xs" onClick={() => setError('')}>✕</button>
-            </div>
-          )}
+        {/* ── Header ── */}
+        <div className="px-5 pt-5 pb-3 border-b border-[hsl(var(--border))] shrink-0">
+          <div className="flex items-center gap-2">
+            {step === 'customize' && (
+              <button onClick={() => setStep('select')} className="text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] mr-1">←</button>
+            )}
+            <span className="text-base font-semibold text-[hsl(var(--foreground))]">{mesa.name}</span>
+            <span className="text-xs text-[hsl(var(--muted-foreground))] font-normal">
+              {step === 'customize' ? 'Personalización' : `${mesa.zona || 'General'} · ${mesa.capacidad} personas`}
+            </span>
+          </div>
+        </div>
 
-          <div className="flex-1 overflow-y-auto min-h-0 px-5 py-4 space-y-4">
+        {error && (
+          <div className="mx-5 mt-3 px-3 py-2 rounded-lg bg-red-50 border border-red-200 text-sm text-red-600">
+            {error}<button className="ml-2 underline text-xs" onClick={() => setError('')}>✕</button>
+          </div>
+        )}
 
-            {/* Completos con personalizador */}
+        {/* ── Contenido según step ── */}
+        {step === 'select' ? (
+          <div className="flex-1 overflow-y-auto no-scrollbar min-h-0 px-5 py-4 space-y-3">
+            {loading ? <Spinner /> : (
+              <>
+                <CategoryAccordion label="Completos"   emoji="🌭" items={completosItems}   selectedQtys={selectedQtys} onAdd={handleAdd} onRemove={handleRemove} />
+                <CategoryAccordion label="Sandwich"    emoji="🥪" items={sandwichItems}    selectedQtys={selectedQtys} onAdd={handleAdd} onRemove={handleRemove} />
+                <CategoryAccordion label="Bebestibles" emoji="🥤" items={bebestiblesItems} selectedQtys={selectedQtys} onAdd={handleAdd} onRemove={handleRemove} />
+              </>
+            )}
+          </div>
+        ) : (
+          <div className="flex-1 overflow-y-auto no-scrollbar min-h-0 px-5 py-4 space-y-4">
             {menuItemsSelected.filter(isCompleto).map(it => (
               <CompleteCustomizer
                 key={it.key}
@@ -524,8 +546,6 @@ export default function MesaDetailModal({ mesa, localId, onClose, onTableUpdated
                 availableProducts={allMenuProducts}
               />
             ))}
-
-            {/* Sandwiches */}
             {menuItemsSelected.filter(it => !isCompleto(it)).map(it => (
               <SandwichCustomizer
                 key={it.key}
@@ -536,8 +556,6 @@ export default function MesaDetailModal({ mesa, localId, onClose, onTableUpdated
                 availableProducts={allMenuProducts}
               />
             ))}
-
-            {/* Resumen de bebestibles (no personalizables) */}
             {bebestiblesItems.filter(it => (selectedQtys[it.key] || 0) > 0).length > 0 && (
               <div className="rounded-xl border border-[hsl(var(--border))] p-4">
                 <p className="text-xs font-bold text-[hsl(var(--muted-foreground))] uppercase tracking-widest mb-2">Bebestibles</p>
@@ -552,8 +570,26 @@ export default function MesaDetailModal({ mesa, localId, onClose, onTableUpdated
               </div>
             )}
           </div>
+        )}
 
-          <DialogFooter className="px-5 py-4 border-t border-[hsl(var(--border))]">
+        {/* ── Footer según step ── */}
+        {step === 'select' ? (
+          totalItems > 0 && (
+            <div className="px-5 py-4 border-t border-[hsl(var(--border))] shrink-0">
+              <div className="flex items-center justify-between w-full gap-3">
+                <span className="text-sm text-[hsl(var(--muted-foreground))]">
+                  {totalItems} ítem{totalItems !== 1 ? 's' : ''} ·{' '}
+                  <span className="font-bold text-[hsl(var(--primary))]">${formatCLP(subtotal)}</span>
+                </span>
+                <Button size="sm" onClick={handleContinuar}
+                  className="bg-[hsl(var(--primary))] hover:bg-[hsl(var(--primary))]/90 text-white">
+                  Continuar →
+                </Button>
+              </div>
+            </div>
+          )
+        ) : (
+          <div className="px-5 py-4 border-t border-[hsl(var(--border))] shrink-0">
             <div className="flex items-center justify-between w-full gap-3">
               <Button variant="outline" size="sm" onClick={() => setStep('select')} disabled={processing}>
                 ← Volver
@@ -563,59 +599,9 @@ export default function MesaDetailModal({ mesa, localId, onClose, onTableUpdated
                 {processing ? 'Confirmando...' : `Confirmar orden · $${formatCLP(subtotal)}`}
               </Button>
             </div>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    )
-  }
-
-  /* ─── PASO 1: selección ───────────────────────────────────── */
-  return (
-    <Dialog open onOpenChange={onClose}>
-      <DialogContent className="max-w-md max-h-[88vh] flex flex-col p-0 gap-0">
-        <DialogHeader className="px-5 pt-5 pb-3 border-b border-[hsl(var(--border))]">
-          <DialogTitle className="flex items-center gap-2">
-            <span className="text-base font-semibold">{mesa.name}</span>
-            <span className="text-xs text-[hsl(var(--muted-foreground))] font-normal">
-              {mesa.zona || 'General'} · {mesa.capacidad} personas
-            </span>
-          </DialogTitle>
-        </DialogHeader>
-
-        {success && (
-          <div className="mx-5 mt-3 px-3 py-2 rounded-lg bg-green-50 border border-green-200 text-sm text-green-700">{success}</div>
-        )}
-        {error && (
-          <div className="mx-5 mt-3 px-3 py-2 rounded-lg bg-red-50 border border-red-200 text-sm text-red-600">
-            {error}<button className="ml-2 underline text-xs" onClick={() => setError('')}>✕</button>
           </div>
         )}
-
-        <div className="flex-1 overflow-y-auto min-h-0 px-5 py-4 space-y-3">
-          {loading ? <Spinner /> : (
-            <>
-              <CategoryAccordion label="Completos"   emoji="🌭" items={completosItems}   selectedQtys={selectedQtys} onAdd={handleAdd} onRemove={handleRemove} />
-              <CategoryAccordion label="Sandwich"    emoji="🥪" items={sandwichItems}    selectedQtys={selectedQtys} onAdd={handleAdd} onRemove={handleRemove} />
-              <CategoryAccordion label="Bebestibles" emoji="🥤" items={bebestiblesItems} selectedQtys={selectedQtys} onAdd={handleAdd} onRemove={handleRemove} />
-            </>
-          )}
-        </div>
-
-        {totalItems > 0 && (
-          <DialogFooter className="px-5 py-4 border-t border-[hsl(var(--border))]">
-            <div className="flex items-center justify-between w-full gap-3">
-              <span className="text-sm text-[hsl(var(--muted-foreground))]">
-                {totalItems} ítem{totalItems !== 1 ? 's' : ''} ·{' '}
-                <span className="font-bold text-[hsl(var(--primary))]">${formatCLP(subtotal)}</span>
-              </span>
-              <Button size="sm" onClick={handleContinuar}
-                className="bg-[hsl(var(--primary))] hover:bg-[hsl(var(--primary))]/90 text-white">
-                Continuar →
-              </Button>
-            </div>
-          </DialogFooter>
-        )}
-      </DialogContent>
-    </Dialog>
+      </div>
+    </div>
   )
 }

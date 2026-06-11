@@ -70,7 +70,7 @@ export default function UserManagementPage() {
   }
 
   return (
-    <div className="flex-1 overflow-y-auto bg-[hsl(var(--background))]">
+    <div className="flex-1 overflow-y-auto no-scrollbar bg-[hsl(var(--background))]">
       <div className="p-6 md:p-8">
         <Button variant="ghost" size="sm" className="mb-3" onClick={() => navigate('/usuarios')}>
           <ArrowLeft size={16} /> Volver a la lista

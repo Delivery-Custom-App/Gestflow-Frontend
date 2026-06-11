@@ -11,6 +11,7 @@ import {
   patchSupplier,
 } from '../../lib/providersApi'
 import { useAuth } from '../../context/AuthContext'
+import { isSuperAdminRole } from '../../auth/roleLabel'
 import { formatCLPDisplay as formatMoneyClp } from '../../lib/formatCLP'
 import InventoryShell from './InventoryShell'
 import LoadingSpinner from '../LoadingSpinner'
@@ -22,7 +23,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import {
   Table, TableHeader, TableBody, TableRow, TableHead, TableCell,
 } from '@/components/ui/table'
-import { Users, CheckCircle, DollarSign, Store, Plus, Clock, Pencil, Power, Trash2 } from 'lucide-react'
+import { Users, CheckCircle, DollarSign, Store, Settings2 } from 'lucide-react'
 
 const MONTH_NAMES = [
   'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
@@ -50,7 +51,8 @@ function supplierAvatar(name, index) {
 }
 
 function SuppliersKpisDashboard() {
-  const { isInventoryAdmin: canAccess } = useAuth()
+  const { isInventoryAdmin: canAccess, userRole } = useAuth()
+  const canEdit = isSuperAdminRole(userRole)
   const { localId } = useParams()
   const selectedLocal = useSelectedLocal(localId)
 
@@ -65,18 +67,15 @@ function SuppliersKpisDashboard() {
   const [suppliersLoading,   setSuppliersLoading]   = useState(true)
   const [suppliersError,     setSuppliersError]     = useState('')
   const [resolvedBusinessId, setResolvedBusinessId] = useState(null)
-  const [registerOpen,   setRegisterOpen]   = useState(false)
-  const [detailId,       setDetailId]       = useState(null)
-  const [updatedAt,      setUpdatedAt]      = useState(null)
-  const [rowActionId,    setRowActionId]    = useState(null)  // id in-flight
-  const [confirmDeleteId, setConfirmDeleteId] = useState(null)
+  const [registerOpen, setRegisterOpen] = useState(false)
+  const [actionRow,    setActionRow]    = useState(null)
+  const [rowActionId,  setRowActionId]  = useState(null)
 
   const load = useCallback(async () => {
     if (!canAccess) { setLoading(false); setData(null); setError(''); return }
     if (!localId)   { setError('No se indicó un local.'); setLoading(false); return }
     setError('')
     setLoading(true)
-    setUpdatedAt(new Date())
     try {
       const payload = await getSupplierKpisByLocal(localId, { year, month })
       setData(payload)
@@ -100,7 +99,7 @@ function SuppliersKpisDashboard() {
     try {
       const [{ businessId: bidFromToken }, loc] = await Promise.all([
         getAuthContext(),
-        getLocalById(localId),
+        getLocalById(localId).catch(() => null),
       ])
       const businessId =
         loc?.business_id != null ? String(loc.business_id) :
@@ -141,10 +140,10 @@ function SuppliersKpisDashboard() {
   const handleDelete = useCallback(async (row) => {
     if (!resolvedBusinessId || rowActionId) return
     setRowActionId(String(row.id))
-    setConfirmDeleteId(null)
     try {
       await deleteSupplier(String(row.id), resolvedBusinessId)
       setSuppliersRows((prev) => prev.filter((r) => String(r.id) !== String(row.id)))
+      setActionRow(null)
       await load()
     } catch (e) {
       setSuppliersError(e?.message || 'No se pudo eliminar el proveedor.')
@@ -177,7 +176,6 @@ function SuppliersKpisDashboard() {
 
   return (
     <InventoryShell>
-      {/* No mx-auto — content anchors to the left with padding only */}
       <div className="px-6 py-6 flex flex-col gap-6 pb-10">
 
         {/* ── Header ── */}
@@ -194,35 +192,21 @@ function SuppliersKpisDashboard() {
             </div>
           </header>
 
-          {canAccess && (
+          {canEdit && (
             <div className="flex items-center gap-3 flex-wrap">
               {resolvedBusinessId && (
                 <Button
                   type="button"
                   onClick={() => setRegisterOpen(true)}
                   disabled={suppliersLoading}
-                  className="gap-2 h-9"
+                  className="h-9"
                 >
-                  <Plus size={16} />
                   Registrar proveedor
                 </Button>
               )}
             </div>
           )}
         </div>
-
-        {/* ── Last updated ── */}
-        {updatedAt && canAccess && (
-          <div className="flex items-center gap-2 text-sm text-[hsl(var(--muted-foreground))] -mt-2">
-            <Clock size={14} className="shrink-0" />
-            <span>
-              Actualizado:{' '}
-              <strong className="text-[hsl(var(--foreground))]">
-                {new Intl.DateTimeFormat('es-CL', { dateStyle: 'medium', timeStyle: 'short' }).format(updatedAt)}
-              </strong>
-            </span>
-          </div>
-        )}
 
         {/* ── Access error ── */}
         {!canAccess && (
@@ -308,7 +292,7 @@ function SuppliersKpisDashboard() {
                       <TableHead className="py-3 text-sm font-semibold">Estado</TableHead>
                       <TableHead className="text-right py-3 text-sm font-semibold">Uds. en inventario</TableHead>
                       <TableHead className="text-right py-3 text-sm font-semibold">Valor inventario</TableHead>
-                      <TableHead className="pr-6 py-3 text-right text-sm font-semibold">Acciones</TableHead>
+                      {canEdit && <TableHead className="pr-6 py-3 text-right text-sm font-semibold">Acciones</TableHead>}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -317,7 +301,6 @@ function SuppliersKpisDashboard() {
                       const isBusy   = rowActionId === String(row.id)
                       const { letter, color } = supplierAvatar(row.name, idx)
                       const avatarCls = inactive ? 'bg-gray-100 text-gray-400' : color
-                      const isConfirmingDelete = confirmDeleteId === String(row.id)
 
                       return (
                         <TableRow
@@ -350,57 +333,19 @@ function SuppliersKpisDashboard() {
                           <TableCell className={`text-right tabular-nums text-base font-semibold py-4 ${inactive ? 'text-gray-400' : 'text-[hsl(var(--primary))]'}`}>
                             {formatMoneyClp(row.supplier_purchases_total_clp)}
                           </TableCell>
-                          <TableCell className="pr-6 py-3">
-                            <div className="flex items-center justify-end gap-1">
-                              {isConfirmingDelete ? (
-                                <div className="flex items-center gap-1.5">
-                                  <span className="text-xs text-red-600 font-medium whitespace-nowrap">¿Eliminar?</span>
-                                  <Button type="button" variant="destructive" size="sm" disabled={isBusy}
-                                    onClick={() => handleDelete(row)} className="h-7 px-2 text-xs">
-                                    {isBusy ? '…' : 'Sí'}
-                                  </Button>
-                                  <Button type="button" variant="ghost" size="sm"
-                                    onClick={() => setConfirmDeleteId(null)} className="h-7 px-2 text-xs">
-                                    No
-                                  </Button>
-                                </div>
-                              ) : (
-                                <>
-                                  <button
-                                    type="button"
-                                    title="Editar proveedor"
-                                    disabled={isBusy}
-                                    onClick={() => setDetailId(row.id != null ? String(row.id) : null)}
-                                    className="w-8 h-8 flex items-center justify-center rounded-lg text-[hsl(var(--primary))] hover:bg-[hsl(var(--primary)/0.08)] disabled:opacity-40 transition-colors"
-                                  >
-                                    <Pencil size={16} />
-                                  </button>
-                                  <button
-                                    type="button"
-                                    title={inactive ? 'Habilitar proveedor' : 'Deshabilitar proveedor'}
-                                    disabled={isBusy}
-                                    onClick={() => handleToggleActive(row)}
-                                    className={`w-8 h-8 flex items-center justify-center rounded-lg disabled:opacity-40 transition-colors ${
-                                      inactive
-                                        ? 'text-emerald-600 hover:bg-emerald-50'
-                                        : 'text-amber-500 hover:bg-amber-50'
-                                    }`}
-                                  >
-                                    <Power size={16} />
-                                  </button>
-                                  <button
-                                    type="button"
-                                    title="Eliminar proveedor"
-                                    disabled={isBusy}
-                                    onClick={() => setConfirmDeleteId(String(row.id))}
-                                    className="w-8 h-8 flex items-center justify-center rounded-lg text-red-500 hover:bg-red-50 disabled:opacity-40 transition-colors"
-                                  >
-                                    <Trash2 size={16} />
-                                  </button>
-                                </>
-                              )}
-                            </div>
-                          </TableCell>
+                          {canEdit && (
+                            <TableCell className="pr-6 py-3 text-right">
+                              <button
+                                type="button"
+                                title="Gestionar proveedor"
+                                disabled={isBusy}
+                                onClick={() => setActionRow(row)}
+                                className="w-8 h-8 inline-flex items-center justify-center rounded-lg hover:bg-[hsl(var(--muted))] disabled:opacity-40 transition-colors"
+                              >
+                                <Settings2 size={16} />
+                              </button>
+                            </TableCell>
+                          )}
                         </TableRow>
                       )
                     })}
@@ -411,20 +356,28 @@ function SuppliersKpisDashboard() {
           </Card>
         )}
 
-        <RegisterSupplierModal
-          open={registerOpen}
-          onClose={() => setRegisterOpen(false)}
-          businessId={resolvedBusinessId}
-          localId={localId}
-          onSuccess={() => { load(); loadSuppliersList() }}
-        />
+        {canEdit && (
+          <>
+            <RegisterSupplierModal
+              open={registerOpen}
+              onClose={() => setRegisterOpen(false)}
+              businessId={resolvedBusinessId}
+              localId={localId}
+              onSuccess={() => { load(); loadSuppliersList() }}
+            />
 
-        <SupplierDetailModal
-          open={detailId != null && detailId !== ''}
-          supplierId={detailId}
-          businessId={resolvedBusinessId}
-          onClose={() => setDetailId(null)}
-        />
+            <SupplierDetailModal
+              open={actionRow != null}
+              supplierId={actionRow ? String(actionRow.id) : null}
+              businessId={resolvedBusinessId}
+              row={actionRow}
+              onClose={() => setActionRow(null)}
+              onToggleActive={handleToggleActive}
+              onDelete={handleDelete}
+              rowActionId={rowActionId}
+            />
+          </>
+        )}
       </div>
     </InventoryShell>
   )

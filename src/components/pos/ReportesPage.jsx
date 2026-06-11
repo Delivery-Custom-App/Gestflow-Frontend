@@ -34,7 +34,7 @@ export default function ReportesPage() {
         </div>
         </header>
 
-      <main className="flex-1 overflow-y-auto p-4 lg:p-6">
+      <main className="flex-1 overflow-y-auto no-scrollbar p-4 lg:p-6">
         {loading && (
           <div className="flex flex-col items-center gap-2 py-16 text-[hsl(var(--muted-foreground))]">
             <div className="w-6 h-6 border-2 border-[hsl(var(--primary))] border-t-transparent rounded-full animate-spin" aria-label="Cargando..." />
