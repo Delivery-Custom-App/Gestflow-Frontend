@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useSelectedLocal } from '../hooks/useSelectedLocal'
 import { useAlerts } from '../hooks/useAlerts'
@@ -16,19 +17,22 @@ import {
   postExpense,
   postTransfer,
 } from '../lib/administrativeApi'
-import { getAuthContext } from '../lib/apiClient'
+import { apiRequest, getAuthContext } from '../lib/apiClient'
+import { markOrderPlaced } from '../lib/alertsApi'
+import { supabase } from '../lib/supabaseClient'
 import { enrichDashboardWithChartData, generateIncomeTrendFromOrders, generateExpenseBreakdownFromData } from '../utils/chartDataHelpers'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 import { formatCLPCurrency as formatMoney } from '../lib/formatCLP'
+import { MapPin, TrendingDown, Send, X, Upload, ImageIcon, ChevronDown, ChevronRight, ShoppingCart } from 'lucide-react'
 
 const sections = [
   { id: 'dashboard',   label: 'Dashboard',      subtitle: 'Resumen general del sistema' },
   { id: 'ventas',      label: 'Ventas',          subtitle: 'Ventas del dia con desglose' },
   { id: 'rendiciones', label: 'Rendiciones',     subtitle: 'Resumen de transferencias dueno a local' },
   { id: 'reportes',    label: 'Reportes',        subtitle: 'Ventas, flujo y comparativas por periodo' },
-  { id: 'flujo-caja',  label: 'Flujo de Caja',  subtitle: 'Resumen monetario por periodo de tiempo' },
+  { id: 'flujo-caja',  label: 'Caja Virtual',   subtitle: 'Resumen monetario por periodo de tiempo' },
   { id: 'alertas',     label: 'Alertas',         subtitle: 'Sistema de alertas administrativas del local' },
   { id: 'bonos',       label: 'Bonos',           subtitle: 'Resumen de bonos por meta cumplida' },
 ]
@@ -74,30 +78,67 @@ function getOrderAmount(order) {
 
 // ── Shared UI atoms ────────────────────────────────────────────
 
-function KpiCard({ label, value, sub, accent }) {
-  const accentCls = {
-    warning: 'border-l-amber-400 bg-amber-50',
-    red:     'border-l-red-400 bg-red-50',
-    blue:    'border-l-blue-400 bg-blue-50',
-    purple:  'border-l-violet-400 bg-violet-50',
-  }[accent] || 'border-l-[hsl(var(--primary))] bg-[hsl(var(--accent))]'
+const KPI_ACCENT = {
+  warning: {
+    bar:   'border-l-amber-500',
+    bg:    'bg-amber-500/10 dark:bg-amber-500/15',
+    ring:  'ring-1 ring-amber-400/30',
+    value: 'text-amber-600 dark:text-amber-400',
+    dot:   'bg-amber-500',
+  },
+  red: {
+    bar:   'border-l-red-500',
+    bg:    'bg-red-500/10 dark:bg-red-500/15',
+    ring:  'ring-1 ring-red-400/30',
+    value: 'text-red-600 dark:text-red-400',
+    dot:   'bg-red-500',
+  },
+  blue: {
+    bar:   'border-l-blue-500',
+    bg:    'bg-blue-500/10 dark:bg-blue-500/15',
+    ring:  'ring-1 ring-blue-400/30',
+    value: 'text-blue-600 dark:text-blue-400',
+    dot:   'bg-blue-500',
+  },
+  purple: {
+    bar:   'border-l-violet-500',
+    bg:    'bg-violet-500/10 dark:bg-violet-500/15',
+    ring:  'ring-1 ring-violet-400/30',
+    value: 'text-violet-600 dark:text-violet-400',
+    dot:   'bg-violet-500',
+  },
+}
 
+const KPI_DEFAULT = {
+  bar:   'border-l-emerald-600',
+  bg:    'bg-emerald-500/10 dark:bg-emerald-500/15',
+  ring:  'ring-1 ring-emerald-400/30',
+  value: 'text-emerald-700 dark:text-emerald-400',
+  dot:   'bg-emerald-600',
+}
+
+function KpiCard({ label, value, sub, accent }) {
+  const a = KPI_ACCENT[accent] || KPI_DEFAULT
   return (
-    <article className={cn('rounded-xl border-l-4 p-4 shadow-sm', accentCls)}>
-      <p className="text-xs font-semibold text-[hsl(var(--muted-foreground))] uppercase tracking-wide">{label}</p>
-      <strong className="mt-1 block text-2xl font-extrabold text-[hsl(var(--foreground))]">{value}</strong>
+    <article className={cn('rounded-xl border-l-[5px] p-4 shadow-md', a.bar, a.bg, a.ring)}>
+      <div className="flex items-center gap-1.5 mb-1">
+        <span className={cn('h-1.5 w-1.5 rounded-full shrink-0', a.dot)} />
+        <p className="text-[10px] font-bold uppercase tracking-widest text-[hsl(var(--muted-foreground))]">{label}</p>
+      </div>
+      <strong className={cn('block text-2xl font-extrabold leading-tight', a.value)}>{value}</strong>
       {sub && <span className="mt-0.5 block text-xs text-[hsl(var(--muted-foreground))]">{sub}</span>}
     </article>
   )
 }
 
-function Panel({ title, sub, accent, children }) {
-  const accentCls = {
-    blue:    'border-blue-200 bg-blue-50',
-    red:     'border-red-200 bg-red-50',
-    warning: 'border-amber-200 bg-amber-50',
-  }[accent] || 'border-[hsl(var(--border))] bg-[hsl(var(--card))]'
+const PANEL_ACCENT = {
+  blue:    'border-blue-400/40 bg-blue-500/5 dark:bg-blue-500/10',
+  red:     'border-red-400/40  bg-red-500/5  dark:bg-red-500/10',
+  warning: 'border-amber-400/40 bg-amber-500/5 dark:bg-amber-500/10',
+}
 
+function Panel({ title, sub, accent, children }) {
+  const accentCls = PANEL_ACCENT[accent] || 'border-[hsl(var(--border))] bg-[hsl(var(--card))]'
   return (
     <article className={cn('rounded-xl border p-5 shadow-sm', accentCls)}>
       {title && <h3 className="mb-0.5 text-sm font-bold text-[hsl(var(--foreground))]">{title}</h3>}
@@ -221,7 +262,7 @@ function DashboardContent({ dashboard, loading, error }) {
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <KpiCard label="Ventas de Hoy"   value={formatMoney(dashboard?.daily_sales)}      sub="Últimas 24 h" />
         <KpiCard label="Ventas del Mes"  value={formatMoney(dashboard?.monthly_sales)}    sub={`Meta ${formatMoney(goal.target_amount)}`} />
-        <KpiCard label="Flujo de Caja"   value={formatMoney(dashboard?.monthly_cash_flow)} sub="Ingresos − Gastos" />
+        <KpiCard label="Caja Virtual"    value={formatMoney(dashboard?.monthly_cash_flow)} sub="Ingresos − Gastos" />
         <KpiCard label="Alertas Activas" value={toNumber(dashboard?.active_alerts)}       sub="Requieren atención" accent="warning" />
       </div>
 
@@ -334,7 +375,7 @@ function VentasContent({ orders, loading, error }) {
   const all = safeArray(orders)
 
   // Últimas 24 horas (ventana rodante)
-  const cutoff24h = new Date(Date.now() - 24 * 60 * 60 * 1000)
+  const cutoff24h = useMemo(() => new Date(Date.now() - 24 * 60 * 60 * 1000), [])
   const last24h = all.filter((o) => {
     if (!o.created_at) return false
     if (_normalizeOrderStatus(o.status) === 'cancelled') return false
@@ -405,6 +446,16 @@ function RendicionesContent({ rendiciones, expenses, transfers, loading, error }
   const stateNode = <SectionState loading={loading} error={error} isEmpty={isEmpty} emptyMessage="Sin movimientos aún. Usa los botones 'Nuevo Gasto' y 'Reportar Transferencia' para registrar." />
   if (loading || error || isEmpty) return stateNode
 
+  const acc = {}
+  for (const e of expensesList) {
+    const key = e.category || 'other'
+    acc[key] = (acc[key] || 0) + toNumber(e.amount)
+  }
+  const expenseBreakdown = Object.entries(acc)
+    .filter(([, v]) => v > 0)
+    .map(([k, v]) => ({ category: EXPENSE_LABEL[k] || k, amount: v }))
+    .sort((a, b) => b.amount - a.amount)
+
   return (
     <div className="space-y-5">
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
@@ -413,7 +464,10 @@ function RendicionesContent({ rendiciones, expenses, transfers, loading, error }
         <KpiCard label="Flujo Neto"                 value={formatMoney(rendiciones?.net_flow)}                 sub="Transferencias - Gastos" accent="blue" />
         <KpiCard label="Pendientes"                 value={formatMoney(toNumber(rendiciones?.pending_expenses_total) + toNumber(rendiciones?.pending_transfers_total))} sub="Montos pendientes" accent="warning" />
       </div>
-      <Panel title="Movimientos de Rendiciones" sub="Resultado de /dashboard/rendiciones + respaldo de /expenses y /transfers">
+      <Panel title="Distribución de Gastos" sub="Gastos del período por categoría" accent="red">
+        <ExpenseBreakdown data={expenseBreakdown} />
+      </Panel>
+      <Panel title="Movimientos de Rendiciones" sub="Transferencias y gastos registrados">
         {rows.length === 0 ? (
           <p className="text-sm text-[hsl(var(--muted-foreground))]">No existen movimientos en el rango actual.</p>
         ) : (
@@ -444,7 +498,7 @@ function ReportesContent({ consolidated, loading, error }) {
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <KpiCard label="Ventas Diarias (Consolidado)" value={formatMoney(consolidated?.daily_sales)}      sub={`${toNumber(consolidated?.local_count)} locales`} />
         <KpiCard label="Ventas Mensuales"             value={formatMoney(consolidated?.monthly_sales)}     sub="Consolidado negocio" />
-        <KpiCard label="Flujo de Caja Mensual"        value={formatMoney(consolidated?.monthly_cash_flow)} sub="Consolidado negocio" accent="blue" />
+        <KpiCard label="Caja Virtual Mensual"         value={formatMoney(consolidated?.monthly_cash_flow)} sub="Consolidado negocio" accent="blue" />
         <KpiCard label="Alertas Activas"              value={toNumber(consolidated?.active_alerts)}        sub="Agregado global" accent="warning" />
       </div>
       <div className="grid gap-5 lg:grid-cols-2">
@@ -488,8 +542,8 @@ function FlujoCajaContent({ dashboard, cajas, loading, error }) {
       </div>
       <Panel title="Cajas del Local" sub="Fuente: endpoint /cajas por local">
         <AmTable
-          headers={['Nombre Caja', 'Estado', 'ID']}
-          rows={cajasList.map((c) => [c.name || 'Caja sin nombre', c.is_active ? 'Activa' : 'Inactiva', String(c.id || '').slice(0, 12)])}
+          headers={['Nombre Caja', 'Estado']}
+          rows={cajasList.map((c) => [c.name || 'Caja sin nombre', c.is_active ? 'Activa' : 'Inactiva'])}
           emptyMessage="No hay cajas registradas para este local."
         />
       </Panel>
@@ -497,154 +551,361 @@ function FlujoCajaContent({ dashboard, cajas, loading, error }) {
   )
 }
 
+const SEVERITY_ORDER = { critical: 0, high: 1, medium: 2, low: 3 }
+
 const SEVERITY_CONFIG = {
-  critical: { label: 'Crítica',  cls: 'border-red-200 bg-red-50',    badge: 'bg-red-100 text-red-700'    },
-  high:     { label: 'Alta',     cls: 'border-orange-200 bg-orange-50', badge: 'bg-orange-100 text-orange-700' },
-  medium:   { label: 'Media',    cls: 'border-amber-200 bg-amber-50', badge: 'bg-amber-100 text-amber-700' },
-  low:      { label: 'Baja',     cls: 'border-blue-200 bg-blue-50',   badge: 'bg-blue-100 text-blue-700'   },
+  critical: {
+    label: 'Crítica',
+    cls:   'border-l-4 border-l-red-500 border border-red-200 bg-red-50 dark:border-slate-700 dark:border-l-red-500 dark:bg-red-950/30',
+    badge: 'bg-red-500 text-white',
+  },
+  high: {
+    label: 'Alta',
+    cls:   'border-l-4 border-l-orange-500 border border-orange-200 bg-orange-50 dark:border-slate-700 dark:border-l-orange-500 dark:bg-orange-950/30',
+    badge: 'bg-orange-500 text-white',
+  },
+  medium: {
+    label: 'Media',
+    cls:   'border-l-4 border-l-amber-400 border border-amber-200 bg-amber-50 dark:border-slate-700 dark:border-l-amber-400 dark:bg-amber-950/20',
+    badge: 'bg-amber-400 text-white',
+  },
+  low: {
+    label: 'Baja',
+    cls:   'border-l-4 border-l-blue-400 border border-blue-200 bg-blue-50 dark:border-slate-700 dark:border-l-blue-400 dark:bg-blue-950/20',
+    badge: 'bg-blue-400 text-white',
+  },
 }
 
-function AlertCard({ alert, onResolve, resolving }) {
-  const cfg = SEVERITY_CONFIG[alert.severity] || SEVERITY_CONFIG.medium
-  const date = alert.created_at
+const ALERT_TYPE_CONFIG = {
+  inventory_stock: {
+    label:    'Inventario',
+    chipCls:  'bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300',
+    actionLabel: 'Ver pedidos',
+    route:    (localId) => `/local/${localId}/inventario/compras-semanales`,
+  },
+  manual: {
+    label:    'Manual',
+    chipCls:  'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300',
+    actionLabel: null,
+    route:    null,
+  },
+}
+
+function AlertCard({ alert }) {
+  const cfg         = SEVERITY_CONFIG[alert.severity] || SEVERITY_CONFIG.medium
+  const orderPlaced = alert.metadata?.order_placed === true
+  const date        = alert.created_at
     ? new Date(alert.created_at).toLocaleString('es-CL', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
     : ''
 
   return (
-    <article className={cn('rounded-xl border p-4 shadow-sm', cfg.cls)}>
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-1 flex-wrap">
-            <span className={cn('inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide', cfg.badge)}>
-              {cfg.label}
-            </span>
-            {alert.status === 'resolved' && (
-              <span className="inline-flex items-center rounded-full bg-green-100 text-green-700 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide">
-                Resuelta
-              </span>
-            )}
-            <span className="text-[10px] text-[hsl(var(--muted-foreground))]">{date}</span>
-          </div>
-          <h4 className="text-sm font-bold text-[hsl(var(--foreground))]">{alert.title}</h4>
-          <p className="mt-0.5 text-xs text-[hsl(var(--muted-foreground))]">{alert.message}</p>
-        </div>
-        {alert.status === 'pending' && (
-          <Button
-            size="sm"
-            variant="outline"
-            disabled={resolving === alert.id}
-            onClick={() => onResolve(alert.id)}
-            className="shrink-0 text-xs h-7"
-          >
-            {resolving === alert.id ? 'Resolviendo…' : 'Resolver'}
-          </Button>
+    <article className={cn('rounded-xl p-4 shadow-sm', cfg.cls)}>
+      <div className="flex items-center gap-2 mb-1 flex-wrap">
+        <span className={cn('inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide', cfg.badge)}>
+          {cfg.label}
+        </span>
+        {orderPlaced && (
+          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide">
+            <ShoppingCart size={9} />
+            Se necesita Pedido
+          </span>
         )}
+        {alert.status === 'resolved' && !orderPlaced && (
+          <span className="inline-flex items-center rounded-full bg-green-100 text-green-700 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide">
+            Solucionada
+          </span>
+        )}
+        {alert.status === 'resolved' && orderPlaced && (
+          <span className="inline-flex items-center rounded-full bg-green-100 text-green-700 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide">
+            Solucionada vía pedido
+          </span>
+        )}
+        <span className="text-[10px] text-[hsl(var(--muted-foreground))]">{date}</span>
       </div>
+      <h4 className="text-sm font-bold text-[hsl(var(--foreground))]">{alert.title}</h4>
+      <p className="mt-0.5 text-xs text-[hsl(var(--muted-foreground))]">{alert.message}</p>
     </article>
   )
 }
 
+function dateDayLabel(isoString) {
+  if (!isoString) return ''
+  const d     = new Date(isoString)
+  const today = new Date()
+  const isToday =
+    d.getDate()     === today.getDate() &&
+    d.getMonth()    === today.getMonth() &&
+    d.getFullYear() === today.getFullYear()
+  const yesterday = new Date(today)
+  yesterday.setDate(today.getDate() - 1)
+  const isYesterday =
+    d.getDate()     === yesterday.getDate() &&
+    d.getMonth()    === yesterday.getMonth() &&
+    d.getFullYear() === yesterday.getFullYear()
+  if (isToday)     return 'Hoy'
+  if (isYesterday) return 'Ayer'
+  return d.toLocaleDateString('es-CL', { day: '2-digit', month: 'short' })
+}
+
+function AlertGroup({ type, typeAlerts, localId, onRefresh }) {
+  const navigate = useNavigate()
+  const [open, setOpen]         = useState(true)
+  const [marking, setMarking]   = useState(false)
+  const typeCfg = ALERT_TYPE_CONFIG[type] || { label: type, chipCls: 'bg-slate-100 text-slate-600', route: null }
+
+  // Ordenar por severidad (crítica primero) y luego agrupar por día
+  const byDay = useMemo(() => {
+    const sorted = [...typeAlerts].sort(
+      (a, b) => (SEVERITY_ORDER[a.severity] ?? 99) - (SEVERITY_ORDER[b.severity] ?? 99)
+    )
+    const map = new Map()
+    for (const a of sorted) {
+      const label = dateDayLabel(a.created_at)
+      if (!map.has(label)) map.set(label, [])
+      map.get(label).push(a)
+    }
+    return map
+  }, [typeAlerts])
+
+  const pendingIds = typeAlerts.filter((a) => a.status === 'pending').map((a) => a.id)
+
+  const handlePedidos = async (e) => {
+    e.stopPropagation()
+    if (pendingIds.length > 0) {
+      setMarking(true)
+      try {
+        const { token } = await getAuthContext()
+        await Promise.all(pendingIds.map((id) => markOrderPlaced(id, token)))
+        onRefresh?.()
+      } catch {
+        // silencioso
+      } finally {
+        setMarking(false)
+      }
+    }
+    if (typeCfg.route) navigate(typeCfg.route(localId))
+  }
+
+  return (
+    <div className="rounded-xl border border-[hsl(var(--border))] overflow-hidden">
+      {/* Encabezado del grupo — div en lugar de button para evitar botones anidados */}
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={() => setOpen((v) => !v)}
+        onKeyDown={(e) => e.key === 'Enter' && setOpen((v) => !v)}
+        className="w-full flex items-center gap-3 px-4 py-3 bg-[hsl(var(--muted)/0.4)] hover:bg-[hsl(var(--muted)/0.7)] transition-colors cursor-pointer select-none"
+      >
+        <span className="text-[hsl(var(--muted-foreground))]">
+          {open ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
+        </span>
+        <span className={cn('inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-bold', typeCfg.chipCls)}>
+          {typeCfg.label}
+        </span>
+        <span className="text-xs text-[hsl(var(--muted-foreground))] flex-1">
+          {typeAlerts.length} alerta{typeAlerts.length !== 1 ? 's' : ''}
+        </span>
+        {typeCfg.route && (
+          <button
+            type="button"
+            onClick={handlePedidos}
+            disabled={marking}
+            className="flex items-center gap-1.5 text-[11px] font-semibold px-3 py-1.5 rounded-lg bg-violet-600 hover:bg-violet-700 disabled:opacity-60 text-white transition-colors shadow-sm"
+          >
+            <ShoppingCart size={12} />
+            {marking ? 'Marcando…' : 'Pedidos'}
+          </button>
+        )}
+      </div>
+
+      {/* Alertas colapsables — agrupadas por día */}
+      {open && (
+        <div className="px-4 py-3 space-y-4">
+          {[...byDay.entries()].map(([dayLabel, dayAlerts]) => (
+            <div key={dayLabel}>
+              {/* Separador de fecha */}
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-[10px] font-semibold text-[hsl(var(--muted-foreground))] uppercase tracking-wider">
+                  {dayLabel}
+                </span>
+                <div className="flex-1 h-px bg-[hsl(var(--border))]" />
+              </div>
+              <div className="space-y-2">
+                {dayAlerts.map((alert) => (
+                  <AlertCard key={alert.id} alert={alert} />
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function AlertTrendChart({ alerts }) {
+  const data = useMemo(() => {
+    const days = 14
+    const result = []
+    const today = new Date()
+    today.setHours(23, 59, 59, 999)
+
+    for (let i = days - 1; i >= 0; i--) {
+      const day = new Date(today)
+      day.setDate(today.getDate() - i)
+      day.setHours(23, 59, 59, 999)
+      const label  = day.toLocaleDateString('es-CL', { day: '2-digit', month: '2-digit' })
+      const dayEnd = day.getTime()
+
+      // Pendientes acumuladas al final de ese día: creadas hasta ese día y aún pendientes
+      const pendientes = alerts.filter((a) => {
+        const t = new Date(a.created_at).getTime()
+        return t <= dayEnd && a.status === 'pending'
+      }).length
+
+      // Resueltas acumuladas: creadas hasta ese día y ya resueltas
+      const resueltas = alerts.filter((a) => {
+        const t = new Date(a.created_at).getTime()
+        return t <= dayEnd && a.status === 'resolved'
+      }).length
+
+      result.push({ fecha: label, Pendientes: pendientes, Resueltas: resueltas })
+    }
+    return result
+  }, [alerts])
+
+  const hasData = data.some((d) => d.Pendientes > 0 || d.Resueltas > 0)
+  if (!hasData) return null
+
+  return (
+    <div className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-4 pt-4 pb-2">
+      <p className="text-xs font-semibold text-[hsl(var(--muted-foreground))] uppercase tracking-wider mb-3">
+        Tendencia acumulada — últimos 14 días
+      </p>
+      <ResponsiveContainer width="100%" height={160}>
+        <LineChart data={data} margin={{ top: 4, right: 8, left: -24, bottom: 0 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+          <XAxis
+            dataKey="fecha"
+            tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }}
+            tickLine={false}
+            axisLine={false}
+            interval="preserveStartEnd"
+          />
+          <YAxis
+            allowDecimals={false}
+            tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }}
+            tickLine={false}
+            axisLine={false}
+          />
+          <Tooltip
+            contentStyle={{
+              background: 'hsl(var(--card))',
+              border: '1px solid hsl(var(--border))',
+              borderRadius: 8,
+              fontSize: 12,
+            }}
+            labelStyle={{ color: 'hsl(var(--foreground))', fontWeight: 600 }}
+          />
+          <Legend
+            iconType="circle"
+            iconSize={8}
+            wrapperStyle={{ fontSize: 11, paddingTop: 4 }}
+          />
+          <Line
+            type="monotone"
+            dataKey="Pendientes"
+            stroke="#ef4444"
+            strokeWidth={2}
+            dot={false}
+            activeDot={{ r: 4 }}
+          />
+          <Line
+            type="monotone"
+            dataKey="Resueltas"
+            stroke="#22c55e"
+            strokeWidth={2}
+            dot={false}
+            activeDot={{ r: 4 }}
+          />
+        </LineChart>
+      </ResponsiveContainer>
+    </div>
+  )
+}
+
 function AlertasContent({ localId }) {
-  const { alerts, loading, error, pendingCount, resolveAlert, evaluateAlerts } = useAlerts(localId)
+  const { alerts, loading, error, pendingCount, refresh } = useAlerts(localId)
   const [filter, setFilter] = useState('pending')
-  const [resolving, setResolving] = useState(null)
-  const [evaluating, setEvaluating] = useState(false)
-  const [evalResult, setEvalResult] = useState(null)
 
   const filtered = filter === 'all' ? alerts : alerts.filter((a) => a.status === filter)
 
-  const handleResolve = async (alertId) => {
-    setResolving(alertId)
-    try {
-      await resolveAlert(alertId)
-    } catch (e) {
-      console.error('Error al resolver alerta:', e)
-    } finally {
-      setResolving(null)
+  const grouped = useMemo(() => {
+    const map = new Map()
+    for (const alert of filtered) {
+      const key = alert.type || 'manual'
+      if (!map.has(key)) map.set(key, [])
+      map.get(key).push(alert)
     }
-  }
-
-  const handleEvaluate = async () => {
-    setEvaluating(true)
-    setEvalResult(null)
-    try {
-      const result = await evaluateAlerts()
-      setEvalResult(result)
-    } catch (e) {
-      console.error('Error al evaluar alertas:', e)
-    } finally {
-      setEvaluating(false)
-    }
-  }
+    return map
+  }, [filtered])
 
   if (loading) return <SectionState loading={true} error={null} isEmpty={false} emptyMessage="" />
-  if (error) return <SectionState loading={false} error={error} isEmpty={false} emptyMessage="" />
+  if (error)   return <SectionState loading={false} error={error} isEmpty={false} emptyMessage="" />
 
   return (
     <div className="space-y-5">
       {/* KPIs */}
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-3">
-        <KpiCard label="Alertas Pendientes" value={pendingCount} sub="Requieren atención" accent="warning" />
+        <KpiCard label="Alertas Pendientes" value={pendingCount}                                         sub="Requieren atención" accent="warning" />
         <KpiCard label="Resueltas"          value={alerts.filter((a) => a.status === 'resolved').length} sub="Total historial" />
-        <KpiCard label="Total Historial"    value={alerts.length} sub="Todas las alertas" accent="blue" />
+        <KpiCard label="Total Historial"    value={alerts.length}                                        sub="Todas las alertas" accent="blue" />
       </div>
 
-      {/* Toolbar */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex gap-1.5">
-          {[
-            { key: 'pending',  label: 'Pendientes' },
-            { key: 'resolved', label: 'Resueltas' },
-            { key: 'all',      label: 'Todas' },
-          ].map(({ key, label }) => (
-            <button
-              key={key}
-              onClick={() => setFilter(key)}
-              className={cn(
-                'px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors',
-                filter === key
-                  ? 'bg-[hsl(var(--primary))] text-white'
-                  : 'bg-[hsl(var(--muted))] text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--border))]',
-              )}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-        <Button
-          size="sm"
-          variant="outline"
-          disabled={evaluating}
-          onClick={handleEvaluate}
-          className="text-xs"
-        >
-          {evaluating ? 'Evaluando reglas…' : 'Evaluar reglas ahora'}
-        </Button>
+      {/* Filtros */}
+      <div className="flex gap-1.5">
+        {[
+          { key: 'pending',  label: 'Pendientes' },
+          { key: 'resolved', label: 'Resueltas' },
+          { key: 'all',      label: 'Todas' },
+        ].map(({ key, label }) => (
+          <button
+            key={key}
+            onClick={() => setFilter(key)}
+            className={cn(
+              'px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors',
+              filter === key
+                ? 'bg-[hsl(var(--primary))] text-white'
+                : 'bg-[hsl(var(--muted))] text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--border))]',
+            )}
+          >
+            {label}
+          </button>
+        ))}
       </div>
 
-      {/* Eval result feedback */}
-      {evalResult && (
-        <div className={cn('rounded-lg border p-3 text-xs', evalResult.alerts_created > 0 ? 'border-amber-200 bg-amber-50 text-amber-800' : 'border-green-200 bg-green-50 text-green-800')}>
-          {evalResult.alerts_created > 0
-            ? `Se generaron ${evalResult.alerts_created} nueva(s) alerta(s).`
-            : 'Todo en orden. No se detectaron condiciones de alerta.'}
-        </div>
-      )}
+      {/* Gráfico tendencia */}
+      <AlertTrendChart alerts={alerts} />
 
-      {/* Alert list */}
-      <Panel title={`Alertas — ${filter === 'pending' ? 'Pendientes' : filter === 'resolved' ? 'Resueltas' : 'Todas'}`} sub="Actualización automática cada 30 segundos">
-        {filtered.length === 0 ? (
+      {/* Grupos acordeón */}
+      {filtered.length === 0 ? (
+        <Panel title="Alertas" sub="Se actualiza automáticamente al detectar cambios en inventario">
           <p className="text-sm text-[hsl(var(--muted-foreground))]">
             {filter === 'pending' ? 'No hay alertas pendientes. El sistema está operando con normalidad.' : 'No hay alertas en este filtro.'}
           </p>
-        ) : (
-          <div className="space-y-3">
-            {filtered.map((alert) => (
-              <AlertCard key={alert.id} alert={alert} onResolve={handleResolve} resolving={resolving} />
+        </Panel>
+      ) : (
+        <div className="space-y-3">
+          {[...grouped.entries()]
+            .sort(([, aArr], [, bArr]) => {
+              const minSev = (arr) => Math.min(...arr.map((a) => SEVERITY_ORDER[a.severity] ?? 99))
+              return minSev(aArr) - minSev(bArr)
+            })
+            .map(([type, typeAlerts]) => (
+              <AlertGroup key={type} type={type} typeAlerts={typeAlerts} localId={localId} onRefresh={refresh} />
             ))}
-          </div>
-        )}
-      </Panel>
+        </div>
+      )}
     </div>
   )
 }
@@ -740,12 +1001,17 @@ function BonosContent({ dashboard, loading, error, localId, onRefresh }) {
 // ── Modal Nuevo Gasto ──────────────────────────────────────
 
 const EXPENSE_CATEGORIES = [
+  { value: 'agua',        label: 'Agua'          },
+  { value: 'luz',         label: 'Luz'           },
+  { value: 'gas',         label: 'Gas'           },
+  { value: 'internet',    label: 'Internet'      },
   { value: 'supplies',    label: 'Insumos'       },
-  { value: 'utilities',   label: 'Servicios'     },
   { value: 'maintenance', label: 'Mantención'    },
   { value: 'staff',       label: 'Personal'      },
   { value: 'other',       label: 'Otros'         },
 ]
+
+const EXPENSE_LABEL = Object.fromEntries(EXPENSE_CATEGORIES.map((c) => [c.value, c.label]))
 
 function NuevoGastoModal({ localId, onClose, onSaved }) {
   const [category,    setCategory]    = useState('other')
@@ -754,6 +1020,15 @@ function NuevoGastoModal({ localId, onClose, onSaved }) {
   const [date,        setDate]        = useState(new Date().toISOString().slice(0, 10))
   const [saving,      setSaving]      = useState(false)
   const [err,         setErr]         = useState('')
+  const [visible,     setVisible]     = useState(false)
+
+  useEffect(() => { requestAnimationFrame(() => setVisible(true)) }, [])
+
+  const handleClose = () => {
+    if (saving) return
+    setVisible(false)
+    setTimeout(onClose, 300)
+  }
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -769,46 +1044,80 @@ function NuevoGastoModal({ localId, onClose, onSaved }) {
         expense_date: new Date(date).toISOString(),
       })
       onSaved()
-      onClose()
+      handleClose()
     } catch (e) { setErr(e?.message || 'Error al guardar'); setSaving(false) }
   }
 
-  const inputCls = 'h-9 w-full rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary)/0.3)]'
+  const inputCls = 'h-9 w-full rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 text-sm text-[hsl(var(--foreground))] placeholder:text-[hsl(var(--muted-foreground))] shadow-sm focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary)/0.4)] transition-colors'
+  const labelCls = 'text-xs font-semibold text-[hsl(var(--muted-foreground))] uppercase tracking-wider'
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <div className="bg-[hsl(var(--card))] rounded-xl shadow-xl w-full max-w-md p-6 flex flex-col gap-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-base font-bold text-[hsl(var(--foreground))]">Nuevo Gasto</h2>
-          <button onClick={onClose} className="text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]">✕</button>
+    <div className="fixed inset-0 z-50 flex">
+      <div className={cn('flex-1 bg-black/60 backdrop-blur-sm transition-opacity duration-300', visible ? 'opacity-100' : 'opacity-0')} onClick={handleClose} />
+      <div className={cn('w-full max-w-md h-full flex flex-col shadow-2xl overflow-y-auto no-scrollbar bg-[hsl(var(--card))] border-l border-[hsl(var(--border))] transition-transform duration-300 ease-out', visible ? 'translate-x-0' : 'translate-x-full')}>
+
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-[hsl(var(--border))] shrink-0">
+          <div className="flex items-center gap-3">
+            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-rose-500/10">
+              <TrendingDown size={18} className="text-rose-500" />
+            </span>
+            <div>
+              <h2 className="text-base font-bold text-[hsl(var(--foreground))]">Nuevo Gasto</h2>
+              <p className="text-xs text-[hsl(var(--muted-foreground))]">Registrar salida de dinero</p>
+            </div>
+          </div>
+          <button onClick={handleClose} disabled={saving}
+            className="flex h-7 w-7 items-center justify-center rounded-lg hover:bg-[hsl(var(--muted))] text-[hsl(var(--muted-foreground))] transition-colors disabled:opacity-40">
+            <X size={14} />
+          </button>
         </div>
-        {err && <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-md px-3 py-2">{err}</p>}
-        <form onSubmit={handleSubmit} className="flex flex-col gap-3">
-          <div className="flex flex-col gap-1">
-            <label className="text-xs font-semibold text-[hsl(var(--muted-foreground))] uppercase tracking-wide">Categoría</label>
-            <select value={category} onChange={e => setCategory(e.target.value)} className={inputCls}>
-              {EXPENSE_CATEGORIES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
-            </select>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div className="flex flex-col gap-1">
-              <label className="text-xs font-semibold text-[hsl(var(--muted-foreground))] uppercase tracking-wide">Monto (CLP)</label>
-              <input type="number" min="1" value={amount} onChange={e => setAmount(e.target.value)} placeholder="0" className={inputCls} required />
+
+        {/* Body */}
+        <div className="p-6 flex flex-col gap-4 flex-1">
+          {err && (
+            <div className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 dark:border-red-800/50 dark:bg-red-950/30 px-3 py-2">
+              <span className="h-1.5 w-1.5 rounded-full bg-red-500 shrink-0" />
+              <p className="text-xs text-red-600 dark:text-red-400">{err}</p>
             </div>
-            <div className="flex flex-col gap-1">
-              <label className="text-xs font-semibold text-[hsl(var(--muted-foreground))] uppercase tracking-wide">Fecha</label>
-              <input type="date" value={date} onChange={e => setDate(e.target.value)} className={inputCls} required />
+          )}
+
+          <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+            <div className="flex flex-col gap-1.5">
+              <label className={labelCls}>Categoría</label>
+              <select value={category} onChange={e => setCategory(e.target.value)} className={inputCls + ' cursor-pointer'}>
+                {EXPENSE_CATEGORIES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
+              </select>
             </div>
-          </div>
-          <div className="flex flex-col gap-1">
-            <label className="text-xs font-semibold text-[hsl(var(--muted-foreground))] uppercase tracking-wide">Descripción (opcional)</label>
-            <input type="text" value={description} onChange={e => setDescription(e.target.value)} placeholder="Detalle del gasto" className={inputCls} />
-          </div>
-          <div className="flex gap-2 justify-end pt-1">
-            <Button type="button" variant="outline" onClick={onClose} disabled={saving}>Cancelar</Button>
-            <Button type="submit" disabled={saving}>{saving ? 'Guardando…' : 'Guardar gasto'}</Button>
-          </div>
-        </form>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="flex flex-col gap-1.5">
+                <label className={labelCls}>Monto (CLP)</label>
+                <input type="number" min="1" value={amount} onChange={e => setAmount(e.target.value)} placeholder="0" className={inputCls} required />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label className={labelCls}>Fecha</label>
+                <input type="date" value={date} onChange={e => setDate(e.target.value)} className={inputCls} required />
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <label className={labelCls}>Descripción <span className="normal-case font-normal opacity-50">(opcional)</span></label>
+              <input type="text" value={description} onChange={e => setDescription(e.target.value)} placeholder="Detalle del gasto" className={inputCls} />
+            </div>
+
+            <div className="flex gap-2 justify-end pt-1">
+              <button type="button" onClick={handleClose} disabled={saving}
+                className="px-4 py-2 rounded-lg text-sm font-medium border border-[hsl(var(--border))] text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))] transition-colors disabled:opacity-40">
+                Cancelar
+              </button>
+              <button type="submit" disabled={saving}
+                className="px-5 py-2 rounded-lg text-sm font-semibold text-white bg-rose-600 hover:bg-rose-700 shadow-sm transition-colors disabled:opacity-50">
+                {saving ? 'Guardando…' : 'Guardar gasto'}
+              </button>
+            </div>
+          </form>
+        </div>
       </div>
     </div>
   )
@@ -817,52 +1126,149 @@ function NuevoGastoModal({ localId, onClose, onSaved }) {
 // ── Modal Reportar Transferencia ───────────────────────────
 
 function ReportarTransferenciaModal({ localId, onClose, onSaved }) {
-  const [amount,     setAmount]     = useState('')
-  const [receiptUrl, setReceiptUrl] = useState('')
-  const [saving,     setSaving]     = useState(false)
-  const [err,        setErr]        = useState('')
+  const [amount,      setAmount]      = useState('')
+  const [file,        setFile]        = useState(null)
+  const [preview,     setPreview]     = useState(null)
+  const [uploading,   setUploading]   = useState(false)
+  const [saving,      setSaving]      = useState(false)
+  const [err,         setErr]         = useState('')
+  const [visible,     setVisible]     = useState(false)
+
+  useEffect(() => { requestAnimationFrame(() => setVisible(true)) }, [])
+
+  const handleFile = (e) => {
+    const f = e.target.files?.[0]
+    if (!f) return
+    if (f.size > 5 * 1024 * 1024) { setErr('La imagen no puede superar 5 MB'); return }
+    setFile(f)
+    setErr('')
+    const reader = new FileReader()
+    reader.onload = (ev) => setPreview(ev.target.result)
+    reader.readAsDataURL(f)
+  }
 
   const handleSubmit = async (e) => {
     e.preventDefault()
     const amt = parseInt(amount, 10)
     if (!amt || amt <= 0) { setErr('Ingresa un monto válido'); return }
     setSaving(true); setErr('')
+    let receiptUrl = null
     try {
-      await postTransfer({
-        local_id:    localId,
-        amount:      amt,
-        receipt_url: receiptUrl.trim() || null,
-      })
+      if (file && supabase) {
+        setUploading(true)
+        const ext = file.name.split('.').pop()
+        const path = `transfers/${localId}/${Date.now()}.${ext}`
+        const { error: upErr } = await supabase.storage
+          .from('comprobantes')
+          .upload(path, file, { upsert: false, contentType: file.type })
+        setUploading(false)
+        if (upErr) throw new Error(`Error al subir imagen: ${upErr.message}`)
+        const { data: urlData } = supabase.storage.from('comprobantes').getPublicUrl(path)
+        receiptUrl = urlData?.publicUrl || null
+      }
+      await postTransfer({ local_id: localId, amount: amt, receipt_url: receiptUrl })
       onSaved()
       onClose()
-    } catch (e) { setErr(e?.message || 'Error al guardar'); setSaving(false) }
+    } catch (e2) { setErr(e2?.message || 'Error al guardar'); setSaving(false); setUploading(false) }
   }
 
-  const inputCls = 'h-9 w-full rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary)/0.3)]'
+  const inputCls = 'h-9 w-full rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 text-sm text-[hsl(var(--foreground))] placeholder:text-[hsl(var(--muted-foreground))] shadow-sm focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary)/0.4)] transition-colors'
+  const labelCls = 'text-xs font-semibold text-[hsl(var(--muted-foreground))] uppercase tracking-wider'
+  const busy = saving || uploading
+
+  const handleClose = () => {
+    if (busy) return
+    setVisible(false)
+    setTimeout(onClose, 300)
+  }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <div className="bg-[hsl(var(--card))] rounded-xl shadow-xl w-full max-w-md p-6 flex flex-col gap-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-base font-bold text-[hsl(var(--foreground))]">Reportar Transferencia</h2>
-          <button onClick={onClose} className="text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]">✕</button>
+    <div className="fixed inset-0 z-50 flex">
+      <div className={cn('flex-1 bg-black/60 backdrop-blur-sm transition-opacity duration-300', visible ? 'opacity-100' : 'opacity-0')} onClick={handleClose} />
+      <div className={cn('w-full max-w-md h-full flex flex-col shadow-2xl overflow-y-auto no-scrollbar bg-[hsl(var(--card))] border-l border-[hsl(var(--border))] transition-transform duration-300 ease-out', visible ? 'translate-x-0' : 'translate-x-full')}>
+
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-[hsl(var(--border))] shrink-0">
+          <div className="flex items-center gap-3">
+            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[hsl(var(--primary)/0.1)]">
+              <Send size={16} className="text-[hsl(var(--primary))]" />
+            </span>
+            <div>
+              <h2 className="text-base font-bold text-[hsl(var(--foreground))]">Reportar Transferencia</h2>
+              <p className="text-xs text-[hsl(var(--muted-foreground))]">Respaldo documental de envío de fondos</p>
+            </div>
+          </div>
+          <button onClick={handleClose} disabled={busy}
+            className="flex h-7 w-7 items-center justify-center rounded-lg hover:bg-[hsl(var(--muted))] text-[hsl(var(--muted-foreground))] transition-colors disabled:opacity-40">
+            <X size={14} />
+          </button>
         </div>
-        <p className="text-xs text-[hsl(var(--muted-foreground))]">Registra una transferencia de dinero del dueño al local.</p>
-        {err && <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-md px-3 py-2">{err}</p>}
-        <form onSubmit={handleSubmit} className="flex flex-col gap-3">
-          <div className="flex flex-col gap-1">
-            <label className="text-xs font-semibold text-[hsl(var(--muted-foreground))] uppercase tracking-wide">Monto (CLP)</label>
-            <input type="number" min="1" value={amount} onChange={e => setAmount(e.target.value)} placeholder="0" className={inputCls} required />
-          </div>
-          <div className="flex flex-col gap-1">
-            <label className="text-xs font-semibold text-[hsl(var(--muted-foreground))] uppercase tracking-wide">URL Comprobante (opcional)</label>
-            <input type="url" value={receiptUrl} onChange={e => setReceiptUrl(e.target.value)} placeholder="https://..." className={inputCls} />
-          </div>
-          <div className="flex gap-2 justify-end pt-1">
-            <Button type="button" variant="outline" onClick={onClose} disabled={saving}>Cancelar</Button>
-            <Button type="submit" disabled={saving}>{saving ? 'Guardando…' : 'Reportar transferencia'}</Button>
-          </div>
-        </form>
+
+        {/* Body */}
+        <div className="p-6 flex flex-col gap-4 flex-1">
+          {err && (
+            <div className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 dark:border-red-800/50 dark:bg-red-950/30 px-3 py-2">
+              <span className="h-1.5 w-1.5 rounded-full bg-red-500 shrink-0" />
+              <p className="text-xs text-red-600 dark:text-red-400">{err}</p>
+            </div>
+          )}
+
+          <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+            <div className="flex flex-col gap-1.5">
+              <label className={labelCls}>Monto (CLP)</label>
+              <input type="number" min="1" value={amount} onChange={e => setAmount(e.target.value)} placeholder="0" className={inputCls} required disabled={busy} />
+            </div>
+
+            {/* Zona de carga de imagen */}
+            <div className="flex flex-col gap-1.5">
+              <label className={labelCls}>
+                Foto / Comprobante <span className="normal-case font-normal opacity-50">(opcional)</span>
+              </label>
+              <label className={cn(
+                'relative flex flex-col items-center justify-center gap-2.5 rounded-xl border-2 border-dashed px-4 py-6 cursor-pointer transition-all',
+                busy
+                  ? 'opacity-50 pointer-events-none border-[hsl(var(--border))]'
+                  : 'border-[hsl(var(--border))] hover:border-[hsl(var(--primary)/0.5)] hover:bg-[hsl(var(--muted)/0.5)]'
+              )}>
+                <input type="file" accept="image/*" className="sr-only" onChange={handleFile} disabled={busy} />
+                {preview ? (
+                  <img src={preview} alt="preview" className="max-h-36 rounded-lg object-contain shadow-md" />
+                ) : (
+                  <>
+                    <span className="flex h-10 w-10 items-center justify-center rounded-full bg-[hsl(var(--muted))]">
+                      {uploading
+                        ? <Upload size={18} className="text-[hsl(var(--primary))] animate-bounce" />
+                        : <ImageIcon size={18} className="text-[hsl(var(--muted-foreground))]" />
+                      }
+                    </span>
+                    <p className="text-xs text-[hsl(var(--muted-foreground))] text-center leading-relaxed">
+                      {uploading ? 'Subiendo imagen…' : 'Haz clic o arrastra una imagen'}
+                      <br />
+                      <span className="opacity-50">JPG, PNG, WEBP · máx. 5 MB</span>
+                    </p>
+                  </>
+                )}
+              </label>
+              {file && !preview && (
+                <p className="text-xs text-[hsl(var(--muted-foreground))]">{file.name}</p>
+              )}
+              {file && preview && (
+                <p className="text-xs text-[hsl(var(--muted-foreground))] truncate">{file.name}</p>
+              )}
+            </div>
+
+            <div className="flex gap-2 justify-end pt-1">
+              <button type="button" onClick={handleClose} disabled={busy}
+                className="px-4 py-2 rounded-lg text-sm font-medium border border-[hsl(var(--border))] text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))] transition-colors disabled:opacity-40">
+                Cancelar
+              </button>
+              <button type="submit" disabled={busy}
+                className="px-5 py-2 rounded-lg text-sm font-semibold text-white bg-[hsl(var(--primary))] hover:opacity-90 shadow-sm transition-all disabled:opacity-50">
+                {uploading ? 'Subiendo…' : saving ? 'Guardando…' : 'Reportar transferencia'}
+              </button>
+            </div>
+          </form>
+        </div>
       </div>
     </div>
   )
@@ -976,8 +1382,6 @@ function AdministrativeModule() {
     return () => { ignore = true }
   }, [localId, activeSection, refreshKey])
 
-  const handleGoModules = () => navigate('/admin', { state: { local: selectedLocal, focusLocalId: localId } })
-
   return (
     <>
       {showNuevoGasto && (
@@ -994,25 +1398,18 @@ function AdministrativeModule() {
           onSaved={() => setRefreshKey(k => k + 1)}
         />
       )}
-      <header className="shrink-0 flex items-center justify-between border-b border-[hsl(var(--border))] bg-[hsl(var(--card))] px-6 py-3 shadow-sm">
-        <div>
-          <h1 className="text-base font-bold text-[hsl(var(--primary))]">{activeSectionMeta.label}</h1>
-          <p className="text-xs text-[hsl(var(--muted-foreground))]">
-            {selectedLocal?.name || localId || 'Sin local'} · Módulo Administrativo
-          </p>
-        </div>
-      </header>
-
-      <main className="flex-1 overflow-y-auto px-5 py-6">
+      <main className="flex-1 overflow-y-auto no-scrollbar px-5 py-6">
         <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <h2 className="text-xl font-extrabold text-[hsl(var(--primary))] tracking-tight">
               {activeSectionMeta.label}
             </h2>
             <p className="mt-0.5 text-sm text-[hsl(var(--muted-foreground))]">{activeSectionMeta.subtitle}</p>
-            <Badge variant="ghost" className="mt-2 text-xs">
-              Local: {selectedLocal?.name || localId || 'No identificado'}
-            </Badge>
+            {selectedLocal?.name && (
+              <Badge variant="ghost" className="mt-2 text-xs">
+                Local: {selectedLocal.name}
+              </Badge>
+            )}
           </div>
           <SectionActions
             activeSection={activeSection}
