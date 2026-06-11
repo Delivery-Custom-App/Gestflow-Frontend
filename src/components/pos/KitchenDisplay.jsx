@@ -1,10 +1,11 @@
-import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
-import { RefreshCw, Search, UtensilsCrossed, Clock } from 'lucide-react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
+import { Search, UtensilsCrossed, Clock } from 'lucide-react'
 import { useKitchenOrders } from '../../hooks/useKitchenOrders'
 
 // ── Constants ─────────────────────────────────────────────────────
-const DELAY_THRESHOLD_MIN = 15
-const READY_DISMISS_SECS  = 30
+const WARN_THRESHOLD_MIN  = 13   // barra cambia a amarillo
+const DELAY_THRESHOLD_MIN = 20   // barra cambia a rojo + estado DELAYED
+const READY_DISMISS_SECS  = 120
 
 const STATUS_CFG = {
   PENDING:   { label: 'Nueva Orden', headerBg: 'bg-[#3d4a5c]',   pillBg: 'bg-[#3d4a5c]'   },
@@ -16,16 +17,22 @@ const STATUS_CFG = {
 const SOURCE_LABEL = { 'dine-in': 'Dine In', takeout: 'Take Away', delivery: 'Delivery' }
 
 // ── Helpers ───────────────────────────────────────────────────────
-function resolveDisplayStatus(order) {
+// Usa updated_at como inicio del timer de cocción (cuando se pasó a PREPARING)
+function cookingStart(order) {
+  return new Date(order.updated_at || order.created_at).getTime()
+}
+
+function resolveDisplayStatus(order, now) {
   if (order.status === 'PREPARING') {
-    const elapsed = (Date.now() - new Date(order.created_at)) / 60000
+    const elapsed = (now - cookingStart(order)) / 60000
     if (elapsed > DELAY_THRESHOLD_MIN) return 'DELAYED'
   }
   return order.status
 }
 
-function elapsedSeconds(createdAt) {
-  return Math.max(0, Math.floor((Date.now() - new Date(createdAt)) / 1000))
+function elapsedSeconds(order, now) {
+  if (order.status === 'PENDING') return 0
+  return Math.max(0, Math.floor((now - cookingStart(order)) / 1000))
 }
 
 function formatTimer(secs) {
@@ -35,23 +42,27 @@ function formatTimer(secs) {
 }
 
 function formatDateTime(iso) {
-  return new Date(iso).toLocaleString('es-CL', {
-    day: '2-digit', month: 'short', year: 'numeric',
-    hour: '2-digit', minute: '2-digit',
-  })
+  const d = new Date(iso)
+  const dd   = String(d.getDate()).padStart(2, '0')
+  const mm   = String(d.getMonth() + 1).padStart(2, '0')
+  const yyyy = d.getFullYear()
+  const hh   = String(d.getHours()).padStart(2, '0')
+  const min  = String(d.getMinutes()).padStart(2, '0')
+  return `${dd}/${mm}/${yyyy}, ${hh}:${min}`
 }
 
 function shortOrderId(id) {
   return '#' + String(id).replace(/-/g, '').slice(-5).toUpperCase()
 }
 
-// ── Tick hook — forces re-render every second for live timers ─────
+// ── Tick hook — forces re-render every second, returns current ms ─
 function useSecondTick() {
-  const [, setTick] = useState(0)
+  const [now, setNow] = useState(() => Date.now())
   useEffect(() => {
-    const id = setInterval(() => setTick(t => t + 1), 1000)
+    const id = setInterval(() => setNow(Date.now()), 1000)
     return () => clearInterval(id)
   }, [])
+  return now
 }
 
 // ── StatusPill ────────────────────────────────────────────────────
@@ -69,12 +80,20 @@ function StatusPill({ label, count, pillBg }) {
 // ── OrderCard ─────────────────────────────────────────────────────
 function OrderCard({ order, mesaMap, onUpdateStatus, tokenIndex }) {
   const [updating, setUpdating] = useState(false)
+  const [now, setNow] = useState(Date.now)
 
-  useSecondTick()
+  const isPending = order.status === 'PENDING'
 
-  const displayStatus = resolveDisplayStatus(order)
+  // Tick propio: solo corre cuando la comanda está en cocina
+  useEffect(() => {
+    if (isPending) return
+    const id = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(id)
+  }, [isPending])
+
+  const displayStatus = resolveDisplayStatus(order, now)
   const cfg = STATUS_CFG[displayStatus] || STATUS_CFG.PENDING
-  const secs = elapsedSeconds(order.created_at)
+  const secs = elapsedSeconds(order, now)
   const timer = formatTimer(secs)
   const progress = Math.min(secs / (DELAY_THRESHOLD_MIN * 60), 1)
   const isDelayed = displayStatus === 'DELAYED'
@@ -85,26 +104,17 @@ function OrderCard({ order, mesaMap, onUpdateStatus, tokenIndex }) {
   const sourceLabel = SOURCE_LABEL[order.source] || 'Dine In'
   const tokenLabel = String(tokenIndex + 1).padStart(2, '0')
 
-  const advance = useCallback(async () => {
+  // PENDING → PREPARING (inicia el timer); PREPARING/DELAYED → READY
+  const handleAction = useCallback(async () => {
     if (updating) return
-    const next = order.status === 'PENDING' ? 'PREPARING' : 'READY'
+    const next = isPending ? 'PREPARING' : 'READY'
     try {
       setUpdating(true)
       await onUpdateStatus(order.id, next)
     } finally {
       setUpdating(false)
     }
-  }, [order.id, order.status, onUpdateStatus, updating])
-
-  const markReady = useCallback(async () => {
-    if (updating) return
-    try {
-      setUpdating(true)
-      await onUpdateStatus(order.id, 'READY')
-    } finally {
-      setUpdating(false)
-    }
-  }, [order.id, onUpdateStatus, updating])
+  }, [order.id, isPending, onUpdateStatus, updating])
 
   const overMin = Math.max(0, Math.floor(secs / 60 - DELAY_THRESHOLD_MIN))
 
@@ -128,7 +138,7 @@ function OrderCard({ order, mesaMap, onUpdateStatus, tokenIndex }) {
       </div>
 
       {/* Meta row */}
-      <div className="flex items-center justify-between px-4 py-2 bg-gray-50 border-b border-[hsl(var(--border))]">
+      <div className="flex items-center justify-between px-4 py-2 bg-[hsl(var(--accent))] border-b border-[hsl(var(--border))]">
         <span className="text-xs text-[hsl(var(--muted-foreground))]">
           Token No: <span className="font-semibold text-[hsl(var(--foreground))]">{tokenLabel}</span>
         </span>
@@ -140,7 +150,7 @@ function OrderCard({ order, mesaMap, onUpdateStatus, tokenIndex }) {
       {/* Items list */}
       <div className="px-4 py-3 flex-1 min-h-[80px] space-y-2">
         {!order.items || order.items.length === 0 ? (
-          <p className="text-xs text-[hsl(var(--muted-foreground))] italic">Sin productos cargados</p>
+          <p className="text-xs text-[hsl(var(--muted-foreground))] italic text-center py-2">Sin productos cargados</p>
         ) : (
           order.items.map((item, i) => (
             <div key={item.id || i}>
@@ -152,8 +162,8 @@ function OrderCard({ order, mesaMap, onUpdateStatus, tokenIndex }) {
                         strokeLinecap="round" strokeLinejoin="round" />
                     </svg>
                   </span>
-                  <span className="text-xs font-medium text-[hsl(var(--foreground))] leading-snug truncate">
-                    {item.product_name}
+                  <span className="text-xs font-medium text-[hsl(var(--foreground))] leading-snug">
+                    {item.item_name || item.product_name || '—'}
                   </span>
                 </div>
                 <span className="text-xs text-[hsl(var(--muted-foreground))] shrink-0 font-medium">
@@ -163,7 +173,7 @@ function OrderCard({ order, mesaMap, onUpdateStatus, tokenIndex }) {
               {item.notes && (
                 <p className="ml-6 text-[11px] text-[hsl(var(--muted-foreground))] mt-0.5 flex items-center gap-1">
                   <Clock className="w-2.5 h-2.5 shrink-0 opacity-60" />
-                  Notes: {item.notes}
+                  {item.notes}
                 </p>
               )}
             </div>
@@ -172,60 +182,64 @@ function OrderCard({ order, mesaMap, onUpdateStatus, tokenIndex }) {
       </div>
 
       {/* Progress bar + timer */}
-      <div className="px-4 pt-1 pb-2 space-y-1.5">
-        {isDelayed && (
-          <p className="text-[11px] text-red-500 font-semibold flex items-center gap-1">
-            <Clock className="w-3 h-3 shrink-0" />
-            Demorada {overMin} Min
-          </p>
-        )}
-        <div className="flex items-center gap-2">
-          <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
-            <div
-              className={`h-full rounded-full transition-all duration-1000 ${isDelayed ? 'bg-red-500' : 'bg-green-500'}`}
-              style={{ width: `${progress * 100}%` }}
-            />
+      {!isPending && (() => {
+        const mins = secs / 60
+        const barColor = isDelayed
+          ? 'bg-red-500'
+          : mins >= WARN_THRESHOLD_MIN
+            ? 'bg-amber-400'
+            : 'bg-green-500'
+        const timerColor = isDelayed
+          ? 'text-red-500 font-bold'
+          : mins >= WARN_THRESHOLD_MIN
+            ? 'text-amber-500 font-bold'
+            : 'text-[hsl(var(--muted-foreground))]'
+        return (
+          <div className="px-4 pt-1 pb-3 space-y-2">
+            {isDelayed && (
+              <p className="text-xs text-red-500 font-semibold flex items-center gap-1">
+                <Clock className="w-3.5 h-3.5 shrink-0" />
+                ¡Demorada {overMin} min!
+              </p>
+            )}
+            <div className="flex items-center gap-3">
+              <div className="flex-1 h-3 bg-[hsl(var(--muted))] rounded-full overflow-hidden">
+                <div
+                  className={`h-full rounded-full transition-all duration-1000 ${barColor}`}
+                  style={{ width: `${progress * 100}%` }}
+                />
+              </div>
+              <div className="flex items-center gap-1 shrink-0">
+                <Clock className={`w-3.5 h-3.5 shrink-0 ${timerColor}`} />
+                <span className={`text-sm font-mono ${timerColor}`}>{timer}</span>
+              </div>
+            </div>
           </div>
-          <div className="flex items-center gap-1 shrink-0">
-            <Clock className="w-3 h-3 text-[hsl(var(--muted-foreground))]" />
-            <span className="text-xs font-mono text-[hsl(var(--muted-foreground))]">{timer}</span>
-          </div>
-        </div>
-      </div>
+        )
+      })()}
 
-      {/* Action buttons */}
-      <div className="px-4 pb-4 flex gap-2">
+      {/* Action button */}
+      <div className="px-4 pb-4">
         {isReady ? (
-          <button
-            className="flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-semibold rounded-lg border border-[hsl(var(--border))] text-[hsl(var(--muted-foreground))] hover:bg-gray-50 transition-colors"
-          >
+          <button className="w-full flex items-center justify-center gap-1.5 py-2 text-xs font-semibold rounded-lg border border-[hsl(var(--border))] text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--accent))] transition-colors">
             🖨 Imprimir Orden
           </button>
+        ) : isPending ? (
+          <button
+            onClick={handleAction}
+            disabled={updating}
+            className="w-full flex items-center justify-center gap-1.5 py-2 text-xs font-semibold rounded-lg border border-orange-400 text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-950/30 transition-colors disabled:opacity-50"
+          >
+            ▷ Iniciar
+          </button>
         ) : (
-          <>
-            <button
-              onClick={advance}
-              disabled={updating}
-              className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-semibold rounded-lg border transition-colors disabled:opacity-50 ${
-                order.status === 'PENDING'
-                  ? 'border-gray-300 text-gray-600 hover:bg-gray-50'
-                  : 'border-orange-300 text-orange-600 hover:bg-orange-50'
-              }`}
-            >
-              {order.status === 'PENDING' ? (
-                <><span className="text-sm">▷</span> Iniciar {timer}</>
-              ) : (
-                <><span className="text-sm">⏸</span> {timer}</>
-              )}
-            </button>
-            <button
-              onClick={markReady}
-              disabled={updating}
-              className="flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-semibold rounded-lg border border-green-300 text-green-700 hover:bg-green-50 transition-colors disabled:opacity-50"
-            >
-              ✓ Listo
-            </button>
-          </>
+          <button
+            onClick={handleAction}
+            disabled={updating}
+            className="w-full flex items-center justify-center gap-1.5 py-2 text-xs font-semibold rounded-lg border border-green-400 text-green-700 hover:bg-green-50 dark:hover:bg-green-950/30 transition-colors disabled:opacity-50"
+          >
+            ✓ Listo
+          </button>
         )}
       </div>
     </div>
@@ -234,51 +248,27 @@ function OrderCard({ order, mesaMap, onUpdateStatus, tokenIndex }) {
 
 // ── KitchenDisplay ────────────────────────────────────────────────
 export default function KitchenDisplay({ localId, mesas = [] }) {
-  const { orders, loading, error, refresh, updateOrderStatus } = useKitchenOrders(localId)
+  const { orders, loading, error, updateOrderStatus } = useKitchenOrders(localId)
   const [search, setSearch] = useState('')
-  const [refreshing, setRefreshing] = useState(false)
+  const now = useSecondTick()
 
-  // Track when each order first became READY (for 30s auto-dismiss)
-  const readyAtRef = useRef({})
-  const [, forceRender] = useState(0)
-
-  useSecondTick()
-
-  useEffect(() => {
-    const now = Date.now()
-    orders.forEach(o => {
-      if (o.status === 'READY' && !readyAtRef.current[o.id]) {
-        readyAtRef.current[o.id] = now
-      }
-    })
-    // Clean up dismissed orders no longer in list
-    const ids = new Set(orders.map(o => o.id))
-    Object.keys(readyAtRef.current).forEach(id => {
-      if (!ids.has(id)) delete readyAtRef.current[id]
-    })
-  }, [orders])
-
-  // Build mesa lookup map
   const mesaMap = useMemo(() => {
     const m = {}
     mesas.forEach(mesa => { m[mesa.id] = mesa })
     return m
   }, [mesas])
 
-  // Enrich orders with display status + filter READY orders after 30s
+  // Auto-dismiss READY orders 30 s after updated_at (set by the server when marked ready)
   const enrichedOrders = useMemo(() => {
-    const now = Date.now()
     return orders
-      .map(o => ({ ...o, displayStatus: resolveDisplayStatus(o) }))
+      .map(o => ({ ...o, displayStatus: resolveDisplayStatus(o, now) }))
       .filter(o => {
         if (o.status !== 'READY') return true
-        const readyAt = readyAtRef.current[o.id]
-        if (!readyAt) return true
+        const readyAt = new Date(o.updated_at || o.created_at).getTime()
         return (now - readyAt) / 1000 < READY_DISMISS_SECS
       })
-  }, [orders])
+  }, [orders, now])
 
-  // Filter by search
   const filteredOrders = useMemo(() => {
     const q = search.trim().toLowerCase()
     if (!q) return enrichedOrders
@@ -291,7 +281,6 @@ export default function KitchenDisplay({ localId, mesas = [] }) {
     })
   }, [enrichedOrders, search, mesaMap])
 
-  // Status counts
   const counts = useMemo(() => ({
     pending:   enrichedOrders.filter(o => o.displayStatus === 'PENDING').length,
     preparing: enrichedOrders.filter(o => o.displayStatus === 'PREPARING').length,
@@ -299,45 +288,29 @@ export default function KitchenDisplay({ localId, mesas = [] }) {
     ready:     enrichedOrders.filter(o => o.displayStatus === 'READY').length,
   }), [enrichedOrders])
 
-  const handleRefresh = async () => {
-    setRefreshing(true)
-    await refresh()
-    setRefreshing(false)
-  }
-
   return (
     <div className="flex flex-col h-full min-h-0">
 
       {/* ── Header ── */}
-      <div className="flex flex-wrap items-center gap-2 pb-4">
-        {/* Title */}
+      <div className="flex flex-wrap items-center gap-2 pb-4 pr-24">
         <div className="flex items-center gap-2 mr-2">
           <UtensilsCrossed className="w-5 h-5 text-[hsl(var(--foreground))]" />
           <h2 className="text-lg font-extrabold text-[hsl(var(--foreground))] tracking-tight">Cocina</h2>
-          <button
-            onClick={handleRefresh}
-            className="p-1.5 rounded-lg hover:bg-[hsl(var(--accent))] transition-colors"
-            title="Actualizar"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 text-[hsl(var(--muted-foreground))] ${refreshing ? 'animate-spin' : ''}`} />
-          </button>
         </div>
 
-        {/* Status pills */}
         <StatusPill label="Nueva Orden"  count={counts.pending}   pillBg={STATUS_CFG.PENDING.pillBg}   />
         <StatusPill label="En Cocina"    count={counts.preparing} pillBg={STATUS_CFG.PREPARING.pillBg} />
         <StatusPill label="Demorada"     count={counts.delayed}   pillBg={STATUS_CFG.DELAYED.pillBg}   />
         <StatusPill label="Lista"        count={counts.ready}     pillBg={STATUS_CFG.READY.pillBg}     />
 
-        {/* Search */}
-        <div className="relative ml-auto">
+        <div className="relative">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[hsl(var(--muted-foreground))]" />
           <input
             type="text"
             placeholder="Buscar mesa u orden..."
             value={search}
             onChange={e => setSearch(e.target.value)}
-            className="h-8 pl-8 pr-3 text-xs rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--card))] focus:outline-none focus:ring-1 focus:ring-[hsl(var(--primary))] w-44"
+            className="h-8 pl-8 pr-3 text-xs rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--card))] text-[hsl(var(--foreground))] focus:outline-none focus:ring-1 focus:ring-[hsl(var(--primary))] w-40"
           />
         </div>
       </div>
@@ -362,7 +335,7 @@ export default function KitchenDisplay({ localId, mesas = [] }) {
           )}
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 overflow-y-auto pb-2">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 overflow-y-auto no-scrollbar pb-2">
           {filteredOrders.map((order, i) => (
             <OrderCard
               key={order.id}
