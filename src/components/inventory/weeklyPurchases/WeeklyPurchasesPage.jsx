@@ -15,11 +15,9 @@ import { formatCLPDisplay as formatMoneyClp } from '../../../lib/formatCLP'
 import InventoryShell from '../InventoryShell'
 import LoadingSpinner from '../../LoadingSpinner'
 import ModernDateField from '../ModernDateField'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Label } from '@/components/ui/label'
-import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
   Table,
@@ -270,27 +268,46 @@ function NewWeeklyOrderModal({ open, businessId, localId, onClose, onCreated }) 
   const colTemplate = '1fr 120px 100px 88px 32px'
 
   return (
-    <Dialog open={open} onOpenChange={(o) => { if (!o) onClose() }}>
-      <DialogContent
-        className="max-w-2xl w-full flex flex-col overflow-hidden p-0"
-        style={{ maxHeight: 'min(92vh, 860px)' }}
-        onInteractOutside={(e) => {
-          const t = (e.detail?.originalEvent ?? e)?.target
-          if (t instanceof Element && t.closest('[data-calendar-panel="true"]')) e.preventDefault()
-        }}
+    <>
+      {/* Overlay */}
+      <div
+        className={`fixed inset-0 bg-black/60 transition-opacity duration-300 ${
+          open ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
+        }`}
+        style={{ zIndex: 500 }}
+        onClick={onClose}
+      />
+
+      {/* Drawer panel */}
+      <div
+        className={`fixed inset-y-0 right-0 w-full max-w-[520px] bg-[hsl(var(--card))] shadow-2xl border-l border-[hsl(var(--border))] flex flex-col transform transition-transform duration-300 ease-in-out ${
+          open ? 'translate-x-0' : 'translate-x-full'
+        }`}
+        style={{ zIndex: 501 }}
       >
         {/* Header */}
-        <DialogHeader className="shrink-0">
-          <DialogTitle className="flex items-center gap-2">
-            <CalendarDays size={18} aria-hidden="true" />
-            Solicitud de Orden
-          </DialogTitle>
-          <p className="text-sm text-[hsl(var(--muted-foreground))]">
-            {step === 'select'
-              ? 'Ingresar datos necesarios para solicitud de nuevos productos'
-              : 'Ajusta las cantidades y confirma el borrador'}
-          </p>
-        </DialogHeader>
+        <div className="flex items-center justify-between px-6 py-5 border-b border-[hsl(var(--border))] shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[hsl(var(--primary)/0.1)]">
+              <CalendarDays className="h-4 w-4 text-[hsl(var(--primary))]" aria-hidden="true" />
+            </div>
+            <div>
+              <h2 className="text-base font-bold text-[hsl(var(--foreground))]">Solicitud de Orden</h2>
+              <p className="text-xs text-[hsl(var(--muted-foreground))]">
+                {step === 'select'
+                  ? 'Ingresar datos necesarios para solicitud de nuevos productos'
+                  : 'Ajusta las cantidades y confirma el borrador'}
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-lg p-2 hover:bg-[hsl(var(--muted))] transition-colors"
+          >
+            <X className="h-4 w-4 text-[hsl(var(--muted-foreground))]" />
+          </button>
+        </div>
 
         <div className="flex-1 overflow-y-auto min-h-0">
           {/* ════ PASO 1: Selección ════ */}
@@ -313,7 +330,7 @@ function NewWeeklyOrderModal({ open, businessId, localId, onClose, onCreated }) 
                     disabled={loadingSup}
                     className={selectCls}
                   >
-                    <option value="">{loadingSup ? 'Cargando…' : '— Seleccionar —'}</option>
+                    <option value="">{loadingSup ? 'Cargando…' : 'Seleccionar'}</option>
                     {suppliers.map((s) => (
                       <option key={String(s.id)} value={String(s.id)}>{s.name || s.id}</option>
                     ))}
@@ -527,7 +544,7 @@ function NewWeeklyOrderModal({ open, businessId, localId, onClose, onCreated }) 
         </div>
 
         {/* Footer */}
-        <DialogFooter className="shrink-0">
+        <div className="shrink-0 border-t border-[hsl(var(--border))] px-6 py-4 flex gap-2 justify-end">
           {step === 'select' ? (
             <>
               <Button type="button" variant="outline" onClick={onClose}>Cancelar</Button>
@@ -549,9 +566,9 @@ function NewWeeklyOrderModal({ open, businessId, localId, onClose, onCreated }) 
               </Button>
             </>
           )}
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        </div>
+      </div>
+    </>
   )
 }
 
@@ -734,8 +751,7 @@ function WeeklyPurchasesPage() {
             </div>
           </div>
           {canAccess && !businessIdLoading && businessId && (
-            <Button type="button" onClick={() => setNewModalOpen(true)} className="gap-1.5 shrink-0">
-              <Plus size={16} />
+            <Button type="button" onClick={() => setNewModalOpen(true)} className="shrink-0">
               Nueva orden semanal
             </Button>
           )}

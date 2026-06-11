@@ -218,12 +218,11 @@ export default function POSModule() {
         />
       )}
 
-      {showPrinterConfig && (
-        <PrinterConfigModal
-          localId={localId}
-          onClose={() => setShowPrinterConfig(false)}
-        />
-      )}
+      <PrinterConfigModal
+        open={showPrinterConfig}
+        localId={localId}
+        onClose={() => setShowPrinterConfig(false)}
+      />
     </>
   )
 }
