@@ -20,7 +20,7 @@ export default defineConfig({
     },
   },
   build: {
-    cssMinify: false,
+    cssMinify: true,
     minify: 'terser',
   },
   server: {
