@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useMemo, useCallback, memo } from 'react'
 import { useOrderItems } from '../../hooks/useOrderItems'
 import { formatCLP } from '../../lib/formatCLP'
 import ProductDetailModal from './ProductDetailModal'
@@ -6,14 +6,35 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
 
+/** Validación pura de un producto. A nivel de módulo para no recrearla por render. */
+function validateProduct(product) {
+  const hasName = !!product.product_name
+  const hasQuantity = product.quantity > 0
+  const hasPrice = product.unit_price > 0 && product.total_price > 0
+  const priceConsistent = Math.abs(product.quantity * product.unit_price - product.total_price) < 0.01
+
+  return {
+    isValid: hasName && hasQuantity && hasPrice && priceConsistent,
+    hasName,
+    hasQuantity,
+    hasPrice,
+    priceConsistent,
+  }
+}
+
 /** Lista de productos de la orden con edición de cantidad/precio y detalle. */
-export default function ProductList({ products = [], orderId = null, onProductsChanged = null, className = '' }) {
+function ProductList({ products = [], orderId = null, onProductsChanged = null, className = '' }) {
   const { updateItem, deleteItem, loading, error } = useOrderItems(orderId)
   const [editingId, setEditingId] = useState(null)
   const [editQuantity, setEditQuantity] = useState('')
   const [editPrice, setEditPrice] = useState('')
   const [localError, setLocalError] = useState(null)
   const [selectedProduct, setSelectedProduct] = useState(null)
+
+  // Validar cada producto UNA sola vez por cambio de `products` (antes se
+  // validaba dos veces por producto en cada render) — AC4, hallazgo H4.
+  const validations = useMemo(() => products.map(validateProduct), [products])
+  const hasInvalid = useMemo(() => validations.some((v) => !v.isValid), [validations])
 
   if (!products || products.length === 0) {
     return (
@@ -23,29 +44,14 @@ export default function ProductList({ products = [], orderId = null, onProductsC
     )
   }
 
-  const validateProduct = (product) => {
-    const hasName = !!product.product_name
-    const hasQuantity = product.quantity > 0
-    const hasPrice = product.unit_price > 0 && product.total_price > 0
-    const priceConsistent = Math.abs(product.quantity * product.unit_price - product.total_price) < 0.01
-
-    return {
-      isValid: hasName && hasQuantity && hasPrice && priceConsistent,
-      hasName,
-      hasQuantity,
-      hasPrice,
-      priceConsistent,
-    }
-  }
-
-  const handleEditStart = (product) => {
+  const handleEditStart = useCallback((product) => {
     setEditingId(product.id)
     setEditQuantity(product.quantity.toString())
     setEditPrice(product.unit_price.toString())
     setLocalError(null)
-  }
+  }, [])
 
-  const handleEditSave = async (product) => {
+  const handleEditSave = useCallback(async (product) => {
     setLocalError(null)
 
     if (!editQuantity || editQuantity <= 0) {
@@ -63,16 +69,16 @@ export default function ProductList({ products = [], orderId = null, onProductsC
       setEditingId(null)
       if (onProductsChanged) onProductsChanged()
     }
-  }
+  }, [editQuantity, editPrice, updateItem, onProductsChanged])
 
-  const handleDelete = async (product) => {
+  const handleDelete = useCallback(async (product) => {
     if (window.confirm(`¿Eliminar ${product.product_name}?`)) {
       const success = await deleteItem(product.id)
       if (success) {
         if (onProductsChanged) onProductsChanged()
       }
     }
-  }
+  }, [deleteItem, onProductsChanged])
 
   return (
     <div className={cn('space-y-2', className)}>
@@ -87,7 +93,7 @@ export default function ProductList({ products = [], orderId = null, onProductsC
 
       <ul className="space-y-1">
         {products.map((product, index) => {
-          const validation = validateProduct(product)
+          const validation = validations[index]
           const isEditing = editingId === product.id
 
           return (
@@ -220,7 +226,7 @@ export default function ProductList({ products = [], orderId = null, onProductsC
       )}
 
       {/* Warning consistencia */}
-      {products.some((p) => !validateProduct(p).isValid) && (
+      {hasInvalid && (
         <p className="text-xs text-orange-600 bg-orange-50 border border-orange-200 rounded px-3 py-2">
           ⚠ Algunos productos tienen datos inconsistentes
         </p>
@@ -235,3 +241,7 @@ export default function ProductList({ products = [], orderId = null, onProductsC
     </div>
   )
 }
+
+// Memoizado: evita re-render del listado cuando el padre cambia sin que cambien
+// los productos (AC4 — componente de alta frecuencia).
+export default memo(ProductList)

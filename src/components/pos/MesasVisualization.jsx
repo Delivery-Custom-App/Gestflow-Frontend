@@ -1,10 +1,12 @@
+import { memo } from 'react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 
 /**
- * Listado de mesas en vista gráfica (tarjetas)
+ * Listado de mesas en vista gráfica (tarjetas).
+ * Memoizado: solo se re-renderiza si cambian las mesas/handlers (AC1).
  */
-export default function MesasVisualization({ mesas = [], loading = false, onMesaSelect = null, onEditMesa = null, onDeleteMesa = null }) {
+function MesasVisualization({ mesas = [], loading = false, onMesaSelect = null, onEditMesa = null, onDeleteMesa = null }) {
 
   if (loading) {
     return (
@@ -44,6 +46,10 @@ export default function MesasVisualization({ mesas = [], loading = false, onMesa
   )
 }
 
+// Memoizado a nivel de módulo: evita re-render de toda la grilla cuando el
+// padre (POSModule) cambia de estado sin que cambien las mesas (AC1, H2).
+export default memo(MesasVisualization)
+
 const STATE_COLORS = {
   libre:    'hsl(var(--mesa-libre))',
   ocupada:  'hsl(var(--mesa-ocupada))',
@@ -79,7 +85,7 @@ const STATE_BTN = {
   inactiva: 'bg-[hsl(var(--mesa-inactiva))]/40 text-[hsl(var(--muted-foreground))] cursor-not-allowed',
 }
 
-function MesaCard({ mesa, index, onMesaSelect, onEditMesa, onDeleteMesa }) {
+const MesaCard = memo(function MesaCard({ mesa, index, onMesaSelect, onEditMesa, onDeleteMesa }) {
   const stateKey = mesa.is_active ? (mesa.state || 'libre') : 'inactiva'
   const stateLabel = STATE_LABEL[stateKey] || 'Libre'
   const borderColor = STATE_COLORS[stateKey] || STATE_COLORS.libre
@@ -155,4 +161,4 @@ function MesaCard({ mesa, index, onMesaSelect, onEditMesa, onDeleteMesa }) {
       </div>
     </div>
   )
-}
+})
