@@ -118,11 +118,13 @@ function WorkerRoutes({ assignedLocalId }) {
   if (assignedLocalId) {
     return (
       <Routes>
-        <Route path="/" element={<Navigate to={home} replace />} />
-        <Route path="/local/:localId/pos" element={<POSModule />} />
-        <Route path="/local/:localId/pos/cocina" element={<POSModule />} />
-        <Route path="/local/:localId/pos/mesa/:mesaId" element={<MesaDetail />} />
-        <Route path="*" element={<Navigate to={home} replace />} />
+        <Route element={<AdminLayout />}>
+          <Route path="/" element={<Navigate to={home} replace />} />
+          <Route path="/local/:localId/pos" element={<POSModule />} />
+          <Route path="/local/:localId/pos/cocina" element={<POSModule />} />
+          <Route path="/local/:localId/pos/mesa/:mesaId" element={<MesaDetail />} />
+          <Route path="*" element={<Navigate to={home} replace />} />
+        </Route>
       </Routes>
     )
   }
@@ -130,12 +132,14 @@ function WorkerRoutes({ assignedLocalId }) {
   // Sin local asignado: selector de local (fallback)
   return (
     <Routes>
-      <Route path="/" element={<Navigate to="/admin" replace />} />
-      <Route path="/admin" element={<AdminDashboard />} />
-      <Route path="/local/:localId/pos" element={<POSModule />} />
-      <Route path="/local/:localId/pos/cocina" element={<POSModule />} />
-      <Route path="/local/:localId/pos/mesa/:mesaId" element={<MesaDetail />} />
-      <Route path="*" element={<Navigate to="/" replace />} />
+      <Route element={<AdminLayout />}>
+        <Route path="/" element={<Navigate to="/admin" replace />} />
+        <Route path="/admin" element={<AdminDashboard />} />
+        <Route path="/local/:localId/pos" element={<POSModule />} />
+        <Route path="/local/:localId/pos/cocina" element={<POSModule />} />
+        <Route path="/local/:localId/pos/mesa/:mesaId" element={<MesaDetail />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Route>
     </Routes>
   )
 }

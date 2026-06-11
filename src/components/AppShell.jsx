@@ -17,6 +17,8 @@ import {
 import CoachMark from './onboarding/CoachMark'
 import { useOnboarding } from '../context/OnboardingContext'
 import { isSuperAdminRole } from '../auth/roleLabel'
+import { WORKER_ROLES } from '../constants/roles'
+import { formatShortAddress } from '../lib/formatAddress'
 
 /* ── key sets for accordion auto-open ──────────────────────────── */
 const ADMIN_KEYS = new Set(['administracion', 'ventas', 'rendiciones', 'reportes', 'flujo-caja', 'alertas', 'bonos'])
@@ -87,6 +89,7 @@ function Sidebar({ collapsed, onToggle, onClose }) {
   const { user, userRole, logout } = useAuth()
   const { restart: restartTour } = useOnboarding()
   const isSuperAdmin = isSuperAdminRole(userRole)
+  const isWorker = WORKER_ROLES.includes(userRole)
   const navigate = useNavigate()
   const { pathname, state: locState } = useLocation()
   const { locales } = useLocals()
@@ -157,8 +160,12 @@ function Sidebar({ collapsed, onToggle, onClose }) {
   const discoverItems = [
     ...(isSuperAdmin ? [{ key: 'locales', label: 'Tus Franquicias', icon: Store }] : []),
     ...(isSuperAdmin ? [{ key: 'usuarios', label: 'Usuarios', icon: Users }] : []),
-    ...(localId ? [{ key: 'dashboard', label: 'Dashboard', icon: LayoutDashboard }] : []),
+    ...(!isWorker && localId ? [{ key: 'dashboard', label: 'Dashboard', icon: LayoutDashboard }] : []),
   ]
+
+  const visibleAccordions = isWorker
+    ? ACCORDIONS.filter((s) => s.key === 'pos')
+    : ACCORDIONS
 
   const navBtn = (item, small = false) => {
     const isActive = activeKey === item.key
@@ -229,7 +236,7 @@ function Sidebar({ collapsed, onToggle, onClose }) {
                     {selectedLocal.address && (
                       <p className="flex items-start gap-1 mt-0.5">
                         <MapPin size={9} className="shrink-0 mt-0.5 text-white/50" />
-                        <span className="text-[9px] text-white/50 leading-tight line-clamp-2">{selectedLocal.address}</span>
+                        <span className="text-[9px] text-white/50 leading-tight line-clamp-2">{formatShortAddress(selectedLocal.address)}</span>
                       </p>
                     )}
                   </div>
@@ -250,22 +257,24 @@ function Sidebar({ collapsed, onToggle, onClose }) {
       {/* Nav */}
       <nav className="flex-1 overflow-y-auto py-3 px-2 no-scrollbar">
         {/* DESCUBRIR */}
-        <div className="mb-3">
-          <AnimatePresence>
-            {!collapsed && (
-              <motion.p
-                initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                className="px-3 pb-1 text-[10px] font-bold text-white/40 uppercase tracking-widest"
-              >
-                DESCUBRIR
-              </motion.p>
-            )}
-          </AnimatePresence>
-          {discoverItems.map((item) => navBtn(item))}
-        </div>
+        {discoverItems.length > 0 && (
+          <div className="mb-3">
+            <AnimatePresence>
+              {!collapsed && (
+                <motion.p
+                  initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                  className="px-3 pb-1 text-[10px] font-bold text-white/40 uppercase tracking-widest"
+                >
+                  DESCUBRIR
+                </motion.p>
+              )}
+            </AnimatePresence>
+            {discoverItems.map((item) => navBtn(item))}
+          </div>
+        )}
 
         {/* Accordions */}
-        {localId && ACCORDIONS.map((section) => {
+        {localId && visibleAccordions.map((section) => {
           const open = isOpen(section.key)
           const hasActive = activeKey === section.key || section.items.some((i) => activeKey === i.key)
           const Icon = section.icon
@@ -544,11 +553,13 @@ function AppShell() {
 
 function FloatingControls({ localId, darkMode, toggleDarkMode }) {
   const [target, setTarget] = useState(null)
+  const { userRole } = useAuth()
+  const isWorkerRole = WORKER_ROLES.includes(userRole)
   useEffect(() => { setTarget(document.getElementById('overlay-root')) }, [])
   if (!target) return null
   return createPortal(
     <>
-      {localId && <AlertBell localId={localId} />}
+      {localId && !isWorkerRole && <AlertBell localId={localId} />}
       <button
         onClick={toggleDarkMode}
         style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '36px', height: '36px', borderRadius: '8px', border: 'none', cursor: 'pointer', background: 'transparent', color: 'hsl(var(--muted-foreground))' }}

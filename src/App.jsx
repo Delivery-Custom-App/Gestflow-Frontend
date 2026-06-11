@@ -1,6 +1,7 @@
 import LoadingPage from './components/LoadingPage'
 import LoginPage from './components/LoginPage'
 import AuthenticatedApp from './routes/AuthenticatedRoutes'
+import NetworkErrorModal from './components/NetworkErrorModal'
 import { AppAuthProvider, useAuth } from './context/AuthContext'
 import { ThemeProvider } from './context/ThemeContext'
 
@@ -23,6 +24,7 @@ function App() {
     <ThemeProvider>
       <AppAuthProvider>
         <AppContent />
+        <NetworkErrorModal />
       </AppAuthProvider>
     </ThemeProvider>
   )

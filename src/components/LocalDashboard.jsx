@@ -2,8 +2,9 @@ import { useState, useEffect, useMemo } from 'react'
 import { useParams, useLocation } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { formatCLPDisplay as formatMoney } from '../lib/formatCLP'
+import { formatShortAddress } from '../lib/formatAddress'
 import { useLocals } from '../hooks/useLocals'
-import { getInventoryKpisByLocal } from '../lib/inventoryApi'
+import { getInventoryKpisByLocal, getLocalById } from '../lib/inventoryApi'
 import { getLocalDashboard, getOrdersByLocal, getIncomeTrend } from '../lib/administrativeApi'
 import { getAuthContext } from '../lib/apiClient'
 import { generateIncomeTrendFromOrders } from '../utils/chartDataHelpers'
@@ -87,14 +88,17 @@ function KpiDetailDrawer({ open, onClose, dashboard, orders, dashLoading }) {
     else       setVisible(false)
   }, [open])
 
-  /* Pedidos por hora (todos los meses, excluye cancelados) */
+  /* Pedidos por hora HOY (excluye cancelados, solo el día actual) */
   const hourlyData = useMemo(() => {
     if (!orders.length) return []
+    const today = new Date(); today.setHours(0, 0, 0, 0)
     const counts = Array.from({ length: 24 }, (_, h) => ({ hora: h, pedidos: 0 }))
     for (const o of orders) {
       if (!o.created_at) continue
       if (String(o.status || '').toLowerCase() === 'cancelled') continue
-      counts[new Date(o.created_at).getHours()].pedidos += 1
+      const d = new Date(o.created_at)
+      if (d < today) continue
+      counts[d.getHours()].pedidos += 1
     }
     return counts
       .filter((d) => d.pedidos > 0)
@@ -169,11 +173,11 @@ function KpiDetailDrawer({ open, onClose, dashboard, orders, dashLoading }) {
   const peakHour = dashboard?.peak_hour
 
   return (
-    <div className="fixed inset-0 z-50 flex">
-      <div className="flex-1 bg-black/50" onClick={onClose} />
+    <div className="fixed inset-0 z-50">
+      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
       <div
         className={cn(
-          'w-full max-w-md h-full flex flex-col shadow-2xl bg-[hsl(var(--card))] border-l border-[hsl(var(--border))] transition-transform duration-300 ease-out overflow-y-auto no-scrollbar',
+          'absolute inset-y-0 right-0 w-full max-w-md flex flex-col shadow-2xl bg-[hsl(var(--card))] border-l border-[hsl(var(--border))] transition-transform duration-300 ease-out overflow-y-auto no-scrollbar',
           visible ? 'translate-x-0' : 'translate-x-full',
         )}
       >
@@ -305,17 +309,24 @@ function LocalDashboard() {
   const location    = useLocation()
   const { locales } = useLocals()
 
+  const [localInfo, setLocalInfo] = useState(location.state?.local ?? null)
+
+  useEffect(() => {
+    if (!localId) return
+    getLocalById(localId)
+      .then((data) => { if (data?.id) setLocalInfo(data) })
+      .catch(() => {})
+  }, [localId])
+
   const localName = useMemo(() => {
-    const stateLocalName = location.state?.local?.name
-    if (stateLocalName && !/^[0-9a-f]{8}-/.test(stateLocalName)) return stateLocalName
+    if (localInfo?.name && !/^[0-9a-f]{8}-/.test(localInfo.name)) return localInfo.name
     const found = locales.find((l) => String(l.id) === String(localId))
-    return found?.name || `Local ${localId ?? ''}`
-  }, [location.state, localId, locales])
+    return found?.name ?? null
+  }, [localInfo, localId, locales])
 
   const localAddress = useMemo(() => {
-    const found = locales.find((l) => String(l.id) === String(localId))
-    return found?.address || location.state?.local?.address || null
-  }, [location.state, localId, locales])
+    return localInfo?.address || locales.find((l) => String(l.id) === String(localId))?.address || null
+  }, [localInfo, localId, locales])
 
   const [trendRange, setTrendRange]       = useState('7d')
   const [trendData, setTrendData]         = useState(null)
@@ -327,6 +338,7 @@ function LocalDashboard() {
   const [orders, setOrders]               = useState([])
   const [ordersLoading, setOrdersLoading] = useState(true)
   const [drawerOpen, setDrawerOpen]       = useState(false)
+  const [ordersRefreshTick, setOrdersRefreshTick] = useState(0)
 
   useEffect(() => {
     if (!localId) return
@@ -356,6 +368,23 @@ function LocalDashboard() {
 
     return () => { ignore = true }
   }, [localId])
+
+  useEffect(() => {
+    const interval = setInterval(() => setOrdersRefreshTick((t) => t + 1), 10 * 60 * 1000)
+    return () => clearInterval(interval)
+  }, [])
+
+  useEffect(() => {
+    if (!localId || ordersRefreshTick === 0) return
+    let ignore = false
+    setOrdersLoading(true)
+    getAuthContext()
+      .then(({ token }) => getOrdersByLocal(localId, token))
+      .then((ords) => { if (!ignore) setOrders(Array.isArray(ords) ? ords : []) })
+      .catch(() => {})
+      .finally(() => { if (!ignore) setOrdersLoading(false) })
+    return () => { ignore = true }
+  }, [localId, ordersRefreshTick])
 
   useEffect(() => {
     if (!localId) return
@@ -421,11 +450,13 @@ function LocalDashboard() {
 
       <header className="shrink-0 bg-[hsl(var(--card))] border-b border-[hsl(var(--border))] px-4 sm:px-6 py-3 flex items-center justify-between shadow-sm">
         <div>
-          <h1 className="text-base font-bold text-[hsl(var(--foreground))]">{localName}</h1>
+          <h1 className="text-base font-bold text-[hsl(var(--foreground))]">
+            {localName ?? <span className="inline-block h-4 w-32 rounded bg-[hsl(var(--muted))] animate-pulse" />}
+          </h1>
           {localAddress && (
             <p className="text-xs text-[hsl(var(--muted-foreground))] flex items-center gap-1 max-w-xs truncate">
               <MapPin size={11} className="shrink-0" />
-              <span className="truncate">{localAddress}</span>
+              <span className="truncate">{formatShortAddress(localAddress)}</span>
             </p>
           )}
         </div>

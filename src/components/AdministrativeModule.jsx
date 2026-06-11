@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
+import { formatShortAddress } from '../lib/formatAddress'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useSelectedLocal } from '../hooks/useSelectedLocal'
+import { getLocalById } from '../lib/inventoryApi'
 import { useAlerts } from '../hooks/useAlerts'
 import LoadingSpinner from './LoadingSpinner'
 import IncomeChart from './charts/IncomeChart'
@@ -18,7 +20,7 @@ import {
   postTransfer,
 } from '../lib/administrativeApi'
 import { apiRequest, getAuthContext } from '../lib/apiClient'
-import { markOrderPlaced } from '../lib/alertsApi'
+import { markOrderPlaced, resolveAlert } from '../lib/alertsApi'
 import { supabase } from '../lib/supabaseClient'
 import { enrichDashboardWithChartData, generateIncomeTrendFromOrders, generateExpenseBreakdownFromData } from '../utils/chartDataHelpers'
 import { Button } from '@/components/ui/button'
@@ -148,13 +150,19 @@ function Panel({ title, sub, accent, children }) {
   )
 }
 
-function RowCard({ title, sub, meta, pill }) {
+function RowCard({ title, sub, meta, pill, receiptUrl }) {
   return (
     <article className="flex items-start justify-between gap-3 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-3">
       <div className="flex-1 min-w-0">
         <strong className="block text-sm font-bold text-[hsl(var(--foreground))]">{title}</strong>
         {sub && <p className="mt-0.5 text-xs text-[hsl(var(--muted-foreground))]">{sub}</p>}
         {meta && <span className="mt-0.5 block text-xs text-[hsl(var(--muted-foreground))]">{meta}</span>}
+        {receiptUrl && (
+          <a href={receiptUrl} target="_blank" rel="noopener noreferrer"
+            className="mt-1.5 inline-flex items-center gap-1 text-xs text-[hsl(var(--primary))] underline underline-offset-2 hover:opacity-75">
+            Ver comprobante
+          </a>
+        )}
       </div>
       {pill && (
         <Badge variant="secondary" className="shrink-0 text-[10px]">{pill}</Badge>
@@ -436,7 +444,7 @@ function RendicionesContent({ rendiciones, expenses, transfers, loading, error }
   const transfersList = safeArray(transfers)
   const fallbackRows = [
     ...expensesList.map((item) => ({ id: item.id, movement_type: 'expense',  amount: toNumber(item.amount), status: item.status || 'pending', occurred_at: item.expense_date || item.created_at, description: item.description })),
-    ...transfersList.map((item) => ({ id: item.id, movement_type: 'transfer', amount: toNumber(item.amount), status: item.status || 'pending', occurred_at: item.created_at,                     description: item.receipt_url })),
+    ...transfersList.map((item) => ({ id: item.id, movement_type: 'transfer', amount: toNumber(item.amount), status: item.status || 'pending', occurred_at: item.created_at, description: item.description || 'Rendición al centro de control', receipt_url: item.receipt_url })),
   ]
   const rows = (movements.length > 0 ? movements : fallbackRows)
     .sort((a, b) => new Date(b.occurred_at || 0) - new Date(a.occurred_at || 0))
@@ -459,10 +467,10 @@ function RendicionesContent({ rendiciones, expenses, transfers, loading, error }
   return (
     <div className="space-y-5">
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <KpiCard label="Transferencias Completadas" value={formatMoney(rendiciones?.completed_transfers_total)} sub="Periodo consultado" />
-        <KpiCard label="Gastos Aprobados"           value={formatMoney(rendiciones?.approved_expenses_total)}  sub="Periodo consultado" accent="red" />
-        <KpiCard label="Flujo Neto"                 value={formatMoney(rendiciones?.net_flow)}                 sub="Transferencias - Gastos" accent="blue" />
-        <KpiCard label="Pendientes"                 value={formatMoney(toNumber(rendiciones?.pending_expenses_total) + toNumber(rendiciones?.pending_transfers_total))} sub="Montos pendientes" accent="warning" />
+        <KpiCard label="Total Rendido"         value={formatMoney(rendiciones?.completed_transfers_total)} sub="Transferido al centro de control" />
+        <KpiCard label="Ingresos Registrados"  value={formatMoney(rendiciones?.approved_expenses_total)}  sub="Período consultado" accent="blue" />
+        <KpiCard label="Consolidado Período"   value={formatMoney(rendiciones?.net_flow)}                 sub="Ingresos − rendiciones" accent="blue" />
+        <KpiCard label="Por Regularizar"       value={formatMoney(toNumber(rendiciones?.pending_expenses_total) + toNumber(rendiciones?.pending_transfers_total))} sub="Pendiente de confirmación" accent="warning" />
       </div>
       <Panel title="Distribución de Gastos" sub="Gastos del período por categoría" accent="red">
         <ExpenseBreakdown data={expenseBreakdown} />
@@ -476,9 +484,10 @@ function RendicionesContent({ rendiciones, expenses, transfers, loading, error }
               <RowCard
                 key={`${row.movement_type}-${row.id}`}
                 title={formatMoney(row.amount)}
-                sub={`${row.movement_type === 'transfer' ? 'Transferencia' : 'Gasto'} — ${formatDateTime(row.occurred_at)}`}
-                meta={row.description || 'Sin descripción'}
+                sub={`${row.movement_type === 'transfer' ? 'Rendición' : 'Movimiento'} — ${formatDateTime(row.occurred_at)}`}
+                meta={row.description || (row.movement_type === 'transfer' ? 'Rendición al centro de control' : 'Sin descripción')}
                 pill={row.status || 'sin estado'}
+                receiptUrl={row.receipt_url || null}
               />
             ))}
           </div>
@@ -591,39 +600,45 @@ const ALERT_TYPE_CONFIG = {
   },
 }
 
-function AlertCard({ alert }) {
+function AlertCard({ alert, isSelected, onToggleSelect }) {
   const cfg         = SEVERITY_CONFIG[alert.severity] || SEVERITY_CONFIG.medium
   const orderPlaced = alert.metadata?.order_placed === true
+  const isPending   = alert.status === 'pending'
   const date        = alert.created_at
     ? new Date(alert.created_at).toLocaleString('es-CL', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
     : ''
 
   return (
-    <article className={cn('rounded-xl p-4 shadow-sm', cfg.cls)}>
-      <div className="flex items-center gap-2 mb-1 flex-wrap">
-        <span className={cn('inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide', cfg.badge)}>
-          {cfg.label}
-        </span>
-        {orderPlaced && (
-          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide">
-            <ShoppingCart size={9} />
-            Se necesita Pedido
+    <article className={cn('rounded-xl p-4 shadow-sm flex items-start gap-3', cfg.cls)}>
+      {isPending && onToggleSelect && (
+        <input
+          type="checkbox"
+          checked={!!isSelected}
+          onChange={() => onToggleSelect(alert.id)}
+          className="mt-0.5 h-4 w-4 shrink-0 rounded accent-[hsl(var(--primary))]"
+        />
+      )}
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2 mb-1 flex-wrap">
+          <span className={cn('inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide', cfg.badge)}>
+            {cfg.label}
           </span>
-        )}
-        {alert.status === 'resolved' && !orderPlaced && (
-          <span className="inline-flex items-center rounded-full bg-green-100 text-green-700 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide">
-            Solucionada
-          </span>
-        )}
-        {alert.status === 'resolved' && orderPlaced && (
-          <span className="inline-flex items-center rounded-full bg-green-100 text-green-700 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide">
-            Solucionada vía pedido
-          </span>
-        )}
-        <span className="text-[10px] text-[hsl(var(--muted-foreground))]">{date}</span>
+          {orderPlaced && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide">
+              <ShoppingCart size={9} />
+              Se necesita Pedido
+            </span>
+          )}
+          {alert.status === 'resolved' && (
+            <span className="inline-flex items-center rounded-full bg-green-100 text-green-700 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide">
+              {orderPlaced ? 'Solucionada vía pedido' : 'Solucionada'}
+            </span>
+          )}
+          <span className="text-[10px] text-[hsl(var(--muted-foreground))]">{date}</span>
+        </div>
+        <h4 className="text-sm font-bold text-[hsl(var(--foreground))]">{alert.title}</h4>
+        <p className="mt-0.5 text-xs text-[hsl(var(--muted-foreground))]">{alert.message}</p>
       </div>
-      <h4 className="text-sm font-bold text-[hsl(var(--foreground))]">{alert.title}</h4>
-      <p className="mt-0.5 text-xs text-[hsl(var(--muted-foreground))]">{alert.message}</p>
     </article>
   )
 }
@@ -649,11 +664,12 @@ function dateDayLabel(isoString) {
 
 function AlertGroup({ type, typeAlerts, localId, onRefresh }) {
   const navigate = useNavigate()
-  const [open, setOpen]         = useState(true)
-  const [marking, setMarking]   = useState(false)
+  const [open, setOpen]           = useState(true)
+  const [marking, setMarking]     = useState(false)
+  const [resolving, setResolving] = useState(false)
+  const [selected, setSelected]   = useState(new Set())
   const typeCfg = ALERT_TYPE_CONFIG[type] || { label: type, chipCls: 'bg-slate-100 text-slate-600', route: null }
 
-  // Ordenar por severidad (crítica primero) y luego agrupar por día
   const byDay = useMemo(() => {
     const sorted = [...typeAlerts].sort(
       (a, b) => (SEVERITY_ORDER[a.severity] ?? 99) - (SEVERITY_ORDER[b.severity] ?? 99)
@@ -667,7 +683,17 @@ function AlertGroup({ type, typeAlerts, localId, onRefresh }) {
     return map
   }, [typeAlerts])
 
-  const pendingIds = typeAlerts.filter((a) => a.status === 'pending').map((a) => a.id)
+  const pendingAlerts = typeAlerts.filter((a) => a.status === 'pending')
+  const pendingIds    = pendingAlerts.map((a) => a.id)
+
+  const toggleSelect = (id) => setSelected((prev) => {
+    const next = new Set(prev)
+    next.has(id) ? next.delete(id) : next.add(id)
+    return next
+  })
+
+  const selectAll = () => setSelected(new Set(pendingIds))
+  const clearAll  = () => setSelected(new Set())
 
   const handlePedidos = async (e) => {
     e.stopPropagation()
@@ -677,18 +703,40 @@ function AlertGroup({ type, typeAlerts, localId, onRefresh }) {
         const { token } = await getAuthContext()
         await Promise.all(pendingIds.map((id) => markOrderPlaced(id, token)))
         onRefresh?.()
-      } catch {
-        // silencioso
-      } finally {
-        setMarking(false)
-      }
+      } catch { /* silencioso */ } finally { setMarking(false) }
     }
     if (typeCfg.route) navigate(typeCfg.route(localId))
   }
 
+  const handleResolveSelected = async (e) => {
+    e.stopPropagation()
+    const ids = [...selected].filter((id) => pendingIds.includes(id))
+    if (!ids.length) return
+    setResolving(true)
+    try {
+      const { token } = await getAuthContext()
+      await Promise.all(ids.map((id) => resolveAlert(id, token)))
+      setSelected(new Set())
+      onRefresh?.()
+    } catch { /* silencioso */ } finally { setResolving(false) }
+  }
+
+  const handleResolveAll = async (e) => {
+    e.stopPropagation()
+    if (!pendingIds.length) return
+    setResolving(true)
+    try {
+      const { token } = await getAuthContext()
+      await Promise.all(pendingIds.map((id) => resolveAlert(id, token)))
+      setSelected(new Set())
+      onRefresh?.()
+    } catch { /* silencioso */ } finally { setResolving(false) }
+  }
+
+  const busy = marking || resolving
+
   return (
     <div className="rounded-xl border border-[hsl(var(--border))] overflow-hidden">
-      {/* Encabezado del grupo — div en lugar de button para evitar botones anidados */}
       <div
         role="button"
         tabIndex={0}
@@ -704,37 +752,65 @@ function AlertGroup({ type, typeAlerts, localId, onRefresh }) {
         </span>
         <span className="text-xs text-[hsl(var(--muted-foreground))] flex-1">
           {typeAlerts.length} alerta{typeAlerts.length !== 1 ? 's' : ''}
+          {pendingIds.length > 0 && ` · ${pendingIds.length} pendiente${pendingIds.length !== 1 ? 's' : ''}`}
         </span>
         {typeCfg.route && (
-          <button
-            type="button"
-            onClick={handlePedidos}
-            disabled={marking}
-            className="flex items-center gap-1.5 text-[11px] font-semibold px-3 py-1.5 rounded-lg bg-violet-600 hover:bg-violet-700 disabled:opacity-60 text-white transition-colors shadow-sm"
-          >
+          <button type="button" onClick={handlePedidos} disabled={busy}
+            className="flex items-center gap-1.5 text-[11px] font-semibold px-3 py-1.5 rounded-lg bg-violet-600 hover:bg-violet-700 disabled:opacity-60 text-white transition-colors shadow-sm">
             <ShoppingCart size={12} />
             {marking ? 'Marcando…' : 'Pedidos'}
           </button>
         )}
       </div>
 
-      {/* Alertas colapsables — agrupadas por día */}
       {open && (
-        <div className="px-4 py-3 space-y-4">
+        <div className="px-4 py-3 space-y-3">
+          {/* Barra de acciones batch — solo si hay pendientes */}
+          {pendingIds.length > 0 && (
+            <div className="flex items-center gap-2 flex-wrap pb-1 border-b border-[hsl(var(--border)/0.5)]">
+              <button type="button" onClick={selectAll} disabled={busy}
+                className="text-[11px] font-semibold text-[hsl(var(--primary))] hover:underline disabled:opacity-50">
+                Seleccionar todas ({pendingIds.length})
+              </button>
+              {selected.size > 0 && (
+                <>
+                  <span className="text-[hsl(var(--border))]">·</span>
+                  <button type="button" onClick={clearAll} disabled={busy}
+                    className="text-[11px] text-[hsl(var(--muted-foreground))] hover:underline disabled:opacity-50">
+                    Limpiar
+                  </button>
+                  <button type="button" onClick={handleResolveSelected} disabled={busy}
+                    className="ml-auto flex items-center gap-1.5 text-[11px] font-semibold px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white transition-colors shadow-sm">
+                    {resolving ? 'Resolviendo…' : `Resolver seleccionadas (${selected.size})`}
+                  </button>
+                </>
+              )}
+              {selected.size === 0 && (
+                <button type="button" onClick={handleResolveAll} disabled={busy}
+                  className="ml-auto flex items-center gap-1.5 text-[11px] font-semibold px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white transition-colors shadow-sm">
+                  {resolving ? 'Resolviendo…' : `Resolver todas (${pendingIds.length})`}
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* Alertas agrupadas por día */}
           {[...byDay.entries()].map(([dayLabel, dayAlerts]) => (
-            <div key={dayLabel}>
-              {/* Separador de fecha */}
-              <div className="flex items-center gap-2 mb-2">
+            <div key={dayLabel} className="space-y-2">
+              <div className="flex items-center gap-2">
                 <span className="text-[10px] font-semibold text-[hsl(var(--muted-foreground))] uppercase tracking-wider">
                   {dayLabel}
                 </span>
                 <div className="flex-1 h-px bg-[hsl(var(--border))]" />
               </div>
-              <div className="space-y-2">
-                {dayAlerts.map((alert) => (
-                  <AlertCard key={alert.id} alert={alert} />
-                ))}
-              </div>
+              {dayAlerts.map((alert) => (
+                <AlertCard
+                  key={alert.id}
+                  alert={alert}
+                  isSelected={selected.has(alert.id)}
+                  onToggleSelect={alert.status === 'pending' ? toggleSelect : null}
+                />
+              ))}
             </div>
           ))}
         </div>
@@ -1052,9 +1128,9 @@ function NuevoGastoModal({ localId, onClose, onSaved }) {
   const labelCls = 'text-xs font-semibold text-[hsl(var(--muted-foreground))] uppercase tracking-wider'
 
   return (
-    <div className="fixed inset-0 z-50 flex">
-      <div className={cn('flex-1 bg-black/60 backdrop-blur-sm transition-opacity duration-300', visible ? 'opacity-100' : 'opacity-0')} onClick={handleClose} />
-      <div className={cn('w-full max-w-md h-full flex flex-col shadow-2xl overflow-y-auto no-scrollbar bg-[hsl(var(--card))] border-l border-[hsl(var(--border))] transition-transform duration-300 ease-out', visible ? 'translate-x-0' : 'translate-x-full')}>
+    <div className="fixed inset-0 z-50">
+      <div className={cn('absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity duration-300', visible ? 'opacity-100' : 'opacity-0')} onClick={handleClose} />
+      <div className={cn('absolute inset-y-0 right-0 w-full max-w-md flex flex-col shadow-2xl overflow-y-auto no-scrollbar bg-[hsl(var(--card))] border-l border-[hsl(var(--border))] transition-transform duration-300 ease-out', visible ? 'translate-x-0' : 'translate-x-full')}>
 
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-[hsl(var(--border))] shrink-0">
@@ -1183,9 +1259,9 @@ function ReportarTransferenciaModal({ localId, onClose, onSaved }) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex">
-      <div className={cn('flex-1 bg-black/60 backdrop-blur-sm transition-opacity duration-300', visible ? 'opacity-100' : 'opacity-0')} onClick={handleClose} />
-      <div className={cn('w-full max-w-md h-full flex flex-col shadow-2xl overflow-y-auto no-scrollbar bg-[hsl(var(--card))] border-l border-[hsl(var(--border))] transition-transform duration-300 ease-out', visible ? 'translate-x-0' : 'translate-x-full')}>
+    <div className="fixed inset-0 z-50">
+      <div className={cn('absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity duration-300', visible ? 'opacity-100' : 'opacity-0')} onClick={handleClose} />
+      <div className={cn('absolute inset-y-0 right-0 w-full max-w-md flex flex-col shadow-2xl overflow-y-auto no-scrollbar bg-[hsl(var(--card))] border-l border-[hsl(var(--border))] transition-transform duration-300 ease-out', visible ? 'translate-x-0' : 'translate-x-full')}>
 
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-[hsl(var(--border))] shrink-0">
@@ -1327,7 +1403,17 @@ function AdministrativeModule() {
   const [showNuevaTransferencia, setShowNuevaTransferencia] = useState(false)
   const [refreshKey, setRefreshKey] = useState(0)
 
-  const selectedLocal = useSelectedLocal(localId, 'state-then-locales')
+  const selectedLocalFromHook = useSelectedLocal(localId, 'state-then-locales')
+  const [fetchedLocal, setFetchedLocal] = useState(null)
+
+  useEffect(() => {
+    if (!localId) return
+    getLocalById(localId)
+      .then((data) => { if (data?.id) setFetchedLocal(data) })
+      .catch(() => {})
+  }, [localId])
+
+  const selectedLocal = selectedLocalFromHook ?? fetchedLocal
 
   const activeSection = sections.some((s) => s.id === sectionId) ? sectionId : 'dashboard'
   const activeSectionMeta = sections.find((s) => s.id === activeSection) || sections[0]
@@ -1401,15 +1487,21 @@ function AdministrativeModule() {
       <main className="flex-1 overflow-y-auto no-scrollbar px-5 py-6">
         <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <h2 className="text-xl font-extrabold text-[hsl(var(--primary))] tracking-tight">
+            {selectedLocal?.name && (
+              <div className="mb-2">
+                <h1 className="text-lg font-extrabold text-[hsl(var(--foreground))] tracking-tight leading-tight">{selectedLocal.name}</h1>
+                {selectedLocal?.address && (
+                  <p className="text-xs text-[hsl(var(--muted-foreground))] flex items-center gap-1 mt-0.5">
+                    <MapPin size={11} className="shrink-0" />
+                    <span>{formatShortAddress(selectedLocal.address)}</span>
+                  </p>
+                )}
+              </div>
+            )}
+            <h2 className="text-base font-bold text-[hsl(var(--primary))] tracking-tight">
               {activeSectionMeta.label}
             </h2>
             <p className="mt-0.5 text-sm text-[hsl(var(--muted-foreground))]">{activeSectionMeta.subtitle}</p>
-            {selectedLocal?.name && (
-              <Badge variant="ghost" className="mt-2 text-xs">
-                Local: {selectedLocal.name}
-              </Badge>
-            )}
           </div>
           <SectionActions
             activeSection={activeSection}

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useMemo, useCallback, memo } from 'react'
+import { useEffect, useState, useMemo, useCallback, memo } from 'react'
 import { useMesaDetail } from '../../hooks/useMesaDetail'
 import { useOrderManagement } from '../../hooks/useOrderManagement'
 import { apiRequest, getSplitPaymentSummary } from '../../lib/apiClient'
@@ -126,7 +126,6 @@ function openPrintWindow({ mesa, firstOrder, allItems, subtotal, iva, total }) {
 function OrdenView({ mesa, localId, onBack, onTableUpdated }) {
   const { detail, loading, error: mesaError, refresh } = useMesaDetail(mesa.id)
   const { updateOrderStatus } = useOrderManagement()
-  const hasTransitioned = useRef(false)
   const [cancelLoading, setCancelLoading]       = useState(false)
   const [cobrarLoading, setCobrarLoading]       = useState(false)
   const [errorMsg, setErrorMsg]                 = useState('')
@@ -134,21 +133,6 @@ function OrdenView({ mesa, localId, onBack, onTableUpdated }) {
   const [showSplitModal, setShowSplitModal]     = useState(false)
   const [splitFullyPaid, setSplitFullyPaid]     = useState(false)
   const [hasSplits, setHasSplits]               = useState(false)
-
-  // When the view opens, transition PENDING/PREPARING orders → READY (triggers en_cobro)
-  useEffect(() => {
-    if (!detail || hasTransitioned.current) return
-    hasTransitioned.current = true
-
-    const toTransition = (detail.active_orders || []).filter(
-      o => o.status === 'pending' || o.status === 'preparing'
-    )
-    if (!toTransition.length) return
-
-    Promise.all(toTransition.map(o => updateOrderStatus(o.id, 'READY')))
-      .then(() => { refresh(); onTableUpdated?.() })
-      .catch(err => setErrorMsg(err.message || 'Error actualizando estado'))
-  }, [detail, onTableUpdated, refresh, updateOrderStatus])
 
   // Totales derivados memoizados: se recalculan solo cuando cambia `detail`,
   // no en cada render (AC4 — carrito de alta frecuencia).

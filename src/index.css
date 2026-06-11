@@ -271,6 +271,31 @@ input[type='number'] {
 .dark .border-gray-300   { border-color: hsl(var(--border)) !important; }
 .dark .border-emerald-200 { border-color: rgb(6 78 59 / 0.4) !important; }
 
+/* ── Touch optimization (AC1) ───────────────────────────────── */
+/* Eliminates 300ms tap delay and prevents accidental double-tap zoom */
+button, [role="button"], a, input, select, textarea, label {
+  touch-action: manipulation;
+}
+
+/* WCAG 2.5.5: 44×44px minimum touch target on coarse pointer (touch) devices.
+   Uses ::after overlay so visual layout is unchanged. */
+@media (pointer: coarse) {
+  button, [role="button"] {
+    position: relative;
+  }
+  button::after, [role="button"]::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    min-width: 44px;
+    min-height: 44px;
+    width: 100%;
+    height: 100%;
+  }
+}
+
 /* ── Sidebar nav items hover ────────────────────────────────── */
 nav button {
   transition: background-color 0.15s ease, color 0.15s ease, transform 0.1s ease;

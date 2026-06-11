@@ -98,11 +98,6 @@ export default function MesasKPICards({ localId, onRefreshReady }) {
         ))}
       </div>
 
-      {kpis?.generated_at && (
-        <p className="text-[10px] text-[hsl(var(--muted-foreground))]">
-          Actualizado: {new Date(kpis.generated_at).toLocaleTimeString('es-AR')}
-        </p>
-      )}
     </section>
   )
 }

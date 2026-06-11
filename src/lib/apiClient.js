@@ -169,7 +169,20 @@ export async function apiRequest(path, options = {}) {
     body: body ? JSON.stringify(body) : undefined,
   })
 
-  let response = await makeRequest(token)
+  let response
+
+  try {
+    response = await makeRequest(token)
+  } catch (networkErr) {
+    // True network failure (offline, DNS, CORS, timeout) — no HTTP status
+    const err = new Error('Sin conexión. Verificá tu red e intentá de nuevo.')
+    err.isNetworkError = true
+    err.originalError = networkErr
+    window.dispatchEvent(new CustomEvent('api:network-error', {
+      detail: { message: err.message, path, method },
+    }))
+    throw err
+  }
 
   if (response.status === 401 && retryOnUnauthorized && supabase) {
     const refreshedSession = await getSession(true)

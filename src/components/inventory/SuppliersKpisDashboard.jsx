@@ -11,6 +11,7 @@ import {
   patchSupplier,
 } from '../../lib/providersApi'
 import { useAuth } from '../../context/AuthContext'
+import { isSuperAdminRole } from '../../auth/roleLabel'
 import { formatCLPDisplay as formatMoneyClp } from '../../lib/formatCLP'
 import InventoryShell from './InventoryShell'
 import LoadingSpinner from '../LoadingSpinner'
@@ -50,7 +51,8 @@ function supplierAvatar(name, index) {
 }
 
 function SuppliersKpisDashboard() {
-  const { isInventoryAdmin: canAccess } = useAuth()
+  const { isInventoryAdmin: canAccess, userRole } = useAuth()
+  const canEdit = isSuperAdminRole(userRole)
   const { localId } = useParams()
   const selectedLocal = useSelectedLocal(localId)
 
@@ -97,7 +99,7 @@ function SuppliersKpisDashboard() {
     try {
       const [{ businessId: bidFromToken }, loc] = await Promise.all([
         getAuthContext(),
-        getLocalById(localId),
+        getLocalById(localId).catch(() => null),
       ])
       const businessId =
         loc?.business_id != null ? String(loc.business_id) :
@@ -190,7 +192,7 @@ function SuppliersKpisDashboard() {
             </div>
           </header>
 
-          {canAccess && (
+          {canEdit && (
             <div className="flex items-center gap-3 flex-wrap">
               {resolvedBusinessId && (
                 <Button
@@ -290,7 +292,7 @@ function SuppliersKpisDashboard() {
                       <TableHead className="py-3 text-sm font-semibold">Estado</TableHead>
                       <TableHead className="text-right py-3 text-sm font-semibold">Uds. en inventario</TableHead>
                       <TableHead className="text-right py-3 text-sm font-semibold">Valor inventario</TableHead>
-                      <TableHead className="pr-6 py-3 text-right text-sm font-semibold">Acciones</TableHead>
+                      {canEdit && <TableHead className="pr-6 py-3 text-right text-sm font-semibold">Acciones</TableHead>}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -331,17 +333,19 @@ function SuppliersKpisDashboard() {
                           <TableCell className={`text-right tabular-nums text-base font-semibold py-4 ${inactive ? 'text-gray-400' : 'text-[hsl(var(--primary))]'}`}>
                             {formatMoneyClp(row.supplier_purchases_total_clp)}
                           </TableCell>
-                          <TableCell className="pr-6 py-3 text-right">
-                            <button
-                              type="button"
-                              title="Gestionar proveedor"
-                              disabled={isBusy}
-                              onClick={() => setActionRow(row)}
-                              className="w-8 h-8 inline-flex items-center justify-center rounded-lg hover:bg-[hsl(var(--muted))] disabled:opacity-40 transition-colors"
-                            >
-                              <Settings2 size={16} />
-                            </button>
-                          </TableCell>
+                          {canEdit && (
+                            <TableCell className="pr-6 py-3 text-right">
+                              <button
+                                type="button"
+                                title="Gestionar proveedor"
+                                disabled={isBusy}
+                                onClick={() => setActionRow(row)}
+                                className="w-8 h-8 inline-flex items-center justify-center rounded-lg hover:bg-[hsl(var(--muted))] disabled:opacity-40 transition-colors"
+                              >
+                                <Settings2 size={16} />
+                              </button>
+                            </TableCell>
+                          )}
                         </TableRow>
                       )
                     })}
@@ -352,24 +356,28 @@ function SuppliersKpisDashboard() {
           </Card>
         )}
 
-        <RegisterSupplierModal
-          open={registerOpen}
-          onClose={() => setRegisterOpen(false)}
-          businessId={resolvedBusinessId}
-          localId={localId}
-          onSuccess={() => { load(); loadSuppliersList() }}
-        />
+        {canEdit && (
+          <>
+            <RegisterSupplierModal
+              open={registerOpen}
+              onClose={() => setRegisterOpen(false)}
+              businessId={resolvedBusinessId}
+              localId={localId}
+              onSuccess={() => { load(); loadSuppliersList() }}
+            />
 
-        <SupplierDetailModal
-          open={actionRow != null}
-          supplierId={actionRow ? String(actionRow.id) : null}
-          businessId={resolvedBusinessId}
-          row={actionRow}
-          onClose={() => setActionRow(null)}
-          onToggleActive={handleToggleActive}
-          onDelete={handleDelete}
-          rowActionId={rowActionId}
-        />
+            <SupplierDetailModal
+              open={actionRow != null}
+              supplierId={actionRow ? String(actionRow.id) : null}
+              businessId={resolvedBusinessId}
+              row={actionRow}
+              onClose={() => setActionRow(null)}
+              onToggleActive={handleToggleActive}
+              onDelete={handleDelete}
+              rowActionId={rowActionId}
+            />
+          </>
+        )}
       </div>
     </InventoryShell>
   )

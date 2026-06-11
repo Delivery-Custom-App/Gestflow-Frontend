@@ -13,10 +13,10 @@ import OrdenView from './OrdenView'
 import PrinterConfigModal from './PrinterConfigModal'
 import { useAuth } from '../../context/AuthContext'
 import { Button } from '@/components/ui/button'
-import { LogOut, Printer } from 'lucide-react'
+import { Printer } from 'lucide-react'
 
 export default function POSModule() {
-  const { isWorker, logout } = useAuth()
+  const { isWorker } = useAuth()
   const { pathname } = useLocation()
   const { localId } = useParams()
   const { mesas, loading: mesasLoading, createMesa, updateMesa, deleteMesa, refresh: refreshMesas } = useMesasConEstado(localId)
@@ -128,29 +128,18 @@ export default function POSModule() {
       {/* Main */}
       <main className="flex-1 overflow-y-auto no-scrollbar p-4 lg:p-6 flex flex-col min-h-0">
         {/* Fila de acciones — solo visible en vista mesas */}
-        {activeView === 'mesas' && !selectedOrdenMesa && (
+        {activeView === 'mesas' && !selectedOrdenMesa && !isWorker && (
           <div className="flex items-center justify-end mb-4 pr-20">
-            {isWorker && (
+            <div className="flex items-center gap-2">
               <button
-                onClick={logout}
-                title="Cerrar sesión"
-                className="flex items-center justify-center w-8 h-8 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--card))] text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors"
+                onClick={() => setShowPrinterConfig(true)}
+                title="Configurar ticketera"
+                className="flex items-center justify-center w-8 h-8 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--card))] text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-950/30 transition-colors"
               >
-                <LogOut size={15} />
+                <Printer size={15} />
               </button>
-            )}
-            {!isWorker && (
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setShowPrinterConfig(true)}
-                  title="Configurar ticketera"
-                  className="flex items-center justify-center w-8 h-8 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--card))] text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-950/30 transition-colors"
-                >
-                  <Printer size={15} />
-                </button>
-                <Button size="sm" onClick={() => setShowModal(true)}>Crear Mesa</Button>
-              </div>
-            )}
+              <Button size="sm" onClick={() => setShowModal(true)}>Crear Mesa</Button>
+            </div>
           </div>
         )}
         {selectedOrdenMesa ? (

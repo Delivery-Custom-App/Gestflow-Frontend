@@ -62,12 +62,12 @@ export default function CreateMesaModal({ mesas, onClose, onSubmit }) {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex">
+    <div className="fixed inset-0 z-50">
       <div
-        className={cn('flex-1 bg-black/60 backdrop-blur-sm transition-opacity duration-300', visible ? 'opacity-100' : 'opacity-0')}
+        className={cn('absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity duration-300', visible ? 'opacity-100' : 'opacity-0')}
         onClick={handleClose}
       />
-      <div className={cn('w-full max-w-md h-full flex flex-col shadow-2xl bg-[hsl(var(--card))] border-l border-[hsl(var(--border))] overflow-hidden transition-transform duration-300 ease-out', visible ? 'translate-x-0' : 'translate-x-full')}>
+      <div className={cn('absolute inset-y-0 right-0 w-full max-w-md flex flex-col shadow-2xl bg-[hsl(var(--card))] border-l border-[hsl(var(--border))] overflow-hidden transition-transform duration-300 ease-out', visible ? 'translate-x-0' : 'translate-x-full')}>
 
         {/* Header */}
         <div className="px-5 pt-5 pb-4 border-b border-[hsl(var(--border))] shrink-0">
