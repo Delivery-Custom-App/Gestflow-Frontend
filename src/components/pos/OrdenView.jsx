@@ -111,7 +111,7 @@ function openPrintWindow({ mesa, firstOrder, allItems, subtotal, iva, total }) {
   <div class="row"><span>IVA 19%:</span><span>$ ${iva.toLocaleString('es-CL')}</span></div>
   <div class="row total"><span>TOTAL:</span><span>$ ${total.toLocaleString('es-CL')}</span></div>
   <p class="small">Fecha: ${dateStr} ${timeStr}</p>
-  <script>window.onload = function(){ window.print(); }<\/script>
+  <script>window.onload = function(){ window.print(); }</script>
 </body>
 </html>`
 
@@ -214,7 +214,7 @@ function OrdenView({ mesa, localId, onBack, onTableUpdated }) {
       setErrorMsg(err.message || 'Error al cobrar la orden')
       setCobrarLoading(false)
     }
-  }, [detail, updateOrderStatus, mesa, firstOrder, allItems, subtotal, iva, total, onTableUpdated, onBack])
+  }, [detail, hasSplits, splitFullyPaid, updateOrderStatus, mesa, firstOrder, allItems, subtotal, iva, total, onTableUpdated, onBack])
 
   const formatItemName = (item) => item.item_name || item.product_name || '—'
 
