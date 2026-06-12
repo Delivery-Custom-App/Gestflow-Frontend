@@ -1,13 +1,10 @@
 import { PieChart, Pie, Cell, Legend, Tooltip, ResponsiveContainer } from 'recharts'
+import ChartSkeleton from '../ui/ChartSkeleton'
 
 const COLORS = ['#e74c3c', '#e67e22', '#f39c12', '#f1c40f', '#3498db', '#9b59b6', '#1abc9c']
 
-/**
- * ExpenseBreakdown - Gráfico de desglose de gastos
- * Muestra distribución de gastos por categoría
- */
-function ExpenseBreakdown({ data = [] }) {
-  // Si no hay datos, mostrar placeholder
+function ExpenseBreakdown({ data = [], loading = false }) {
+  if (loading) return <ChartSkeleton className="h-[300px]" />
   if (!data || data.length === 0) {
     return (
       <div className="chart-empty">

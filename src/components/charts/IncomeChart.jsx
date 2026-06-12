@@ -8,11 +8,13 @@ import {
   ResponsiveContainer,
   Legend,
 } from 'recharts'
+import ChartSkeleton from '../ui/ChartSkeleton'
 
 const CLP = (v) =>
   new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(v)
 
-function IncomeChart({ data = [], showCashFlow = false }) {
+function IncomeChart({ data = [], loading = false, showCashFlow = false }) {
+  if (loading) return <ChartSkeleton className="h-[220px]" />
   if (!data || data.length === 0) {
     return (
       <div className="flex items-center justify-center h-48 text-sm text-[hsl(var(--muted-foreground))]">

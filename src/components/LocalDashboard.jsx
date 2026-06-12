@@ -9,6 +9,7 @@ import { generateIncomeTrendFromOrders } from '../utils/chartDataHelpers'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import PageTransition from './PageTransition'
 import LoadingSpinner from './LoadingSpinner'
+import ChartSkeleton from './ui/ChartSkeleton'
 import IncomeChart from './charts/IncomeChart'
 import {
   BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Tooltip,
@@ -592,7 +593,7 @@ function LocalDashboard() {
               </CardHeader>
               <CardContent>
                 {(trendRange === '7d' ? trendLoading : ordersLoading) ? (
-                  <div className="h-48 flex items-center justify-center"><LoadingSpinner /></div>
+                  <ChartSkeleton className="h-[220px]" />
                 ) : incomeTrend.length === 0 ? (
                   <p className="text-sm text-[hsl(var(--muted-foreground))] py-8 text-center">Sin pedidos registrados en el período.</p>
                 ) : (
@@ -607,7 +608,7 @@ function LocalDashboard() {
               </CardHeader>
               <CardContent>
                 {invLoading ? (
-                  <div className="h-48 flex items-center justify-center"><LoadingSpinner /></div>
+                  <ChartSkeleton className="h-[180px]" />
                 ) : pieData.length === 0 ? (
                   <p className="text-sm text-[hsl(var(--muted-foreground))] py-8 text-center">Sin datos de inventario.</p>
                 ) : (
@@ -685,7 +686,24 @@ function LocalDashboard() {
           </section>
 
           {/* Comparativo semanal + distribución por pago */}
-          {!dashLoading && dashboard && (
+          {dashLoading ? (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm">Comparativo Semanal</CardTitle>
+                  <p className="text-xs text-[hsl(var(--muted-foreground))]">Esta semana vs semana anterior</p>
+                </CardHeader>
+                <CardContent><ChartSkeleton className="h-[140px]" /></CardContent>
+              </Card>
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm flex items-center gap-2"><CreditCard size={15} /> Distribución por Pago</CardTitle>
+                  <p className="text-xs text-[hsl(var(--muted-foreground))]">Métodos de pago este mes</p>
+                </CardHeader>
+                <CardContent><ChartSkeleton className="h-[170px]" /></CardContent>
+              </Card>
+            </div>
+          ) : dashboard && (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               <Card>
                 <CardHeader className="pb-2">

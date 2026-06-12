@@ -138,6 +138,8 @@ export function AppAuthProvider({ children }) {
       setUserRole(null)
       setEmail('')
       setPassword('')
+      setErrorMessage('')
+      setSuccessMessage('')
       // Limpia la URL para que el próximo login arranque desde /
       window.history.replaceState({}, document.title, '/')
     }

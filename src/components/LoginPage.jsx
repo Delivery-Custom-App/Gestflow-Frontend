@@ -93,11 +93,6 @@ export default function LoginPage() {
               {errorMessage}
             </p>
           )}
-          {successMessage && (
-            <p className="rounded-lg border border-emerald-400/30 bg-emerald-500/20 px-3 py-2 text-sm text-emerald-300">
-              {successMessage}
-            </p>
-          )}
         </form>
       </section>
     </motion.main>

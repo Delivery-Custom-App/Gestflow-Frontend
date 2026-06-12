@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useAuth } from '../context/AuthContext'
+import { WORKER_ROLES } from '../constants/roles'
 import { formatShortAddress } from '../lib/formatAddress'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 import { useNavigate, useParams } from 'react-router-dom'
@@ -600,7 +602,7 @@ const ALERT_TYPE_CONFIG = {
   },
 }
 
-function AlertCard({ alert, isSelected, onToggleSelect }) {
+function AlertCard({ alert, isSelected, onToggleSelect, isWorker }) {
   const cfg         = SEVERITY_CONFIG[alert.severity] || SEVERITY_CONFIG.medium
   const orderPlaced = alert.metadata?.order_placed === true
   const isPending   = alert.status === 'pending'
@@ -610,7 +612,7 @@ function AlertCard({ alert, isSelected, onToggleSelect }) {
 
   return (
     <article className={cn('rounded-xl p-4 shadow-sm flex items-start gap-3', cfg.cls)}>
-      {isPending && onToggleSelect && (
+      {isPending && onToggleSelect && !isWorker && (
         <input
           type="checkbox"
           checked={!!isSelected}
@@ -662,7 +664,7 @@ function dateDayLabel(isoString) {
   return d.toLocaleDateString('es-CL', { day: '2-digit', month: 'short' })
 }
 
-function AlertGroup({ type, typeAlerts, localId, onRefresh }) {
+function AlertGroup({ type, typeAlerts, localId, onRefresh, isWorker }) {
   const showResolve = type !== 'inventory'
   const navigate = useNavigate()
   const [open, setOpen]           = useState(true)
@@ -753,9 +755,9 @@ function AlertGroup({ type, typeAlerts, localId, onRefresh }) {
         </span>
         <span className="text-xs text-[hsl(var(--muted-foreground))] flex-1">
           {typeAlerts.length} alerta{typeAlerts.length !== 1 ? 's' : ''}
-          {pendingIds.length > 0 && ` · ${pendingIds.length} pendiente${pendingIds.length !== 1 ? 's' : ''}`}
+          {!isWorker && pendingIds.length > 0 && ` · ${pendingIds.length} pendiente${pendingIds.length !== 1 ? 's' : ''}`}
         </span>
-        {typeCfg.route && (
+        {!isWorker && typeCfg.route && (
           <button type="button" onClick={handlePedidos} disabled={busy}
             className="flex items-center gap-1.5 text-[11px] font-semibold px-3 py-1.5 rounded-lg bg-violet-600 hover:bg-violet-700 disabled:opacity-60 text-white transition-colors shadow-sm">
             <ShoppingCart size={12} />
@@ -766,8 +768,8 @@ function AlertGroup({ type, typeAlerts, localId, onRefresh }) {
 
       {open && (
         <div className="px-4 py-3 space-y-3">
-          {/* Barra de acciones batch — solo si hay pendientes */}
-          {showResolve && pendingIds.length > 0 && (
+          {/* Barra de acciones batch — solo si hay pendientes y no es trabajador */}
+          {showResolve && pendingIds.length > 0 && !isWorker && (
             <div className="flex items-center gap-2 flex-wrap pb-1 border-b border-[hsl(var(--border)/0.5)]">
               <button type="button" onClick={selectAll} disabled={busy}
                 className="text-[11px] font-semibold text-[hsl(var(--primary))] hover:underline disabled:opacity-50">
@@ -807,6 +809,7 @@ function AlertGroup({ type, typeAlerts, localId, onRefresh }) {
               {dayAlerts.map((alert) => (
                 <AlertCard
                   key={alert.id}
+                  isWorker={isWorker}
                   alert={alert}
                   isSelected={selected.has(alert.id)}
                   onToggleSelect={showResolve && alert.status === 'pending' ? toggleSelect : null}
@@ -913,6 +916,8 @@ function AlertTrendChart({ alerts }) {
 
 function AlertasContent({ localId }) {
   const { alerts, loading, error, pendingCount, refresh } = useAlerts(localId)
+  const { userRole } = useAuth()
+  const isWorker = WORKER_ROLES.includes(userRole)
   const [filter, setFilter] = useState('pending')
 
   const filtered = filter === 'all' ? alerts : alerts.filter((a) => a.status === filter)
@@ -979,7 +984,7 @@ function AlertasContent({ localId }) {
               return minSev(aArr) - minSev(bArr)
             })
             .map(([type, typeAlerts]) => (
-              <AlertGroup key={type} type={type} typeAlerts={typeAlerts} localId={localId} onRefresh={refresh} />
+              <AlertGroup key={type} type={type} typeAlerts={typeAlerts} localId={localId} onRefresh={refresh} isWorker={isWorker} />
             ))}
         </div>
       )}

@@ -9,6 +9,7 @@ import { getInventoryKpisByLocal, getInventoryStockList } from '../../lib/invent
 import { useAlerts } from '../../hooks/useAlerts'
 import InventoryShell from './InventoryShell'
 import LoadingSpinner from '../LoadingSpinner'
+import ChartSkeleton from '../ui/ChartSkeleton'
 import { getStockAlertLevel } from './stockAlertUtils'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -265,7 +266,7 @@ function InventoryHub() {
                 </CardHeader>
                 <CardContent>
                   {kpisLoading ? (
-                    <div className="h-48 flex items-center justify-center"><LoadingSpinner /></div>
+                    <ChartSkeleton className="h-[220px]" />
                   ) : stockDistData.length === 0 ? (
                     <p className="text-sm text-[hsl(var(--muted-foreground))] py-8 text-center">Sin datos</p>
                   ) : (
@@ -296,7 +297,7 @@ function InventoryHub() {
                 </CardHeader>
                 <CardContent>
                   {itemsLoading ? (
-                    <div className="h-48 flex items-center justify-center"><LoadingSpinner /></div>
+                    <ChartSkeleton className="h-[280px]" />
                   ) : top5Critical.length === 0 ? (
                     <p className="text-sm text-[hsl(var(--muted-foreground))] py-8 text-center">
                       No hay productos críticos. Todo en orden.
