@@ -25,7 +25,8 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 import { formatCLPCurrency as formatMoney } from '../lib/formatCLP'
-import { MapPin, TrendingDown, Send, X, Upload, ImageIcon, ChevronDown, ChevronRight, ShoppingCart } from 'lucide-react'
+import { motion, AnimatePresence } from 'framer-motion'
+import { MapPin, TrendingDown, Send, X, Upload, ImageIcon, ChevronDown, ChevronRight, ShoppingCart, HelpCircle, BarChart2, CreditCard, ArrowLeftRight, Bell, Award, LayoutDashboard } from 'lucide-react'
 
 const sections = [
   { id: 'dashboard',   label: 'Dashboard',      subtitle: 'Resumen general del sistema' },
@@ -662,6 +663,7 @@ function dateDayLabel(isoString) {
 }
 
 function AlertGroup({ type, typeAlerts, localId, onRefresh }) {
+  const showResolve = type !== 'inventory'
   const navigate = useNavigate()
   const [open, setOpen]           = useState(true)
   const [marking, setMarking]     = useState(false)
@@ -765,7 +767,7 @@ function AlertGroup({ type, typeAlerts, localId, onRefresh }) {
       {open && (
         <div className="px-4 py-3 space-y-3">
           {/* Barra de acciones batch — solo si hay pendientes */}
-          {pendingIds.length > 0 && (
+          {showResolve && pendingIds.length > 0 && (
             <div className="flex items-center gap-2 flex-wrap pb-1 border-b border-[hsl(var(--border)/0.5)]">
               <button type="button" onClick={selectAll} disabled={busy}
                 className="text-[11px] font-semibold text-[hsl(var(--primary))] hover:underline disabled:opacity-50">
@@ -807,7 +809,7 @@ function AlertGroup({ type, typeAlerts, localId, onRefresh }) {
                   key={alert.id}
                   alert={alert}
                   isSelected={selected.has(alert.id)}
-                  onToggleSelect={alert.status === 'pending' ? toggleSelect : null}
+                  onToggleSelect={showResolve && alert.status === 'pending' ? toggleSelect : null}
                 />
               ))}
             </div>
@@ -1528,6 +1530,7 @@ function AdministrativeModule() {
   const [showNuevoGasto, setShowNuevoGasto]             = useState(false)
   const [showNuevaTransferencia, setShowNuevaTransferencia] = useState(false)
   const [refreshKey, setRefreshKey] = useState(0)
+  const [guideOpen,  setGuideOpen]  = useState(false)
 
   const selectedLocalFromHook = useSelectedLocal(localId, 'state-then-locales')
   const [fetchedLocal, setFetchedLocal] = useState(null)
@@ -1610,30 +1613,70 @@ function AdministrativeModule() {
           onSaved={() => setRefreshKey(k => k + 1)}
         />
       )}
+      <AnimatePresence>
+        {guideOpen && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4"
+            onClick={() => setGuideOpen(false)}>
+            <motion.div initial={{ opacity: 0, scale: 0.95, y: 12 }} animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.96, y: 8 }} transition={{ duration: 0.2 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-[hsl(var(--card))] border border-[hsl(var(--border))] rounded-2xl shadow-2xl w-full max-w-lg max-h-[88vh] overflow-y-auto no-scrollbar">
+              <div className="flex items-center justify-between px-5 py-4 border-b border-[hsl(var(--border))]">
+                <div className="flex items-center gap-2">
+                  <HelpCircle size={16} className="text-[hsl(var(--primary))]" />
+                  <h3 className="text-sm font-bold text-[hsl(var(--foreground))]">Guía — Módulo Administrativo</h3>
+                </div>
+                <button onClick={() => setGuideOpen(false)}
+                  className="flex items-center justify-center w-7 h-7 rounded-lg text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))] transition-colors">
+                  <X size={14} />
+                </button>
+              </div>
+              <div className="px-5 py-4 space-y-3">
+                {[
+                  { icon: LayoutDashboard, color: 'text-[hsl(var(--primary))]', title: 'Dashboard', desc: 'Resumen general del local: ventas totales, gastos, pedidos y estado financiero del día.' },
+                  { icon: ShoppingCart, color: 'text-emerald-600', title: 'Ventas', desc: 'Detalle de todos los pedidos del día con desglose por método de pago, productos y montos.' },
+                  { icon: ArrowLeftRight, color: 'text-blue-600', title: 'Rendiciones', desc: 'Registro de transferencias del dueño al local y de gastos operativos. Permite reportar nuevas transferencias y gastos.' },
+                  { icon: BarChart2, color: 'text-violet-600', title: 'Reportes', desc: 'Comparativas de ventas, flujo de caja y análisis por período. Útil para tomar decisiones basadas en datos históricos.' },
+                  { icon: CreditCard, color: 'text-amber-600', title: 'Caja Virtual', desc: 'Resumen monetario del período: ingresos, egresos y saldo disponible por caja registradora.' },
+                  { icon: Bell, color: 'text-red-600', title: 'Alertas', desc: 'Notificaciones del sistema sobre situaciones que requieren atención: stock bajo, pedidos pendientes, etc.' },
+                  { icon: Award, color: 'text-[hsl(var(--primary))]', title: 'Bonos', highlight: true, desc: 'Registro de bonos por metas cumplidas. Muestra el estado de cada objetivo y los bonos asignados al equipo.' },
+                ].map(({ icon: Icon, color, title, desc, highlight }) => (
+                  <div key={title} className={`flex gap-3 rounded-xl p-3 ${highlight ? 'bg-[hsl(var(--primary)/0.08)] border border-[hsl(var(--primary)/0.2)]' : 'bg-[hsl(var(--muted)/0.4)]'}`}>
+                    <div className={`mt-0.5 shrink-0 ${color}`}><Icon size={15} /></div>
+                    <div>
+                      <p className="text-xs font-semibold text-[hsl(var(--foreground))] mb-0.5">{title}</p>
+                      <p className="text-xs text-[hsl(var(--muted-foreground))] leading-relaxed">{desc}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
       <main className="flex-1 overflow-y-auto no-scrollbar px-5 py-6">
         <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            {selectedLocal?.name && (
-              <div className="mb-2">
-                <h1 className="text-lg font-extrabold text-[hsl(var(--foreground))] tracking-tight leading-tight">{selectedLocal.name}</h1>
-                {selectedLocal?.address && (
-                  <p className="text-xs text-[hsl(var(--muted-foreground))] flex items-center gap-1 mt-0.5">
-                    <MapPin size={11} className="shrink-0" />
-                    <span>{formatShortAddress(selectedLocal.address)}</span>
-                  </p>
-                )}
-              </div>
-            )}
             <h2 className="text-base font-bold text-[hsl(var(--primary))] tracking-tight">
               {activeSectionMeta.label}
             </h2>
             <p className="mt-0.5 text-sm text-[hsl(var(--muted-foreground))]">{activeSectionMeta.subtitle}</p>
           </div>
-          <SectionActions
-            activeSection={activeSection}
-            onNuevoGasto={() => setShowNuevoGasto(true)}
-            onNuevaTransferencia={() => setShowNuevaTransferencia(true)}
-          />
+          <div className="flex flex-col items-end gap-1.5">
+            <SectionActions
+              activeSection={activeSection}
+              onNuevoGasto={() => setShowNuevoGasto(true)}
+              onNuevaTransferencia={() => setShowNuevaTransferencia(true)}
+            />
+            <button
+              onClick={() => setGuideOpen(true)}
+              className="flex items-center gap-1.5 text-xs text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--primary))] transition-colors"
+            >
+              <HelpCircle size={13} />
+              <span>¿Cómo funciona este módulo?</span>
+            </button>
+          </div>
         </div>
 
         {renderSectionContent(activeSection, {

@@ -14,11 +14,11 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
-import { motion } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
 import { formatCLPDisplay as formatMoney } from '../../lib/formatCLP'
 import {
   Package, CheckCircle, TrendingDown, AlertTriangle, DollarSign,
-  ArrowRight, ShoppingCart,
+  ArrowRight, ShoppingCart, HelpCircle, X,
 } from 'lucide-react'
 
 const SEVERITY_CONFIG = {
@@ -102,6 +102,7 @@ function InventoryHub() {
   const [kpisLoading, setKL]      = useState(true)
   const [items, setItems]         = useState([])
   const [itemsLoading, setIL]     = useState(true)
+  const [guideOpen, setGuideOpen] = useState(false)
 
   const { alerts: hookAlerts, loading: alertsLoading } = useAlerts(localId)
 
@@ -164,8 +165,68 @@ function InventoryHub() {
   const loading = kpisLoading || itemsLoading
 
   return (
-    <InventoryShell>
+    <>
+      <AnimatePresence>
+        {guideOpen && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4"
+            onClick={() => setGuideOpen(false)}>
+            <motion.div initial={{ opacity: 0, scale: 0.95, y: 12 }} animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.96, y: 8 }} transition={{ duration: 0.2 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-[hsl(var(--card))] border border-[hsl(var(--border))] rounded-2xl shadow-2xl w-full max-w-lg max-h-[88vh] overflow-y-auto no-scrollbar">
+              <div className="flex items-center justify-between px-5 py-4 border-b border-[hsl(var(--border))]">
+                <div className="flex items-center gap-2">
+                  <HelpCircle size={16} className="text-[hsl(var(--primary))]" />
+                  <h3 className="text-sm font-bold text-[hsl(var(--foreground))]">Guía — Inventario</h3>
+                </div>
+                <button onClick={() => setGuideOpen(false)}
+                  className="flex items-center justify-center w-7 h-7 rounded-lg text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))] transition-colors">
+                  <X size={14} />
+                </button>
+              </div>
+              <div className="px-5 py-4 space-y-3">
+                {[
+                  { icon: Package, color: 'text-[hsl(var(--primary))]', title: 'Resumen de inventario', desc: 'Los indicadores superiores muestran la cantidad total de productos, cuántos tienen stock óptimo, cuántos están bajos, cuántos en estado crítico y el valor total del inventario.' },
+                  { icon: TrendingDown, color: 'text-amber-600', title: 'Distribución de stock', desc: 'Gráfico de barras que muestra cuántos productos están en cada nivel de stock (Óptimo, Bajo, Crítico) para ver de un vistazo la situación general.' },
+                  { icon: AlertTriangle, color: 'text-red-600', title: 'Productos críticos', desc: 'Lista los 5 productos con menor stock comparando su cantidad actual contra el mínimo definido. Los más urgentes aparecen primero.' },
+                  { icon: ShoppingCart, color: 'text-blue-600', title: 'Alertas de inventario', desc: 'Notificaciones automáticas de productos que necesitan reposición urgente. Haz clic en "Ir a Pedidos" para crear una orden de compra.' },
+                  { icon: ArrowRight, color: 'text-[hsl(var(--primary))]', title: 'Secciones del inventario', highlight: true, desc: 'Desde el menú lateral accedes a: Stock (gestión detallada), Proveedores (gestión de proveedores), Recetas (fórmulas y costos) y Compras Semanales (órdenes de compra).' },
+                ].map(({ icon: Icon, color, title, desc, highlight }) => (
+                  <div key={title} className={`flex gap-3 rounded-xl p-3 ${highlight ? 'bg-[hsl(var(--primary)/0.08)] border border-[hsl(var(--primary)/0.2)]' : 'bg-[hsl(var(--muted)/0.4)]'}`}>
+                    <div className={`mt-0.5 shrink-0 ${color}`}><Icon size={15} /></div>
+                    <div>
+                      <p className="text-xs font-semibold text-[hsl(var(--foreground))] mb-0.5">{title}</p>
+                      <p className="text-xs text-[hsl(var(--muted-foreground))] leading-relaxed">{desc}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+      <InventoryShell>
       <div className="px-6 py-6 flex flex-col gap-6 pb-10">
+        {/* Header */}
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <span className="flex items-center justify-center w-10 h-10 rounded-full bg-[hsl(var(--primary)/0.1)] text-[hsl(var(--primary))]">
+              <Package size={22} />
+            </span>
+            <div>
+              <h1 className="text-xl font-bold text-[hsl(var(--foreground))]">Inventario</h1>
+              <p className="text-sm text-[hsl(var(--muted-foreground))]">Vista general del stock, alertas y gráficos de inventario</p>
+            </div>
+          </div>
+          <button
+            onClick={() => setGuideOpen(true)}
+            className="flex items-center gap-1.5 text-xs text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--primary))] transition-colors"
+          >
+            <HelpCircle size={13} />
+            <span>¿Cómo funciona esta pantalla?</span>
+          </button>
+        </div>
         {loading && !kpis && !items.length ? (
           <LoadingSpinner message="Cargando inventario..." />
         ) : (
@@ -301,6 +362,7 @@ function InventoryHub() {
         )}
       </div>
     </InventoryShell>
+    </>
   )
 }
 

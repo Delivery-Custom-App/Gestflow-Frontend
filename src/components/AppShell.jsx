@@ -1,5 +1,4 @@
 import { useState, useEffect, useMemo } from 'react'
-import { createPortal } from 'react-dom'
 import { Outlet, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { useLocals } from '../hooks/useLocals'
@@ -14,6 +13,7 @@ import {
   Package, Truck, ShoppingCart, BookMarked, PackageOpen,
   LogOut, Utensils, HelpCircle, Phone, Mail, Moon, Sun, Users, RotateCcw, MapPin,
 } from 'lucide-react'
+import { ExpandableTabs } from './ui/expandable-tabs'
 import CoachMark from './onboarding/CoachMark'
 import { useOnboarding } from '../context/OnboardingContext'
 import { isSuperAdminRole } from '../auth/roleLabel'
@@ -92,22 +92,15 @@ function Sidebar({ collapsed, onToggle, onClose }) {
   const isWorker = WORKER_ROLES.includes(userRole)
   const navigate = useNavigate()
   const { pathname, state: locState } = useLocation()
-  const { locales } = useLocals()
 
   const localIdMatch = pathname.match(/\/local\/([^/]+)/)
   const localId  = localIdMatch ? localIdMatch[1] : null
   const activeKey = deriveActiveKey(pathname)
   const navState  = locState?.local ? { local: locState.local } : localId ? { local: { id: localId } } : {}
 
-  const selectedLocal = useMemo(() => {
-    if (!localId) return null
-    if (locState?.local?.name) return locState.local
-    return locales.find((l) => String(l.id) === String(localId)) ?? null
-  }, [localId, locState, locales])
-
-  const [helpOpen, setHelpOpen] = useState(false)
   const [userOpen, setUserOpen] = useState({ administracion: false, pos: false, inventario: false })
   const [userClosed, setUserClosed] = useState({ administracion: false, pos: false, inventario: false })
+  const [helpOpen, setHelpOpen] = useState(false)
 
   const isOpen = (key) => {
     if (userClosed[key]) return false
@@ -182,10 +175,10 @@ function Sidebar({ collapsed, onToggle, onClose }) {
           'w-full flex items-center gap-2.5 px-3 rounded-lg font-medium transition-colors text-left',
           small ? 'py-1.5 text-sm' : 'py-2 text-sm',
           isDisabled
-            ? 'text-white/30 cursor-not-allowed opacity-50'
+            ? 'text-[hsl(var(--muted-foreground))] cursor-not-allowed opacity-50'
             : isActive
-              ? 'bg-white/20 text-white'
-              : 'text-white/75 hover:bg-white/15 hover:text-white',
+              ? 'bg-[hsl(var(--primary)/0.12)] text-[hsl(var(--primary))]'
+              : 'text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--accent))] hover:text-[hsl(var(--foreground))]',
           collapsed && 'justify-center px-0',
         )}
       >
@@ -209,49 +202,23 @@ function Sidebar({ collapsed, onToggle, onClose }) {
     <motion.aside
       animate={{ width: collapsed ? 64 : 240 }}
       transition={{ type: 'spring', stiffness: 320, damping: 30 }}
-      className="shrink-0 flex flex-col bg-[hsl(var(--primary))] text-white h-screen sticky top-0 overflow-hidden z-20"
+      className="shrink-0 flex flex-col bg-[hsl(var(--card))] border-r border-[hsl(var(--border))] h-screen sticky top-0 overflow-hidden z-20"
     >
       {/* Header */}
-      <div className={cn('border-b border-white/15', collapsed ? 'flex items-center justify-center px-2 min-h-[60px]' : 'px-4 pt-3 pb-3')}>
-        <div className={cn('flex items-center gap-2', collapsed ? '' : 'w-full')}>
-          <AnimatePresence initial={false}>
-            {!collapsed && (
-              <motion.div
-                key="logo-text"
-                initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -8 }}
-                transition={{ duration: 0.15 }}
-                className="flex-1 min-w-0"
-              >
-                {/* Marca */}
-                <div className="flex items-center gap-2 mb-1">
-                  <Utensils size={18} className="shrink-0" />
-                  <span className="font-extrabold text-sm tracking-tight">SibaGestion</span>
-                </div>
-                {/* Local activo */}
-                {selectedLocal && (
-                  <div className="rounded-md bg-white/10 px-2 py-1.5 mt-1">
-                    <p className="text-[11px] font-semibold text-white leading-tight truncate">
-                      {selectedLocal.name}
-                    </p>
-                    {selectedLocal.address && (
-                      <p className="flex items-start gap-1 mt-0.5">
-                        <MapPin size={9} className="shrink-0 mt-0.5 text-white/50" />
-                        <span className="text-[9px] text-white/50 leading-tight line-clamp-2">{formatShortAddress(selectedLocal.address)}</span>
-                      </p>
-                    )}
-                  </div>
-                )}
-              </motion.div>
-            )}
-          </AnimatePresence>
-          <button
-            onClick={onToggle}
-            className="w-8 h-8 flex items-center justify-center rounded-md hover:bg-white/15 transition-colors shrink-0"
-            aria-label={collapsed ? 'Expandir menú' : 'Contraer menú'}
-          >
-            {collapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
-          </button>
-        </div>
+      <div className={cn('border-b border-[hsl(var(--border))] flex items-center', collapsed ? 'justify-center px-2 min-h-[56px]' : 'justify-between px-3 min-h-[56px]')}>
+        {!collapsed && (
+          <div className="flex items-center gap-2 px-1">
+            <Utensils size={16} className="shrink-0 text-[hsl(var(--primary))]" />
+            <span className="font-extrabold text-sm tracking-tight text-[hsl(var(--foreground))]">Gestflow</span>
+          </div>
+        )}
+        <button
+          onClick={onToggle}
+          className="w-8 h-8 flex items-center justify-center rounded-md text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--accent))] hover:text-[hsl(var(--foreground))] transition-colors shrink-0"
+          aria-label={collapsed ? 'Expandir menú' : 'Contraer menú'}
+        >
+          {collapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
+        </button>
       </div>
 
       {/* Nav */}
@@ -263,7 +230,7 @@ function Sidebar({ collapsed, onToggle, onClose }) {
               {!collapsed && (
                 <motion.p
                   initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                  className="px-3 pb-1 text-[10px] font-bold text-white/40 uppercase tracking-widest"
+                  className="px-3 pb-1 text-[10px] font-bold text-[hsl(var(--muted-foreground))] uppercase tracking-widest"
                 >
                   DESCUBRIR
                 </motion.p>
@@ -290,7 +257,9 @@ function Sidebar({ collapsed, onToggle, onClose }) {
                   title={collapsed ? section.label : undefined}
                   className={cn(
                     'flex-1 flex items-center gap-2.5 px-3 py-2 text-sm font-medium transition-colors',
-                    hasActive ? 'bg-white/20 text-white' : 'text-white/75 hover:bg-white/15 hover:text-white',
+                    hasActive
+                      ? 'bg-[hsl(var(--primary)/0.12)] text-[hsl(var(--primary))]'
+                      : 'text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--accent))] hover:text-[hsl(var(--foreground))]',
                     collapsed ? 'justify-center px-0 rounded-lg' : 'rounded-l-lg',
                   )}
                 >
@@ -311,7 +280,9 @@ function Sidebar({ collapsed, onToggle, onClose }) {
                     onClick={() => toggleAccordion(section.key)}
                     className={cn(
                       'flex items-center justify-center w-8 h-8 shrink-0 rounded-r-lg transition-colors',
-                      hasActive ? 'bg-white/20 text-white hover:bg-white/30' : 'text-white/60 hover:bg-white/15 hover:text-white',
+                      hasActive
+                        ? 'bg-[hsl(var(--primary)/0.12)] text-[hsl(var(--primary))] hover:bg-[hsl(var(--primary)/0.2)]'
+                        : 'text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--accent))] hover:text-[hsl(var(--foreground))]',
                     )}
                   >
                     <motion.span
@@ -346,32 +317,16 @@ function Sidebar({ collapsed, onToggle, onClose }) {
       </nav>
 
       {/* Footer */}
-      <div className="px-2 pb-4 border-t border-white/15 pt-3">
-        {/* Replay tutorial button */}
+      <div className="px-2 pb-4 border-t border-[hsl(var(--border))] pt-3">
+        {/* Ayuda / Soporte */}
         <button
-          onClick={() => { onClose?.(); restartTour() }}
-          title={collapsed ? 'Ver tutorial' : undefined}
-          className={cn(
-            'w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-white/60 hover:bg-white/15 hover:text-white transition-colors mb-1',
-            collapsed && 'justify-center px-0',
-          )}
-        >
-          <RotateCcw size={16} className="shrink-0" />
-          <AnimatePresence>
-            {!collapsed && (
-              <motion.span initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex-1 text-left">
-                Ver tutorial
-              </motion.span>
-            )}
-          </AnimatePresence>
-        </button>
-
-        {/* Help button */}
-        <button
-          onClick={() => { if (collapsed) { onToggle(); setHelpOpen(true) } else { setHelpOpen((v) => !v) } }}
+          onClick={() => { if (collapsed) { onToggle(); setHelpOpen(true) } else setHelpOpen((v) => !v) }}
           title={collapsed ? 'Ayuda' : undefined}
           className={cn(
-            'w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-white/60 hover:bg-white/15 hover:text-white transition-colors mb-1',
+            'w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors mb-1',
+            helpOpen
+              ? 'bg-[hsl(var(--accent))] text-[hsl(var(--foreground))]'
+              : 'text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--accent))] hover:text-[hsl(var(--foreground))]',
             collapsed && 'justify-center px-0',
           )}
         >
@@ -385,7 +340,7 @@ function Sidebar({ collapsed, onToggle, onClose }) {
           </AnimatePresence>
         </button>
 
-        {/* Help panel */}
+        {/* Panel soporte */}
         <AnimatePresence>
           {helpOpen && !collapsed && (
             <motion.div
@@ -395,22 +350,19 @@ function Sidebar({ collapsed, onToggle, onClose }) {
               transition={{ duration: 0.2 }}
               className="overflow-hidden mb-2"
             >
-              <div className="rounded-lg bg-white/10 px-3 py-3 space-y-2">
+              <div className="rounded-lg bg-[hsl(var(--muted))] px-3 py-3 space-y-2">
                 <div className="flex items-center justify-between">
-                  <span className="text-[10px] font-bold uppercase tracking-widest text-white/40">Soporte</span>
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-[hsl(var(--muted-foreground))]">Soporte</span>
                   <span className="text-[9px] font-bold bg-amber-400/90 text-amber-900 px-1.5 py-0.5 rounded-full tracking-wide">DEMO</span>
                 </div>
-                <div className="flex items-center gap-2 text-white/80">
-                  <Phone size={12} className="shrink-0 text-white/40" />
+                <div className="flex items-center gap-2 text-[hsl(var(--foreground))]">
+                  <Phone size={12} className="shrink-0 text-[hsl(var(--muted-foreground))]" />
                   <span className="text-xs">+56 9 1234 5678</span>
                 </div>
-                <div className="flex items-center gap-2 text-white/80">
-                  <Mail size={12} className="shrink-0 text-white/40" />
-                  <span className="text-xs truncate">soporte@sibagestion.cl</span>
+                <div className="flex items-center gap-2 text-[hsl(var(--foreground))]">
+                  <Mail size={12} className="shrink-0 text-[hsl(var(--muted-foreground))]" />
+                  <span className="text-xs truncate">gestflowtriferax@gmail.com</span>
                 </div>
-                <p className="text-[10px] text-white/30 pt-1 border-t border-white/10">
-                  Versión demo — solo fines de prueba
-                </p>
               </div>
             </motion.div>
           )}
@@ -420,10 +372,10 @@ function Sidebar({ collapsed, onToggle, onClose }) {
           {!collapsed && (
             <motion.div
               initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-              className="px-3 py-2 mb-2 rounded-lg bg-white/10"
+              className="px-3 py-2 mb-2 rounded-lg bg-[hsl(var(--muted))]"
             >
-              <p className="text-xs font-medium text-white truncate">{user?.email}</p>
-              <p className="text-[10px] text-white/60 mt-0.5">{userRole || 'Usuario'}</p>
+              <p className="text-xs font-medium text-[hsl(var(--foreground))] truncate">{user?.email}</p>
+              <p className="text-[10px] text-[hsl(var(--muted-foreground))] mt-0.5">{userRole || 'Usuario'}</p>
             </motion.div>
           )}
         </AnimatePresence>
@@ -432,7 +384,7 @@ function Sidebar({ collapsed, onToggle, onClose }) {
           onClick={logout}
           title={collapsed ? 'Cerrar sesión' : undefined}
           className={cn(
-            'w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-white/60 hover:bg-red-500/20 hover:text-red-200 transition-colors',
+            'w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-[hsl(var(--muted-foreground))] hover:bg-red-100 dark:hover:bg-red-900/20 hover:text-red-600 transition-colors',
             collapsed && 'justify-center px-0',
           )}
         >
@@ -450,35 +402,73 @@ function Sidebar({ collapsed, onToggle, onClose }) {
   )
 }
 
-/* ── AlertBell ──────────────────────────────────────────────────── */
-function AlertBell({ localId }) {
+/* ── TopBar ─────────────────────────────────────────────────────── */
+function TopBar({ localId, darkMode, toggleDarkMode }) {
+  const { userRole } = useAuth()
+  const { locales } = useLocals()
+  const { state: locState } = useLocation()
   const navigate = useNavigate()
-  const { pathname, state: locState } = useLocation()
+  const isWorkerRole = WORKER_ROLES.includes(userRole)
   const { pendingCount } = useAlerts(localId)
 
-  if (!localId) return null
+  const selectedLocal = useMemo(() => {
+    if (!localId) return null
+    if (locState?.local?.name) return locState.local
+    return locales.find((l) => String(l.id) === String(localId)) ?? null
+  }, [localId, locState, locales])
 
-  const navState = locState?.local ? { local: locState.local } : { local: { id: localId } }
-  const isActive = pathname.includes('/administrativo/alertas')
+  const navState = locState?.local ? { local: locState.local } : localId ? { local: { id: localId } } : {}
+
+  // Build tabs — only show bell when there's a local and user isn't worker
+  const showBell = Boolean(localId && !isWorkerRole)
+  const tabs = [
+    ...(showBell ? [{ title: 'Notificaciones', icon: Bell, badge: pendingCount || null }] : []),
+    { title: darkMode ? 'Modo Noche' : 'Modo Día', icon: darkMode ? Moon : Sun },
+  ]
+
+  const bellIdx  = showBell ? 0 : -1
+  const themeIdx = showBell ? 1 : 0
+
+  const handleTabChange = (index) => {
+    if (index === null) return
+    if (index === bellIdx) {
+      navigate(`/local/${localId}/administrativo/alertas`, { state: navState })
+    } else if (index === themeIdx) {
+      toggleDarkMode()
+    }
+  }
 
   return (
-    <button
-      onClick={() => navigate(`/local/${localId}/administrativo/alertas`, { state: navState })}
-      title={pendingCount > 0 ? `${pendingCount} alerta(s) pendiente(s)` : 'Alertas'}
-      className={cn(
-        'relative flex items-center justify-center w-9 h-9 rounded-lg transition-colors',
-        isActive
-          ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'
-          : 'text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))] hover:text-[hsl(var(--foreground))]',
-      )}
-    >
-      <Bell size={18} />
-      {pendingCount > 0 && (
-        <span className="absolute -top-0.5 -right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-bold text-white leading-none">
-          {pendingCount > 99 ? '99+' : pendingCount}
-        </span>
-      )}
-    </button>
+    <div className="shrink-0 flex items-center justify-between px-4 sm:px-6 h-14 border-b border-[hsl(var(--border))] bg-[hsl(var(--card))] shadow-sm z-10">
+      {/* Left: local name + address */}
+      <div className="min-w-0">
+        {selectedLocal ? (
+          <>
+            <h1 className="text-sm font-bold text-[hsl(var(--foreground))] leading-tight truncate">
+              {selectedLocal.name}
+            </h1>
+            {selectedLocal.address && (
+              <p className="text-xs text-[hsl(var(--muted-foreground))] flex items-center gap-1 truncate">
+                <MapPin size={11} className="shrink-0" />
+                <span className="truncate">{formatShortAddress(selectedLocal.address)}</span>
+              </p>
+            )}
+          </>
+        ) : (
+          <span className="text-sm font-semibold text-[hsl(var(--foreground))]">Gestflow</span>
+        )}
+      </div>
+
+      {/* Right: expandable tab controls */}
+      <div className="shrink-0">
+        <ExpandableTabs
+          tabs={tabs}
+          activeColor="text-[hsl(var(--primary))]"
+          onChange={handleTabChange}
+          className="border-[hsl(var(--border))] bg-[hsl(var(--card))]"
+        />
+      </div>
+    </div>
   )
 }
 
@@ -506,10 +496,7 @@ function AppShell() {
   }
 
   return (
-    <div className="flex h-screen bg-[hsl(var(--background))]">
-
-      {/* Controles flotantes — portal a #overlay-root (fuera de #root, inmune a cualquier contexto de React) */}
-      <FloatingControls localId={localId} darkMode={darkMode} toggleDarkMode={toggleDarkMode} />
+    <div className="flex h-screen bg-gradient-to-br from-[#0a1410] via-[#0d1a14] to-[#091210]">
 
       {/* Overlay backdrop (solo móvil) */}
       <AnimatePresence>
@@ -542,33 +529,13 @@ function AppShell() {
       </div>
 
       {/* Contenido principal */}
-      <div className="flex-1 min-w-0 flex flex-col overflow-hidden">
+      <div className="flex-1 min-w-0 flex flex-col overflow-hidden bg-[hsl(var(--background))]">
+        <TopBar localId={localId} darkMode={darkMode} toggleDarkMode={toggleDarkMode} />
         <Outlet />
       </div>
 
       <CoachMark />
     </div>
-  )
-}
-
-function FloatingControls({ localId, darkMode, toggleDarkMode }) {
-  const [target, setTarget] = useState(null)
-  const { userRole } = useAuth()
-  const isWorkerRole = WORKER_ROLES.includes(userRole)
-  useEffect(() => { setTarget(document.getElementById('overlay-root')) }, [])
-  if (!target) return null
-  return createPortal(
-    <>
-      {localId && !isWorkerRole && <AlertBell localId={localId} />}
-      <button
-        onClick={toggleDarkMode}
-        style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '36px', height: '36px', borderRadius: '8px', border: 'none', cursor: 'pointer', background: 'transparent', color: 'hsl(var(--muted-foreground))' }}
-        title={darkMode ? 'Modo claro' : 'Modo noche'}
-      >
-        {darkMode ? <Sun size={18} /> : <Moon size={18} />}
-      </button>
-    </>,
-    target
   )
 }
 

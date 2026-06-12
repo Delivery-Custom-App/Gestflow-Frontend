@@ -1,10 +1,8 @@
 import { useState, useEffect, useMemo } from 'react'
-import { useParams, useLocation } from 'react-router-dom'
-import { motion } from 'framer-motion'
+import { useParams } from 'react-router-dom'
+import { motion, AnimatePresence } from 'framer-motion'
 import { formatCLPDisplay as formatMoney } from '../lib/formatCLP'
-import { formatShortAddress } from '../lib/formatAddress'
-import { useLocals } from '../hooks/useLocals'
-import { getInventoryKpisByLocal, getLocalById } from '../lib/inventoryApi'
+import { getInventoryKpisByLocal } from '../lib/inventoryApi'
 import { getLocalDashboard, getOrdersByLocal, getIncomeTrend } from '../lib/administrativeApi'
 import { getAuthContext } from '../lib/apiClient'
 import { generateIncomeTrendFromOrders } from '../utils/chartDataHelpers'
@@ -18,7 +16,7 @@ import {
 } from 'recharts'
 import {
   Package, CheckCircle, TrendingDown, AlertTriangle, DollarSign,
-  TrendingUp, Wallet, Clock, XCircle, MapPin, CreditCard, X, BarChart2,
+  TrendingUp, Wallet, Clock, XCircle, MapPin, CreditCard, X, BarChart2, HelpCircle,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -306,27 +304,6 @@ function KpiDetailDrawer({ open, onClose, dashboard, orders, dashLoading }) {
 /* ── LocalDashboard ───────────────────────────────────────────── */
 function LocalDashboard() {
   const { localId } = useParams()
-  const location    = useLocation()
-  const { locales } = useLocals()
-
-  const [localInfo, setLocalInfo] = useState(location.state?.local ?? null)
-
-  useEffect(() => {
-    if (!localId) return
-    getLocalById(localId)
-      .then((data) => { if (data?.id) setLocalInfo(data) })
-      .catch(() => {})
-  }, [localId])
-
-  const localName = useMemo(() => {
-    if (localInfo?.name && !/^[0-9a-f]{8}-/.test(localInfo.name)) return localInfo.name
-    const found = locales.find((l) => String(l.id) === String(localId))
-    return found?.name ?? null
-  }, [localInfo, localId, locales])
-
-  const localAddress = useMemo(() => {
-    return localInfo?.address || locales.find((l) => String(l.id) === String(localId))?.address || null
-  }, [localInfo, localId, locales])
 
   const [trendRange, setTrendRange]       = useState('7d')
   const [trendData, setTrendData]         = useState(null)
@@ -339,6 +316,7 @@ function LocalDashboard() {
   const [ordersLoading, setOrdersLoading] = useState(true)
   const [drawerOpen, setDrawerOpen]       = useState(false)
   const [ordersRefreshTick, setOrdersRefreshTick] = useState(0)
+  const [guideOpen, setGuideOpen]         = useState(false)
 
   useEffect(() => {
     if (!localId) return
@@ -448,22 +426,119 @@ function LocalDashboard() {
         dashLoading={dashLoading}
       />
 
-      <header className="shrink-0 bg-[hsl(var(--card))] border-b border-[hsl(var(--border))] px-4 sm:px-6 py-3 flex items-center justify-between shadow-sm">
-        <div>
-          <h1 className="text-base font-bold text-[hsl(var(--foreground))]">
-            {localName ?? <span className="inline-block h-4 w-32 rounded bg-[hsl(var(--muted))] animate-pulse" />}
-          </h1>
-          {localAddress && (
-            <p className="text-xs text-[hsl(var(--muted-foreground))] flex items-center gap-1 max-w-xs truncate">
-              <MapPin size={11} className="shrink-0" />
-              <span className="truncate">{formatShortAddress(localAddress)}</span>
-            </p>
-          )}
-        </div>
-      </header>
-
       <div className="flex-1 overflow-y-auto no-scrollbar">
         <PageTransition className="flex flex-col gap-6 p-3 sm:p-6 pb-10">
+
+          {/* Botón de ayuda flotante */}
+          <div className="flex justify-end -mb-3">
+            <button
+              onClick={() => setGuideOpen(true)}
+              className="flex items-center gap-1.5 text-xs text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--primary))] transition-colors"
+            >
+              <HelpCircle size={14} />
+              <span>¿Cómo leer este dashboard?</span>
+            </button>
+          </div>
+
+          {/* Panel guía del dashboard */}
+          <AnimatePresence>
+            {guideOpen && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4"
+                onClick={() => setGuideOpen(false)}
+              >
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.95, y: 12 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.96, y: 8 }}
+                  transition={{ duration: 0.2 }}
+                  onClick={(e) => e.stopPropagation()}
+                  className="bg-[hsl(var(--card))] border border-[hsl(var(--border))] rounded-2xl shadow-2xl w-full max-w-lg max-h-[88vh] overflow-y-auto no-scrollbar"
+                >
+                  <div className="flex items-center justify-between px-5 py-4 border-b border-[hsl(var(--border))]">
+                    <div className="flex items-center gap-2">
+                      <HelpCircle size={16} className="text-[hsl(var(--primary))]" />
+                      <h3 className="text-sm font-bold text-[hsl(var(--foreground))]">Guía del Dashboard</h3>
+                    </div>
+                    <button
+                      onClick={() => setGuideOpen(false)}
+                      className="flex items-center justify-center w-7 h-7 rounded-lg text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))] transition-colors"
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
+                  <div className="px-5 py-4 space-y-4">
+                    {[
+                      {
+                        title: 'Resumen Financiero',
+                        icon: DollarSign,
+                        color: 'text-emerald-600',
+                        desc: 'Muestra las ventas del día, ventas del mes, caja virtual, ticket promedio, tasa de cancelaciones y la hora de mayor actividad del local.',
+                      },
+                      {
+                        title: 'Inventario',
+                        icon: Package,
+                        color: 'text-blue-600',
+                        desc: 'Estado del stock: total de productos, cuántos están en nivel óptimo, bajo o crítico, y el valor total del inventario disponible.',
+                      },
+                      {
+                        title: 'Tendencia de Ingresos',
+                        icon: BarChart2,
+                        color: 'text-violet-600',
+                        desc: 'Gráfico de evolución de ingresos por período (7 días, 30 días o 3 meses). Permite detectar tendencias de crecimiento o caída.',
+                      },
+                      {
+                        title: 'Distribución de Pedidos',
+                        icon: CheckCircle,
+                        color: 'text-amber-600',
+                        desc: 'Proporción de pedidos por estado: completados, pendientes y cancelados. Indica la eficiencia operativa del local.',
+                      },
+                      {
+                        title: 'Actividad por Hora',
+                        icon: Clock,
+                        color: 'text-pink-600',
+                        desc: 'Muestra la cantidad de pedidos en cada hora del día para identificar los momentos de mayor y menor demanda.',
+                      },
+                      {
+                        title: 'Pedidos Recientes',
+                        icon: CreditCard,
+                        color: 'text-teal-600',
+                        desc: 'Listado de los últimos pedidos con su estado actual. Permite un seguimiento rápido del flujo de operaciones en tiempo real.',
+                      },
+                      {
+                        title: 'Botón "Ver detalles"',
+                        icon: BarChart2,
+                        color: 'text-[hsl(var(--primary))]',
+                        desc: 'Abre un panel lateral con el desglose completo de los indicadores financieros: ventas por producto, distribución de ingresos, estado de cajas y cifras avanzadas del período seleccionado.',
+                        highlight: true,
+                      },
+                    ].map(({ title, icon: Icon, color, desc, highlight }) => (
+                      <div
+                        key={title}
+                        className={cn(
+                          'flex gap-3 rounded-xl p-3',
+                          highlight
+                            ? 'bg-[hsl(var(--primary)/0.08)] border border-[hsl(var(--primary)/0.2)]'
+                            : 'bg-[hsl(var(--muted)/0.4)]',
+                        )}
+                      >
+                        <div className={cn('mt-0.5 shrink-0', color)}>
+                          <Icon size={15} />
+                        </div>
+                        <div>
+                          <p className="text-xs font-semibold text-[hsl(var(--foreground))] mb-0.5">{title}</p>
+                          <p className="text-xs text-[hsl(var(--muted-foreground))] leading-relaxed">{desc}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </motion.div>
+              </motion.div>
+            )}
+          </AnimatePresence>
 
           {/* Resumen Financiero */}
           <section>
