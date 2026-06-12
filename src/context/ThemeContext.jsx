@@ -5,9 +5,10 @@ const ThemeContext = createContext(null)
 export function ThemeProvider({ children }) {
   const [darkMode, setDarkMode] = useState(() => {
     try {
-      return window.localStorage.getItem('theme') === 'dark'
+      const stored = window.localStorage.getItem('theme')
+      return stored === null ? true : stored === 'dark'
     } catch {
-      return false
+      return true
     }
   })
 

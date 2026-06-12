@@ -27,7 +27,7 @@ async function geocodeAddress(address) {
   for (const q of queries) {
     try {
       const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&limit=1&countrycodes=cl`
-      const res = await fetch(url, { headers: { 'User-Agent': 'SibaGestion/1.0' } })
+      const res = await fetch(url, { headers: { 'User-Agent': 'Gestflow/1.0' } })
       const data = await res.json()
       if (data.length > 0) return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) }
     } catch { /* continue */ }
@@ -72,7 +72,7 @@ function CreateLocalDrawer({ isOpen, onClose, onSuccess }) {
       try {
         const normalized = normalizeChileanAddress(value)
         const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(normalized + ', Chile')}&format=json&limit=6&countrycodes=cl`
-        const res = await fetch(url, { headers: { 'User-Agent': 'SibaGestion/1.0' } })
+        const res = await fetch(url, { headers: { 'User-Agent': 'Gestflow/1.0' } })
         const data = await res.json()
         setSuggestions(data)
         setShowSuggestions(data.length > 0)

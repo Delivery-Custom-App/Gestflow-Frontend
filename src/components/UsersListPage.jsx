@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Users, Store, Plus, Trash2, ChevronDown, X, UserPlus, Loader2, Eye, EyeOff } from 'lucide-react'
+import { Users, Store, Plus, Trash2, ChevronDown, X, UserPlus, Loader2, Eye, EyeOff, Shield } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { isSuperAdminRole } from '../auth/roleLabel'
 import { isInventoryAdminRole } from '../utils/inventoryAccess'
@@ -171,7 +171,7 @@ export default function UsersListPage() {
   const [loading, setLoading]     = useState(true)
   const [err, setErr]             = useState('')
   const [drawerOpen, setDrawerOpen] = useState(false)
-  const [openGroups, setOpenGroups] = useState(new Set())
+  const [openGroups, setOpenGroups] = useState(new Set(['__superadmin__']))
 
   const loadUsers = useCallback(async () => {
     setLoading(true)
@@ -247,17 +247,24 @@ export default function UsersListPage() {
   const localNameById = Object.fromEntries(locales.map((l) => [String(l.id), l.name]))
   const groupsMap = new Map()
   for (const u of users) {
-    const lid = u.local_id ? String(u.local_id) : '__none__'
+    const role = String(u.role || '').toUpperCase()
+    const lid = role === 'SUPERADMIN' ? '__superadmin__' : u.local_id ? String(u.local_id) : '__none__'
     if (!groupsMap.has(lid)) groupsMap.set(lid, [])
     groupsMap.get(lid).push(u)
   }
   const groups = Array.from(groupsMap.entries())
     .map(([lid, us]) => ({
       localId: lid,
-      localName: lid === '__none__' ? 'Sin local asignado' : (localNameById[lid] || `Local ${lid.slice(0, 8)}…`),
+      localName: lid === '__superadmin__' ? 'SuperAdministradores' : lid === '__none__' ? 'Sin local asignado' : (localNameById[lid] || `Local ${lid.slice(0, 8)}…`),
       users: [...us].sort(sortByRole),
     }))
-    .sort((a, b) => a.localName.localeCompare(b.localName))
+    .sort((a, b) => {
+      if (a.localId === '__superadmin__') return -1
+      if (b.localId === '__superadmin__') return 1
+      if (a.localId === '__none__') return 1
+      if (b.localId === '__none__') return -1
+      return a.localName.localeCompare(b.localName)
+    })
 
   return (
     <div className="flex-1 overflow-y-auto no-scrollbar bg-[hsl(var(--background))]">
@@ -301,7 +308,10 @@ export default function UsersListPage() {
                     className="w-full flex items-center justify-between px-5 py-4 bg-[hsl(var(--muted))]/40 hover:bg-[hsl(var(--muted))]/70 transition-colors"
                   >
                     <div className="flex items-center gap-2">
-                      <Store size={17} className="text-[hsl(var(--primary))] shrink-0" />
+                      {g.localId === '__superadmin__'
+                        ? <Shield size={17} className="text-violet-600 shrink-0" />
+                        : <Store size={17} className="text-[hsl(var(--primary))] shrink-0" />
+                      }
                       <span className="text-sm font-semibold text-[hsl(var(--foreground))]">{g.localName}</span>
                       <Badge variant="secondary">{g.users.length}</Badge>
                     </div>

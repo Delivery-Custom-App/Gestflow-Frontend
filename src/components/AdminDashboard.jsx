@@ -8,21 +8,9 @@ import LoadingSpinner from './LoadingSpinner'
 import { apiRequest, getOptionalAuthContext } from '../lib/apiClient'
 
 function getDateRange() {
-  let salesDays = 1
-  try {
-    const stored = localStorage.getItem('sibagestion_flow_thresholds')
-    if (stored) {
-      const parsed = JSON.parse(stored)
-      if (typeof parsed.salesDays === 'number' && parsed.salesDays >= 1) salesDays = parsed.salesDays
-    }
-  } catch { /* use default */ }
-
-  const end = new Date()
-  end.setHours(23, 59, 59, 999)
-  const start = new Date()
-  start.setDate(start.getDate() - (salesDays - 1))
-  start.setHours(0, 0, 0, 0)
-  return { dateFrom: start.toISOString(), dateTo: end.toISOString() }
+  const now    = new Date()
+  const h24ago = new Date(now.getTime() - 24 * 60 * 60 * 1000)
+  return { dateFrom: h24ago.toISOString(), dateTo: now.toISOString() }
 }
 
 function AdminDashboard() {
@@ -42,13 +30,22 @@ function AdminDashboard() {
       const { token } = await getOptionalAuthContext()
       if (!token) return
       const { dateFrom, dateTo } = getDateRange()
+      const from = new Date(dateFrom)
+      const to   = new Date(dateTo)
       const results = await Promise.all(
         locals.map((l) =>
           apiRequest(
             `/orders?local_id=${l.id}&date_from=${encodeURIComponent(dateFrom)}&date_to=${encodeURIComponent(dateTo)}`,
             { token }
           )
-            .then((orders) => ({ id: l.id, count: Array.isArray(orders) ? orders.length : 0 }))
+            .then((orders) => {
+              if (!Array.isArray(orders)) return { id: l.id, count: 0 }
+              const count = orders.filter((o) => {
+                const d = new Date(o.created_at)
+                return d >= from && d <= to
+              }).length
+              return { id: l.id, count }
+            })
             .catch(() => ({ id: l.id, count: 0 }))
         )
       )

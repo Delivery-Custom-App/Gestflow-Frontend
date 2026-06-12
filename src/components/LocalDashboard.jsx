@@ -1,10 +1,8 @@
 import { useState, useEffect, useMemo } from 'react'
-import { useParams, useLocation } from 'react-router-dom'
+import { useParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { formatCLPDisplay as formatMoney } from '../lib/formatCLP'
-import { formatShortAddress } from '../lib/formatAddress'
-import { useLocals } from '../hooks/useLocals'
-import { getInventoryKpisByLocal, getLocalById } from '../lib/inventoryApi'
+import { getInventoryKpisByLocal } from '../lib/inventoryApi'
 import { getLocalDashboard, getOrdersByLocal, getIncomeTrend } from '../lib/administrativeApi'
 import { getAuthContext } from '../lib/apiClient'
 import { generateIncomeTrendFromOrders } from '../utils/chartDataHelpers'
@@ -306,27 +304,6 @@ function KpiDetailDrawer({ open, onClose, dashboard, orders, dashLoading }) {
 /* ── LocalDashboard ───────────────────────────────────────────── */
 function LocalDashboard() {
   const { localId } = useParams()
-  const location    = useLocation()
-  const { locales } = useLocals()
-
-  const [localInfo, setLocalInfo] = useState(location.state?.local ?? null)
-
-  useEffect(() => {
-    if (!localId) return
-    getLocalById(localId)
-      .then((data) => { if (data?.id) setLocalInfo(data) })
-      .catch(() => {})
-  }, [localId])
-
-  const localName = useMemo(() => {
-    if (localInfo?.name && !/^[0-9a-f]{8}-/.test(localInfo.name)) return localInfo.name
-    const found = locales.find((l) => String(l.id) === String(localId))
-    return found?.name ?? null
-  }, [localInfo, localId, locales])
-
-  const localAddress = useMemo(() => {
-    return localInfo?.address || locales.find((l) => String(l.id) === String(localId))?.address || null
-  }, [localInfo, localId, locales])
 
   const [trendRange, setTrendRange]       = useState('7d')
   const [trendData, setTrendData]         = useState(null)
@@ -447,20 +424,6 @@ function LocalDashboard() {
         orders={orders}
         dashLoading={dashLoading}
       />
-
-      <header className="shrink-0 bg-[hsl(var(--card))] border-b border-[hsl(var(--border))] px-4 sm:px-6 py-3 flex items-center justify-between shadow-sm">
-        <div>
-          <h1 className="text-base font-bold text-[hsl(var(--foreground))]">
-            {localName ?? <span className="inline-block h-4 w-32 rounded bg-[hsl(var(--muted))] animate-pulse" />}
-          </h1>
-          {localAddress && (
-            <p className="text-xs text-[hsl(var(--muted-foreground))] flex items-center gap-1 max-w-xs truncate">
-              <MapPin size={11} className="shrink-0" />
-              <span className="truncate">{formatShortAddress(localAddress)}</span>
-            </p>
-          )}
-        </div>
-      </header>
 
       <div className="flex-1 overflow-y-auto no-scrollbar">
         <PageTransition className="flex flex-col gap-6 p-3 sm:p-6 pb-10">
