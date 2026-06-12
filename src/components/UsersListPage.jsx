@@ -186,8 +186,13 @@ export default function UsersListPage() {
       const data = await listUsers(businessId)
       const list = Array.isArray(data) ? data : []
       setUsers(list)
-      // Abrir todos los grupos por defecto al cargar
-      const ids = new Set(list.map((u) => u.local_id ? String(u.local_id) : '__none__'))
+      // Abrir todos los grupos por defecto al cargar (incluyendo __superadmin__)
+      const ids = new Set(['__superadmin__'])
+      for (const u of list) {
+        const role = String(u.role || '').toUpperCase()
+        const lid = role === 'SUPERADMIN' ? '__superadmin__' : u.local_id ? String(u.local_id) : '__none__'
+        ids.add(lid)
+      }
       setOpenGroups(ids)
     } catch (e) {
       setErr(e.detail || e.message || 'Error al cargar usuarios')
