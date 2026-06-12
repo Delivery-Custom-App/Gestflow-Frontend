@@ -15,12 +15,6 @@ function RecipesPage() {
   const { localId } = useParams()
   const selectedLocal = useSelectedLocal(localId)
 
-  useEffect(() => {
-    // #region agent log
-    fetch('http://127.0.0.1:7673/ingest/fc1bcda6-0b0a-47fe-82fd-7a27bd7f1276',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'a557df'},body:JSON.stringify({sessionId:'a557df',hypothesisId:'H3',location:'RecipesPage.jsx:mount',message:'RecipesPage mounted',data:{localId,recetasUrl:import.meta.env.VITE_RECETAS_API_URL},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
-  }, [localId])
-
   const { recipes, kpis, loading, error, fetchRecipes, getRecipe, createRecipe, updateRecipe, toggleRecipeStatus, deleteRecipe, fetchKpis } = useRecipes(localId)
 
   const [showCreateModal, setShowCreateModal] = useState(false)

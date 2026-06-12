@@ -129,9 +129,6 @@ export function AppAuthProvider({ children }) {
 
       const loginRedirect = (import.meta.env.VITE_LOGIN_REDIRECT || '').trim()
       if (loginRedirect && typeof window !== 'undefined') {
-        // #region agent log
-        fetch('http://127.0.0.1:7673/ingest/fc1bcda6-0b0a-47fe-82fd-7a27bd7f1276',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'a557df'},body:JSON.stringify({sessionId:'a557df',hypothesisId:'H1',location:'AuthContext.jsx:login',message:'post-login redirect',data:{loginRedirect},timestamp:Date.now()})}).catch(()=>{});
-        // #endregion
         const path = loginRedirect.startsWith('/') ? loginRedirect : `/${loginRedirect}`
         window.location.replace(path)
         return
