@@ -15,10 +15,10 @@ import LoadingSpinner from '../LoadingSpinner'
 import NuevoProductoModal from './NuevoProductoModal'
 import ProductsTable from './ProductsTable'
 import CategoryFilterSelect from './CategoryFilterSelect'
-import { motion } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Search, Package, CheckCircle, TrendingDown, AlertTriangle, DollarSign } from 'lucide-react'
+import { Search, Package, CheckCircle, TrendingDown, AlertTriangle, DollarSign, HelpCircle, X } from 'lucide-react'
 import PageTransition from '../PageTransition'
 import { formatCLPDisplay as formatMoney } from '../../lib/formatCLP'
 
@@ -57,6 +57,7 @@ function StockControlDashboard() {
   const [categoriesCatalog, setCategoriesCatalog] = useState([])
   const [statusFilters, setStatusFilters] = useState([])
   const pageSize = 10
+  const [guideOpen, setGuideOpen] = useState(false)
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearch(searchQuery.trim().toLowerCase()), 320)
@@ -298,17 +299,69 @@ function StockControlDashboard() {
     : []
 
   return (
-    <InventoryShell>
+    <>
+      <AnimatePresence>
+        {guideOpen && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4"
+            onClick={() => setGuideOpen(false)}>
+            <motion.div initial={{ opacity: 0, scale: 0.95, y: 12 }} animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.96, y: 8 }} transition={{ duration: 0.2 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-[hsl(var(--card))] border border-[hsl(var(--border))] rounded-2xl shadow-2xl w-full max-w-lg max-h-[88vh] overflow-y-auto no-scrollbar">
+              <div className="flex items-center justify-between px-5 py-4 border-b border-[hsl(var(--border))]">
+                <div className="flex items-center gap-2">
+                  <HelpCircle size={16} className="text-[hsl(var(--primary))]" />
+                  <h3 className="text-sm font-bold text-[hsl(var(--foreground))]">Guía — Stock de Productos</h3>
+                </div>
+                <button onClick={() => setGuideOpen(false)}
+                  className="flex items-center justify-center w-7 h-7 rounded-lg text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))] transition-colors">
+                  <X size={14} />
+                </button>
+              </div>
+              <div className="px-5 py-4 space-y-3">
+                {[
+                  { icon: Package, color: 'text-[hsl(var(--primary))]', title: 'Lista de productos', desc: 'Tabla con todos los ingredientes y productos del inventario. Muestra nombre, cantidad actual, costo unitario y estado de stock.' },
+                  { icon: AlertTriangle, color: 'text-red-600', title: 'Alertas de stock', desc: 'Los indicadores superiores muestran cuántos productos están en stock crítico, bajo, o sin stock. Haz clic en cada indicador para filtrar la lista.' },
+                  { icon: Search, color: 'text-indigo-600', title: 'Búsqueda y filtros', desc: 'Busca productos por nombre o filtra por categoría y estado de stock para encontrar rápidamente lo que necesitas reponer.' },
+                  { icon: DollarSign, color: 'text-emerald-600', title: 'Valor total', desc: 'Suma del valor monetario de todo el inventario actual, calculado con el costo unitario de cada producto.' },
+                  { icon: CheckCircle, color: 'text-emerald-600', title: 'Agregar producto', highlight: true, desc: 'Registra un nuevo ingrediente o producto en el inventario con su nombre, categoría, cantidad inicial y costo.' },
+                ].map(({ icon: Icon, color, title, desc, highlight }) => (
+                  <div key={title} className={`flex gap-3 rounded-xl p-3 ${highlight ? 'bg-[hsl(var(--primary)/0.08)] border border-[hsl(var(--primary)/0.2)]' : 'bg-[hsl(var(--muted)/0.4)]'}`}>
+                    <div className={`mt-0.5 shrink-0 ${color}`}><Icon size={15} /></div>
+                    <div>
+                      <p className="text-xs font-semibold text-[hsl(var(--foreground))] mb-0.5">{title}</p>
+                      <p className="text-xs text-[hsl(var(--muted-foreground))] leading-relaxed">{desc}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+      <InventoryShell>
       <PageTransition className="flex flex-col gap-6 px-6 py-6 pb-10">
-        <header className="flex items-center gap-3">
-          <span className="flex items-center justify-center w-10 h-10 rounded-full bg-[hsl(var(--primary)/0.1)] text-[hsl(var(--primary))]" aria-hidden="true">
-            <Package size={22} />
-          </span>
-          <div>
-            <h1 className="text-xl font-bold text-[hsl(var(--foreground))]">Stock producto</h1>
-            <p className="text-sm text-[hsl(var(--muted-foreground))]">Gestiona existencias y costos para decisiones de reposición</p>
+        <div className="flex items-center justify-between gap-4 flex-wrap">
+          <header className="flex items-center gap-3">
+            <span className="flex items-center justify-center w-10 h-10 rounded-full bg-[hsl(var(--primary)/0.1)] text-[hsl(var(--primary))]" aria-hidden="true">
+              <Package size={22} />
+            </span>
+            <div>
+              <h1 className="text-xl font-bold text-[hsl(var(--foreground))]">Stock producto</h1>
+              <p className="text-sm text-[hsl(var(--muted-foreground))]">Gestiona existencias y costos para decisiones de reposición</p>
+            </div>
+          </header>
+          <div className="flex flex-col items-end gap-1">
+            <button
+              onClick={() => setGuideOpen(true)}
+              className="flex items-center gap-1.5 text-xs text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--primary))] transition-colors"
+            >
+              <HelpCircle size={13} />
+              <span>¿Cómo funciona esta pantalla?</span>
+            </button>
           </div>
-        </header>
+        </div>
 
         {error ? (
           <div className="rounded-md bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3">
@@ -426,6 +479,7 @@ function StockControlDashboard() {
         />
       </PageTransition>
     </InventoryShell>
+    </>
   )
 }
 

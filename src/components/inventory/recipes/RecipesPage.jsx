@@ -8,7 +8,8 @@ import CreateRecipeModal from './CreateRecipeModal'
 import { useRecipes } from '../../../hooks/useRecipes'
 import { apiRequest } from '../../../lib/apiClient'
 import { Button } from '@/components/ui/button'
-import { BookOpen } from 'lucide-react'
+import { motion, AnimatePresence } from 'framer-motion'
+import { BookOpen, HelpCircle, X, DollarSign, Search, Tag, ToggleLeft } from 'lucide-react'
 import { formatCLPOrDash as formatCLP } from '../../../lib/formatCLP'
 
 function RecipesPage() {
@@ -26,6 +27,7 @@ function RecipesPage() {
   const [statusFilter, setStatusFilter] = useState(null)
   const [categories, setCategories] = useState([])
   const [saveError, setSaveError] = useState('')
+  const [guideOpen, setGuideOpen] = useState(false)
 
   useEffect(() => {
     const loadCategories = async () => {
@@ -108,7 +110,49 @@ function RecipesPage() {
   const selectClass = 'h-9 rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3 py-1 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary)/0.3)]'
 
   return (
-    <InventoryShell>
+    <>
+      <AnimatePresence>
+        {guideOpen && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4"
+            onClick={() => setGuideOpen(false)}>
+            <motion.div initial={{ opacity: 0, scale: 0.95, y: 12 }} animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.96, y: 8 }} transition={{ duration: 0.2 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-[hsl(var(--card))] border border-[hsl(var(--border))] rounded-2xl shadow-2xl w-full max-w-lg max-h-[88vh] overflow-y-auto no-scrollbar">
+              <div className="flex items-center justify-between px-5 py-4 border-b border-[hsl(var(--border))]">
+                <div className="flex items-center gap-2">
+                  <HelpCircle size={16} className="text-[hsl(var(--primary))]" />
+                  <h3 className="text-sm font-bold text-[hsl(var(--foreground))]">Guía — Recetas</h3>
+                </div>
+                <button onClick={() => setGuideOpen(false)}
+                  className="flex items-center justify-center w-7 h-7 rounded-lg text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))] transition-colors">
+                  <X size={14} />
+                </button>
+              </div>
+              <div className="px-5 py-4 space-y-3">
+                {[
+                  { icon: BookOpen, color: 'text-[hsl(var(--primary))]', title: 'Lista de recetas', desc: 'Muestra todas las recetas del local con su costo de producción y margen de ganancia calculados automáticamente.' },
+                  { icon: DollarSign, color: 'text-emerald-600', title: 'Costo y margen', desc: 'El costo se calcula sumando el costo de cada ingrediente según la cantidad usada. El margen muestra cuánto ganas sobre el precio de venta.' },
+                  { icon: Tag, color: 'text-amber-600', title: 'Categorías', desc: 'Organiza las recetas por categoría (ej: entradas, platos, postres) para encontrarlas más fácilmente.' },
+                  { icon: ToggleLeft, color: 'text-blue-600', title: 'Estado activo/inactivo', desc: 'Puedes desactivar una receta para que no aparezca en el POS sin necesidad de eliminarla.' },
+                  { icon: Search, color: 'text-indigo-600', title: 'Búsqueda', desc: 'Filtra por nombre, categoría o estado para localizar recetas específicas rápidamente.' },
+                  { icon: BookOpen, color: 'text-[hsl(var(--primary))]', title: 'Nueva receta', highlight: true, desc: 'Crea una receta indicando los ingredientes del inventario con sus cantidades. El costo se calcula solo.' },
+                ].map(({ icon: Icon, color, title, desc, highlight }) => (
+                  <div key={title} className={`flex gap-3 rounded-xl p-3 ${highlight ? 'bg-[hsl(var(--primary)/0.08)] border border-[hsl(var(--primary)/0.2)]' : 'bg-[hsl(var(--muted)/0.4)]'}`}>
+                    <div className={`mt-0.5 shrink-0 ${color}`}><Icon size={15} /></div>
+                    <div>
+                      <p className="text-xs font-semibold text-[hsl(var(--foreground))] mb-0.5">{title}</p>
+                      <p className="text-xs text-[hsl(var(--muted-foreground))] leading-relaxed">{desc}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+      <InventoryShell>
       <div className="flex flex-col gap-6 pb-8 pt-4 px-6">
 
         <header className="flex items-center justify-between gap-4 flex-wrap">
@@ -121,15 +165,24 @@ function RecipesPage() {
               <p className="text-sm text-[hsl(var(--muted-foreground))]">Crea y administra recetas con cálculo automático de costos</p>
             </div>
           </div>
-          <Button
-            type="button"
-            onClick={() => {
-              setEditingRecipe(null)
-              setShowCreateModal(true)
-            }}
-          >
-            Nueva Receta
-          </Button>
+          <div className="flex flex-col items-end gap-1.5">
+            <Button
+              type="button"
+              onClick={() => {
+                setEditingRecipe(null)
+                setShowCreateModal(true)
+              }}
+            >
+              Nueva Receta
+            </Button>
+            <button
+              onClick={() => setGuideOpen(true)}
+              className="flex items-center gap-1.5 text-xs text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--primary))] transition-colors"
+            >
+              <HelpCircle size={13} />
+              <span>¿Cómo funciona esta pantalla?</span>
+            </button>
+          </div>
         </header>
 
         {/* KPIs */}
@@ -229,6 +282,7 @@ function RecipesPage() {
         )}
       </div>
     </InventoryShell>
+    </>
   )
 }
 

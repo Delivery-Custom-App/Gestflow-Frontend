@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { Outlet, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { useLocals } from '../hooks/useLocals'
@@ -100,6 +100,7 @@ function Sidebar({ collapsed, onToggle, onClose }) {
 
   const [userOpen, setUserOpen] = useState({ administracion: false, pos: false, inventario: false })
   const [userClosed, setUserClosed] = useState({ administracion: false, pos: false, inventario: false })
+  const [helpOpen, setHelpOpen] = useState(false)
 
   const isOpen = (key) => {
     if (userClosed[key]) return false
@@ -201,7 +202,7 @@ function Sidebar({ collapsed, onToggle, onClose }) {
     <motion.aside
       animate={{ width: collapsed ? 64 : 240 }}
       transition={{ type: 'spring', stiffness: 320, damping: 30 }}
-      className="shrink-0 flex flex-col bg-[hsl(var(--background))] border-r border-[hsl(var(--border))] h-screen sticky top-0 overflow-hidden z-20"
+      className="shrink-0 flex flex-col bg-[hsl(var(--card))] border-r border-[hsl(var(--border))] h-screen sticky top-0 overflow-hidden z-20"
     >
       {/* Header */}
       <div className={cn('border-b border-[hsl(var(--border))] flex items-center', collapsed ? 'justify-center px-2 min-h-[56px]' : 'justify-between px-3 min-h-[56px]')}>
@@ -317,24 +318,55 @@ function Sidebar({ collapsed, onToggle, onClose }) {
 
       {/* Footer */}
       <div className="px-2 pb-4 border-t border-[hsl(var(--border))] pt-3">
-        {/* Replay tutorial button */}
+        {/* Ayuda / Soporte */}
         <button
-          onClick={() => { onClose?.(); restartTour() }}
-          title={collapsed ? 'Ver tutorial' : undefined}
+          onClick={() => { if (collapsed) { onToggle(); setHelpOpen(true) } else setHelpOpen((v) => !v) }}
+          title={collapsed ? 'Ayuda' : undefined}
           className={cn(
-            'w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--accent))] hover:text-[hsl(var(--foreground))] transition-colors mb-1',
+            'w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors mb-1',
+            helpOpen
+              ? 'bg-[hsl(var(--accent))] text-[hsl(var(--foreground))]'
+              : 'text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--accent))] hover:text-[hsl(var(--foreground))]',
             collapsed && 'justify-center px-0',
           )}
         >
-          <RotateCcw size={16} className="shrink-0" />
+          <HelpCircle size={16} className="shrink-0" />
           <AnimatePresence>
             {!collapsed && (
               <motion.span initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex-1 text-left">
-                Ver tutorial
+                Ayuda
               </motion.span>
             )}
           </AnimatePresence>
         </button>
+
+        {/* Panel soporte */}
+        <AnimatePresence>
+          {helpOpen && !collapsed && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              transition={{ duration: 0.2 }}
+              className="overflow-hidden mb-2"
+            >
+              <div className="rounded-lg bg-[hsl(var(--muted))] px-3 py-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-[hsl(var(--muted-foreground))]">Soporte</span>
+                  <span className="text-[9px] font-bold bg-amber-400/90 text-amber-900 px-1.5 py-0.5 rounded-full tracking-wide">DEMO</span>
+                </div>
+                <div className="flex items-center gap-2 text-[hsl(var(--foreground))]">
+                  <Phone size={12} className="shrink-0 text-[hsl(var(--muted-foreground))]" />
+                  <span className="text-xs">+56 9 1234 5678</span>
+                </div>
+                <div className="flex items-center gap-2 text-[hsl(var(--foreground))]">
+                  <Mail size={12} className="shrink-0 text-[hsl(var(--muted-foreground))]" />
+                  <span className="text-xs truncate">gestflowtriferax@gmail.com</span>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         <AnimatePresence>
           {!collapsed && (
@@ -378,8 +410,6 @@ function TopBar({ localId, darkMode, toggleDarkMode }) {
   const navigate = useNavigate()
   const isWorkerRole = WORKER_ROLES.includes(userRole)
   const { pendingCount } = useAlerts(localId)
-  const [helpVisible, setHelpVisible] = useState(false)
-  const tabsContainerRef = useRef(null)
 
   const selectedLocal = useMemo(() => {
     if (!localId) return null
@@ -394,21 +424,17 @@ function TopBar({ localId, darkMode, toggleDarkMode }) {
   const tabs = [
     ...(showBell ? [{ title: 'Notificaciones', icon: Bell, badge: pendingCount || null }] : []),
     { title: darkMode ? 'Modo Noche' : 'Modo Día', icon: darkMode ? Moon : Sun },
-    { title: 'Ayuda', icon: HelpCircle },
   ]
 
   const bellIdx  = showBell ? 0 : -1
   const themeIdx = showBell ? 1 : 0
-  const helpIdx  = showBell ? 2 : 1
 
   const handleTabChange = (index) => {
-    if (index === null) { setHelpVisible(false); return }
+    if (index === null) return
     if (index === bellIdx) {
       navigate(`/local/${localId}/administrativo/alertas`, { state: navState })
     } else if (index === themeIdx) {
       toggleDarkMode()
-    } else if (index === helpIdx) {
-      setHelpVisible((v) => !v)
     }
   }
 
@@ -433,43 +459,14 @@ function TopBar({ localId, darkMode, toggleDarkMode }) {
         )}
       </div>
 
-      {/* Right: expandable tab controls + help panel */}
-      <div ref={tabsContainerRef} className="relative shrink-0">
+      {/* Right: expandable tab controls */}
+      <div className="shrink-0">
         <ExpandableTabs
           tabs={tabs}
           activeColor="text-[hsl(var(--primary))]"
           onChange={handleTabChange}
-          outsideRef={tabsContainerRef}
           className="border-[hsl(var(--border))] bg-[hsl(var(--card))]"
         />
-
-        <AnimatePresence>
-          {helpVisible && (
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: -4 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: -4 }}
-              transition={{ duration: 0.15 }}
-              className="absolute right-0 top-full mt-2 w-56 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] shadow-xl z-20 p-3 space-y-2"
-            >
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-[10px] font-bold uppercase tracking-widest text-[hsl(var(--muted-foreground))]">Soporte</span>
-                <span className="text-[9px] font-bold bg-amber-400/90 text-amber-900 px-1.5 py-0.5 rounded-full tracking-wide">DEMO</span>
-              </div>
-              <div className="flex items-center gap-2 text-[hsl(var(--foreground))]">
-                <Phone size={12} className="shrink-0 text-[hsl(var(--muted-foreground))]" />
-                <span className="text-xs">+56 9 1234 5678</span>
-              </div>
-              <div className="flex items-center gap-2 text-[hsl(var(--foreground))]">
-                <Mail size={12} className="shrink-0 text-[hsl(var(--muted-foreground))]" />
-                <span className="text-xs truncate">soporte@gestflow.cl</span>
-              </div>
-              <p className="text-[10px] text-[hsl(var(--muted-foreground))] pt-2 border-t border-[hsl(var(--border))]">
-                Versión demo — solo fines de prueba
-              </p>
-            </motion.div>
-          )}
-        </AnimatePresence>
       </div>
     </div>
   )

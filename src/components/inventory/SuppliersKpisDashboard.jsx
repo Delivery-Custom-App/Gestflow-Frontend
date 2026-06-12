@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { useSelectedLocal } from '../../hooks/useSelectedLocal'
-import { motion } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
 import { getAuthContext } from '../../lib/apiClient'
 import {
   deleteSupplier,
@@ -23,7 +23,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import {
   Table, TableHeader, TableBody, TableRow, TableHead, TableCell,
 } from '@/components/ui/table'
-import { Users, CheckCircle, DollarSign, Store, Settings2 } from 'lucide-react'
+import { Users, CheckCircle, DollarSign, Store, Settings2, HelpCircle, X } from 'lucide-react'
 
 const MONTH_NAMES = [
   'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
@@ -70,6 +70,7 @@ function SuppliersKpisDashboard() {
   const [registerOpen, setRegisterOpen] = useState(false)
   const [actionRow,    setActionRow]    = useState(null)
   const [rowActionId,  setRowActionId]  = useState(null)
+  const [guideOpen, setGuideOpen] = useState(false)
 
   const load = useCallback(async () => {
     if (!canAccess) { setLoading(false); setData(null); setError(''); return }
@@ -175,7 +176,48 @@ function SuppliersKpisDashboard() {
   ]
 
   return (
-    <InventoryShell>
+    <>
+      <AnimatePresence>
+        {guideOpen && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4"
+            onClick={() => setGuideOpen(false)}>
+            <motion.div initial={{ opacity: 0, scale: 0.95, y: 12 }} animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.96, y: 8 }} transition={{ duration: 0.2 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-[hsl(var(--card))] border border-[hsl(var(--border))] rounded-2xl shadow-2xl w-full max-w-lg max-h-[88vh] overflow-y-auto no-scrollbar">
+              <div className="flex items-center justify-between px-5 py-4 border-b border-[hsl(var(--border))]">
+                <div className="flex items-center gap-2">
+                  <HelpCircle size={16} className="text-[hsl(var(--primary))]" />
+                  <h3 className="text-sm font-bold text-[hsl(var(--foreground))]">Guía — Proveedores</h3>
+                </div>
+                <button onClick={() => setGuideOpen(false)}
+                  className="flex items-center justify-center w-7 h-7 rounded-lg text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))] transition-colors">
+                  <X size={14} />
+                </button>
+              </div>
+              <div className="px-5 py-4 space-y-3">
+                {[
+                  { icon: Store, color: 'text-[hsl(var(--primary))]', title: 'Lista de proveedores', desc: 'Muestra todos los proveedores registrados con sus métricas de compra: total gastado, cantidad de órdenes y costo promedio.' },
+                  { icon: DollarSign, color: 'text-emerald-600', title: 'Gasto total', desc: 'Suma acumulada de todas las compras realizadas al proveedor en el período seleccionado (mes y año filtrable).' },
+                  { icon: CheckCircle, color: 'text-blue-600', title: 'Órdenes completadas', desc: 'Cantidad de órdenes de compra que ya fueron recibidas y confirmadas para ese proveedor.' },
+                  { icon: Users, color: 'text-[hsl(var(--primary))]', title: 'Registrar proveedor', highlight: true, desc: 'Agrega un nuevo proveedor al sistema con su nombre, datos de contacto y categoría de productos.' },
+                  { icon: Settings2, color: 'text-slate-600', title: 'Detalle del proveedor', desc: 'Haz clic en cualquier fila para ver el historial completo de órdenes, editar los datos o eliminar el proveedor.' },
+                ].map(({ icon: Icon, color, title, desc, highlight }) => (
+                  <div key={title} className={`flex gap-3 rounded-xl p-3 ${highlight ? 'bg-[hsl(var(--primary)/0.08)] border border-[hsl(var(--primary)/0.2)]' : 'bg-[hsl(var(--muted)/0.4)]'}`}>
+                    <div className={`mt-0.5 shrink-0 ${color}`}><Icon size={15} /></div>
+                    <div>
+                      <p className="text-xs font-semibold text-[hsl(var(--foreground))] mb-0.5">{title}</p>
+                      <p className="text-xs text-[hsl(var(--muted-foreground))] leading-relaxed">{desc}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+      <InventoryShell>
       <div className="px-6 py-6 flex flex-col gap-6 pb-10">
 
         {/* ── Header ── */}
@@ -189,6 +231,13 @@ function SuppliersKpisDashboard() {
               <p className="text-sm text-[hsl(var(--muted-foreground))] mt-0.5">
                 Gestiona proveedores y monitorea su impacto en compras
               </p>
+              <button
+                onClick={() => setGuideOpen(true)}
+                className="mt-1 flex items-center gap-1.5 text-xs text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--primary))] transition-colors"
+              >
+                <HelpCircle size={13} />
+                <span>¿Cómo funciona esta pantalla?</span>
+              </button>
             </div>
           </header>
 
@@ -380,6 +429,7 @@ function SuppliersKpisDashboard() {
         )}
       </div>
     </InventoryShell>
+    </>
   )
 }
 

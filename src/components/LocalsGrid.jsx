@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
-import { Building2, MapPin, Plus, TrendingUp, TrendingDown, Settings, Search, ArrowUp, ArrowDown, Minus, ChevronRight } from 'lucide-react'
+import { motion, AnimatePresence } from 'framer-motion'
+import { Building2, MapPin, Plus, TrendingUp, TrendingDown, Settings, Search, ArrowUp, ArrowDown, Minus, ChevronRight, ChevronDown, HelpCircle, X, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table'
 import OpcionesDrawer from './OpcionesDrawer'
@@ -68,6 +69,8 @@ function LocalsGrid({ locales, onLocalSelect, onCreateLocal, salesCounts = {}, d
   const [search,       setSearch]       = useState('')
   const [filterZona,   setFilterZona]   = useState('')
   const [filterFlow,   setFilterFlow]   = useState('')
+  const [guideOpen,    setGuideOpen]    = useState(false)
+  const [mapOpen,      setMapOpen]      = useState(true)
 
   const handleSaveThresholds = (newThresholds) => {
     setThresholds({ ...DEFAULT_THRESHOLDS, ...newThresholds })
@@ -99,6 +102,111 @@ function LocalsGrid({ locales, onLocalSelect, onCreateLocal, salesCounts = {}, d
 
   return (
     <>
+      {/* Guía de Tus Franquicias */}
+      <AnimatePresence>
+        {guideOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4"
+            onClick={() => setGuideOpen(false)}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 12 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.96, y: 8 }}
+              transition={{ duration: 0.2 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-[hsl(var(--card))] border border-[hsl(var(--border))] rounded-2xl shadow-2xl w-full max-w-lg max-h-[88vh] overflow-y-auto no-scrollbar"
+            >
+              <div className="flex items-center justify-between px-5 py-4 border-b border-[hsl(var(--border))]">
+                <div className="flex items-center gap-2">
+                  <HelpCircle size={16} className="text-[hsl(var(--primary))]" />
+                  <h3 className="text-sm font-bold text-[hsl(var(--foreground))]">Guía — Tus Franquicias</h3>
+                </div>
+                <button
+                  onClick={() => setGuideOpen(false)}
+                  className="flex items-center justify-center w-7 h-7 rounded-lg text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))] transition-colors"
+                >
+                  <X size={14} />
+                </button>
+              </div>
+              <div className="px-5 py-4 space-y-3">
+                {[
+                  {
+                    icon: Building2,
+                    color: 'text-[hsl(var(--primary))]',
+                    title: 'Lista de franquicias',
+                    desc: 'Muestra todas tus sucursales con nombre y dirección. Haz clic en cualquier fila para acceder al panel completo de esa franquicia.',
+                  },
+                  {
+                    icon: TrendingUp,
+                    color: 'text-amber-600',
+                    title: 'Flujo de actividad',
+                    desc: 'Nivel de pedidos de cada franquicia en las últimas 24 horas. Verde = Bajo (pocos pedidos), Amarillo = Medio, Rojo = Alto (mucha actividad).',
+                  },
+                  {
+                    icon: ArrowUp,
+                    color: 'text-emerald-600',
+                    title: 'Flecha de tendencia',
+                    desc: 'Compara la actividad de la última hora con la hora anterior. Flecha verde ↑ = aumentó de nivel, flecha roja ↓ = bajó de nivel. Si no cambia de nivel, no aparece flecha.',
+                  },
+                  {
+                    icon: Minus,
+                    color: 'text-blue-600',
+                    title: 'Variación (Δ)',
+                    desc: 'Diferencia exacta de pedidos entre la última hora y la hora anterior. Un +3 significa 3 pedidos más que en la hora previa.',
+                  },
+                  {
+                    icon: Settings,
+                    color: 'text-slate-600',
+                    title: 'Botón Opciones',
+                    desc: 'Configura los umbrales que definen cuándo el flujo es Bajo, Medio o Alto. También puedes ajustar el período de análisis.',
+                  },
+                  {
+                    icon: Plus,
+                    color: 'text-[hsl(var(--primary))]',
+                    title: 'Crear Franquicia',
+                    desc: 'Registra una nueva sucursal en el sistema. Solo disponible para administradores.',
+                    highlight: true,
+                  },
+                  {
+                    icon: MapPin,
+                    color: 'text-rose-600',
+                    title: 'Mapa de franquicias',
+                    desc: 'Visualiza la ubicación geográfica de todas tus franquicias en un mapa interactivo.',
+                  },
+                  {
+                    icon: Search,
+                    color: 'text-indigo-600',
+                    title: 'Filtros y búsqueda',
+                    desc: 'Busca por nombre, filtra por zona geográfica o por nivel de flujo para encontrar franquicias rápidamente.',
+                  },
+                ].map(({ icon: Icon, color, title, desc, highlight }) => (
+                  <div
+                    key={title}
+                    className={`flex gap-3 rounded-xl p-3 ${
+                      highlight
+                        ? 'bg-[hsl(var(--primary)/0.08)] border border-[hsl(var(--primary)/0.2)]'
+                        : 'bg-[hsl(var(--muted)/0.4)]'
+                    }`}
+                  >
+                    <div className={`mt-0.5 shrink-0 ${color}`}>
+                      <Icon size={15} />
+                    </div>
+                    <div>
+                      <p className="text-xs font-semibold text-[hsl(var(--foreground))] mb-0.5">{title}</p>
+                      <p className="text-xs text-[hsl(var(--muted-foreground))] leading-relaxed">{desc}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       <div className="min-h-full bg-[hsl(var(--background))]">
         {/* Page header */}
         <div
@@ -121,15 +229,24 @@ function LocalsGrid({ locales, onLocalSelect, onCreateLocal, salesCounts = {}, d
                   : 'Crea tu primera franquicia para comenzar a operar.'}
               </p>
             </div>
-            <div className="flex items-center gap-2 shrink-0">
-              <Button variant="outline" onClick={() => setShowOpciones(true)} className="gap-2 rounded-xl">
-                <Settings className="h-4 w-4" />
-                Opciones
-              </Button>
-              <Button onClick={onCreateLocal} className="gap-2 rounded-xl px-5">
-                <Plus className="h-4 w-4" />
-                Crear Franquicia
-              </Button>
+            <div className="flex flex-col items-end gap-2 shrink-0">
+              <div className="flex items-center gap-2">
+                <Button variant="outline" onClick={() => setShowOpciones(true)} className="gap-2 rounded-xl">
+                  <Settings className="h-4 w-4" />
+                  Opciones
+                </Button>
+                <Button onClick={onCreateLocal} className="gap-2 rounded-xl px-5">
+                  <Plus className="h-4 w-4" />
+                  Crear Franquicia
+                </Button>
+              </div>
+              <button
+                onClick={() => setGuideOpen(true)}
+                className="flex items-center gap-1.5 text-xs text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--primary))] transition-colors"
+              >
+                <HelpCircle size={13} />
+                <span>¿Cómo funciona esta pantalla?</span>
+              </button>
             </div>
           </div>
         </div>
@@ -301,17 +418,40 @@ function LocalsGrid({ locales, onLocalSelect, onCreateLocal, salesCounts = {}, d
             </div>
           )}
 
-          {/* Map — always shown below */}
+          {/* Map — collapsible */}
           {locales.length > 0 && (
-            <div className="px-10 pb-6">
-              <div className="flex items-center gap-3 mb-4">
-                <MapPin className="h-4 w-4 text-[hsl(var(--primary))]" />
+            <div className="pb-6">
+              <button
+                type="button"
+                onClick={() => setMapOpen((v) => !v)}
+                className="w-full flex items-center gap-3 mb-3 group"
+              >
+                <MapPin className="h-4 w-4 text-[hsl(var(--primary))] shrink-0" />
                 <h2 className="text-sm font-bold text-[hsl(var(--muted-foreground))] uppercase tracking-widest">
                   Ubicación de franquicias
                 </h2>
                 <div className="flex-1 h-px bg-[hsl(var(--border))]" />
-              </div>
-              <FranchisesMap locales={locales} />
+                <span className="text-xs text-[hsl(var(--muted-foreground))] group-hover:text-[hsl(var(--foreground))] transition-colors shrink-0">
+                  {mapOpen ? 'Ocultar' : 'Mostrar'}
+                </span>
+                <ChevronDown
+                  className={`h-4 w-4 text-[hsl(var(--muted-foreground))] transition-transform duration-200 shrink-0 ${mapOpen ? 'rotate-0' : '-rotate-90'}`}
+                />
+              </button>
+              <AnimatePresence initial={false}>
+                {mapOpen && (
+                  <motion.div
+                    key="map"
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0 }}
+                    transition={{ duration: 0.25, ease: 'easeInOut' }}
+                    style={{ overflow: 'hidden' }}
+                  >
+                    <FranchisesMap locales={locales} />
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
           )}
         </div>
