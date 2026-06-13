@@ -5,6 +5,7 @@ import { apiRequest, getSplitPaymentSummary } from '../../lib/apiClient'
 import MesaDetailModal from './MesaDetailModal'
 import ComandaActions from './ComandaActions'
 import MultiPaymentModal from './MultiPaymentModal'
+import MercadoPagoModal from './MercadoPagoModal'
 import { Button } from '@/components/ui/button'
 
 const STATUS_BADGE = {
@@ -115,11 +116,19 @@ function openPrintWindow({ mesa, firstOrder, allItems, subtotal, iva, total }) {
 </body>
 </html>`
 
-  const newWin = window.open('', '_blank')
-  if (newWin) {
-    newWin.document.open()
-    newWin.document.write(html)
-    newWin.document.close()
+  const iframe = document.createElement('iframe')
+  iframe.style.cssText = 'position:fixed;right:0;bottom:0;width:1px;height:1px;border:none;opacity:0'
+  document.body.appendChild(iframe)
+  const doc = iframe.contentDocument || iframe.contentWindow.document
+  doc.open()
+  doc.write(html)
+  doc.close()
+  iframe.onload = () => {
+    iframe.contentWindow.focus()
+    iframe.contentWindow.print()
+    setTimeout(() => {
+      if (document.body.contains(iframe)) document.body.removeChild(iframe)
+    }, 3000)
   }
 }
 
@@ -133,6 +142,7 @@ function OrdenView({ mesa, localId, onBack, onTableUpdated }) {
   const [showSplitModal, setShowSplitModal]     = useState(false)
   const [splitFullyPaid, setSplitFullyPaid]     = useState(false)
   const [hasSplits, setHasSplits]               = useState(false)
+  const [showMPModal, setShowMPModal]           = useState(false)
 
   // Totales derivados memoizados: se recalculan solo cuando cambia `detail`,
   // no en cada render (AC4 — carrito de alta frecuencia).
@@ -174,19 +184,22 @@ function OrdenView({ mesa, localId, onBack, onTableUpdated }) {
     }
   }, [detail, updateOrderStatus, onTableUpdated, onBack])
 
-  const handleCobrar = useCallback(async () => {
+  // Abre el modal de pago (con validación de split payments)
+  const handleCobrar = useCallback(() => {
     if (!detail?.active_orders?.length) return
-    // AC2 (OP-03): Block cobrar if there are unresolved split payments
     if (hasSplits && !splitFullyPaid) {
       setErrorMsg('Pago dividido incompleto. Aprueba todos los pagos antes de cobrar.')
       return
     }
-    setCobrarLoading(true)
     setErrorMsg('')
+    setShowMPModal(true)
+  }, [detail, hasSplits, splitFullyPaid])
+
+  // Llamado por MercadoPagoModal al aprobar el pago (order ya COMPLETED vía simulate)
+  const handlePaymentSuccess = useCallback(async () => {
+    setShowMPModal(false)
+    setCobrarLoading(true)
     try {
-      for (const order of detail.active_orders) {
-        await updateOrderStatus(order.id, 'COMPLETED')
-      }
       await apiRequest(`/mesas/${mesa.id}/state`, {
         method: 'PATCH',
         body: { state: 'libre' },
@@ -195,10 +208,10 @@ function OrdenView({ mesa, localId, onBack, onTableUpdated }) {
       onTableUpdated?.()
       onBack()
     } catch (err) {
-      setErrorMsg(err.message || 'Error al cobrar la orden')
+      setErrorMsg(err.message || 'Error al finalizar el cobro')
       setCobrarLoading(false)
     }
-  }, [detail, hasSplits, splitFullyPaid, updateOrderStatus, mesa, firstOrder, allItems, subtotal, iva, total, onTableUpdated, onBack])
+  }, [mesa, firstOrder, allItems, subtotal, iva, total, onTableUpdated, onBack])
 
   const formatItemName = (item) => item.item_name || item.product_name || '—'
 
@@ -232,6 +245,16 @@ function OrdenView({ mesa, localId, onBack, onTableUpdated }) {
           orderTotal={total}
           onClose={() => { setShowSplitModal(false); refresh() }}
           onFullyPaid={() => { setSplitFullyPaid(true); setHasSplits(true) }}
+        />
+      )}
+
+      {firstOrder && (
+        <MercadoPagoModal
+          open={showMPModal}
+          orderId={firstOrder.id}
+          total={total}
+          onSuccess={handlePaymentSuccess}
+          onClose={() => setShowMPModal(false)}
         />
       )}
 

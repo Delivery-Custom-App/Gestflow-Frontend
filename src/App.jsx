@@ -3,6 +3,7 @@ import LoadingPage from './components/LoadingPage'
 import LoginPage from './components/LoginPage'
 import AuthenticatedApp from './routes/AuthenticatedRoutes'
 import NetworkErrorModal from './components/NetworkErrorModal'
+import MercadoPagoReturn from './components/MercadoPagoReturn'
 import { AppAuthProvider, useAuth } from './context/AuthContext'
 import { ThemeProvider } from './context/ThemeContext'
 
@@ -28,6 +29,7 @@ function App() {
       <AppAuthProvider>
         <AppContent />
         <NetworkErrorModal />
+        <MercadoPagoReturn />
       </AppAuthProvider>
     </ThemeProvider>
   )
