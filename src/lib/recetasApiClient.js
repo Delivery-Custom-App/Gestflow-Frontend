@@ -1,6 +1,11 @@
 import { apiRequest } from './apiClient'
 
-const recetasBaseUrl = import.meta.env.VITE_RECETAS_API_URL || ''
+// SEC-04: si VITE_RECETAS_API_URL no está definida, se usa la URL del backend
+// principal (VITE_API_URL) en lugar de quedar vacía. Antes, al quedar vacía, las
+// llamadas iban al dominio actual (sin el endpoint) y rompían el módulo de recetas.
+// Las recetas las sirve el mismo monolito, por lo que el fallback es correcto.
+const recetasBaseUrl =
+  import.meta.env.VITE_RECETAS_API_URL || import.meta.env.VITE_API_URL || ''
 
 function buildRecetasUrl(path) {
   const normalizedPath = path.startsWith('/') ? path : `/${path}`
