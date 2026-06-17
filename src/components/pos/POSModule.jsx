@@ -11,9 +11,10 @@ import DeleteMesaModal from './DeleteMesaModal'
 import MesaDetailModal from './MesaDetailModal'
 import OrdenView from './OrdenView'
 import PrinterConfigModal from './PrinterConfigModal'
+import MPConfigDrawer from './MPConfigDrawer'
 import { useAuth } from '../../context/AuthContext'
 import { Button } from '@/components/ui/button'
-import { Printer } from 'lucide-react'
+import { Printer, Settings2 } from 'lucide-react'
 
 export default function POSModule() {
   const { isWorker } = useAuth()
@@ -33,6 +34,7 @@ export default function POSModule() {
   const [showMesaDetail, setShowMesaDetail] = useState(false)
   const [selectedOrdenMesa, setSelectedOrdenMesa] = useState(null)
   const [showPrinterConfig, setShowPrinterConfig] = useState(false)
+  const [showMPConfig, setShowMPConfig] = useState(false)
   const kpiRefreshRef = useRef(null)
 
   const handleSubmitMesa = async (formData) => {
@@ -132,6 +134,13 @@ export default function POSModule() {
           <div className="flex items-center justify-end mb-4 pr-20">
             <div className="flex items-center gap-2">
               <button
+                onClick={() => setShowMPConfig(true)}
+                title="Configurar POS MercadoPago"
+                className="flex items-center justify-center w-8 h-8 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--card))] text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-950/30 transition-colors"
+              >
+                <Settings2 size={15} />
+              </button>
+              <button
                 onClick={() => setShowPrinterConfig(true)}
                 title="Configurar ticketera"
                 className="flex items-center justify-center w-8 h-8 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--card))] text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-950/30 transition-colors"
@@ -214,6 +223,12 @@ export default function POSModule() {
         open={showPrinterConfig}
         localId={localId}
         onClose={() => setShowPrinterConfig(false)}
+      />
+
+      <MPConfigDrawer
+        open={showMPConfig}
+        localId={localId}
+        onClose={() => setShowMPConfig(false)}
       />
     </>
   )
