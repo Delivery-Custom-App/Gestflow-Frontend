@@ -1,18 +1,23 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import {
   createSplitPayment,
   deleteSplitPayment,
   getSplitPaymentSummary,
   updateSplitPayment,
+  createPointCharge,
+  getPointOrderStatus,
+  cancelPointCharge,
+  printComanda,
 } from '../../lib/apiClient'
 
 const PAYMENT_METHODS = [
-  { value: 'CASH',     label: 'Efectivo' },
-  { value: 'CARD',     label: 'Tarjeta' },
-  { value: 'DEBIT',    label: 'Débito' },
-  { value: 'CREDIT',   label: 'Crédito' },
-  { value: 'TRANSFER', label: 'Transferencia' },
+  { value: 'CASH',               label: 'Efectivo' },
+  { value: 'CARD',               label: 'Tarjeta' },
+  { value: 'DEBIT',              label: 'Débito' },
+  { value: 'CREDIT',             label: 'Crédito' },
+  { value: 'TRANSFER',           label: 'Transferencia' },
+  { value: 'MERCADOPAGO_POINT',  label: 'MercadoPago' },
 ]
 
 const STATUS_BADGE = {
@@ -31,18 +36,45 @@ const STATUS_LABEL = {
   CANCELLED:  'Cancelado',
 }
 
+// Estado del intent en la terminal
+const POINT_STATE_LABEL = {
+  OPEN:        'Enviando a terminal...',
+  ON_TERMINAL: 'Esperando tarjeta...',
+  PROCESSING:  'Procesando pago...',
+  PROCESSED:   'Procesado',
+  CANCELLED:   'Cancelado',
+}
+
 function fmt(n) {
   return Number(n || 0).toLocaleString('es-CL')
 }
 
+// ── Icono terminal ─────────────────────────────────────────────────────────
+function TerminalIcon({ className = 'w-4 h-4' }) {
+  return (
+    <svg className={className} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+      <rect x="2" y="3" width="20" height="14" rx="2" />
+      <path strokeLinecap="round" d="M8 21h8M12 17v4" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M6 8h4M6 11h2" />
+    </svg>
+  )
+}
+
 export default function MultiPaymentModal({ order, orderTotal, onClose, onFullyPaid }) {
-  const [summary, setSummary]       = useState(null)
-  const [loading, setLoading]       = useState(true)
-  const [saving, setSaving]         = useState(false)
-  const [error, setError]           = useState('')
-  const [newAmount, setNewAmount]   = useState('')
-  const [newMethod, setNewMethod]   = useState('CASH')
-  const [newLabel, setNewLabel]     = useState('')
+  const [summary, setSummary]     = useState(null)
+  const [loading, setLoading]     = useState(true)
+  const [saving, setSaving]       = useState(false)
+  const [error, setError]         = useState('')
+  const [newAmount, setNewAmount] = useState('')
+  const [newMethod, setNewMethod] = useState('CASH')
+  const [newLabel, setNewLabel]   = useState('')
+
+  // Estado del intent de Point activo
+  const [pointIntent, setPointIntent] = useState(null)
+  // pointIntent: { splitId, intentId, deviceId, terminalState }
+  const pollRef = useRef(null)
+  const [lastApprovedOrderId, setLastApprovedOrderId] = useState(null)
+  const [printing, setPrinting] = useState(false)
 
   const loadSummary = useCallback(async () => {
     try {
@@ -58,10 +90,51 @@ export default function MultiPaymentModal({ order, orderTotal, onClose, onFullyP
 
   useEffect(() => { loadSummary() }, [loadSummary])
 
-  // Auto-notify parent when fully paid
   useEffect(() => {
     if (summary?.is_fully_paid) onFullyPaid?.()
   }, [summary?.is_fully_paid, onFullyPaid])
+
+  // ── Polling del cobro Point (consulta nuestra BD vía backend) ─────────────
+  useEffect(() => {
+    if (!pointIntent) return
+
+    const pollOnce = async () => {
+      try {
+        const status = await getPointOrderStatus(order.id)
+
+        if (status.order_status === 'COMPLETED') {
+          stopPolling()
+          await loadSummary()
+          setLastApprovedOrderId(order.id)
+          setPointIntent(null)
+        } else if (status.order_status === 'CANCELLED') {
+          stopPolling()
+          setPointIntent(null)
+        } else if (status.point_charge_expired) {
+          stopPolling()
+          setPointIntent(null)
+          setError('No detectamos el pago en la terminal. Verificá el monto y volvé a cobrar.')
+        }
+      } catch {
+        // ignorar errores de red durante polling
+      }
+    }
+
+    pollOnce()
+    pollRef.current = setInterval(pollOnce, 3000)
+
+    return () => stopPolling()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pointIntent])
+
+  function stopPolling() {
+    if (pollRef.current) {
+      clearInterval(pollRef.current)
+      pollRef.current = null
+    }
+  }
+
+  // ── Handlers ───────────────────────────────────────────────────────────────
 
   const handleAdd = async () => {
     const amt = parseFloat(newAmount)
@@ -112,6 +185,45 @@ export default function MultiPaymentModal({ order, orderTotal, onClose, onFullyP
     }
   }
 
+  const handlePointCharge = async (split) => {
+    setSaving(true)
+    setError('')
+    try {
+      await createPointCharge(order.id, {
+        amount: Math.round(split.amount),
+        description: split.comensal_label || 'Pago en terminal',
+      })
+      setPointIntent({ splitId: split.id })
+    } catch (err) {
+      setError(err.message || 'Error al conectar con la terminal')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handlePrintBoleta = async () => {
+    setPrinting(true)
+    try {
+      await printComanda(order.id)
+      setLastApprovedOrderId(null)
+    } catch (err) {
+      setError(err.message || 'Error al imprimir boleta')
+    } finally {
+      setPrinting(false)
+    }
+  }
+
+  const handlePointCancel = async () => {
+    if (!pointIntent) return
+    stopPolling()
+    try {
+      await cancelPointCharge(order.id)
+    } catch {
+      // ignorar — la orden puede ya estar cancelada
+    }
+    setPointIntent(null)
+  }
+
   const splits    = summary?.splits || []
   const remaining = summary?.remaining ?? orderTotal
   const approved  = summary?.total_approved ?? 0
@@ -157,6 +269,61 @@ export default function MultiPaymentModal({ order, orderTotal, onClose, onFullyP
           )}
         </div>
 
+        {/* Banner de terminal activa */}
+        {pointIntent && (
+          <div className="mx-6 mt-3 flex items-center justify-between px-4 py-3 rounded-xl bg-blue-50 border border-blue-200">
+            <div className="flex items-center gap-3">
+              <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin shrink-0" />
+              <div>
+                <p className="text-sm font-semibold text-blue-800">Terminal activa</p>
+                <p className="text-xs text-blue-600">
+                  {POINT_STATE_LABEL[pointIntent.terminalState] || 'Conectando...'}
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={handlePointCancel}
+              className="text-xs px-3 py-1.5 rounded-lg border border-blue-300 text-blue-700 hover:bg-blue-100 transition-colors"
+            >
+              Cancelar
+            </button>
+          </div>
+        )}
+
+        {/* Banner boleta post-pago Point */}
+        {lastApprovedOrderId && !pointIntent && (
+          <div className="mx-6 mt-3 flex items-center justify-between px-4 py-3 rounded-xl bg-green-50 border border-green-200">
+            <div>
+              <p className="text-sm font-semibold text-green-800">Pago aprobado</p>
+              <p className="text-xs text-green-600">Podés imprimir la boleta ahora</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handlePrintBoleta}
+                disabled={printing}
+                className="flex items-center gap-1.5 text-xs px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-lg disabled:opacity-50 transition-colors font-medium"
+              >
+                {printing ? (
+                  <div className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2" />
+                    <rect x="6" y="14" width="12" height="8" rx="1" />
+                  </svg>
+                )}
+                {printing ? 'Imprimiendo...' : 'Imprimir boleta'}
+              </button>
+              <button
+                onClick={() => setLastApprovedOrderId(null)}
+                className="text-xs text-green-600 hover:text-green-800"
+                title="Cerrar"
+              >
+                ✕
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Error */}
         {error && (
           <div className="mx-6 mt-3 px-3 py-2 rounded-lg bg-red-50 border border-red-200 text-sm text-red-600">
@@ -175,48 +342,84 @@ export default function MultiPaymentModal({ order, orderTotal, onClose, onFullyP
               No hay pagos registrados. Agrega comensales abajo.
             </p>
           ) : (
-            splits.map((s) => (
-              <div
-                key={s.id}
-                className="flex items-center justify-between bg-[hsl(var(--accent))] rounded-xl px-4 py-3 gap-2"
-              >
-                <div className="min-w-0">
-                  <p className="text-sm font-medium text-[hsl(var(--foreground))] truncate">{s.comensal_label}</p>
-                  <p className="text-xs text-[hsl(var(--muted-foreground))]">
-                    {PAYMENT_METHODS.find(m => m.value === s.payment_method)?.label || s.payment_method}
-                    {s.external_transaction_id && (
-                      <span className="ml-1 font-mono">· MP {s.external_transaction_id.slice(0, 8)}</span>
+            splits.map((s) => {
+              const isPoint      = s.payment_method === 'MERCADOPAGO_POINT'
+              const isThisPolling = pointIntent?.splitId === s.id
+
+              return (
+                <div
+                  key={s.id}
+                  className="flex items-center justify-between bg-[hsl(var(--accent))] rounded-xl px-4 py-3 gap-2"
+                >
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-[hsl(var(--foreground))] truncate">{s.comensal_label}</p>
+                    <p className="text-xs text-[hsl(var(--muted-foreground))] flex items-center gap-1">
+                      {isPoint && <TerminalIcon className="w-3 h-3" />}
+                      {PAYMENT_METHODS.find(m => m.value === s.payment_method)?.label || s.payment_method}
+                      {s.external_transaction_id && (
+                        <span className="ml-1 font-mono">· MP {s.external_transaction_id.slice(0, 8)}</span>
+                      )}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className="text-sm font-semibold text-[hsl(var(--foreground))]">${fmt(s.amount)}</span>
+                    <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${STATUS_BADGE[s.payment_status] || 'bg-gray-100 text-gray-600'}`}>
+                      {STATUS_LABEL[s.payment_status] || s.payment_status}
+                    </span>
+
+                    {s.payment_status === 'PENDING' && (
+                      isPoint ? (
+                        isThisPolling ? (
+                          /* Terminal procesando este split */
+                          <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+                        ) : (
+                          /* Botón cobrar en terminal */
+                          <>
+                            <button
+                              onClick={() => handlePointCharge(s)}
+                              disabled={saving || !!pointIntent}
+                              className="flex items-center gap-1 text-xs px-2 py-1 bg-[#009ee3] hover:bg-[#0082c0] text-white rounded-lg disabled:opacity-50 transition-colors"
+                              title="Cobrar en terminal MP Point"
+                            >
+                              <TerminalIcon className="w-3 h-3" />
+                              Cobrar
+                            </button>
+                            <button
+                              onClick={() => handleDelete(s.id)}
+                              disabled={saving}
+                              className="text-xs px-2 py-1 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg disabled:opacity-50"
+                              title="Eliminar"
+                            >
+                              ✕
+                            </button>
+                          </>
+                        )
+                      ) : (
+                        /* Métodos manuales: aprobar o eliminar */
+                        <>
+                          <button
+                            onClick={() => handleApprove(s.id)}
+                            disabled={saving}
+                            className="text-xs px-2 py-1 bg-green-600 hover:bg-green-700 text-white rounded-lg disabled:opacity-50"
+                            title="Marcar como pagado"
+                          >
+                            ✓
+                          </button>
+                          <button
+                            onClick={() => handleDelete(s.id)}
+                            disabled={saving}
+                            className="text-xs px-2 py-1 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg disabled:opacity-50"
+                            title="Eliminar"
+                          >
+                            ✕
+                          </button>
+                        </>
+                      )
                     )}
-                  </p>
+                  </div>
                 </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  <span className="text-sm font-semibold text-[hsl(var(--foreground))]">${fmt(s.amount)}</span>
-                  <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${STATUS_BADGE[s.payment_status] || 'bg-gray-100 text-gray-600'}`}>
-                    {STATUS_LABEL[s.payment_status] || s.payment_status}
-                  </span>
-                  {s.payment_status === 'PENDING' && (
-                    <>
-                      <button
-                        onClick={() => handleApprove(s.id)}
-                        disabled={saving}
-                        className="text-xs px-2 py-1 bg-green-600 hover:bg-green-700 text-white rounded-lg disabled:opacity-50"
-                        title="Marcar como pagado"
-                      >
-                        ✓
-                      </button>
-                      <button
-                        onClick={() => handleDelete(s.id)}
-                        disabled={saving}
-                        className="text-xs px-2 py-1 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg disabled:opacity-50"
-                        title="Eliminar"
-                      >
-                        ✕
-                      </button>
-                    </>
-                  )}
-                </div>
-              </div>
-            ))
+              )
+            })
           )}
         </div>
 
@@ -261,6 +464,14 @@ export default function MultiPaymentModal({ order, orderTotal, onClose, onFullyP
                 + Agregar
               </Button>
             </div>
+
+            {/* Ayuda contextual para Point */}
+            {newMethod === 'MERCADOPAGO_POINT' && (
+              <p className="text-xs text-blue-600 bg-blue-50 border border-blue-100 rounded-lg px-3 py-2">
+                Al agregar este comensal aparecerá un botón <strong>"Cobrar"</strong> para enviar el pago a la terminal física.
+              </p>
+            )}
+
             {/* Quick-fill remaining */}
             {remaining > 0 && assigned < orderTotal && (
               <button

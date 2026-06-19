@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
 import { apiRequest, getAuthContext } from '../../lib/apiClient'
 import {
-  getInventorySuppliersForLocal,
   getLocalById,
+  getSuppliersWithMetricsForBusiness,
   postCategory,
   postInventoryNewProduct,
   postSupplier,
@@ -33,6 +33,10 @@ const numInputCls =
   'focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary)/0.3)] ' +
   '[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none'
 
+const selectCls =
+  'h-9 w-full rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3 py-1 text-sm shadow-sm ' +
+  'focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary)/0.3)] disabled:cursor-not-allowed disabled:opacity-50'
+
 function NuevoProductoModal({ open, localId, onClose, onSuccess }) {
   const [submitting,       setSubmitting]       = useState(false)
   const [error,            setError]            = useState('')
@@ -57,8 +61,21 @@ function NuevoProductoModal({ open, localId, onClose, onSuccess }) {
     setSuppliersLoading(true)
     setSuppliersError('')
     try {
-      const rows = await getInventorySuppliersForLocal(localId)
-      const list = Array.isArray(rows) ? rows : []
+      const [{ businessId: bidFromToken }, loc] = await Promise.all([
+        getAuthContext(),
+        getLocalById(localId).catch(() => null),
+      ])
+      const businessId =
+        loc?.business_id != null ? String(loc.business_id) :
+        bidFromToken != null     ? String(bidFromToken)     : null
+      if (!businessId) {
+        setSuppliers([])
+        setSupplierId('')
+        setSuppliersError('No se pudo determinar el negocio del local.')
+        return
+      }
+      const rows = await getSuppliersWithMetricsForBusiness(businessId, { localId })
+      const list = (Array.isArray(rows) ? rows : []).filter((s) => s.is_active !== false)
       setSuppliers(list)
       setSupplierId((prev) => {
         if (prev && list.some((s) => String(s.id) === prev)) return prev
@@ -120,7 +137,7 @@ function NuevoProductoModal({ open, localId, onClose, onSuccess }) {
         if (loc?.business_id != null) businessId = String(loc.business_id)
       }
       if (!businessId) { setError('No se pudo determinar el negocio del local.'); return }
-      const created = await postSupplier({ name, business_id: businessId })
+      const created = await postSupplier({ name, business_id: businessId, local_id: localId })
       setNewSupplierName('')
       await loadSuppliers()
       if (created?.id) setSupplierId(String(created.id))
@@ -268,7 +285,7 @@ function NuevoProductoModal({ open, localId, onClose, onSuccess }) {
                 <SelectTrigger id="np-unit" className="h-9 text-sm">
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="z-[600]">
                   {UNITS.map((u) => (
                     <SelectItem key={u.value} value={u.value}>{u.label}</SelectItem>
                   ))}
@@ -339,28 +356,25 @@ function NuevoProductoModal({ open, localId, onClose, onSuccess }) {
           {/* Proveedor */}
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="np-supplier">Proveedor <span className="text-red-500">*</span></Label>
-            <Select
+            <select
+              id="np-supplier"
               value={supplierId}
-              onValueChange={setSupplierId}
+              onChange={(ev) => setSupplierId(ev.target.value)}
               disabled={suppliersLoading || suppliers.length === 0 || submitting}
+              aria-busy={suppliersLoading}
+              className={selectCls}
             >
-              <SelectTrigger id="np-supplier" className="h-9 text-sm" aria-busy={suppliersLoading}>
-                <SelectValue
-                  placeholder={
-                    suppliersLoading
-                      ? 'Cargando proveedores…'
-                      : suppliers.length === 0
-                        ? 'Sin proveedores — agrega uno abajo'
-                        : 'Seleccionar proveedor'
-                  }
-                />
-              </SelectTrigger>
-              <SelectContent>
-                {suppliers.map((s) => (
-                  <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              <option value="">
+                {suppliersLoading
+                  ? 'Cargando proveedores…'
+                  : suppliers.length === 0
+                    ? 'Sin proveedores — agrega uno abajo'
+                    : 'Seleccionar proveedor'}
+              </option>
+              {suppliers.map((s) => (
+                <option key={s.id} value={String(s.id)}>{s.name}</option>
+              ))}
+            </select>
 
             {!suppliersLoading && suppliers.length === 0 && (
               <div className="flex gap-2 mt-1">

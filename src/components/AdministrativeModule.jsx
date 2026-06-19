@@ -5,6 +5,7 @@ import { formatShortAddress } from '../lib/formatAddress'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useSelectedLocal } from '../hooks/useSelectedLocal'
+import { parseApiDate } from '../utils/chileDateTime'
 import { getLocalById } from '../lib/inventoryApi'
 import { useAlerts } from '../hooks/useAlerts'
 import LoadingSpinner from './LoadingSpinner'
@@ -56,6 +57,7 @@ function _normalizeOrderStatus(status) {
 
 function normalizePaymentMethod(method) {
   const value = String(method || '').toLowerCase()
+  if (value === 'mercadopago_point' || value.includes('mercadopago')) return 'MercadoPago'
   if (value.includes('cash') || value.includes('efectivo')) return 'Efectivo'
   if (value.includes('debit') || value.includes('debito')) return 'Debito'
   if (value.includes('credit') || value.includes('credito')) return 'Credito'
@@ -65,9 +67,16 @@ function normalizePaymentMethod(method) {
 
 function formatDateTime(value) {
   if (!value) return 'Sin fecha'
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return 'Sin fecha'
-  return date.toLocaleString('es-CL', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
+  const date = parseApiDate(value)
+  if (!date) return 'Sin fecha'
+  return date.toLocaleString('es-CL', {
+    day: '2-digit',
+    month: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    timeZone: 'America/Santiago',
+    hour12: true,
+  })
 }
 
 function getOrderAmount(order) {

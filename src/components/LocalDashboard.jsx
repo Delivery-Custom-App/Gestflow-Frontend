@@ -13,15 +13,21 @@ import ChartSkeleton from './ui/ChartSkeleton'
 import IncomeChart from './charts/IncomeChart'
 import {
   BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Tooltip,
-  PieChart, Pie,
+  PieChart, Pie, LabelList, LineChart, Line, Legend,
 } from 'recharts'
 import {
   Package, CheckCircle, TrendingDown, AlertTriangle, DollarSign,
   TrendingUp, Wallet, Clock, XCircle, MapPin, CreditCard, X, BarChart2, HelpCircle,
+  LineChart as LineChartIcon, PieChart as PieChartIcon,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import {
+  chileHourFromIso, formatChileHour, formatChileTime, formatPaymentPct,
+  paymentMethodLabel, CHILE_TZ, parseApiDate,
+} from '../utils/chileDateTime'
 
 const PIE_COLORS = ['#16a34a', '#f59e0b', '#ef4444']
+const PAY_CHART_COLORS = ['#16a34a', '#3b82f6', '#8b5cf6', '#f59e0b', '#6b7280']
 
 const STAGGER = {
   hidden: {},
@@ -41,11 +47,15 @@ const STATUS_CFG = {
 }
 
 function formatHourAMPM(hour) {
-  if (hour === null || hour === undefined) return '—'
-  if (hour === 0)  return '12:00 AM'
-  if (hour < 12)   return `${hour}:00 AM`
-  if (hour === 12) return '12:00 PM'
-  return `${hour - 12}:00 PM`
+  return formatChileHour(hour)
+}
+
+/** Agrupa método de pago en efectivo | mercadopago | null. */
+function paymentMethodBucket(method) {
+  const key = String(method || '').trim().toLowerCase()
+  if (key === 'mercadopago' || key === 'mercadopago_point') return 'mercadopago'
+  if (key === 'cash' || key === 'efectivo') return 'efectivo'
+  return null
 }
 
 function KpiCard({ icon: Icon, label, value, iconColor, iconBg, accentColor, loading }) {
@@ -95,9 +105,11 @@ function KpiDetailDrawer({ open, onClose, dashboard, orders, dashLoading }) {
     for (const o of orders) {
       if (!o.created_at) continue
       if (String(o.status || '').toLowerCase() === 'cancelled') continue
-      const d = new Date(o.created_at)
-      if (d < today) continue
-      counts[d.getHours()].pedidos += 1
+      const d = parseApiDate(o.created_at)
+      if (!d || d < today) continue
+      const chileHour = chileHourFromIso(o.created_at)
+      if (chileHour == null) continue
+      counts[chileHour].pedidos += 1
     }
     return counts
       .filter((d) => d.pedidos > 0)
@@ -110,8 +122,11 @@ function KpiDetailDrawer({ open, onClose, dashboard, orders, dashLoading }) {
     const counts = Array.from({ length: 24 }, (_, h) => ({ hora: h, label: formatHourAMPM(h), total: 0 }))
     for (const o of orders) {
       if (!o.created_at || String(o.status || '').toLowerCase() === 'cancelled') continue
-      const d = new Date(o.created_at)
-      if (d >= today) counts[d.getHours()].total += Number(o.total ?? 0)
+      const d = parseApiDate(o.created_at)
+      if (!d || d < today) continue
+      const chileHour = chileHourFromIso(o.created_at)
+      if (chileHour == null) continue
+      counts[chileHour].total += Number(o.total ?? 0)
     }
     return counts.filter((d) => d.total > 0)
   }, [orders])
@@ -316,6 +331,7 @@ function LocalDashboard() {
   const [orders, setOrders]               = useState([])
   const [ordersLoading, setOrdersLoading] = useState(true)
   const [drawerOpen, setDrawerOpen]       = useState(false)
+  const [payChartView, setPayChartView]   = useState('line')
   const [ordersRefreshTick, setOrdersRefreshTick] = useState(0)
   const [guideOpen, setGuideOpen]         = useState(false)
 
@@ -395,9 +411,65 @@ function LocalDashboard() {
   const recentOrders = useMemo(() =>
     [...orders]
       .filter((o) => String(o.status || '').toLowerCase() !== 'cancelled')
-      .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+      .sort((a, b) => {
+        const da = parseApiDate(a.created_at)?.getTime() ?? 0
+        const db = parseApiDate(b.created_at)?.getTime() ?? 0
+        return db - da
+      })
       .slice(0, 8)
   , [orders])
+
+  /** Monto recaudado por método de pago (CLP). */
+  const payAmountData = useMemo(() => {
+    const rows = dashboard?.payment_breakdown
+    if (!Array.isArray(rows) || !rows.length) return []
+    const totalAmount = rows.reduce((s, p) => s + Number(p.total ?? 0), 0)
+    return rows.map((p, i) => ({
+      name:  paymentMethodLabel(p.method),
+      monto: Number(p.total ?? 0),
+      color: PAY_CHART_COLORS[i % PAY_CHART_COLORS.length],
+      pct:   totalAmount > 0 ? (Number(p.total ?? 0) / totalAmount * 100) : 0,
+    }))
+  }, [dashboard?.payment_breakdown])
+
+  /** Cantidad de ventas por método de pago. */
+  const payCountData = useMemo(() => {
+    const rows = dashboard?.payment_breakdown
+    if (!Array.isArray(rows) || !rows.length) return []
+    const totalCount = rows.reduce((s, p) => s + Number(p.count ?? 0), 0)
+    return rows.map((p, i) => ({
+      name:  paymentMethodLabel(p.method),
+      ventas: Number(p.count ?? 0),
+      color: PAY_CHART_COLORS[i % PAY_CHART_COLORS.length],
+      pct:   totalCount > 0 ? (Number(p.count ?? 0) / totalCount * 100) : 0,
+    }))
+  }, [dashboard?.payment_breakdown])
+
+  /** Monto por día: evolución temporal Efectivo vs MercadoPago (eje X = fechas). */
+  const payAmountTimeSeries = useMemo(() => {
+    const now = new Date()
+    const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1))
+    const buckets = new Map()
+
+    for (const o of orders) {
+      if (String(o.status || '').toLowerCase() !== 'completed') continue
+      const d = parseApiDate(o.created_at)
+      if (!d || d < monthStart) continue
+
+      const sortKey = d.toLocaleDateString('en-CA', { timeZone: CHILE_TZ })
+      const label = d.toLocaleDateString('es-CL', { day: '2-digit', month: '2-digit', timeZone: CHILE_TZ })
+      const bucket = paymentMethodBucket(o.payment_method)
+      if (!bucket) continue
+
+      if (!buckets.has(sortKey)) {
+        buckets.set(sortKey, { label, sortKey, efectivo: 0, mercadopago: 0 })
+      }
+      const row = buckets.get(sortKey)
+      row[bucket] += Number(o.total ?? 0)
+    }
+
+    return Array.from(buckets.values()).sort((a, b) => a.sortKey.localeCompare(b.sortKey))
+  }, [orders])
 
   const finCards = [
     { icon: TrendingUp, label: 'Ventas Hoy',      value: formatMoney(dashboard?.daily_sales),        iconColor: 'text-emerald-600',           iconBg: 'bg-emerald-50', accentColor: 'border-l-emerald-500' },
@@ -623,6 +695,13 @@ function LocalDashboard() {
                       />
                       <Bar dataKey="value" radius={[6, 6, 0, 0]}>
                         {pieData.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
+                        <LabelList
+                          dataKey="value"
+                          position="top"
+                          fontSize={12}
+                          fontWeight={700}
+                          fill="hsl(var(--foreground))"
+                        />
                       </Bar>
                     </BarChart>
                   </ResponsiveContainer>
@@ -656,17 +735,16 @@ function LocalDashboard() {
                         </tr>
                       </thead>
                       <tbody>
-                        {recentOrders.map((order) => {
+                        {recentOrders.map((order, idx) => {
                           const status   = String(order.status || '').toLowerCase()
                           const cfg      = STATUS_CFG[status] || STATUS_CFG.pending
-                          const hora     = order.created_at ? new Date(order.created_at).toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' }) : '—'
-                          const shortId  = String(order.id || '').slice(0, 8)
-                          const payment  = String(order.payment_method || '').toLowerCase()
-                          const payLabel = { cash: 'Efectivo', efectivo: 'Efectivo', debit: 'Débito', debito: 'Débito', credit: 'Crédito', credito: 'Crédito', transfer: 'Transf.', other: 'Otro' }[payment] || payment || '—'
+                          const hora     = formatChileTime(order.created_at)
+                          const orderNum = recentOrders.length - idx
+                          const payLabel = paymentMethodLabel(order.payment_method)
                           return (
                             <tr key={order.id} className="border-b border-[hsl(var(--border))] last:border-0 hover:bg-[hsl(var(--muted)/0.4)] transition-colors">
                               <td className="px-5 py-3 text-[hsl(var(--muted-foreground))] text-xs">{hora}</td>
-                              <td className="px-3 py-3 font-mono text-xs text-[hsl(var(--foreground))]">{shortId}…</td>
+                              <td className="px-3 py-3 text-xs font-semibold text-[hsl(var(--foreground))]">{orderNum}</td>
                               <td className="px-3 py-3">
                                 <span className={cn('inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide', cfg.cls)}>
                                   {cfg.label}
@@ -740,47 +818,149 @@ function LocalDashboard() {
 
               <Card>
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-sm flex items-center gap-2"><CreditCard size={15} /> Distribución por Pago</CardTitle>
-                  <p className="text-xs text-[hsl(var(--muted-foreground))]">Métodos de pago este mes</p>
+                  <div className="flex items-start justify-between gap-2 flex-wrap">
+                    <div>
+                      <CardTitle className="text-sm flex items-center gap-2"><CreditCard size={15} /> Distribución por Pago</CardTitle>
+                      <p className="text-xs text-[hsl(var(--muted-foreground))] mt-0.5">
+                        {payChartView === 'line'
+                          ? 'Evolución diaria del monto recaudado (Efectivo y MercadoPago)'
+                          : 'Cantidad de ventas por método este mes'}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => setPayChartView('line')}
+                        className={cn(
+                          'flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-md transition-colors',
+                          payChartView === 'line'
+                            ? 'bg-emerald-600 text-white shadow-sm'
+                            : 'text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))]',
+                        )}
+                      >
+                        <LineChartIcon size={13} />
+                        Por monto
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPayChartView('pie')}
+                        className={cn(
+                          'flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-md transition-colors',
+                          payChartView === 'pie'
+                            ? 'bg-emerald-600 text-white shadow-sm'
+                            : 'text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))]',
+                        )}
+                      >
+                        <PieChartIcon size={13} />
+                        Por cantidad
+                      </button>
+                    </div>
+                  </div>
                 </CardHeader>
                 <CardContent>
-                  {Array.isArray(dashboard.payment_breakdown) && dashboard.payment_breakdown.length > 0 ? (() => {
-                    const LABEL  = { cash: 'Efectivo', efectivo: 'Efectivo', debit: 'Débito', debito: 'Débito', credit: 'Crédito', credito: 'Crédito', transfer: 'Transferencia', other: 'Otro' }
-                    const COLORS = ['#16a34a', '#3b82f6', '#8b5cf6', '#f59e0b', '#6b7280']
-                    const payments    = dashboard.payment_breakdown
-                    const total       = payments.reduce((s, p) => s + Number(p.total ?? 0), 0)
-                    const piePayData  = payments.map((p, i) => ({
-                      name:  LABEL[String(p.method).toLowerCase()] || p.method,
-                      value: Number(p.total ?? 0),
-                      color: COLORS[i % COLORS.length],
-                      pct:   total > 0 ? (Number(p.total) / total * 100) : 0,
-                    }))
-                    return (
-                      <div className="flex flex-col items-center gap-3">
-                        <ResponsiveContainer width="100%" height={170}>
+                  {(payChartView === 'line' ? payAmountTimeSeries.length > 0 : payCountData.length > 0) ? (
+                    <div className="flex flex-col items-center gap-3">
+                      <ResponsiveContainer width="100%" height={170}>
+                        {payChartView === 'line' ? (
+                          <LineChart data={payAmountTimeSeries} margin={{ top: 8, right: 12, left: -8, bottom: 0 }}>
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
+                            <XAxis
+                              dataKey="label"
+                              tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }}
+                              tickLine={false}
+                              axisLine={false}
+                              interval="preserveStartEnd"
+                            />
+                            <YAxis
+                              tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`}
+                              tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }}
+                              tickLine={false}
+                              axisLine={false}
+                              width={40}
+                            />
+                            <Tooltip
+                              formatter={(v, name) => [
+                                formatMoney(v),
+                                name === 'efectivo' ? 'Efectivo' : name === 'mercadopago' ? 'MercadoPago' : name,
+                              ]}
+                              labelFormatter={(label) => `Día ${label}`}
+                              contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: '8px', fontSize: 12 }}
+                            />
+                            <Legend
+                              wrapperStyle={{ fontSize: 11, paddingTop: 4 }}
+                              formatter={(value) => (value === 'efectivo' ? 'Efectivo' : 'MercadoPago')}
+                            />
+                            <Line
+                              type="monotone"
+                              dataKey="efectivo"
+                              name="efectivo"
+                              stroke="#16a34a"
+                              strokeWidth={2}
+                              dot={{ r: 3, fill: '#16a34a' }}
+                              activeDot={{ r: 5 }}
+                            />
+                            <Line
+                              type="monotone"
+                              dataKey="mercadopago"
+                              name="mercadopago"
+                              stroke="#3b82f6"
+                              strokeWidth={2}
+                              dot={{ r: 3, fill: '#3b82f6' }}
+                              activeDot={{ r: 5 }}
+                            />
+                          </LineChart>
+                        ) : (
                           <PieChart>
-                            <Pie data={piePayData} cx="50%" cy="50%" innerRadius={46} outerRadius={70} paddingAngle={3} dataKey="value">
-                              {piePayData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
+                            <Pie
+                              data={payCountData}
+                              cx="50%"
+                              cy="50%"
+                              innerRadius={46}
+                              outerRadius={70}
+                              paddingAngle={3}
+                              dataKey="ventas"
+                            >
+                              {payCountData.map((entry, i) => (
+                                <Cell key={i} fill={entry.color} />
+                              ))}
                             </Pie>
                             <Tooltip
-                              formatter={(v, n) => [formatMoney(v), n]}
+                              formatter={(v, n, props) => {
+                                const pct = props?.payload?.pct
+                                return [`${v} venta${v === 1 ? '' : 's'} (${formatPaymentPct(pct)})`, n]
+                              }}
                               contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: '8px', fontSize: 12 }}
                             />
                           </PieChart>
-                        </ResponsiveContainer>
-                        <div className="flex flex-wrap justify-center gap-x-4 gap-y-2">
-                          {piePayData.map((entry) => (
+                        )}
+                      </ResponsiveContainer>
+                      <div className="flex flex-wrap justify-center gap-x-4 gap-y-2">
+                        {payChartView === 'line' ? (
+                          payAmountData.map((entry) => (
                             <div key={entry.name} className="flex items-center gap-1.5">
                               <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: entry.color }} />
                               <span className="text-xs text-[hsl(var(--muted-foreground))]">
-                                {entry.name} <span className="font-semibold text-[hsl(var(--foreground))]">{entry.pct.toFixed(0)}%</span>
+                                {entry.name}{' '}
+                                <span className="font-semibold text-[hsl(var(--foreground))]">{formatMoney(entry.monto)}</span>
+                                <span className="text-[hsl(var(--muted-foreground))]"> ({formatPaymentPct(entry.pct)} del mes)</span>
                               </span>
                             </div>
-                          ))}
-                        </div>
+                          ))
+                        ) : (
+                          payCountData.map((entry) => (
+                            <div key={entry.name} className="flex items-center gap-1.5">
+                              <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: entry.color }} />
+                              <span className="text-xs text-[hsl(var(--muted-foreground))]">
+                                {entry.name}{' '}
+                                <span className="font-semibold text-[hsl(var(--foreground))]">{entry.ventas} venta{entry.ventas === 1 ? '' : 's'}</span>
+                                <span className="text-[hsl(var(--muted-foreground))]"> ({formatPaymentPct(entry.pct)})</span>
+                              </span>
+                            </div>
+                          ))
+                        )}
                       </div>
-                    )
-                  })() : (
+                    </div>
+                  ) : (
                     <p className="text-sm text-[hsl(var(--muted-foreground))] py-4 text-center">Sin ventas registradas.</p>
                   )}
                 </CardContent>

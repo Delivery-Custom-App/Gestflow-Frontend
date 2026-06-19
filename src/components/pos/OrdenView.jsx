@@ -7,6 +7,7 @@ import ComandaActions from './ComandaActions'
 import MultiPaymentModal from './MultiPaymentModal'
 import MercadoPagoModal from './MercadoPagoModal'
 import { Button } from '@/components/ui/button'
+import { formatChileTime } from '../../utils/chileDateTime'
 
 const STATUS_BADGE = {
   pending:   'bg-yellow-100 text-yellow-700',
@@ -48,14 +49,19 @@ function fmt(dateStr) {
 
 function fmtTime(dateStr) {
   if (!dateStr) return '—'
-  return new Date(dateStr).toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' })
+  return formatChileTime(dateStr)
 }
 
+let _printInProgress = false
+
 function openPrintWindow({ mesa, firstOrder, allItems, subtotal, iva, total }) {
+  if (_printInProgress) return
+  _printInProgress = true
+
   const now = new Date()
-  const dateStr = now.toLocaleDateString('es-CL', { day: '2-digit', month: '2-digit', year: 'numeric' })
-  const timeStr = now.toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' })
-  const orderId = firstOrder?.id ? `#${firstOrder.id.slice(0, 8).toUpperCase()}` : '—'
+  const dateStr = now.toLocaleDateString('es-CL', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'America/Santiago' })
+  const timeStr = formatChileTime(now.toISOString())
+  const orderId = firstOrder?.id ? `#${String(firstOrder.id).slice(0, 8).toUpperCase()}` : '—'
 
   const itemsHTML = allItems.map(item => `
     <tr>
@@ -90,7 +96,7 @@ function openPrintWindow({ mesa, firstOrder, allItems, subtotal, iva, total }) {
 <body>
   <div class="center">
     <h2>RESTAURANTE</h2>
-    <p style="font-weight:700">COMANDA</p>
+    <p style="font-weight:700">BOLETA</p>
     <p style="font-family:monospace">${orderId}</p>
   </div>
   <hr/>
@@ -112,7 +118,6 @@ function openPrintWindow({ mesa, firstOrder, allItems, subtotal, iva, total }) {
   <div class="row"><span>IVA 19%:</span><span>$ ${iva.toLocaleString('es-CL')}</span></div>
   <div class="row total"><span>TOTAL:</span><span>$ ${total.toLocaleString('es-CL')}</span></div>
   <p class="small">Fecha: ${dateStr} ${timeStr}</p>
-  <script>window.onload = function(){ window.print(); }</script>
 </body>
 </html>`
 
@@ -127,6 +132,7 @@ function openPrintWindow({ mesa, firstOrder, allItems, subtotal, iva, total }) {
     iframe.contentWindow.focus()
     iframe.contentWindow.print()
     setTimeout(() => {
+      _printInProgress = false
       if (document.body.contains(iframe)) document.body.removeChild(iframe)
     }, 3000)
   }

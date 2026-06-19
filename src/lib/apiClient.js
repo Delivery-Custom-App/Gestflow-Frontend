@@ -294,3 +294,31 @@ export async function updateSplitPayment(splitId, updates) {
 export async function deleteSplitPayment(splitId) {
   return apiRequest(`/split-payments/${splitId}`, { method: 'DELETE' })
 }
+
+// ─── MercadoPago Point Smart 2 — In-Store Orders API (Chile) ────────────────
+
+/** Envía el cobro de una orden a la terminal Point Smart 2. */
+export async function createPointCharge(orderId, body = {}) {
+  return apiRequest(`/payments/point/orders/${orderId}/charge`, {
+    method: 'POST',
+    body,
+  })
+}
+
+/**
+ * Polling de estado: consulta nuestra BD (actualizada por el webhook de MP).
+ * Devuelve { order_id, order_status, payment_status, payment_method }.
+ */
+export async function getPointOrderStatus(orderId) {
+  return apiRequest(`/payments/point/orders/${orderId}/status`)
+}
+
+/** Cancela la orden pendiente en la terminal (libera la pantalla del dispositivo). */
+export async function cancelPointCharge(orderId) {
+  return apiRequest(`/payments/point/orders/${orderId}/charge`, { method: 'DELETE' })
+}
+
+/** Lista las terminales Point vinculadas a la cuenta de MercadoPago. */
+export async function listPointDevices() {
+  return apiRequest('/payments/point/devices')
+}
