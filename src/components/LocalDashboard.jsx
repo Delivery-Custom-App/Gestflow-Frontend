@@ -53,7 +53,7 @@ function formatHourAMPM(hour) {
 /** Agrupa método de pago en efectivo | mercadopago | null. */
 function paymentMethodBucket(method) {
   const key = String(method || '').trim().toLowerCase()
-  if (key === 'mercadopago' || key === 'mercadopago_point') return 'mercadopago'
+  if (key === 'mercadopago' || key.startsWith('mercadopago_point')) return 'mercadopago'
   if (key === 'cash' || key === 'efectivo') return 'efectivo'
   return null
 }

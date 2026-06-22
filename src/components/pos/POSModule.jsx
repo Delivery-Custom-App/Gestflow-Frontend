@@ -13,6 +13,7 @@ import OrdenView from './OrdenView'
 import PrinterConfigModal from './PrinterConfigModal'
 import MPConfigDrawer from './MPConfigDrawer'
 import { useAuth } from '../../context/AuthContext'
+import { useCajaActiva } from '../../hooks/useCajaActiva'
 import { Button } from '@/components/ui/button'
 import { Printer, Settings2 } from 'lucide-react'
 
@@ -20,6 +21,7 @@ export default function POSModule() {
   const { isWorker } = useAuth()
   const { pathname } = useLocation()
   const { localId } = useParams()
+  const { cajaId } = useCajaActiva(localId)
   const { mesas, loading: mesasLoading, createMesa, updateMesa, deleteMesa, refresh: refreshMesas } = useMesasConEstado(localId)
   const activeView = pathname.endsWith('/cocina') ? 'cocina' : 'mesas'
   const [showModal, setShowModal] = useState(false)
@@ -214,6 +216,7 @@ export default function POSModule() {
         <MesaDetailModal
           mesa={selectedMesaDetail}
           localId={localId}
+          cajaId={cajaId}
           onClose={handleMesaDetailClose}
           onTableUpdated={handleTableUpdated}
         />

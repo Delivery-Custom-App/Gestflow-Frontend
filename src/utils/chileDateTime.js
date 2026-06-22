@@ -65,7 +65,9 @@ export function paymentMethodLabel(method) {
     transfer: 'Transferencia',
     transferencia: 'Transferencia',
     mercadopago: 'MercadoPago',
-    mercadopago_point: 'MercadoPago',
+    mercadopago_point: 'MercadoPago Point',
+    mercadopago_point_debit: 'MP Débito',
+    mercadopago_point_credit: 'MP Crédito',
     other: 'Otro',
   }
   return MAP[key] || (key ? key : '—')

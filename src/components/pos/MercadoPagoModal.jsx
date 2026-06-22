@@ -14,11 +14,12 @@ function fmt(n) {
 
 export default function MercadoPagoModal({ open, orderId, total, onSuccess, onClose }) {
   const [step, setStep]               = useState('select')
-  // steps: 'select' | 'mp_checkout' | 'mp_demo' | 'point_ready' | 'point_waiting'
+  // steps: 'select' | 'mp_checkout' | 'mp_demo' | 'point_ready' | 'point_waiting' | 'point_success'
   const [checkoutUrl, setCheckoutUrl] = useState(null)
   const [loading, setLoading]         = useState(false)
   const [error, setError]             = useState(null)
   const [terminalMsg, setTerminalMsg] = useState('Conectando con la terminal...')
+  const [paymentDetail, setPaymentDetail] = useState(null)
   const pollRef = useRef(null)
 
   const stopPolling = () => {
@@ -37,6 +38,7 @@ export default function MercadoPagoModal({ open, orderId, total, onSuccess, onCl
     setLoading(false)
     setError(null)
     setTerminalMsg('Conectando con la terminal...')
+    setPaymentDetail(null)
   }
 
   const handleClose = () => { reset(); onClose() }
@@ -110,8 +112,8 @@ export default function MercadoPagoModal({ open, orderId, total, onSuccess, onCl
 
         if (s.order_status === 'COMPLETED') {
           stopPolling()
-          reset()
-          onSuccess('MERCADOPAGO_POINT')
+          setPaymentDetail(s.payment_detail || null)
+          setStep('point_success')
           return
         }
 
@@ -173,6 +175,7 @@ export default function MercadoPagoModal({ open, orderId, total, onSuccess, onCl
             onClick={handleClose}
             disabled={step === 'point_waiting'}
             className="text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] text-xl leading-none disabled:opacity-30"
+            disabled={step === 'point_waiting' || step === 'point_success'}
           >
             ✕
           </button>
@@ -291,6 +294,35 @@ export default function MercadoPagoModal({ open, orderId, total, onSuccess, onCl
             </div>
           )}
 
+          {/* ── Point: pago detectado ─────────────────────────────────────── */}
+          {step === 'point_success' && (
+            <div className="space-y-3">
+              <div className="bg-green-50 border border-green-200 rounded-xl p-4 text-center">
+                <p className="text-2xl mb-1">✅</p>
+                <p className="text-sm font-semibold text-green-900">Pago detectado</p>
+                {paymentDetail && (
+                  <div className="mt-3 text-left space-y-1">
+                    <p className="text-xs text-green-800 font-medium">Tipo: <span className="font-bold">{paymentDetail.payment_type_id}</span></p>
+                    <p className="text-xs text-green-800">Marca: <span className="font-bold">{paymentDetail.payment_method_id}</span></p>
+                    <p className="text-xs text-green-800">Últimos 4: <span className="font-bold">**** {paymentDetail.card_last_four}</span></p>
+                    <p className="text-xs text-green-800">Cuotas: <span className="font-bold">{paymentDetail.installments}</span></p>
+                    <p className="text-xs text-green-800">Autorización: <span className="font-bold">{paymentDetail.authorization_code}</span></p>
+                    <details className="mt-2">
+                      <summary className="text-xs text-green-600 cursor-pointer">Ver JSON completo</summary>
+                      <pre className="text-xs text-green-700 mt-1 bg-green-100 rounded p-2 overflow-auto max-h-40 whitespace-pre-wrap">{JSON.stringify(paymentDetail, null, 2)}</pre>
+                    </details>
+                  </div>
+                )}
+              </div>
+              <button
+                onClick={() => { reset(); onSuccess(paymentDetail?.payment_type_id?.includes('debit') ? 'mercadopago_point_debit' : paymentDetail?.payment_type_id?.includes('credit') ? 'mercadopago_point_credit' : 'MERCADOPAGO_POINT') }}
+                className="w-full py-2.5 rounded-xl bg-green-600 hover:bg-green-700 text-white text-sm font-semibold transition-colors"
+              >
+                Confirmar y cerrar
+              </button>
+            </div>
+          )}
+
           {/* ── MP demo (sin credenciales) ────────────────────────────────── */}
           {step === 'mp_demo' && (
             <div className="space-y-3">
@@ -317,7 +349,7 @@ export default function MercadoPagoModal({ open, orderId, total, onSuccess, onCl
           <div className="px-6 pb-4">
             <button
               onClick={() => { stopPolling(); setStep('select'); setError(null) }}
-              disabled={step === 'point_waiting'}
+              disabled={step === 'point_waiting' || step === 'point_success'}
               className="text-xs text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] underline disabled:opacity-30 disabled:no-underline"
             >
               ← Volver a métodos

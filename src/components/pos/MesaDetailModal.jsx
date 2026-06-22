@@ -362,7 +362,7 @@ function SandwichCustomizer({ item, qty, customization, onChange, availableProdu
 }
 
 /* ─── modal principal ─────────────────────────────────────── */
-export default function MesaDetailModal({ mesa, localId, onClose, onTableUpdated }) {
+export default function MesaDetailModal({ mesa, localId, cajaId, onClose, onTableUpdated }) {
   const { data: menuData, loading: menuLoading, fetch: fetchMenu } = useMenuPOS(localId)
 
   const [recipes, setRecipes]               = useState([])
@@ -483,7 +483,7 @@ export default function MesaDetailModal({ mesa, localId, onClose, onTableUpdated
       })
       await apiRequest('/orders', {
         method: 'POST',
-        body: { local_id: localId, mesa_id: mesa.id, source: 'dine-in', payment_method: 'CASH', items },
+        body: { local_id: localId, mesa_id: mesa.id, caja_id: cajaId || null, source: 'dine-in', payment_method: 'CASH', items },
       })
       onTableUpdated?.()
       onClose?.()
