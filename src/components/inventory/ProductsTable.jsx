@@ -27,8 +27,6 @@ function ProductsTable({
   loading,
   error,
   currentPage,
-  totalPages,
-  totalCount = 0,
   pageSize = 10,
   onPageChange,
   onEmptyAction,
@@ -49,13 +47,13 @@ function ProductsTable({
   const [deleting, setDeleting] = useState(false)
   const [expandedGroups, setExpandedGroups] = useState(new Set())
 
-  // Group items by product name; groups with 1 row render as-is, >1 render as expandable
+  // Group items by product name + category; groups with 1 row render as-is, >1 render as expandable
   const groupedItems = useMemo(() => {
     const map = new Map()
     for (const row of items) {
       const raw = (row.product_name || row.name || '').trim()
       const display = raw ? raw.charAt(0).toUpperCase() + raw.slice(1).toLowerCase() : ''
-      const key = raw.toLowerCase()
+      const key = `${raw.toLowerCase()}|${(row.category_name || '').toLowerCase()}`
       if (!map.has(key)) map.set(key, { key, display, rows: [] })
       map.get(key).rows.push(row)
     }
@@ -63,6 +61,11 @@ function ProductsTable({
   }, [items])
 
   useEffect(() => { setExpandedGroups(new Set()) }, [items])
+
+  // Paginar grupos (no items crudos) para que el agrupamiento funcione entre páginas
+  const groupedTotalPages = Math.max(1, Math.ceil(groupedItems.length / pageSize))
+  const safePage = Math.min(Math.max(1, currentPage), groupedTotalPages)
+  const pagedGroups = groupedItems.slice((safePage - 1) * pageSize, safePage * pageSize)
 
   const toggleGroup = (key) => {
     setExpandedGroups((prev) => {
@@ -73,8 +76,8 @@ function ProductsTable({
     })
   }
 
-  const showPagination = !error && !loading && totalPages > 1
-  const showCount = !error && !loading && totalCount > 0
+  const showPagination = !error && !loading && groupedTotalPages > 1
+  const showCount = !error && !loading && groupedItems.length > 0
 
   const closeEditModal = () => {
     setEditingRow(null)
@@ -153,9 +156,9 @@ function ProductsTable({
       {showCount ? (
         <p className="text-sm text-[hsl(var(--muted-foreground))]">
           {(() => {
-            const from = items.length === 0 ? 0 : (currentPage - 1) * pageSize + 1
-            const to = (currentPage - 1) * pageSize + items.length
-            return `Mostrando ${from}–${to} de ${totalCount} productos`
+            const from = pagedGroups.length === 0 ? 0 : (safePage - 1) * pageSize + 1
+            const to = (safePage - 1) * pageSize + pagedGroups.length
+            return `Mostrando ${from}–${to} de ${groupedItems.length} productos`
           })()}
         </p>
       ) : null}
@@ -164,22 +167,21 @@ function ProductsTable({
         <Table className="w-full table-fixed text-xs">
           <TableHeader>
             <TableRow className="bg-[hsl(var(--muted)/0.4)]">
-              <TableHead className="w-[14%] font-semibold">Producto</TableHead>
-              <TableHead className="w-[10%] font-semibold">Categoría</TableHead>
-              <TableHead className="w-[12%] font-semibold">Proveedor</TableHead>
-              <TableHead className="w-[8%] font-semibold text-right text-emerald-700">Actual</TableHead>
-              <TableHead className="w-[7%] font-semibold text-right text-amber-600">Mín.</TableHead>
-              <TableHead className="w-[7%] font-semibold text-right text-sky-600">Máx.</TableHead>
-              <TableHead className="w-[10%] font-semibold text-right">Costo (CLP)</TableHead>
-              <TableHead className="w-[11%] font-semibold text-right">Val. total</TableHead>
-              <TableHead className="w-[9%] font-semibold">Estado</TableHead>
-              <TableHead className="w-[12%] font-semibold">Gestionar</TableHead>
+              <TableHead className="w-[18%] font-semibold">Producto</TableHead>
+              <TableHead className="w-[12%] font-semibold">Categoría</TableHead>
+              <TableHead className="w-[10%] font-semibold text-right text-emerald-700">Actual</TableHead>
+              <TableHead className="w-[8%] font-semibold text-right text-amber-600">Mín.</TableHead>
+              <TableHead className="w-[8%] font-semibold text-right text-sky-600">Máx.</TableHead>
+              <TableHead className="w-[12%] font-semibold text-right">Costo (CLP)</TableHead>
+              <TableHead className="w-[13%] font-semibold text-right">Val. total</TableHead>
+              <TableHead className="w-[10%] font-semibold">Estado</TableHead>
+              <TableHead className="w-[9%] font-semibold">Gestionar</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {error ? (
               <TableRow>
-                <TableCell colSpan={10} className="text-center text-[hsl(var(--destructive))] py-8">
+                <TableCell colSpan={9} className="text-center text-[hsl(var(--destructive))] py-8">
                   {error}
                 </TableCell>
               </TableRow>
@@ -187,7 +189,7 @@ function ProductsTable({
             {!error && loading
               ? Array.from({ length: 5 }).map((_, i) => (
                   <TableRow key={`skel-${i}`}>
-                    {Array.from({ length: 10 }).map((_, j) => (
+                    {Array.from({ length: 9 }).map((_, j) => (
                       <TableCell key={j}>
                         <Skeleton className="h-4 w-full" />
                       </TableCell>
@@ -197,7 +199,7 @@ function ProductsTable({
               : null}
             {!error && !loading && items.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={10} className="py-12">
+                <TableCell colSpan={9} className="py-12">
                   {statusFilters.length > 0 ? (
                     <div className="flex flex-col items-center gap-1 text-center">
                       <p className="font-semibold text-[hsl(var(--foreground))]">
@@ -225,7 +227,7 @@ function ProductsTable({
             ) : null}
             <AnimatePresence initial={false}>
             {!error && !loading
-              ? groupedItems.flatMap(({ key, display, rows }, gIdx) => {
+              ? pagedGroups.flatMap(({ key, display, rows }, gIdx) => {
                   const isMulti = rows.length > 1
                   const isExpanded = expandedGroups.has(key)
 
@@ -253,16 +255,24 @@ function ProductsTable({
                           {isSubRow ? (
                             <div className="pl-4 flex items-center gap-1 truncate">
                               <span className="text-[hsl(var(--muted-foreground))] select-none shrink-0">└</span>
-                              <span className="font-medium truncate">{display}</span>
+                              <div className="flex flex-col min-w-0">
+                                <span className="font-medium truncate">{display}</span>
+                                {row.supplier_name ? (
+                                  <span className="text-[10px] text-[hsl(var(--muted-foreground))] truncate">
+                                    {row.supplier_name} · stock: {row.stock_current ?? 0}
+                                  </span>
+                                ) : (
+                                  <span className="text-[10px] text-amber-600 font-semibold truncate">
+                                    Emergencia · stock: {row.stock_current ?? 0}
+                                  </span>
+                                )}
+                              </div>
                             </div>
                           ) : (
                             <div className="font-bold truncate">{display || '—'}</div>
                           )}
                         </TableCell>
                         <TableCell className="truncate">{row.category_name || '—'}</TableCell>
-                        <TableCell className="truncate font-medium">
-                          {row.supplier_name?.trim() || '—'}
-                        </TableCell>
                         <TableCell className={`text-right tabular-nums ${actualCls}`}>{stockCurrent}</TableCell>
                         <TableCell className="text-right tabular-nums text-amber-600 font-medium">{stockMin}</TableCell>
                         <TableCell className="text-right tabular-nums text-sky-600 font-medium">{stockMax}</TableCell>
@@ -317,12 +327,16 @@ function ProductsTable({
                           }
                           {display || '—'}
                           <span className="text-[10px] font-semibold bg-[hsl(var(--muted))] text-[hsl(var(--muted-foreground))] rounded px-1.5 py-0.5 ml-0.5">
-                            {rows.length} proveedores
+                            {rows.length} fuentes
                           </span>
+                          {rows.some((r) => !r.supplier_name) && (
+                            <span className="text-[10px] font-semibold bg-amber-100 text-amber-700 rounded px-1.5 py-0.5">
+                              inc. emergencia
+                            </span>
+                          )}
                         </div>
                       </TableCell>
                       <TableCell className="truncate">{rows[0].category_name || '—'}</TableCell>
-                      <TableCell className="text-[hsl(var(--muted-foreground))] italic">Varios</TableCell>
                       <TableCell className="text-right tabular-nums">{totalStock}</TableCell>
                       <TableCell className="text-right text-[hsl(var(--muted-foreground))]">—</TableCell>
                       <TableCell className="text-right text-[hsl(var(--muted-foreground))]">—</TableCell>
@@ -398,6 +412,18 @@ function ProductsTable({
               className="h-10"
             />
           </div>
+
+          {editingRow?.supplier_name && (
+            <div className="flex flex-col gap-1.5">
+              <Label className="text-sm font-semibold">Proveedor</Label>
+              <div className="flex items-center justify-between rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--muted)/0.4)] px-3 py-2 text-sm">
+                <span className="font-medium truncate">{editingRow.supplier_name}</span>
+                <span className="text-xs text-[hsl(var(--muted-foreground))] shrink-0 ml-2">
+                  Stock actual: <span className="font-semibold text-[hsl(var(--foreground))]">{editingRow.stock_current ?? 0}</span>
+                </span>
+              </div>
+            </div>
+          )}
 
           <div className="grid grid-cols-2 gap-4">
             <div className="flex flex-col gap-2">
@@ -489,20 +515,20 @@ function ProductsTable({
             type="button"
             variant="outline"
             size="sm"
-            onClick={() => onPageChange(currentPage - 1)}
-            disabled={currentPage <= 1}
+            onClick={() => onPageChange(safePage - 1)}
+            disabled={safePage <= 1}
           >
             Anterior
           </Button>
           <span className="text-sm text-[hsl(var(--muted-foreground))]">
-            Página {currentPage} de {totalPages}
+            Página {safePage} de {groupedTotalPages}
           </span>
           <Button
             type="button"
             variant="outline"
             size="sm"
-            onClick={() => onPageChange(currentPage + 1)}
-            disabled={currentPage >= totalPages}
+            onClick={() => onPageChange(safePage + 1)}
+            disabled={safePage >= groupedTotalPages}
           >
             Siguiente
           </Button>

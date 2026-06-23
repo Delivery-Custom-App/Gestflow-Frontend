@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { apiRequest, getAuthContext } from '../../lib/apiClient'
 import {
   getInventorySuppliersForLocal,
@@ -130,6 +130,27 @@ function NuevoProductoModal({ open, localId, onClose, onSuccess }) {
       setAddingSupplier(false)
     }
   }
+
+  // Filtra proveedores por categoría del producto (si el proveedor tiene campo category)
+  const displayedSuppliers = useMemo(() => {
+    const cat = categoryName.trim().toLowerCase()
+    if (!cat || suppliers.length === 0) return suppliers
+    const matching = suppliers.filter((s) =>
+      (s.category || '').toLowerCase().includes(cat)
+    )
+    return matching.length > 0 ? matching : suppliers
+  }, [suppliers, categoryName])
+
+  const supplierHint = useMemo(() => {
+    const cat = categoryName.trim().toLowerCase()
+    if (!cat || suppliers.length === 0) return null
+    const matching = suppliers.filter((s) =>
+      (s.category || '').toLowerCase().includes(cat)
+    )
+    if (matching.length === 0) return 'Sin coincidencias para esta categoría — mostrando todos'
+    if (matching.length < suppliers.length) return `${matching.length} proveedor${matching.length !== 1 ? 'es' : ''} para "${categoryName.trim()}"`
+    return null
+  }, [suppliers, categoryName])
 
   const onlyDigits = (val) => val.replace(/\D/g, '')
 
@@ -268,7 +289,7 @@ function NuevoProductoModal({ open, localId, onClose, onSuccess }) {
                 <SelectTrigger id="np-unit" className="h-9 text-sm">
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="z-[600]">
                   {UNITS.map((u) => (
                     <SelectItem key={u.value} value={u.value}>{u.label}</SelectItem>
                   ))}
@@ -338,7 +359,12 @@ function NuevoProductoModal({ open, localId, onClose, onSuccess }) {
 
           {/* Proveedor */}
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="np-supplier">Proveedor <span className="text-red-500">*</span></Label>
+            <div className="flex items-center justify-between">
+              <Label htmlFor="np-supplier">Proveedor <span className="text-red-500">*</span></Label>
+              {supplierHint && (
+                <span className="text-[10px] text-[hsl(var(--muted-foreground))]">{supplierHint}</span>
+              )}
+            </div>
             <Select
               value={supplierId}
               onValueChange={setSupplierId}
@@ -355,8 +381,8 @@ function NuevoProductoModal({ open, localId, onClose, onSuccess }) {
                   }
                 />
               </SelectTrigger>
-              <SelectContent>
-                {suppliers.map((s) => (
+              <SelectContent className="z-[600]">
+                {displayedSuppliers.map((s) => (
                   <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>
                 ))}
               </SelectContent>

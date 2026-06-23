@@ -4,7 +4,6 @@ import { useSelectedLocal } from '../../hooks/useSelectedLocal'
 import {
   deleteInventoryItem,
   getInventoryKpisByLocal,
-  getInventoryProductsPage,
   getInventoryStockList,
   patchInventoryProductUnitCost,
   patchInventoryStock,
@@ -13,12 +12,13 @@ import {
 import InventoryShell from './InventoryShell'
 import LoadingSpinner from '../LoadingSpinner'
 import NuevoProductoModal from './NuevoProductoModal'
+import EmergencyRestockModal from './EmergencyRestockModal'
 import ProductsTable from './ProductsTable'
 import CategoryFilterSelect from './CategoryFilterSelect'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Search, Package, CheckCircle, TrendingDown, AlertTriangle, DollarSign, HelpCircle, X } from 'lucide-react'
+import { Search, Package, CheckCircle, TrendingDown, AlertTriangle, DollarSign, HelpCircle, X, Zap } from 'lucide-react'
 import PageTransition from '../PageTransition'
 import { formatCLPDisplay as formatMoney } from '../../lib/formatCLP'
 
@@ -45,6 +45,7 @@ function StockControlDashboard() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [modalOpen, setModalOpen] = useState(false)
+  const [emergencyOpen, setEmergencyOpen] = useState(false)
   const [items, setItems] = useState([])
   const [totalCount, setTotalCount] = useState(0)
   const [itemsLoading, setItemsLoading] = useState(true)
@@ -114,7 +115,7 @@ function StockControlDashboard() {
   )
 
   const loadItems = useCallback(
-    async (filters, page) => {
+    async (filters) => {
       if (!localId) {
         setItemsError('No se indicó un local.')
         setItemsLoading(false)
@@ -123,14 +124,10 @@ function StockControlDashboard() {
       setItemsError('')
       setItemsLoading(true)
       try {
-        const offset = (page - 1) * pageSize
-        const { items: pageItems, total } = await getInventoryProductsPage(localId, {
-          ...filters,
-          limit: pageSize,
-          offset,
-        })
-        setItems(pageItems)
-        setTotalCount(total)
+        const rows = await getInventoryStockList(localId, filters)
+        const all = Array.isArray(rows) ? rows : []
+        setItems(all)
+        setTotalCount(all.length)
       } catch (e) {
         setItemsError(e?.message || 'No se pudo cargar el listado de productos.')
         setItems([])
@@ -139,7 +136,7 @@ function StockControlDashboard() {
         setItemsLoading(false)
       }
     },
-    [localId, pageSize],
+    [localId],
   )
 
   useEffect(() => {
@@ -156,8 +153,8 @@ function StockControlDashboard() {
 
   useEffect(() => {
     if (!localId) return
-    loadItems(currentFilters, currentPage)
-  }, [localId, currentFilters, currentPage, loadItems])
+    loadItems(currentFilters)
+  }, [localId, currentFilters, loadItems])
 
   useEffect(() => {
     if (categoryFilter && !categoriesCatalog.some((c) => c.id === categoryFilter)) {
@@ -165,8 +162,7 @@ function StockControlDashboard() {
     }
   }, [categoryFilter, categoriesCatalog])
 
-  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize))
-  const safeCurrentPage = Math.min(currentPage, totalPages)
+  // totalPages y safeCurrentPage son manejados internamente por ProductsTable (agrupa antes de paginar)
 
   const handlePatchStock = useCallback(
     async (row, body) => {
@@ -175,13 +171,13 @@ function StockControlDashboard() {
       try {
         await patchInventoryStock(localId, row.inventory_id, body)
         await load()
-        await loadItems(currentFilters, currentPage)
+        await loadItems(currentFilters)
       } catch (e) {
         setActionError(e?.message || 'No se pudo actualizar el stock.')
         throw e
       }
     },
-    [localId, load, loadItems, currentFilters, currentPage],
+    [localId, load, loadItems, currentFilters],
   )
 
   const handlePatchUnitCost = useCallback(
@@ -191,13 +187,13 @@ function StockControlDashboard() {
       try {
         await patchInventoryProductUnitCost(localId, row.product_id, { unitCost: unitCostClp })
         await load()
-        await loadItems(currentFilters, currentPage)
+        await loadItems(currentFilters)
       } catch (e) {
         setActionError(e?.message || 'No se pudo actualizar el costo.')
         throw e
       }
     },
-    [localId, load, loadItems, currentFilters, currentPage],
+    [localId, load, loadItems, currentFilters],
   )
 
   const handlePatchProductName = useCallback(
@@ -206,13 +202,13 @@ function StockControlDashboard() {
       try {
         await patchProduct(row.product_id, { name: newName.trim() })
         await load()
-        await loadItems(currentFilters, currentPage)
+        await loadItems(currentFilters)
       } catch (e) {
         setActionError(e?.message || 'No se pudo actualizar el nombre.')
         throw e
       }
     },
-    [load, loadItems, currentFilters, currentPage],
+    [load, loadItems, currentFilters],
   )
 
   const handleDeleteItem = useCallback(
@@ -223,7 +219,7 @@ function StockControlDashboard() {
         await deleteInventoryItem(localId, row.inventory_id)
         await load()
         setCurrentPage(1)
-        await loadItems(currentFilters, 1)
+        await loadItems(currentFilters)
       } catch (e) {
         setActionError(e?.message || 'No se pudo eliminar el producto.')
         throw e
@@ -416,9 +412,20 @@ function StockControlDashboard() {
           <CardHeader className="pb-4">
             <div className="flex items-center justify-between gap-3 flex-wrap">
               <CardTitle id="scd-inventory-heading" className="text-base">Inventario de productos</CardTitle>
-              <Button type="button" onClick={() => setModalOpen(true)}>
-                Nuevo producto
-              </Button>
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setEmergencyOpen(true)}
+                  className="border-amber-300 text-amber-700 hover:bg-amber-50 gap-1.5"
+                >
+                  <Zap size={14} />
+                  Re-stock emergencia
+                </Button>
+                <Button type="button" onClick={() => setModalOpen(true)}>
+                  Nuevo producto
+                </Button>
+              </div>
             </div>
           </CardHeader>
           <CardContent className="flex flex-col gap-4 pt-0">
@@ -450,9 +457,7 @@ function StockControlDashboard() {
               items={items}
               loading={itemsLoading}
               error={itemsError}
-              currentPage={safeCurrentPage}
-              totalPages={totalPages}
-              totalCount={totalCount}
+              currentPage={currentPage}
               pageSize={pageSize}
               onPageChange={setCurrentPage}
               onEmptyAction={() => setModalOpen(true)}
@@ -466,6 +471,17 @@ function StockControlDashboard() {
         </Card>
         </motion.div>
 
+        <EmergencyRestockModal
+          open={emergencyOpen}
+          localId={localId}
+          onClose={() => setEmergencyOpen(false)}
+          onSuccess={() => {
+            setCurrentPage(1)
+            load()
+            loadCategoriesCatalog()
+            loadItems(currentFilters).catch(() => {})
+          }}
+        />
         <NuevoProductoModal
           open={modalOpen}
           localId={localId}
@@ -474,7 +490,7 @@ function StockControlDashboard() {
             setCurrentPage(1)
             load()
             loadCategoriesCatalog()
-            loadItems(currentFilters, 1).catch(() => {})
+            loadItems(currentFilters).catch(() => {})
           }}
         />
       </PageTransition>

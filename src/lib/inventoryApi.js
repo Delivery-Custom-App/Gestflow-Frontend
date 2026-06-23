@@ -276,6 +276,13 @@ export function postInventoryNewProduct(localId, body) {
   })
 }
 
+export function postInventoryEmergencyRestock(localId, body) {
+  return apiRequest(`/inventory/locals/${localId}/emergency-restock`, {
+    method: 'POST',
+    body,
+  })
+}
+
 /** Actualiza stock o mínimo; la API devuelve la fila con total_value recalculado (stock × costo). */
 export function patchInventoryStock(localId, inventoryId, body) {
   return apiRequest(`/inventory/locals/${localId}/stock/${inventoryId}`, {
