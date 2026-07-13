@@ -126,6 +126,13 @@ export function AppAuthProvider({ children }) {
       setUser(sessionUser)
       setUserRole(formatRoleLabel(roleFromDb))
       setSuccessMessage(`Sesion iniciada como ${userEmail}.`)
+
+      const loginRedirect = (import.meta.env.VITE_LOGIN_REDIRECT || '').trim()
+      if (loginRedirect && typeof window !== 'undefined') {
+        const path = loginRedirect.startsWith('/') ? loginRedirect : `/${loginRedirect}`
+        window.location.replace(path)
+        return
+      }
     } finally {
       setIsLoading(false)
     }

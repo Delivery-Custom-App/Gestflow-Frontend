@@ -6,7 +6,7 @@ import RecipesList from './RecipesList'
 import RecipeDetail from './RecipeDetail'
 import CreateRecipeModal from './CreateRecipeModal'
 import { useRecipes } from '../../../hooks/useRecipes'
-import { apiRequest } from '../../../lib/apiClient'
+import { getCategoriesForLocal } from '../../../lib/inventoryApi'
 import { Button } from '@/components/ui/button'
 import { motion, AnimatePresence } from 'framer-motion'
 import { BookOpen, HelpCircle, X, DollarSign, Search, Tag, ToggleLeft } from 'lucide-react'
@@ -32,7 +32,9 @@ function RecipesPage() {
   useEffect(() => {
     const loadCategories = async () => {
       try {
-        const data = await apiRequest(`/categories?local_id=${localId}`)
+        // SEC-04: el endpoint /recipes/categories no existe en el backend monolito.
+        // Se usa /categories (mismo que CreateRecipeModal para asignar la categoría).
+        const data = await getCategoriesForLocal(localId)
         setCategories(Array.isArray(data) ? data : [])
       } catch {
         setCategories([])

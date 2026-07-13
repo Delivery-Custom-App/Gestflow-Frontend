@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label'
 import { GLSLHills } from '@/components/ui/glsl-hills'
 import { useAuth } from '../context/AuthContext'
 
-export default function LoginPage() {
+export default function LoginPage({ onShowRegister }) {
   const { login } = useAuth()
   const {
     email,
@@ -94,6 +94,30 @@ export default function LoginPage() {
             </p>
           )}
         </form>
+        {import.meta.env.DEV && (
+          <p className="mt-4 text-center text-xs text-[hsl(var(--muted-foreground))]">
+            Tras iniciar sesión, recetas (práctica):{' '}
+            <a
+              href="/practica/recetas"
+              className="text-[hsl(var(--primary))] underline font-medium"
+            >
+              /practica/recetas
+            </a>
+          </p>
+        )}
+
+        {onShowRegister && (
+          <div className="mt-5 text-center">
+            <span className="text-sm text-[hsl(var(--muted-foreground))]">¿No tienes una cuenta? </span>
+            <button
+              type="button"
+              onClick={onShowRegister}
+              className="text-sm font-medium text-[hsl(var(--primary))] hover:underline"
+            >
+              Regístrate aquí
+            </button>
+          </div>
+        )}
       </section>
     </motion.main>
   )
