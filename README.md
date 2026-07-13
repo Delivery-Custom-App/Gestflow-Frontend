@@ -32,10 +32,30 @@ Sistema de gestión para restaurantes. Frontend React que consume la [API FastAP
 
 ### Con Docker (recomendado)
 
-Desde el repo backend:
+Para levantar Postgres local con volumen persistente:
 
 ```bash
-.\scripts\docker-dev-up.ps1
+cp .env.db.example .env.db
+docker compose --env-file .env.db up -d postgres
+# DATABASE_URL para el backend: postgresql://gestflow:gestflow_dev_password@localhost:5432/gestflow
+```
+
+El volumen `gestflow_postgres_data` conserva los datos aunque el contenedor se reinicie o se recree.
+
+Comandos utiles:
+
+```bash
+docker compose --env-file .env.db ps
+docker compose --env-file .env.db logs -f postgres
+docker compose --env-file .env.db down
+docker compose --env-file .env.db down -v # borra tambien el volumen de datos
+```
+
+Luego levanta el backend apuntando a `DATABASE_URL` y el frontend con:
+
+```bash
+npm install
+npm run dev
 # Frontend: http://localhost:5173
 # API:      http://localhost:8000
 # Docs API: http://localhost:8000/api/docs

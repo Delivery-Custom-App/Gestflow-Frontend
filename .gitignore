@@ -25,6 +25,7 @@ dist-ssr
 *.sln
 *.sw?
 .env
+.env.db
 
 # Documentación / informes — se gestionan en Google Drive
 CAMBIOS_SESION.md
