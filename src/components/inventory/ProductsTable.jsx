@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Pencil, ChevronRight, ChevronDown } from 'lucide-react'
 import StockStatusBadge from './StockStatusBadge'
+import { stockLevelFromRow } from './stockAlertUtils'
 
 const ROW_CLASS =
   'border-b border-[hsl(var(--border))] transition-colors hover:bg-[hsl(var(--muted)/0.5)] data-[state=selected]:bg-[hsl(var(--accent))]'
@@ -13,7 +14,6 @@ import {
   TableHead,
   TableCell,
 } from '@/components/ui/table'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -53,8 +53,9 @@ function ProductsTable({
   const groupedItems = useMemo(() => {
     const map = new Map()
     for (const row of items) {
-      const display = (row.product_name || row.name || '').trim()
-      const key = display.toLowerCase()
+      const raw = (row.product_name || row.name || '').trim()
+      const display = raw ? raw.charAt(0).toUpperCase() + raw.slice(1).toLowerCase() : ''
+      const key = raw.toLowerCase()
       if (!map.has(key)) map.set(key, { key, display, rows: [] })
       map.get(key).rows.push(row)
     }
@@ -166,13 +167,13 @@ function ProductsTable({
               <TableHead className="w-[14%] font-semibold">Producto</TableHead>
               <TableHead className="w-[10%] font-semibold">Categoría</TableHead>
               <TableHead className="w-[12%] font-semibold">Proveedor</TableHead>
-              <TableHead className="w-[8%] font-semibold text-right">Actual</TableHead>
-              <TableHead className="w-[7%] font-semibold text-right">Mín.</TableHead>
-              <TableHead className="w-[7%] font-semibold text-right">Máx.</TableHead>
+              <TableHead className="w-[8%] font-semibold text-right text-emerald-700">Actual</TableHead>
+              <TableHead className="w-[7%] font-semibold text-right text-amber-600">Mín.</TableHead>
+              <TableHead className="w-[7%] font-semibold text-right text-sky-600">Máx.</TableHead>
               <TableHead className="w-[10%] font-semibold text-right">Costo (CLP)</TableHead>
               <TableHead className="w-[11%] font-semibold text-right">Val. total</TableHead>
               <TableHead className="w-[9%] font-semibold">Estado</TableHead>
-              <TableHead className="w-[12%] font-semibold">Acciones</TableHead>
+              <TableHead className="w-[12%] font-semibold">Gestionar</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -237,6 +238,8 @@ function ProductsTable({
                         : stockCurrent * unitCost
                     const stockMin = row.stock_min == null ? '—' : String(row.stock_min)
                     const stockMax = row.stock_max == null ? '—' : String(row.stock_max)
+                    const level = stockLevelFromRow(row)
+                    const actualCls = level === 'critical' ? 'text-red-600 font-bold' : level === 'low' ? 'text-amber-600 font-semibold' : 'text-emerald-600 font-semibold'
                     return (
                       <motion.tr
                         key={row.inventory_id ?? row.product_id}
@@ -260,9 +263,9 @@ function ProductsTable({
                         <TableCell className="truncate font-medium">
                           {row.supplier_name?.trim() || '—'}
                         </TableCell>
-                        <TableCell className="text-right tabular-nums">{stockCurrent}</TableCell>
-                        <TableCell className="text-right tabular-nums">{stockMin}</TableCell>
-                        <TableCell className="text-right tabular-nums">{stockMax}</TableCell>
+                        <TableCell className={`text-right tabular-nums ${actualCls}`}>{stockCurrent}</TableCell>
+                        <TableCell className="text-right tabular-nums text-amber-600 font-medium">{stockMin}</TableCell>
+                        <TableCell className="text-right tabular-nums text-sky-600 font-medium">{stockMax}</TableCell>
                         <TableCell className="text-right tabular-nums">{formatClp(unitCost)}</TableCell>
                         <TableCell className="text-right tabular-nums">{formatClp(total)}</TableCell>
                         <TableCell>
@@ -342,138 +345,143 @@ function ProductsTable({
         </Table>
       </div>
 
-      {/* Edit modal */}
-      <Dialog open={!!editingRow} onOpenChange={(open) => { if (!open) closeEditModal() }}>
-        <DialogContent className="max-w-md w-full p-0 gap-0 overflow-hidden">
-
-          {/* Header */}
-          <DialogHeader className="px-7 pt-6 pb-4 border-b border-[hsl(var(--border))]">
-            <DialogTitle className="text-base">Editar producto</DialogTitle>
+      {/* Edit drawer */}
+      <div
+        className={`fixed inset-0 bg-black/60 transition-opacity duration-300 ${
+          editingRow ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
+        }`}
+        style={{ zIndex: 500 }}
+        onClick={() => { if (!saving && !deleting) closeEditModal() }}
+      />
+      <div
+        className={`fixed inset-y-0 right-0 w-full max-w-md bg-[hsl(var(--card))] shadow-2xl border-l border-[hsl(var(--border))] flex flex-col transform transition-transform duration-300 ease-in-out ${
+          editingRow ? 'translate-x-0' : 'translate-x-full'
+        }`}
+        style={{ zIndex: 501 }}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-5 border-b border-[hsl(var(--border))] shrink-0">
+          <div>
+            <h2 className="text-base font-bold text-[hsl(var(--foreground))]">Editar producto</h2>
             {editingRow && (
               <p className="text-sm text-[hsl(var(--muted-foreground))] mt-0.5 font-medium">
                 {editingRow.product_name || editingRow.name || 'Producto'}
               </p>
             )}
-          </DialogHeader>
+          </div>
+          <button
+            type="button"
+            onClick={closeEditModal}
+            disabled={saving || deleting}
+            className="rounded-lg p-2 hover:bg-[hsl(var(--muted))] transition-colors disabled:opacity-50"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-[hsl(var(--muted-foreground))]"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
 
-          {/* Body */}
-          <div className="px-7 py-6 flex flex-col gap-5">
-            {formError && (
-              <p className="rounded-md bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-2.5" role="alert">
-                {formError}
-              </p>
-            )}
+        {/* Body */}
+        <div className="flex-1 overflow-y-auto px-6 py-6 flex flex-col gap-5">
+          {formError && (
+            <p className="rounded-md bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-2.5" role="alert">
+              {formError}
+            </p>
+          )}
 
-            {/* Nombre */}
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="edit-name" className="text-sm font-semibold">Nombre</Label>
+            <Input
+              id="edit-name"
+              value={nameDraft}
+              onChange={(e) => setNameDraft(e.target.value)}
+              placeholder="Nombre del producto"
+              disabled={saving}
+              className="h-10"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
             <div className="flex flex-col gap-2">
-              <Label htmlFor="edit-name" className="text-sm font-semibold">Nombre</Label>
+              <Label htmlFor="edit-min-stock" className="text-sm font-semibold">Stock Mínimo</Label>
               <Input
-                id="edit-name"
-                value={nameDraft}
-                onChange={(e) => setNameDraft(e.target.value)}
-                placeholder="Nombre del producto"
+                id="edit-min-stock"
+                type="number"
+                min={0}
+                value={minStockDraft}
+                onChange={(e) => setMinStockDraft(e.target.value)}
                 disabled={saving}
                 className="h-10"
               />
             </div>
-
-            {/* Stock mín + máx en grid */}
-            <div className="grid grid-cols-2 gap-4">
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="edit-min-stock" className="text-sm font-semibold">
-                  Stock Mínimo
-                </Label>
-                <Input
-                  id="edit-min-stock"
-                  type="number"
-                  min={0}
-                  value={minStockDraft}
-                  onChange={(e) => setMinStockDraft(e.target.value)}
-                  disabled={saving}
-                  className="h-10"
-                />
-              </div>
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="edit-max-stock" className="text-sm font-semibold">
-                  Stock Máximo
-                </Label>
-                <Input
-                  id="edit-max-stock"
-                  type="number"
-                  min={0}
-                  placeholder="Sin límite"
-                  value={maxStockDraft}
-                  onChange={(e) => setMaxStockDraft(e.target.value)}
-                  disabled={saving}
-                  className="h-10"
-                />
-              </div>
-            </div>
-
-            {/* Costo unitario */}
             <div className="flex flex-col gap-2">
-              <Label htmlFor="edit-cost" className="text-sm font-semibold">
-                Costo Unitario (CLP)
-              </Label>
+              <Label htmlFor="edit-max-stock" className="text-sm font-semibold">Stock Máximo</Label>
               <Input
-                id="edit-cost"
+                id="edit-max-stock"
                 type="number"
-                min={1}
-                step={1}
-                value={costDraft}
-                onChange={(e) => setCostDraft(e.target.value)}
+                min={0}
+                placeholder="Sin límite"
+                value={maxStockDraft}
+                onChange={(e) => setMaxStockDraft(e.target.value)}
                 disabled={saving}
                 className="h-10"
               />
             </div>
           </div>
 
-          {/* Footer */}
-          <div className="px-7 pb-6 flex flex-col gap-3">
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="edit-cost" className="text-sm font-semibold">Costo Unitario (CLP)</Label>
+            <Input
+              id="edit-cost"
+              type="number"
+              min={1}
+              step={1}
+              value={costDraft}
+              onChange={(e) => setCostDraft(e.target.value)}
+              disabled={saving}
+              className="h-10"
+            />
+          </div>
+        </div>
 
-            {/* Confirmar eliminar */}
-            {confirmDelete && (
-              <div className="rounded-lg bg-red-50 border border-red-200 px-4 py-3 flex items-center justify-between gap-3">
-                <span className="text-sm text-red-700 font-medium">¿Eliminar este producto?</span>
-                <div className="flex gap-2">
-                  <Button type="button" variant="destructive" size="sm" disabled={deleting}
-                    onClick={async () => {
-                      if (!editingRow || !onDeleteItem) return
-                      setDeleting(true)
-                      try { await onDeleteItem(editingRow); closeEditModal() }
-                      catch (e) { setFormError(e?.message || 'No se pudo eliminar.'); setConfirmDelete(false) }
-                      finally { setDeleting(false) }
-                    }}>
-                    {deleting ? 'Eliminando...' : 'Confirmar'}
-                  </Button>
-                  <Button type="button" variant="outline" size="sm" onClick={() => setConfirmDelete(false)} disabled={deleting}>
-                    No
-                  </Button>
-                </div>
-              </div>
-            )}
-
-            {/* Botones principales */}
-            <div className="flex items-center justify-between gap-3">
-              <Button type="button" variant="outline" onClick={closeEditModal} disabled={saving || deleting}>
-                Cancelar
-              </Button>
+        {/* Footer */}
+        <div className="shrink-0 border-t border-[hsl(var(--border))] px-6 py-4 flex flex-col gap-3">
+          {confirmDelete && (
+            <div className="rounded-lg bg-red-50 border border-red-200 px-4 py-3 flex items-center justify-between gap-3">
+              <span className="text-sm text-red-700 font-medium">¿Eliminar este producto?</span>
               <div className="flex gap-2">
-                {!confirmDelete && (
-                  <Button type="button" variant="destructive" disabled={saving || deleting}
-                    onClick={() => setConfirmDelete(true)}>
-                    Eliminar
-                  </Button>
-                )}
-                <Button type="button" onClick={submitRowUpdate} disabled={saving || deleting || confirmDelete}>
-                  {saving ? 'Guardando...' : 'Guardar cambios'}
+                <Button type="button" variant="destructive" size="sm" disabled={deleting}
+                  onClick={async () => {
+                    if (!editingRow || !onDeleteItem) return
+                    setDeleting(true)
+                    try { await onDeleteItem(editingRow); closeEditModal() }
+                    catch (e) { setFormError(e?.message || 'No se pudo eliminar.'); setConfirmDelete(false) }
+                    finally { setDeleting(false) }
+                  }}>
+                  {deleting ? 'Eliminando...' : 'Confirmar'}
+                </Button>
+                <Button type="button" variant="outline" size="sm" onClick={() => setConfirmDelete(false)} disabled={deleting}>
+                  No
                 </Button>
               </div>
             </div>
+          )}
+          <div className="flex items-center justify-between gap-3">
+            <Button type="button" variant="outline" onClick={closeEditModal} disabled={saving || deleting}>
+              Cancelar
+            </Button>
+            <div className="flex gap-2">
+              {!confirmDelete && (
+                <Button type="button" variant="destructive" disabled={saving || deleting}
+                  onClick={() => setConfirmDelete(true)}>
+                  Eliminar
+                </Button>
+              )}
+              <Button type="button" onClick={submitRowUpdate} disabled={saving || deleting || confirmDelete}>
+                {saving ? 'Guardando...' : 'Guardar cambios'}
+              </Button>
+            </div>
           </div>
-
-        </DialogContent>
-      </Dialog>
+        </div>
+      </div>
 
       {showPagination ? (
         <div className="flex items-center justify-center gap-3 mt-2">

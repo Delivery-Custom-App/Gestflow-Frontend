@@ -9,7 +9,7 @@ import {
   TableHead,
   TableCell,
 } from '@/components/ui/table'
-import { Eye, Pencil, Power, Trash2 } from 'lucide-react'
+import { Settings2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { formatCLPOrDash as formatCLP } from '../../../lib/formatCLP'
 
@@ -152,7 +152,7 @@ function RecipesList({
               <TableHead className="text-right">Margen</TableHead>
               <TableHead className="text-right">Porciones</TableHead>
               <TableHead>Estado</TableHead>
-              <TableHead>Acciones</TableHead>
+              <TableHead>Opciones</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -197,52 +197,14 @@ function RecipesList({
                   </Badge>
                 </TableCell>
                 <TableCell>
-                  <div className="flex items-center gap-1">
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => onViewDetail(recipe.id)}
-                      title={recipe.is_active ? 'Ver detalles' : 'Receta inactiva'}
-                      className="p-1 h-7 w-7"
-                      disabled={!recipe.is_active}
-                    >
-                      <Eye size={14} />
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => onEdit(recipe)}
-                      title={recipe.is_active ? 'Editar' : 'Receta inactiva'}
-                      className="p-1 h-7 w-7"
-                      disabled={!recipe.is_active}
-                    >
-                      <Pencil size={14} />
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleToggle(recipe)}
-                      title={recipe.is_active ? 'Desactivar' : 'Activar'}
-                      className={cn('p-1 h-7 w-7', recipe.is_active ? 'text-amber-600 hover:text-amber-700' : 'text-emerald-600 hover:text-emerald-700')}
-                      disabled={actionLoading === `toggle-${recipe.id}`}
-                    >
-                      <Power size={14} />
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleDelete(recipe)}
-                      title="Eliminar"
-                      className="p-1 h-7 w-7 text-[hsl(var(--destructive))]"
-                      disabled={actionLoading === `delete-${recipe.id}`}
-                    >
-                      <Trash2 size={14} />
-                    </Button>
-                  </div>
+                  <button
+                    type="button"
+                    title="Editar receta"
+                    onClick={() => onEdit(recipe)}
+                    className="w-8 h-8 inline-flex items-center justify-center rounded-lg hover:bg-[hsl(var(--muted))] transition-colors"
+                  >
+                    <Settings2 size={16} />
+                  </button>
                 </TableCell>
               </TableRow>
             ))}

@@ -1,78 +1,182 @@
 import {
-  LineChart,
-  Line,
+  AreaChart,
+  Area,
   XAxis,
   YAxis,
   CartesianGrid,
   Tooltip,
-  Legend,
   ResponsiveContainer,
+  Legend,
 } from 'recharts'
+import ChartSkeleton from '../ui/ChartSkeleton'
 
-/**
- * IncomeChart - Gráfico de tendencia de ingresos
- * Muestra ingresos diarios/semanales por período
- */
-function IncomeChart({ data = [] }) {
-  // Si no hay datos, mostrar placeholder
+const CLP = (v) =>
+  new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(v)
+
+function IncomeChart({ data = [], loading = false, showCashFlow = false }) {
+  if (loading) return <ChartSkeleton className="h-[220px]" />
   if (!data || data.length === 0) {
     return (
-      <div className="chart-empty">
-        <p>No hay datos de ingresos disponibles</p>
+      <div className="flex items-center justify-center h-48 text-sm text-[hsl(var(--muted-foreground))]">
+        Sin pedidos registrados en el período.
       </div>
     )
   }
 
-  // Formatea datos para el gráfico si es necesario
+  if (showCashFlow) {
+    // 7d mode: ingresos + flujo_neto from API
+    const chartData = data.map((item) => ({
+      date:      item.date,
+      ingresos:  Math.max(0, Number(item.ingresos)  || 0),
+      flujo_neto: Number(item.flujo_neto) || 0,
+    }))
+
+    const minY = Math.min(0, ...chartData.map((d) => d.flujo_neto))
+
+    return (
+      <ResponsiveContainer width="100%" height={220}>
+        <AreaChart data={chartData} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
+          <defs>
+            <linearGradient id="gradIngresos7d" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="5%"  stopColor="#16a34a" stopOpacity={0.35} />
+              <stop offset="95%" stopColor="#16a34a" stopOpacity={0.02} />
+            </linearGradient>
+            <linearGradient id="gradFlujo" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="5%"  stopColor="#8b5cf6" stopOpacity={0.25} />
+              <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0.02} />
+            </linearGradient>
+          </defs>
+
+          <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
+          <XAxis
+            dataKey="date"
+            fontSize={11}
+            tickLine={false}
+            axisLine={false}
+            tick={{ fill: 'hsl(var(--muted-foreground))' }}
+          />
+          <YAxis
+            fontSize={11}
+            tickLine={false}
+            axisLine={false}
+            tick={{ fill: 'hsl(var(--muted-foreground))' }}
+            tickFormatter={(v) => v >= 1000 ? `$${(v / 1000).toFixed(0)}k` : `$${v}`}
+            width={48}
+            domain={[minY < 0 ? minY : 0, 'auto']}
+          />
+          <Tooltip
+            formatter={(value, name) => [
+              CLP(value),
+              name === 'ingresos' ? 'Ingresos' : 'Flujo Neto',
+            ]}
+            contentStyle={{
+              backgroundColor: 'hsl(var(--card))',
+              border: '1px solid hsl(var(--border))',
+              borderRadius: '8px',
+              fontSize: 12,
+            }}
+            labelStyle={{ fontWeight: 600, marginBottom: 4 }}
+          />
+          <Legend
+            formatter={(value) => value === 'ingresos' ? 'Ingresos' : 'Flujo Neto'}
+            wrapperStyle={{ fontSize: 11, paddingTop: 4 }}
+          />
+
+          <Area
+            type="monotoneX"
+            dataKey="flujo_neto"
+            stroke="#8b5cf6"
+            strokeWidth={1.5}
+            strokeDasharray="5 4"
+            fill="url(#gradFlujo)"
+            dot={false}
+            name="flujo_neto"
+          />
+          <Area
+            type="monotoneX"
+            dataKey="ingresos"
+            stroke="#16a34a"
+            strokeWidth={2.5}
+            fill="url(#gradIngresos7d)"
+            dot={{ fill: '#16a34a', r: 4, strokeWidth: 2, stroke: '#fff' }}
+            activeDot={{ r: 6, fill: '#16a34a', stroke: '#fff', strokeWidth: 2 }}
+            name="ingresos"
+          />
+        </AreaChart>
+      </ResponsiveContainer>
+    )
+  }
+
+  // Sub-day mode: ingresos + promedio from order bucketing
   const chartData = data.map((item) => ({
-    date: item.date || item.period || item.name || 'N/A',
+    date:     item.date || item.period || item.name || '—',
     ingresos: Number(item.ingresos) || Number(item.revenue) || 0,
     promedio: Number(item.promedio) || Number(item.average) || 0,
   }))
 
   return (
-    <ResponsiveContainer width="100%" height={300}>
-      <LineChart data={chartData} margin={{ top: 5, right: 30, left: 0, bottom: 5 }}>
-        <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
-        <XAxis dataKey="date" fontSize={12} />
-        <YAxis fontSize={12} />
+    <ResponsiveContainer width="100%" height={220}>
+      <AreaChart data={chartData} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
+        <defs>
+          <linearGradient id="gradIngresos" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="5%"  stopColor="#16a34a" stopOpacity={0.35} />
+            <stop offset="95%" stopColor="#16a34a" stopOpacity={0.02} />
+          </linearGradient>
+          <linearGradient id="gradPromedio" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="5%"  stopColor="#3b82f6" stopOpacity={0.18} />
+            <stop offset="95%" stopColor="#3b82f6" stopOpacity={0.01} />
+          </linearGradient>
+        </defs>
+
+        <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
+        <XAxis
+          dataKey="date"
+          fontSize={11}
+          tickLine={false}
+          axisLine={false}
+          tick={{ fill: 'hsl(var(--muted-foreground))' }}
+        />
+        <YAxis
+          fontSize={11}
+          tickLine={false}
+          axisLine={false}
+          tick={{ fill: 'hsl(var(--muted-foreground))' }}
+          tickFormatter={(v) => v >= 1000 ? `$${(v / 1000).toFixed(0)}k` : `$${v}`}
+          width={48}
+          domain={[0, 'auto']}
+        />
         <Tooltip
-          formatter={(value) =>
-            new Intl.NumberFormat('es-CL', {
-              style: 'currency',
-              currency: 'CLP',
-              maximumFractionDigits: 0,
-            }).format(value)
-          }
+          formatter={(value, name) => [CLP(value), name === 'ingresos' ? 'Ingresos' : 'Promedio']}
           contentStyle={{
-            backgroundColor: '#fff',
-            border: '1px solid #ccc',
-            borderRadius: '4px',
+            backgroundColor: 'hsl(var(--card))',
+            border: '1px solid hsl(var(--border))',
+            borderRadius: '8px',
+            fontSize: 12,
           }}
+          labelStyle={{ fontWeight: 600, marginBottom: 4 }}
         />
-        <Legend />
-        <Line
-          type="monotone"
+
+        <Area
+          type="monotoneX"
+          dataKey="promedio"
+          stroke="#3b82f6"
+          strokeWidth={1.5}
+          strokeDasharray="5 4"
+          fill="url(#gradPromedio)"
+          dot={false}
+          name="promedio"
+        />
+        <Area
+          type="monotoneX"
           dataKey="ingresos"
-          stroke="#2ecc71"
-          strokeWidth={2}
-          dot={{ fill: '#2ecc71', r: 4 }}
-          activeDot={{ r: 6 }}
-          name="Ingresos"
+          stroke="#16a34a"
+          strokeWidth={2.5}
+          fill="url(#gradIngresos)"
+          dot={{ fill: '#16a34a', r: 4, strokeWidth: 2, stroke: '#fff' }}
+          activeDot={{ r: 6, fill: '#16a34a', stroke: '#fff', strokeWidth: 2 }}
+          name="ingresos"
         />
-        {chartData.some((item) => item.promedio > 0) && (
-          <Line
-            type="monotone"
-            dataKey="promedio"
-            stroke="#3498db"
-            strokeWidth={2}
-            strokeDasharray="5 5"
-            dot={{ fill: '#3498db', r: 3 }}
-            activeDot={{ r: 5 }}
-            name="Promedio"
-          />
-        )}
-      </LineChart>
+      </AreaChart>
     </ResponsiveContainer>
   )
 }

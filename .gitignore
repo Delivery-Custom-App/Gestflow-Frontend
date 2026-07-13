@@ -25,3 +25,13 @@ dist-ssr
 *.sln
 *.sw?
 .env
+
+# Documentación / informes — se gestionan en Google Drive
+CAMBIOS_SESION.md
+docs/
+
+# Agentes y skills de IA — no son parte del código del proyecto
+.agents/
+
+# npm config local — contiene rutas absolutas del dev, no commitear
+.npmrc

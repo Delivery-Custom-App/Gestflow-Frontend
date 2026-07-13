@@ -1,9 +1,8 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { getInventoryProductsPage, getCategoriesForLocal, postCategory } from '../../../lib/inventoryApi'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
-import { Trash2 } from 'lucide-react'
+import { Trash2, X, BookOpen, Power } from 'lucide-react'
 import { formatCLPDisplay as fmt } from '../../../lib/formatCLP'
 
 const UNITS = [
@@ -111,7 +110,7 @@ const isSauce = (product) => {
   return cat.includes('salsa') || cat.includes('sauce')
 }
 
-function CreateRecipeModal({ isOpen, recipe, onSave, onCancel, localId, externalError }) {
+function CreateRecipeModal({ isOpen, recipe, onSave, onCancel, localId, externalError, onToggleStatus, onDelete }) {
   const [formData, setFormData] = useState({
     category_id:   '',
     category_name: '',
@@ -121,12 +120,14 @@ function CreateRecipeModal({ isOpen, recipe, onSave, onCancel, localId, external
     yield_portions: '',
   })
 
-  const [ingredients, setIngredients]     = useState([])
-  const [products,    setProducts]        = useState([])
-  const [loading,     setLoading]         = useState(false)
-  const [savingLoading, setSavingLoading] = useState(false)
-  const [errors,      setErrors]          = useState({})
-  const [pickedId,    setPickedId]        = useState('')
+  const [ingredients, setIngredients]       = useState([])
+  const [products,    setProducts]          = useState([])
+  const [loading,     setLoading]           = useState(false)
+  const [savingLoading, setSavingLoading]   = useState(false)
+  const [errors,      setErrors]            = useState({})
+  const [pickerSearch, setPickerSearch]     = useState('')
+  const [actionLoading, setActionLoading]   = useState(false)
+  const [confirmingDelete, setConfirmingDelete] = useState(false)
 
   useEffect(() => {
     if (!isOpen) return
@@ -146,8 +147,10 @@ function CreateRecipeModal({ isOpen, recipe, onSave, onCancel, localId, external
       setIngredients([])
     }
 
-    setPickedId('')
+    setPickerSearch('')
     setErrors({})
+    setConfirmingDelete(false)
+    setActionLoading(false)
 
     if (!localId) { setProducts([]); return }
     let cancelled = false
@@ -164,25 +167,28 @@ function CreateRecipeModal({ isOpen, recipe, onSave, onCancel, localId, external
     setErrors((p) => { const n = { ...p }; delete n[key]; return n })
   }
 
-  const handlePickProduct = (e) => {
-    const pid = e.target.value
-    setPickedId('')
-    if (!pid) return
-    if (ingredients.some((i) => String(i.product_id) === pid)) return
+  const filteredProducts = useMemo(() => {
+    const q = pickerSearch.trim().toLowerCase()
+    return q ? products.filter((p) => (p.product_name || '').toLowerCase().includes(q)) : products
+  }, [products, pickerSearch])
 
-    const product = products.find((p) => String(p.product_id) === pid)
-    if (!product) return
-
-    const sauce = isSauce(product)
-    setIngredients((prev) => [...prev, {
-      product_id:        pid,
-      product_name:      product.product_name,
-      quantity_required: sauce ? (Number(product.stock_current) || 1) : '',
-      unit:              sauce ? (product.unit || 'unidad') : 'unidad',
-      unit_cost_clp:     Number(product.unit_cost_clp ?? product.price_per_unit ?? 0),
-      is_sauce:          sauce,
-    }])
-    setErrors((p) => { const n = { ...p }; delete n.ingredients; return n })
+  const toggleIngredient = (product) => {
+    const pid = String(product.product_id)
+    const isSelected = ingredients.some((i) => String(i.product_id) === pid)
+    if (isSelected) {
+      removeIngredient(pid)
+    } else {
+      const sauce = isSauce(product)
+      setIngredients((prev) => [...prev, {
+        product_id:        pid,
+        product_name:      product.product_name,
+        quantity_required: sauce ? (Number(product.stock_current) || 1) : '',
+        unit:              sauce ? (product.unit || 'unidad') : 'unidad',
+        unit_cost_clp:     Number(product.unit_cost_clp ?? product.price_per_unit ?? 0),
+        is_sauce:          sauce,
+      }])
+      setErrors((p) => { const n = { ...p }; delete n.ingredients; return n })
+    }
   }
 
   const updateIngredient = (pid, field, value) =>
@@ -253,19 +259,47 @@ function CreateRecipeModal({ isOpen, recipe, onSave, onCancel, localId, external
     }`
 
   return (
-    <Dialog open={isOpen} onOpenChange={(o) => { if (!o) onCancel() }}>
-      <DialogContent
-        className="max-w-3xl w-full flex flex-col overflow-hidden p-0"
-        style={{ maxHeight: 'min(92vh, 860px)' }}
-      >
-        <DialogHeader className="shrink-0 px-7 pt-6 pb-3 border-b border-[hsl(var(--border))]">
-          <DialogTitle>{recipe ? 'Editar Receta' : 'Nueva Receta'}</DialogTitle>
-          <p className="text-sm text-[hsl(var(--muted-foreground))]">
-            Completa todos los campos para {recipe ? 'actualizar' : 'crear'} la receta
-          </p>
-        </DialogHeader>
+    <>
+      {/* Overlay */}
+      <div
+        className={`fixed inset-0 bg-black/60 transition-opacity duration-300 ${
+          isOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
+        }`}
+        style={{ zIndex: 500 }}
+        onClick={() => { if (!savingLoading) onCancel() }}
+      />
 
-        <div className="flex-1 overflow-y-auto min-h-0 px-7 py-5 flex flex-col gap-5">
+      {/* Drawer panel */}
+      <div
+        className={`fixed inset-y-0 right-0 w-full max-w-[580px] bg-[hsl(var(--card))] shadow-2xl border-l border-[hsl(var(--border))] flex flex-col transform transition-transform duration-300 ease-in-out ${
+          isOpen ? 'translate-x-0' : 'translate-x-full'
+        }`}
+        style={{ zIndex: 501 }}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between px-7 py-5 border-b border-[hsl(var(--border))] shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[hsl(var(--primary)/0.1)]">
+              <BookOpen className="h-4 w-4 text-[hsl(var(--primary))]" />
+            </div>
+            <div>
+              <h2 className="text-base font-bold text-[hsl(var(--foreground))]">{recipe ? 'Editar Receta' : 'Nueva Receta'}</h2>
+              <p className="text-xs text-[hsl(var(--muted-foreground))]">
+                Completa todos los campos para {recipe ? 'actualizar' : 'crear'} la receta
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => { if (!savingLoading) onCancel() }}
+            disabled={savingLoading}
+            className="rounded-lg p-2 hover:bg-[hsl(var(--muted))] transition-colors disabled:opacity-50"
+          >
+            <X className="h-4 w-4 text-[hsl(var(--muted-foreground))]" />
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto min-h-0 px-7 py-5 flex flex-col gap-5 [&::-webkit-scrollbar]:hidden [scrollbar-width:none]">
 
           {/* Nombre */}
           <div className="flex flex-col gap-1.5">
@@ -346,38 +380,56 @@ function CreateRecipeModal({ isOpen, recipe, onSave, onCancel, localId, external
 
           {/* Ingredientes */}
           <div className="flex flex-col gap-3">
-            <div>
-              <h3 className="text-sm font-semibold text-[hsl(var(--foreground))]">Ingredientes</h3>
-              {errors.ingredients && (
-                <p className="text-xs text-red-500 mt-0.5">{errors.ingredients}</p>
-              )}
-            </div>
+            {errors.ingredients && (
+              <p className="text-xs text-red-500">{errors.ingredients}</p>
+            )}
 
             {loading ? (
               <p className="text-sm text-[hsl(var(--muted-foreground))] py-2">Cargando productos…</p>
             ) : (
               <>
-                <div className="flex flex-col gap-1.5">
-                  <Label htmlFor="cr-pick-product">Seleccione un Producto</Label>
-                  <select
-                    id="cr-pick-product"
-                    value={pickedId}
-                    onChange={handlePickProduct}
-                    disabled={products.length === 0}
-                    className={selectCls(null)}
-                  >
-                    <option value="">
-                      {products.length === 0 ? 'Sin productos en inventario' : '— Selecciona para agregar —'}
-                    </option>
-                    {products.map((p) => (
-                      <option key={p.product_id} value={p.product_id}>
-                        {p.product_name}
-                        {isSauce(p) ? ' 🫙 Salsa' : ''}
-                        {' — '}
-                        {fmt(p.unit_cost_clp ?? 0)} / u.
-                      </option>
-                    ))}
-                  </select>
+                <div className="flex flex-col gap-2">
+                  <div className="flex items-center justify-between">
+                    <Label>Seleccionar ingredientes</Label>
+                    {ingredients.length > 0 && (
+                      <span className="text-xs text-[hsl(var(--muted-foreground))]">{ingredients.length} seleccionado{ingredients.length !== 1 ? 's' : ''}</span>
+                    )}
+                  </div>
+                  <div className="max-h-64 overflow-y-auto rounded-lg border border-[hsl(var(--border))] p-2 [&::-webkit-scrollbar]:hidden [scrollbar-width:none]">
+                    {filteredProducts.length === 0 ? (
+                      <p className="text-sm text-center text-[hsl(var(--muted-foreground))] py-4">
+                        {products.length === 0 ? 'Sin productos en inventario' : 'Sin resultados'}
+                      </p>
+                    ) : (
+                      <div className="grid grid-cols-3 gap-1.5">
+                        {filteredProducts.map((p) => {
+                          const pid = String(p.product_id)
+                          const checked = ingredients.some((i) => String(i.product_id) === pid)
+                          return (
+                            <label
+                              key={pid}
+                              className={`flex items-start gap-2 rounded-lg border px-2.5 py-2 cursor-pointer transition-colors ${
+                                checked
+                                  ? 'border-[hsl(var(--primary)/0.5)] bg-[hsl(var(--primary)/0.07)]'
+                                  : 'border-[hsl(var(--border))] hover:border-[hsl(var(--primary)/0.3)] hover:bg-[hsl(var(--accent)/0.4)]'
+                              }`}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                onChange={() => toggleIngredient(p)}
+                                className="mt-0.5 h-3.5 w-3.5 shrink-0 rounded border-[hsl(var(--border))] accent-[hsl(var(--primary))]"
+                              />
+                              <span className="min-w-0 flex flex-col gap-0.5">
+                                <span className="text-xs font-medium leading-tight line-clamp-2">{p.product_name}</span>
+                                {isSauce(p) && <span className="text-[10px] text-amber-600">Salsa</span>}
+                              </span>
+                            </label>
+                          )
+                        })}
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 {ingredients.length > 0 && (
@@ -465,11 +517,6 @@ function CreateRecipeModal({ isOpen, recipe, onSave, onCancel, localId, external
                   </div>
                 )}
 
-                {ingredients.length === 0 && (
-                  <p className="text-sm text-center text-[hsl(var(--muted-foreground))] py-4 border border-dashed border-[hsl(var(--border))] rounded-lg">
-                    Sin ingredientes — selecciona un producto arriba para agregar
-                  </p>
-                )}
               </>
             )}
           </div>
@@ -494,23 +541,95 @@ function CreateRecipeModal({ isOpen, recipe, onSave, onCancel, localId, external
           )}
         </div>
 
-        <DialogFooter className="shrink-0 px-7 py-4 border-t border-[hsl(var(--border))] flex-col gap-2">
+        {/* Footer */}
+        <div className="shrink-0 px-7 py-4 border-t border-[hsl(var(--border))] flex flex-col gap-3">
           {externalError && (
             <p className="w-full rounded-lg border border-red-200 bg-red-50 text-red-700 text-xs px-3 py-2 text-left">
               {externalError}
             </p>
           )}
           <div className="flex gap-2 justify-end w-full">
-            <Button type="button" variant="outline" onClick={onCancel} disabled={savingLoading}>
+            <Button type="button" variant="outline" onClick={onCancel} disabled={savingLoading || actionLoading}>
               Cancelar
             </Button>
-            <Button type="button" onClick={handleSave} disabled={savingLoading}>
+            <Button type="button" onClick={handleSave} disabled={savingLoading || actionLoading}>
               {savingLoading ? 'Guardando…' : recipe ? 'Actualizar' : 'Crear Receta'}
             </Button>
           </div>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+
+          {/* Toggle + Delete — only when editing existing recipe */}
+          {recipe && (onToggleStatus || onDelete) && (
+            <div className="flex flex-col gap-2 border-t border-[hsl(var(--border))] pt-3">
+              {onToggleStatus && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={actionLoading || savingLoading}
+                  className={recipe.is_active
+                    ? 'justify-start gap-2 text-amber-600 border-amber-200 hover:bg-amber-50'
+                    : 'justify-start gap-2 text-emerald-600 border-emerald-200 hover:bg-emerald-50'
+                  }
+                  onClick={async () => {
+                    setActionLoading(true)
+                    try {
+                      await onToggleStatus(recipe.id, !recipe.is_active)
+                      onCancel()
+                    } finally {
+                      setActionLoading(false)
+                    }
+                  }}
+                >
+                  <Power size={15} />
+                  {recipe.is_active ? 'Desactivar receta' : 'Activar receta'}
+                </Button>
+              )}
+
+              {onDelete && !confirmingDelete && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={actionLoading || savingLoading}
+                  className="justify-start gap-2 text-[hsl(var(--destructive))] border-[hsl(var(--destructive)/0.3)] hover:bg-red-50"
+                  onClick={() => setConfirmingDelete(true)}
+                >
+                  <Trash2 size={15} />
+                  Eliminar receta
+                </Button>
+              )}
+
+              {onDelete && confirmingDelete && (
+                <div className="rounded-lg bg-red-50 border border-red-200 px-4 py-3 flex flex-col gap-2">
+                  <p className="text-sm text-red-700 font-medium">¿Eliminar esta receta? Esta acción no se puede deshacer.</p>
+                  <div className="flex gap-2">
+                    <Button
+                      type="button"
+                      variant="destructive"
+                      size="sm"
+                      disabled={actionLoading}
+                      onClick={async () => {
+                        setActionLoading(true)
+                        try {
+                          await onDelete(recipe.id)
+                          onCancel()
+                        } finally {
+                          setActionLoading(false)
+                          setConfirmingDelete(false)
+                        }
+                      }}
+                    >
+                      {actionLoading ? 'Eliminando…' : 'Confirmar'}
+                    </Button>
+                    <Button type="button" variant="outline" size="sm" onClick={() => setConfirmingDelete(false)} disabled={actionLoading}>
+                      Cancelar
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    </>
   )
 }
 

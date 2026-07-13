@@ -1,9 +1,13 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState, useMemo, useCallback, memo } from 'react'
 import { useMesaDetail } from '../../hooks/useMesaDetail'
 import { useOrderManagement } from '../../hooks/useOrderManagement'
-import { apiRequest } from '../../lib/apiClient'
+import { apiRequest, getSplitPaymentSummary } from '../../lib/apiClient'
 import MesaDetailModal from './MesaDetailModal'
+import ComandaActions from './ComandaActions'
+import MultiPaymentModal from './MultiPaymentModal'
+import MercadoPagoModal from './MercadoPagoModal'
 import { Button } from '@/components/ui/button'
+import { formatChileTime } from '../../utils/chileDateTime'
 
 const STATUS_BADGE = {
   pending:   'bg-yellow-100 text-yellow-700',
@@ -11,6 +15,22 @@ const STATUS_BADGE = {
   ready:     'bg-green-100 text-green-700',
   completed: 'bg-gray-100 text-gray-600',
   cancelled: 'bg-red-100 text-red-600',
+}
+
+const PAYMENT_STATUS_BADGE = {
+  APPROVED:   'bg-green-100 text-green-700',
+  REJECTED:   'bg-red-100 text-red-700',
+  IN_PROCESS: 'bg-yellow-100 text-yellow-700',
+  PENDING:    'bg-gray-100 text-gray-600',
+  CANCELLED:  'bg-red-50 text-red-500',
+}
+
+const PAYMENT_STATUS_LABEL = {
+  APPROVED:   'Aprobado',
+  REJECTED:   'Rechazado',
+  IN_PROCESS: 'En Proceso',
+  PENDING:    'Pendiente',
+  CANCELLED:  'Cancelado',
 }
 
 const STATUS_LABEL = {
@@ -29,14 +49,19 @@ function fmt(dateStr) {
 
 function fmtTime(dateStr) {
   if (!dateStr) return '—'
-  return new Date(dateStr).toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' })
+  return formatChileTime(dateStr)
 }
 
+let _printInProgress = false
+
 function openPrintWindow({ mesa, firstOrder, allItems, subtotal, iva, total }) {
+  if (_printInProgress) return
+  _printInProgress = true
+
   const now = new Date()
-  const dateStr = now.toLocaleDateString('es-CL', { day: '2-digit', month: '2-digit', year: 'numeric' })
-  const timeStr = now.toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' })
-  const orderId = firstOrder?.id ? `#${firstOrder.id.slice(0, 8).toUpperCase()}` : '—'
+  const dateStr = now.toLocaleDateString('es-CL', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'America/Santiago' })
+  const timeStr = formatChileTime(now.toISOString())
+  const orderId = firstOrder?.id ? `#${String(firstOrder.id).slice(0, 8).toUpperCase()}` : '—'
 
   const itemsHTML = allItems.map(item => `
     <tr>
@@ -71,7 +96,7 @@ function openPrintWindow({ mesa, firstOrder, allItems, subtotal, iva, total }) {
 <body>
   <div class="center">
     <h2>RESTAURANTE</h2>
-    <p style="font-weight:700">COMANDA</p>
+    <p style="font-weight:700">BOLETA</p>
     <p style="font-family:monospace">${orderId}</p>
   </div>
   <hr/>
@@ -93,43 +118,62 @@ function openPrintWindow({ mesa, firstOrder, allItems, subtotal, iva, total }) {
   <div class="row"><span>IVA 19%:</span><span>$ ${iva.toLocaleString('es-CL')}</span></div>
   <div class="row total"><span>TOTAL:</span><span>$ ${total.toLocaleString('es-CL')}</span></div>
   <p class="small">Fecha: ${dateStr} ${timeStr}</p>
-  <script>window.onload = function(){ window.print(); }<\/script>
 </body>
 </html>`
 
-  const newWin = window.open('', '_blank')
-  if (newWin) {
-    newWin.document.open()
-    newWin.document.write(html)
-    newWin.document.close()
+  const iframe = document.createElement('iframe')
+  iframe.style.cssText = 'position:fixed;right:0;bottom:0;width:1px;height:1px;border:none;opacity:0'
+  document.body.appendChild(iframe)
+  const doc = iframe.contentDocument || iframe.contentWindow.document
+  doc.open()
+  doc.write(html)
+  doc.close()
+  iframe.onload = () => {
+    iframe.contentWindow.focus()
+    iframe.contentWindow.print()
+    setTimeout(() => {
+      _printInProgress = false
+      if (document.body.contains(iframe)) document.body.removeChild(iframe)
+    }, 3000)
   }
 }
 
-export default function OrdenView({ mesa, localId, onBack, onTableUpdated }) {
+function OrdenView({ mesa, localId, onBack, onTableUpdated }) {
   const { detail, loading, error: mesaError, refresh } = useMesaDetail(mesa.id)
   const { updateOrderStatus } = useOrderManagement()
-  const hasTransitioned = useRef(false)
-  const [cancelLoading, setCancelLoading]   = useState(false)
-  const [cobrarLoading, setCobrarLoading]   = useState(false)
-  const [errorMsg, setErrorMsg]             = useState('')
-  const [showAddItems, setShowAddItems]     = useState(false)
+  const [cancelLoading, setCancelLoading]       = useState(false)
+  const [cobrarLoading, setCobrarLoading]       = useState(false)
+  const [errorMsg, setErrorMsg]                 = useState('')
+  const [showAddItems, setShowAddItems]         = useState(false)
+  const [showSplitModal, setShowSplitModal]     = useState(false)
+  const [splitFullyPaid, setSplitFullyPaid]     = useState(false)
+  const [hasSplits, setHasSplits]               = useState(false)
+  const [showMPModal, setShowMPModal]           = useState(false)
 
-  // When the view opens, transition PENDING/PREPARING orders → READY (triggers en_cobro)
+  // Totales derivados memoizados: se recalculan solo cuando cambia `detail`,
+  // no en cada render (AC4 — carrito de alta frecuencia).
+  const { allItems, subtotal, iva, total, firstOrder } = useMemo(() => {
+    const allItems = (detail?.active_orders || []).flatMap(o => o.items || [])
+    const subtotal = allItems.reduce((s, item) => s + (item.total_price || 0), 0)
+    const iva = Math.round(subtotal * 0.19)
+    const total = subtotal + iva
+    const firstOrder = detail?.active_orders?.[0]
+    return { allItems, subtotal, iva, total, firstOrder }
+  }, [detail])
+
+  // AC2: Check split payment state whenever the order view loads or refreshes
   useEffect(() => {
-    if (!detail || hasTransitioned.current) return
-    hasTransitioned.current = true
+    const orderId = detail?.active_orders?.[0]?.id
+    if (!orderId) return
+    getSplitPaymentSummary(orderId)
+      .then(s => {
+        setHasSplits((s.splits || []).length > 0)
+        setSplitFullyPaid(s.is_fully_paid)
+      })
+      .catch(() => {})
+  }, [detail])
 
-    const toTransition = (detail.active_orders || []).filter(
-      o => o.status === 'pending' || o.status === 'preparing'
-    )
-    if (!toTransition.length) return
-
-    Promise.all(toTransition.map(o => updateOrderStatus(o.id, 'READY')))
-      .then(() => { refresh(); onTableUpdated?.() })
-      .catch(err => setErrorMsg(err.message || 'Error actualizando estado'))
-  }, [detail, onTableUpdated, refresh, updateOrderStatus])
-
-  const handleCancelOrder = async () => {
+  const handleCancelOrder = useCallback(async () => {
     if (!detail?.active_orders?.length) return
     if (!window.confirm('¿Cancelar la orden y liberar la mesa?')) return
     setCancelLoading(true)
@@ -144,16 +188,24 @@ export default function OrdenView({ mesa, localId, onBack, onTableUpdated }) {
       setErrorMsg(err.message || 'Error al cancelar la orden')
       setCancelLoading(false)
     }
-  }
+  }, [detail, updateOrderStatus, onTableUpdated, onBack])
 
-  const handleCobrar = async () => {
+  // Abre el modal de pago (con validación de split payments)
+  const handleCobrar = useCallback(() => {
     if (!detail?.active_orders?.length) return
-    setCobrarLoading(true)
+    if (hasSplits && !splitFullyPaid) {
+      setErrorMsg('Pago dividido incompleto. Aprueba todos los pagos antes de cobrar.')
+      return
+    }
     setErrorMsg('')
+    setShowMPModal(true)
+  }, [detail, hasSplits, splitFullyPaid])
+
+  // Llamado por MercadoPagoModal al aprobar el pago (order ya COMPLETED vía simulate)
+  const handlePaymentSuccess = useCallback(async () => {
+    setShowMPModal(false)
+    setCobrarLoading(true)
     try {
-      for (const order of detail.active_orders) {
-        await updateOrderStatus(order.id, 'COMPLETED')
-      }
       await apiRequest(`/mesas/${mesa.id}/state`, {
         method: 'PATCH',
         body: { state: 'libre' },
@@ -162,16 +214,10 @@ export default function OrdenView({ mesa, localId, onBack, onTableUpdated }) {
       onTableUpdated?.()
       onBack()
     } catch (err) {
-      setErrorMsg(err.message || 'Error al cobrar la orden')
+      setErrorMsg(err.message || 'Error al finalizar el cobro')
       setCobrarLoading(false)
     }
-  }
-
-  const allItems = (detail?.active_orders || []).flatMap(o => o.items || [])
-  const subtotal = allItems.reduce((s, item) => s + (item.total_price || 0), 0)
-  const iva = Math.round(subtotal * 0.19)
-  const total = subtotal + iva
-  const firstOrder = detail?.active_orders?.[0]
+  }, [mesa, firstOrder, allItems, subtotal, iva, total, onTableUpdated, onBack])
 
   const formatItemName = (item) => item.item_name || item.product_name || '—'
 
@@ -199,6 +245,25 @@ export default function OrdenView({ mesa, localId, onBack, onTableUpdated }) {
         />
       )}
 
+      {showSplitModal && firstOrder && (
+        <MultiPaymentModal
+          order={firstOrder}
+          orderTotal={total}
+          onClose={() => { setShowSplitModal(false); refresh() }}
+          onFullyPaid={() => { setSplitFullyPaid(true); setHasSplits(true) }}
+        />
+      )}
+
+      {firstOrder && (
+        <MercadoPagoModal
+          open={showMPModal}
+          orderId={firstOrder.id}
+          total={total}
+          onSuccess={handlePaymentSuccess}
+          onClose={() => setShowMPModal(false)}
+        />
+      )}
+
       <div className="flex flex-col h-full">
         {/* Breadcrumb + acciones */}
         <div className="flex items-center justify-between px-6 py-3 border-b border-[hsl(var(--border))] bg-[hsl(var(--card))] shrink-0">
@@ -216,13 +281,34 @@ export default function OrdenView({ mesa, localId, onBack, onTableUpdated }) {
             )}
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            {firstOrder?.id && (
+              <ComandaActions orderId={firstOrder.id} size="sm" showLabel={false} />
+            )}
+            {/* AC1 (OP-03): Dividir pago entre N comensales */}
+            {firstOrder?.id && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowSplitModal(true)}
+                disabled={!detail?.active_orders?.length}
+                className={hasSplits && !splitFullyPaid
+                  ? 'border-yellow-400 text-yellow-700 hover:bg-yellow-50'
+                  : hasSplits && splitFullyPaid
+                  ? 'border-green-400 text-green-700 hover:bg-green-50'
+                  : ''
+                }
+              >
+                {hasSplits && splitFullyPaid ? '✓ Pago Dividido' : '⊘ Dividir Pago'}
+              </Button>
+            )}
             <Button
               variant="outline"
               size="sm"
               onClick={handleCobrar}
-              disabled={cobrarLoading || cancelLoading || !detail?.active_orders?.length}
-              className="bg-green-600 hover:bg-green-700 text-white font-semibold"
+              disabled={cobrarLoading || cancelLoading || !detail?.active_orders?.length || (hasSplits && !splitFullyPaid)}
+              className="bg-green-600 hover:bg-green-700 text-white font-semibold disabled:opacity-50"
+              title={hasSplits && !splitFullyPaid ? 'Aprueba todos los pagos divididos primero' : ''}
             >
               {cobrarLoading ? 'Procesando...' : '💰 Cobrar e imprimir'}
             </Button>
@@ -282,7 +368,9 @@ export default function OrdenView({ mesa, localId, onBack, onTableUpdated }) {
                     <div>
                       <p className="text-xs text-[hsl(var(--muted-foreground))] mb-0.5">Tipo</p>
                       <p className="text-[hsl(var(--foreground))]">
-                        {firstOrder?.source === 'dine-in' ? 'En Local' : firstOrder?.source || '—'}
+                        {firstOrder?.source === 'dine-in' ? 'En Local'
+                          : firstOrder?.source === 'mercadopago_pos' ? 'MercadoPago POS'
+                          : firstOrder?.source || '—'}
                       </p>
                     </div>
                     <div>
@@ -303,6 +391,26 @@ export default function OrdenView({ mesa, localId, onBack, onTableUpdated }) {
                       <p className="text-xs text-[hsl(var(--muted-foreground))] mb-0.5">Hora</p>
                       <p className="text-[hsl(var(--foreground))]">{fmtTime(firstOrder?.created_at)}</p>
                     </div>
+
+                    {/* AC1: Payment confirmation status */}
+                    {firstOrder?.payment_status && (
+                      <div>
+                        <p className="text-xs text-[hsl(var(--muted-foreground))] mb-0.5">Pago</p>
+                        <span className={`inline-block text-xs font-medium px-2 py-0.5 rounded-full ${PAYMENT_STATUS_BADGE[firstOrder.payment_status] || 'bg-gray-100 text-gray-600'}`}>
+                          {PAYMENT_STATUS_LABEL[firstOrder.payment_status] || firstOrder.payment_status}
+                        </span>
+                      </div>
+                    )}
+
+                    {/* AC4: MercadoPago external transaction ID for 1:1 traceability */}
+                    {firstOrder?.external_transaction_id && (
+                      <div className="col-span-2">
+                        <p className="text-xs text-[hsl(var(--muted-foreground))] mb-0.5">ID Transacción MP</p>
+                        <p className="font-mono text-xs text-[hsl(var(--foreground))] break-all">
+                          {firstOrder.external_transaction_id}
+                        </p>
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -437,3 +545,5 @@ export default function OrdenView({ mesa, localId, onBack, onTableUpdated }) {
   )
 }
 
+// Memoizado: el carrito no se re-renderiza si no cambian sus props (AC4).
+export default memo(OrdenView)

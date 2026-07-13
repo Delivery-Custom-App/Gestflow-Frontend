@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { UserPlus, ArrowLeft } from 'lucide-react'
+import { UserPlus, ArrowLeft, RefreshCw, Eye, EyeOff } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { isSuperAdminRole } from '../auth/roleLabel'
 import { isInventoryAdminRole } from '../utils/inventoryAccess'
@@ -10,26 +10,41 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/com
 import { Button } from '@/components/ui/button'
 
 const ROLES = [
-  { value: 'EMPLEADO', label: 'Empleado — solo POS' },
-  { value: 'ADMIN', label: 'Admin — su local (inventario, etc.)' },
+  { value: 'EMPLEADO',   label: 'Empleado — solo POS' },
+  { value: 'ADMIN',      label: 'Admin — su local (inventario, etc.)' },
   { value: 'SUPERADMIN', label: 'Superadmin — acceso total' },
 ]
+
+const HIGH_ROLES = new Set(['ADMIN', 'SUPERADMIN'])
+
+const ROLE_WARNING = {
+  ADMIN:      'Este usuario podrá administrar inventario, proveedores y reportes de su local.',
+  SUPERADMIN: 'Este usuario tendrá acceso total al sistema, incluyendo todos los locales y configuraciones críticas.',
+}
 
 const inputCls =
   'w-full rounded-lg border border-[hsl(var(--border))] bg-white px-3 py-2 text-sm text-[hsl(var(--foreground))] ' +
   'focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary))]/40 focus:border-[hsl(var(--primary))]'
 const labelCls = 'block text-sm font-medium text-[hsl(var(--foreground))] mb-1'
 
+function generatePassword() {
+  const chars = 'abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789!@#$%'
+  return Array.from({ length: 12 }, () => chars[Math.floor(Math.random() * chars.length)]).join('')
+}
+
 export default function UserManagementPage() {
   const { userRole } = useAuth()
   const navigate = useNavigate()
   const { locales, loading: localesLoading } = useLocals()
   const [form, setForm] = useState({ name: '', email: '', password: '', role: 'EMPLEADO', local_id: '' })
+  const [showPassword, setShowPassword] = useState(false)
+  const [roleConfirmed, setRoleConfirmed] = useState(false)
   const [loading, setLoading] = useState(false)
   const [ok, setOk] = useState('')
   const [err, setErr] = useState('')
 
   const availableRoles = isSuperAdminRole(userRole) ? ROLES : ROLES.filter((r) => r.value !== 'SUPERADMIN')
+  const needsConfirm = HIGH_ROLES.has(form.role)
 
   if (!isInventoryAdminRole(userRole)) {
     return (
@@ -45,7 +60,17 @@ export default function UserManagementPage() {
     )
   }
 
-  const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }))
+  const set = (k) => (e) => {
+    const val = e.target.value
+    setForm((f) => ({ ...f, [k]: val }))
+    if (k === 'role') setRoleConfirmed(false)
+  }
+
+  const handleGeneratePassword = () => {
+    const pwd = generatePassword()
+    setForm((f) => ({ ...f, password: pwd }))
+    setShowPassword(true)
+  }
 
   const onSubmit = async (e) => {
     e.preventDefault()
@@ -53,6 +78,7 @@ export default function UserManagementPage() {
     if (!form.name || !form.email || !form.password) { setErr('Completa nombre, correo y contraseña.'); return }
     if (form.password.length < 6) { setErr('La contraseña debe tener al menos 6 caracteres.'); return }
     if (form.role !== 'SUPERADMIN' && !form.local_id) { setErr('Selecciona el local al que pertenece este usuario.'); return }
+    if (needsConfirm && !roleConfirmed) { setErr('Debes confirmar la asignación de este rol antes de continuar.'); return }
     setLoading(true)
     try {
       await createUser({
@@ -60,8 +86,10 @@ export default function UserManagementPage() {
         role: form.role, local_id: form.local_id || null,
       })
       const localName = locales.find((l) => String(l.id) === String(form.local_id))?.name
-      setOk(`Usuario "${form.email.trim()}" creado como ${form.role}${localName ? ` en el local "${localName}"` : ''}.`)
+      setOk(`Usuario "${form.email.trim()}" creado como ${form.role}${localName ? ` en "${localName}"` : ''}.`)
       setForm({ name: '', email: '', password: '', role: 'EMPLEADO', local_id: '' })
+      setRoleConfirmed(false)
+      setShowPassword(false)
     } catch (e2) {
       setErr(e2.detail || e2.message || 'Error al crear usuario')
     } finally {
@@ -70,7 +98,7 @@ export default function UserManagementPage() {
   }
 
   return (
-    <div className="flex-1 overflow-y-auto bg-[hsl(var(--background))]">
+    <div className="flex-1 overflow-y-auto no-scrollbar bg-[hsl(var(--background))]">
       <div className="p-6 md:p-8">
         <Button variant="ghost" size="sm" className="mb-3" onClick={() => navigate('/usuarios')}>
           <ArrowLeft size={16} /> Volver a la lista
@@ -96,17 +124,44 @@ export default function UserManagementPage() {
                   <label className={labelCls}>Correo</label>
                   <input className={inputCls} type="email" value={form.email} onChange={set('email')} placeholder="juan@correo.com" />
                 </div>
-                <div>
+
+                {/* Contraseña con generador */}
+                <div className="sm:col-span-2">
                   <label className={labelCls}>Contraseña</label>
-                  <input className={inputCls} type="password" value={form.password} onChange={set('password')} placeholder="Mínimo 6 caracteres" />
+                  <div className="flex gap-2">
+                    <div className="relative flex-1">
+                      <input
+                        className={inputCls + ' pr-10'}
+                        type={showPassword ? 'text' : 'password'}
+                        value={form.password}
+                        onChange={set('password')}
+                        placeholder="Mínimo 6 caracteres"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword((v) => !v)}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]"
+                      >
+                        {showPassword ? <EyeOff size={15} /> : <Eye size={15} />}
+                      </button>
+                    </div>
+                    <Button type="button" variant="outline" size="sm" onClick={handleGeneratePassword} className="shrink-0 gap-1.5">
+                      <RefreshCw size={13} /> Generar
+                    </Button>
+                  </div>
+                  {showPassword && form.password && (
+                    <p className="text-xs text-amber-600 mt-1">Copia la contraseña antes de guardar — no se mostrará nuevamente.</p>
+                  )}
                 </div>
-                <div>
+
+                <div className="sm:col-span-2">
                   <label className={labelCls}>Rol</label>
                   <select className={inputCls} value={form.role} onChange={set('role')}>
                     {availableRoles.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
                   </select>
                 </div>
               </div>
+
               {form.role !== 'SUPERADMIN' && (
                 <div>
                   <label className={labelCls}>Local asignado</label>
@@ -117,14 +172,34 @@ export default function UserManagementPage() {
                   <p className="text-xs text-[hsl(var(--muted-foreground))] mt-1">El usuario solo tendrá acceso a este local.</p>
                 </div>
               )}
+
+              {/* Doble verificación para roles elevados */}
+              {needsConfirm && (
+                <label className="flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={roleConfirmed}
+                    onChange={(e) => setRoleConfirmed(e.target.checked)}
+                    className="mt-0.5 h-4 w-4 accent-amber-600 shrink-0"
+                  />
+                  <span className="text-sm text-amber-800">
+                    <span className="font-semibold">Confirmo la asignación de rol {form.role}. </span>
+                    {ROLE_WARNING[form.role]}
+                  </span>
+                </label>
+              )}
+
               {ok && (
                 <div className="text-sm text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2">
                   {ok} <button type="button" onClick={() => navigate('/usuarios')} className="underline font-medium ml-1">Ver lista</button>
                 </div>
               )}
               {err && <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2 whitespace-pre-line">{err}</div>}
+
               <div className="flex gap-2 pt-1">
-                <Button type="submit" disabled={loading}>{loading ? 'Creando…' : 'Crear usuario'}</Button>
+                <Button type="submit" disabled={loading || (needsConfirm && !roleConfirmed)}>
+                  {loading ? 'Creando…' : 'Crear usuario'}
+                </Button>
                 <Button type="button" variant="outline" onClick={() => navigate('/usuarios')}>Cancelar</Button>
               </div>
             </form>

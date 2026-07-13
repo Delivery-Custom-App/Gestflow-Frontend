@@ -2,23 +2,85 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useSelectedLocal } from '../../hooks/useSelectedLocal'
 import {
-  PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip,
-  ResponsiveContainer, CartesianGrid, Legend,
+  Cell, BarChart, Bar, XAxis, YAxis, Tooltip,
+  ResponsiveContainer, CartesianGrid,
 } from 'recharts'
 import { getInventoryKpisByLocal, getInventoryStockList } from '../../lib/inventoryApi'
+import { useAlerts } from '../../hooks/useAlerts'
 import InventoryShell from './InventoryShell'
 import LoadingSpinner from '../LoadingSpinner'
+import ChartSkeleton from '../ui/ChartSkeleton'
 import { getStockAlertLevel } from './stockAlertUtils'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
-import { motion } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
 import { formatCLPDisplay as formatMoney } from '../../lib/formatCLP'
 import {
   Package, CheckCircle, TrendingDown, AlertTriangle, DollarSign,
-  Info, ArrowRight,
+  ArrowRight, ShoppingCart, HelpCircle, X,
 } from 'lucide-react'
+
+const SEVERITY_CONFIG = {
+  critical: {
+    label: 'Crítica',
+    cls:   'border-l-4 border-l-red-500 border border-red-200 bg-red-50 dark:border-slate-700 dark:border-l-red-500 dark:bg-red-950/30',
+    badge: 'bg-red-500 text-white',
+  },
+  high: {
+    label: 'Alta',
+    cls:   'border-l-4 border-l-orange-500 border border-orange-200 bg-orange-50 dark:border-slate-700 dark:border-l-orange-500 dark:bg-orange-950/30',
+    badge: 'bg-orange-500 text-white',
+  },
+  medium: {
+    label: 'Media',
+    cls:   'border-l-4 border-l-amber-400 border border-amber-200 bg-amber-50 dark:border-slate-700 dark:border-l-amber-400 dark:bg-amber-950/20',
+    badge: 'bg-amber-400 text-white',
+  },
+  low: {
+    label: 'Baja',
+    cls:   'border-l-4 border-l-blue-400 border border-blue-200 bg-blue-50 dark:border-slate-700 dark:border-l-blue-400 dark:bg-blue-950/20',
+    badge: 'bg-blue-400 text-white',
+  },
+}
+
+function AlertCard({ alert }) {
+  const cfg         = SEVERITY_CONFIG[alert.severity] || SEVERITY_CONFIG.medium
+  const orderPlaced = alert.metadata?.order_placed === true
+  const date        = alert.created_at
+    ? new Date(alert.created_at).toLocaleString('es-CL', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
+    : ''
+
+  return (
+    <article className={cn('rounded-xl p-4 shadow-sm', cfg.cls)}>
+      <div className="flex items-center gap-2 mb-1 flex-wrap">
+        <span className={cn('inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide', cfg.badge)}>
+          {cfg.label}
+        </span>
+        {orderPlaced && (
+          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide">
+            <ShoppingCart size={9} />
+            Se necesita Pedido
+          </span>
+        )}
+        {alert.status === 'resolved' && !orderPlaced && (
+          <span className="inline-flex items-center rounded-full bg-green-100 text-green-700 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide">
+            Solucionada
+          </span>
+        )}
+        {alert.status === 'resolved' && orderPlaced && (
+          <span className="inline-flex items-center rounded-full bg-green-100 text-green-700 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide">
+            Solucionada vía pedido
+          </span>
+        )}
+        <span className="text-[10px] text-[hsl(var(--muted-foreground))]">{date}</span>
+      </div>
+      <h4 className="text-sm font-bold text-[hsl(var(--foreground))]">{alert.title}</h4>
+      <p className="mt-0.5 text-xs text-[hsl(var(--muted-foreground))]">{alert.message}</p>
+    </article>
+  )
+}
 
 const STAGGER = {
   hidden: {},
@@ -29,7 +91,6 @@ const ITEM = {
   visible: { opacity: 1, y: 0, transition: { duration: 0.28 } },
 }
 
-const PIE_COLORS = ['#16a34a', '#f59e0b', '#ef4444']
 
 function InventoryHub() {
   const navigate  = useNavigate()
@@ -42,6 +103,14 @@ function InventoryHub() {
   const [kpisLoading, setKL]      = useState(true)
   const [items, setItems]         = useState([])
   const [itemsLoading, setIL]     = useState(true)
+  const [guideOpen, setGuideOpen] = useState(false)
+
+  const { alerts: hookAlerts, loading: alertsLoading } = useAlerts(localId)
+
+  const inventoryAlerts = useMemo(
+    () => hookAlerts.filter((a) => a.type === 'inventory_stock' && a.status === 'pending'),
+    [hookAlerts]
+  )
 
   const loadKpis = useCallback(async () => {
     if (!localId) { setKL(false); return }
@@ -60,43 +129,30 @@ function InventoryHub() {
 
   useEffect(() => { loadKpis(); loadItems() }, [loadKpis, loadItems])
 
-  /* ── alert items ──────────────────────────────────────────── */
-  const alerts = useMemo(() => {
-    const rows = []
-    for (const row of items) {
-      const level = getStockAlertLevel(row)
-      if (!level) continue
-      rows.push({
-        id:     row.inventory_id ?? row.product_id,
-        name:   row.product_name || row.name || 'Producto',
-        level,
-        stock:  Number(row.stock_current ?? 0),
-        min:    row.stock_min != null ? Number(row.stock_min) : null,
-        cat:    row.category_name || '—',
-      })
-    }
-    rows.sort((a, b) => (a.level === 'critical' ? -1 : b.level === 'critical' ? 1 : 0))
-    return rows
-  }, [items])
-
-  /* ── pie chart data ────────────────────────────────────────── */
-  const pieData = useMemo(() => {
+  /* ── bar chart data: distribución de stock por nivel ─────── */
+  const stockDistData = useMemo(() => {
     if (!kpis) return []
     return [
-      { name: 'Óptimo',     value: kpis.optimal_stock_count  ?? 0 },
-      { name: 'Stock bajo', value: kpis.low_stock_count      ?? 0 },
-      { name: 'Crítico',    value: kpis.critical_stock_count ?? 0 },
-    ].filter((d) => d.value > 0)
+      { name: 'Óptimo',     cantidad: kpis.optimal_stock_count  ?? 0, fill: '#16a34a' },
+      { name: 'Stock bajo', cantidad: kpis.low_stock_count      ?? 0, fill: '#f59e0b' },
+      { name: 'Crítico',    cantidad: kpis.critical_stock_count ?? 0, fill: '#ef4444' },
+    ].filter((d) => d.cantidad > 0)
   }, [kpis])
 
-  /* ── bar chart data: top alert products ───────────────────── */
-  const barData = useMemo(() =>
-    alerts.slice(0, 10).map((a) => ({
-      name:   a.name.length > 14 ? a.name.slice(0, 13) + '…' : a.name,
-      Actual: a.stock,
-      Mínimo: a.min ?? 0,
-    }))
-  , [alerts])
+  /* ── top 5 productos con menos stock (críticos primero) ──── */
+  const top5Critical = useMemo(() =>
+    [...items]
+      .filter((r) => getStockAlertLevel(r))
+      .sort((a, b) => Number(a.stock_current ?? 0) - Number(b.stock_current ?? 0))
+      .slice(0, 5)
+      .map((r) => ({
+        name:   (r.product_name || r.name || 'Producto').length > 14
+                  ? (r.product_name || r.name).slice(0, 13) + '…'
+                  : (r.product_name || r.name || 'Producto'),
+        Stock:  Number(r.stock_current ?? 0),
+        Mínimo: Number(r.stock_min ?? 0),
+      }))
+  , [items])
 
   /* ── KPI cards ─────────────────────────────────────────────── */
   const KPI_CARDS = [
@@ -110,13 +166,68 @@ function InventoryHub() {
   const loading = kpisLoading || itemsLoading
 
   return (
-    <InventoryShell>
+    <>
+      <AnimatePresence>
+        {guideOpen && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4"
+            onClick={() => setGuideOpen(false)}>
+            <motion.div initial={{ opacity: 0, scale: 0.95, y: 12 }} animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.96, y: 8 }} transition={{ duration: 0.2 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-[hsl(var(--card))] border border-[hsl(var(--border))] rounded-2xl shadow-2xl w-full max-w-lg max-h-[88vh] overflow-y-auto no-scrollbar">
+              <div className="flex items-center justify-between px-5 py-4 border-b border-[hsl(var(--border))]">
+                <div className="flex items-center gap-2">
+                  <HelpCircle size={16} className="text-[hsl(var(--primary))]" />
+                  <h3 className="text-sm font-bold text-[hsl(var(--foreground))]">Guía — Inventario</h3>
+                </div>
+                <button onClick={() => setGuideOpen(false)}
+                  className="flex items-center justify-center w-7 h-7 rounded-lg text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))] transition-colors">
+                  <X size={14} />
+                </button>
+              </div>
+              <div className="px-5 py-4 space-y-3">
+                {[
+                  { icon: Package, color: 'text-[hsl(var(--primary))]', title: 'Resumen de inventario', desc: 'Los indicadores superiores muestran la cantidad total de productos, cuántos tienen stock óptimo, cuántos están bajos, cuántos en estado crítico y el valor total del inventario.' },
+                  { icon: TrendingDown, color: 'text-amber-600', title: 'Distribución de stock', desc: 'Gráfico de barras que muestra cuántos productos están en cada nivel de stock (Óptimo, Bajo, Crítico) para ver de un vistazo la situación general.' },
+                  { icon: AlertTriangle, color: 'text-red-600', title: 'Productos críticos', desc: 'Lista los 5 productos con menor stock comparando su cantidad actual contra el mínimo definido. Los más urgentes aparecen primero.' },
+                  { icon: ShoppingCart, color: 'text-blue-600', title: 'Alertas de inventario', desc: 'Notificaciones automáticas de productos que necesitan reposición urgente. Haz clic en "Ir a Pedidos" para crear una orden de compra.' },
+                  { icon: ArrowRight, color: 'text-[hsl(var(--primary))]', title: 'Secciones del inventario', highlight: true, desc: 'Desde el menú lateral accedes a: Stock (gestión detallada), Proveedores (gestión de proveedores), Recetas (fórmulas y costos) y Compras Semanales (órdenes de compra).' },
+                ].map(({ icon: Icon, color, title, desc, highlight }) => (
+                  <div key={title} className={`flex gap-3 rounded-xl p-3 ${highlight ? 'bg-[hsl(var(--primary)/0.08)] border border-[hsl(var(--primary)/0.2)]' : 'bg-[hsl(var(--muted)/0.4)]'}`}>
+                    <div className={`mt-0.5 shrink-0 ${color}`}><Icon size={15} /></div>
+                    <div>
+                      <p className="text-xs font-semibold text-[hsl(var(--foreground))] mb-0.5">{title}</p>
+                      <p className="text-xs text-[hsl(var(--muted-foreground))] leading-relaxed">{desc}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+      <InventoryShell>
       <div className="px-6 py-6 flex flex-col gap-6 pb-10">
-        <header>
-          <h2 className="text-2xl font-bold text-[hsl(var(--foreground))]">Estado Actual Inventario</h2>
-          <p className="text-sm text-[hsl(var(--muted-foreground))] mt-0.5">{selectedLocal?.name}</p>
-        </header>
-
+        {/* Header */}
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <span className="flex items-center justify-center w-10 h-10 rounded-full bg-[hsl(var(--primary)/0.1)] text-[hsl(var(--primary))]">
+              <Package size={22} />
+            </span>
+            <div>
+              <h1 className="text-xl font-bold text-[hsl(var(--foreground))]">Inventario</h1>
+              <p className="text-sm text-[hsl(var(--muted-foreground))]">Vista general del stock, alertas y gráficos de inventario</p>
+            </div>
+          </div>
+          <button
+            onClick={() => setGuideOpen(true)}
+            className="flex items-center gap-1.5 text-xs text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--primary))] transition-colors"
+          >
+            <HelpCircle size={13} />
+            <span>¿Cómo funciona esta pantalla?</span>
+          </button>
+        </div>
         {loading && !kpis && !items.length ? (
           <LoadingSpinner message="Cargando inventario..." />
         ) : (
@@ -148,63 +259,66 @@ function InventoryHub() {
 
             {/* Charts row */}
             <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
-              {/* Donut — stock status */}
+              {/* Bar chart — distribución de stock por nivel con cantidades */}
               <Card className="lg:col-span-2">
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-base">Distribución de stock</CardTitle>
+                  <CardTitle className="text-base">Distribución de Stock</CardTitle>
                 </CardHeader>
                 <CardContent>
                   {kpisLoading ? (
-                    <div className="h-48 flex items-center justify-center">
-                      <LoadingSpinner />
-                    </div>
-                  ) : pieData.length === 0 ? (
+                    <ChartSkeleton className="h-[220px]" />
+                  ) : stockDistData.length === 0 ? (
                     <p className="text-sm text-[hsl(var(--muted-foreground))] py-8 text-center">Sin datos</p>
                   ) : (
                     <ResponsiveContainer width="100%" height={220}>
-                      <PieChart>
-                        <Pie
-                          data={pieData}
-                          cx="50%" cy="50%"
-                          innerRadius={55} outerRadius={80}
-                          paddingAngle={3}
-                          dataKey="value"
-                        >
-                          {pieData.map((_, i) => (
-                            <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
+                      <BarChart data={stockDistData} margin={{ top: 28, right: 16, left: -16, bottom: 4 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
+                        <XAxis dataKey="name" tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} tickLine={false} axisLine={false} />
+                        <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} tickLine={false} axisLine={false} />
+                        <Tooltip
+                          formatter={(v) => [`${v} productos`]}
+                          contentStyle={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: 8, fontSize: 12 }}
+                        />
+                        <Bar dataKey="cantidad" radius={[4, 4, 0, 0]} maxBarSize={56} label={{ position: 'top', fontSize: 12, fontWeight: 700, fill: 'hsl(var(--foreground))' }}>
+                          {stockDistData.map((entry, i) => (
+                            <Cell key={i} fill={entry.fill} />
                           ))}
-                        </Pie>
-                        <Tooltip formatter={(v, n) => [`${v} productos`, n]} />
-                        <Legend iconType="circle" iconSize={10} />
-                      </PieChart>
+                        </Bar>
+                      </BarChart>
                     </ResponsiveContainer>
                   )}
                 </CardContent>
               </Card>
 
-              {/* Bar chart — products with alerts */}
+              {/* Bar chart — top 5 productos críticos por menor stock */}
               <Card className="lg:col-span-3">
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-base">Productos en alerta (stock actual vs mínimo)</CardTitle>
+                  <CardTitle className="text-base">Productos Críticos</CardTitle>
                 </CardHeader>
                 <CardContent>
                   {itemsLoading ? (
-                    <div className="h-48 flex items-center justify-center">
-                      <LoadingSpinner />
-                    </div>
-                  ) : barData.length === 0 ? (
+                    <ChartSkeleton className="h-[280px]" />
+                  ) : top5Critical.length === 0 ? (
                     <p className="text-sm text-[hsl(var(--muted-foreground))] py-8 text-center">
-                      No hay productos en alerta. Todo en orden.
+                      No hay productos críticos. Todo en orden.
                     </p>
                   ) : (
-                    <ResponsiveContainer width="100%" height={220}>
-                      <BarChart data={barData} layout="vertical" margin={{ left: 4, right: 16, top: 4, bottom: 4 }}>
-                        <CartesianGrid strokeDasharray="3 3" horizontal={false} />
-                        <XAxis type="number" tick={{ fontSize: 12 }} />
-                        <YAxis type="category" dataKey="name" width={100} tick={{ fontSize: 12 }} />
-                        <Tooltip />
-                        <Bar dataKey="Actual" fill="#16a34a" radius={[0, 3, 3, 0]} barSize={12} />
-                        <Bar dataKey="Mínimo" fill="#fca5a5" radius={[0, 3, 3, 0]} barSize={12} />
+                    <ResponsiveContainer width="100%" height={280}>
+                      <BarChart data={top5Critical} layout="vertical" barCategoryGap="55%" margin={{ left: 4, right: 44, top: 4, bottom: 4 }}>
+                        <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="hsl(var(--border))" />
+                        <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} tickLine={false} axisLine={false} />
+                        <YAxis type="category" dataKey="name" width={95} tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} tickLine={false} axisLine={false} />
+                        <Tooltip
+                          contentStyle={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: 8, fontSize: 12 }}
+                        />
+                        <Bar dataKey="Stock" fill="#ef4444" radius={[0, 3, 3, 0]} barSize={18} minPointSize={0}
+                          label={({ x, y, width, height, value }) => (
+                            <text x={x + width + 6} y={y + height / 2} dominantBaseline="middle" fontSize={11} fontWeight={700} fill="#ef4444">
+                              {value}
+                            </text>
+                          )}
+                        />
+                        <Bar dataKey="Mínimo" fill="#64748b" radius={[0, 3, 3, 0]} barSize={18} minPointSize={0} />
                       </BarChart>
                     </ResponsiveContainer>
                   )}
@@ -212,87 +326,35 @@ function InventoryHub() {
               </Card>
             </div>
 
-            {/* Alerts */}
+            {/* Alertas de inventario — misma lógica y diseño que AdministrativeModule */}
             <Card>
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between">
                   <CardTitle className="text-base flex items-center gap-2">
                     <AlertTriangle size={18} className="text-amber-500" />
                     Alertas de inventario
-                    {alerts.length > 0 && (
-                      <Badge variant="destructive" className="text-xs px-2 py-0.5">{alerts.length}</Badge>
+                    {inventoryAlerts.length > 0 && (
+                      <Badge variant="destructive" className="text-xs px-2 py-0.5">{inventoryAlerts.length}</Badge>
                     )}
                   </CardTitle>
-                  <Button type="button" variant="ghost" size="sm" onClick={() => nav('inventario/stock')} className="gap-1 text-sm">
-                    Ver stock completo <ArrowRight size={14} />
+                  <Button type="button" variant="ghost" size="sm" onClick={() => nav('inventario/compras-semanales')} className="gap-1 text-sm">
+                    Ir a Pedidos <ArrowRight size={14} />
                   </Button>
                 </div>
               </CardHeader>
               <CardContent className="pt-0">
-                {itemsLoading ? (
+                {alertsLoading ? (
                   <LoadingSpinner message="Cargando alertas..." />
-                ) : alerts.length === 0 ? (
+                ) : inventoryAlerts.length === 0 ? (
                   <div className="flex items-center gap-2 py-4 text-sm text-emerald-600">
                     <CheckCircle size={16} />
                     Todo el inventario está en niveles óptimos.
                   </div>
                 ) : (
                   <div className="flex flex-col gap-2">
-                    {/* Summary pills */}
-                    <div className="flex gap-2 mb-1">
-                      {[
-                        { level: 'critical', label: 'Crítico', color: 'bg-red-100 text-red-700 border-red-200 dark:bg-red-900/30 dark:text-red-400 dark:border-red-800/50' },
-                        { level: 'low',      label: 'Bajo',    color: 'bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-800/50' },
-                      ].map(({ level, label, color }) => {
-                        const cnt = alerts.filter((a) => a.level === level).length
-                        if (!cnt) return null
-                        return (
-                          <span key={level} className={`text-sm font-semibold px-3 py-1 rounded-full border ${color}`}>
-                            {cnt} {label}
-                          </span>
-                        )
-                      })}
-                    </div>
-
-                    {/* Alert rows */}
-                    <div className="divide-y divide-[hsl(var(--border))] rounded-lg border border-[hsl(var(--border))] overflow-hidden">
-                      {alerts.slice(0, 8).map((a) => (
-                        <div
-                          key={a.id}
-                          className={cn(
-                            'flex items-center gap-3 px-5 py-3',
-                            a.level === 'critical'
-                              ? 'bg-red-50/60 dark:bg-red-900/15'
-                              : 'bg-amber-50/60 dark:bg-amber-900/15',
-                          )}
-                        >
-                          <span className={a.level === 'critical' ? 'text-red-500' : 'text-amber-500'} aria-hidden="true">
-                            {a.level === 'critical' ? <AlertTriangle size={17} /> : <Info size={17} />}
-                          </span>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-base font-semibold text-[hsl(var(--foreground))] truncate">{a.name}</p>
-                            <p className="text-sm text-[hsl(var(--muted-foreground))]">
-                              Stock: <strong>{a.stock}</strong>{a.min != null && ` | Mín: ${a.min}`} · {a.cat}
-                            </p>
-                          </div>
-                          <Badge
-                            className={cn(
-                              'shrink-0 text-xs px-2 py-0.5 border',
-                              a.level === 'critical'
-                                ? 'bg-red-100 text-red-700 hover:bg-red-100 border-red-200 dark:bg-red-900/30 dark:text-red-400 dark:border-red-800/50'
-                                : 'bg-amber-100 text-amber-700 hover:bg-amber-100 border-amber-200 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-800/50',
-                            )}
-                          >
-                            {a.level === 'critical' ? 'Crítico' : 'Bajo'}
-                          </Badge>
-                        </div>
-                      ))}
-                    </div>
-                    {alerts.length > 8 && (
-                      <p className="text-xs text-[hsl(var(--muted-foreground))] text-center mt-1">
-                        +{alerts.length - 8} más · <button onClick={() => nav('inventario/stock')} className="underline hover:text-[hsl(var(--primary))]">Ver todos</button>
-                      </p>
-                    )}
+                    {inventoryAlerts.map((alert) => (
+                      <AlertCard key={alert.id} alert={alert} />
+                    ))}
                   </div>
                 )}
               </CardContent>
@@ -301,6 +363,7 @@ function InventoryHub() {
         )}
       </div>
     </InventoryShell>
+    </>
   )
 }
 

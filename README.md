@@ -46,17 +46,35 @@ Desde el repo backend:
 ```bash
 # Requiere backend corriendo en :8000
 npm install
-cp .env.example .env   # configurar VITE_API_URL y VITE_SUPABASE_*
 npm run dev
 ```
 
-Variables de entorno requeridas:
+> **Importante:** Si cambias de rama (`main` ↔ `develop`), vuelve a ejecutar `npm install`
+> porque las dependencias pueden variar entre ramas.
+
+#### Variables de entorno
+
+Crea un archivo `.env.local` en la raíz del frontend (no existe por defecto, no se sube al repo):
 
 ```env
-VITE_API_URL=http://localhost:8000
 VITE_SUPABASE_URL=https://<project>.supabase.co
 VITE_SUPABASE_ANON_KEY=<anon_key>
+VITE_API_URL=http://localhost:8000
+VITE_RECETAS_API_URL=http://localhost:8000
 ```
+
+> No uses `.env.example` — no existe en este repo. Crea `.env.local` directamente.
+
+#### Dependencias extra (rama `develop`)
+
+La rama `develop` incluye paquetes que no estaban en `main`. Si `vite` lanza errores de import al iniciar, ejecuta:
+
+```bash
+npm install usehooks-ts framer-motion
+```
+
+Estos ya están declarados en `package.json` de `develop`; el error ocurre solo si instalaste
+`node_modules` estando en `main` y luego cambiaste de rama sin reinstalar.
 
 ## Tests
 

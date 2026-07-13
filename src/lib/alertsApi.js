@@ -43,3 +43,8 @@ export function createAlert(body, token) {
 export function resolveAlert(alertId, token) {
   return apiRequest(`/alerts/${alertId}/resolve`, { method: 'PATCH', token })
 }
+
+/** Marcar que se realizó un pedido para resolver esta alerta (actualiza metadata). */
+export function markOrderPlaced(alertId, token) {
+  return apiRequest(`/alerts/${alertId}/order-placed`, { method: 'PATCH', token })
+}
