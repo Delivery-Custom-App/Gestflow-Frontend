@@ -23,6 +23,7 @@ import {
   postTransfer,
 } from '../lib/administrativeApi'
 import { getAuthContext, apiRequest } from '../lib/apiClient'
+import { uploadReceipt } from '../lib/uploadApi'
 import { enrichDashboardWithChartData, generateIncomeTrendFromOrders, generateExpenseBreakdownFromData } from '../utils/chartDataHelpers'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -1370,17 +1371,10 @@ function ReportarTransferenciaModal({ localId, onClose, onSaved }) {
     setSaving(true); setErr('')
     let receiptUrl = null
     try {
-      if (file && supabase) {
+      if (file) {
         setUploading(true)
-        const ext = file.name.split('.').pop()
-        const path = `transfers/${localId}/${Date.now()}.${ext}`
-        const { error: upErr } = await supabase.storage
-          .from('comprobantes')
-          .upload(path, file, { upsert: false, contentType: file.type })
+        receiptUrl = await uploadReceipt(file, { localId })
         setUploading(false)
-        if (upErr) throw new Error(`Error al subir imagen: ${upErr.message}`)
-        const { data: urlData } = supabase.storage.from('comprobantes').getPublicUrl(path)
-        receiptUrl = urlData?.publicUrl || null
       }
       await postTransfer({ local_id: localId, amount: amt, receipt_url: receiptUrl })
       onSaved()

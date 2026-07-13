@@ -215,7 +215,7 @@ Soporte nativo para negocios con múltiples sucursales.
 | **Modo oscuro / claro** | Toggle persistente en toda la aplicación |
 | **Responsive** | Optimizado para desktop, tablet y móvil |
 | **Carga rápida** | Code-splitting y lazy-loading por módulo |
-| **Autenticación segura** | Supabase Auth con JWT y renovación automática de sesión |
+| **Autenticación segura** | Backend local con JWT y renovación automática de sesión |
 | **Seguridad a nivel de datos** | Row Level Security (RLS) en base de datos |
 | **Operación offline parcial** | Idempotencia para evitar duplicados al reconectar |
 | **Actualizaciones en tiempo real** | WebSocket para dashboard y alertas |

@@ -35,7 +35,7 @@ function pickFirstNonEmpty(...values) {
 }
 
 /**
- * Extrae el business_id del JWT de Supabase
+ * Extrae el business_id del JWT emitido por el backend
  * @param {string} token - Token JWT
  * @returns {string|null} business_id o null si no existe
  */
@@ -54,7 +54,7 @@ export function getBusinessIdFromToken(token) {
 /**
  * Extrae el business_id desde el usuario de sesión y, como fallback, desde el JWT.
  * Se prioriza app_metadata sobre user_metadata.
- * @param {object|null} user - Usuario autenticado de Supabase
+ * @param {object|null} user - Usuario autenticado
  * @param {string|null} token - JWT de acceso
  * @returns {string|null}
  */
@@ -72,7 +72,7 @@ export function getBusinessId(user, token) {
 
 /**
  * Extrae el rol del usuario desde user metadata, app metadata o claims del token.
- * @param {object|null} user - Usuario de Supabase
+ * @param {object|null} user - Usuario autenticado
  * @param {string|null} token - JWT de acceso
  * @returns {string|null} rol detectado
  */

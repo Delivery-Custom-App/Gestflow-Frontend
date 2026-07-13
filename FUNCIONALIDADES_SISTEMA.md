@@ -23,7 +23,7 @@
 
 ## 1. Acceso y Roles
 
-El sistema cuenta con autenticación segura vía Supabase y cuatro niveles de acceso:
+El sistema cuenta con autenticación segura vía backend local y cuatro niveles de acceso:
 
 | Rol | Descripción |
 |---|---|

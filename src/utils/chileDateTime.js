@@ -3,7 +3,7 @@ export const CHILE_TZ = 'America/Santiago'
 
 /**
  * Parsea fechas de la API. Si vienen sin zona (ej. "2026-06-19T00:18:48"),
- * se interpretan como UTC — Postgres/Supabase guarda timestamptz en UTC.
+ * se interpretan como UTC — Postgres guarda timestamptz en UTC.
  */
 export function parseApiDate(iso) {
   if (iso == null || iso === '') return null
