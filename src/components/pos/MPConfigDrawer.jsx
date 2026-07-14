@@ -72,6 +72,11 @@ export default function MPConfigDrawer({ localId, onClose, open = true }) {
 
   function handleOAuthConnect() {
     if (!localId || oauthConnecting) return
+    if (mpStatus?.oauth_available !== true) {
+      setShowManualToken(true)
+      toast.info('OAuth MercadoPago no está configurado. Ingresa el Access Token manualmente.')
+      return
+    }
     cancelOAuthListeners()
 
     const url = `${API_BASE}/api/mp-oauth/start?local_id=${encodeURIComponent(localId)}`
@@ -318,6 +323,12 @@ export default function MPConfigDrawer({ localId, onClose, open = true }) {
                   </div>
                 )}
 
+                {mpStatus?.oauth_available !== true && (
+                  <p className="text-xs text-center text-[hsl(var(--muted-foreground))]">
+                    La conexión automática OAuth no está habilitada en este servidor.
+                  </p>
+                )}
+
                 {/* OAuth — primary action */}
                 <button
                   onClick={handleOAuthConnect}
@@ -332,7 +343,7 @@ export default function MPConfigDrawer({ localId, onClose, open = true }) {
                   ) : (
                     <>
                       <Link2 className="h-4 w-4" />
-                      Conectar con MercadoPago
+                      {mpStatus?.oauth_available === true ? 'Conectar con MercadoPago' : 'Ingresar token MercadoPago'}
                     </>
                   )}
                 </button>
@@ -343,7 +354,7 @@ export default function MPConfigDrawer({ localId, onClose, open = true }) {
                   className="flex items-center gap-1.5 text-xs text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] transition-colors mx-auto"
                 >
                   {showManualToken ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
-                  ¿Prefieres ingresar tu token manualmente?
+                  {mpStatus?.oauth_available === true ? '¿Prefieres ingresar tu token manualmente?' : 'Mostrar formulario de token'}
                 </button>
 
                 {showManualToken && (
