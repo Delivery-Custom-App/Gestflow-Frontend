@@ -206,8 +206,11 @@ export function buildCategoriesListPath(localId) {
   return `/categories?${params.toString()}`
 }
 
-export function getCategoriesForLocal(localId) {
-  return apiRequest(buildCategoriesListPath(localId))
+export async function getCategoriesForLocal(localId) {
+  const data = await apiRequest(buildCategoriesListPath(localId))
+  const rows = Array.isArray(data) ? data : []
+  setCachedCategories(localId, rows)
+  return rows
 }
 
 /** Lista categorías usando caché en memoria (HU-87). */
@@ -223,6 +226,13 @@ export async function loadCategoriesForLocalCached(localId) {
 /** POST /categories — ADMIN+; body { local_id, name, is_active }. */
 export function postCategory(body) {
   return apiRequest('/categories', { method: 'POST', body })
+}
+
+export function patchCategory(categoryId, body) {
+  return apiRequest(`/categories/${encodeURIComponent(String(categoryId))}`, {
+    method: 'PATCH',
+    body,
+  })
 }
 
 /**

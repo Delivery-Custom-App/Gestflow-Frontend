@@ -19,6 +19,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Skeleton } from '@/components/ui/skeleton'
 import { formatCLPOrDash as formatClp } from '../../lib/formatCLP'
+import { getCategoryTone } from '../../lib/categoryColor'
 
 const STATUS_LABEL = { OPTIMO: 'óptimo', BAJO: 'bajo', CRITICO: 'crítico' }
 
@@ -240,10 +241,12 @@ function ProductsTable({
                     const stockMax = row.stock_max == null ? '—' : String(row.stock_max)
                     const level = stockLevelFromRow(row)
                     const actualCls = level === 'critical' ? 'text-red-600 font-bold' : level === 'low' ? 'text-amber-600 font-semibold' : 'text-emerald-600 font-semibold'
+                    const categoryTone = getCategoryTone({ id: row.category_id, name: row.category_name })
                     return (
                       <motion.tr
                         key={row.inventory_id ?? row.product_id}
                         className={`${ROW_CLASS} ${isSubRow ? 'bg-[hsl(var(--muted)/0.15)]' : ''}`}
+                        style={{ boxShadow: `inset 3px 0 0 ${categoryTone.rail}` }}
                         initial={{ opacity: 0, y: isSubRow ? -4 : 10 }}
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, x: -10 }}
@@ -259,7 +262,16 @@ function ProductsTable({
                             <div className="font-bold truncate">{display || '—'}</div>
                           )}
                         </TableCell>
-                        <TableCell className="truncate">{row.category_name || '—'}</TableCell>
+                        <TableCell className="truncate">
+                          {row.category_name ? (
+                            <span
+                              className="inline-flex max-w-full items-center rounded-full border px-2 py-1 text-[11px] font-semibold leading-none"
+                              style={{ backgroundColor: categoryTone.bg, borderColor: categoryTone.border, color: categoryTone.text }}
+                            >
+                              <span className="truncate">{row.category_name}</span>
+                            </span>
+                          ) : '—'}
+                        </TableCell>
                         <TableCell className="truncate font-medium">
                           {row.supplier_name?.trim() || '—'}
                         </TableCell>
@@ -300,9 +312,13 @@ function ProductsTable({
                   }, 0)
 
                   const headerRow = (
+                    (() => {
+                      const categoryTone = getCategoryTone({ id: rows[0].category_id, name: rows[0].category_name })
+                      return (
                     <motion.tr
                       key={`grp-${key}`}
                       className={`${ROW_CLASS} cursor-pointer select-none`}
+                      style={{ boxShadow: `inset 3px 0 0 ${categoryTone.rail}` }}
                       onClick={() => toggleGroup(key)}
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}
@@ -321,7 +337,16 @@ function ProductsTable({
                           </span>
                         </div>
                       </TableCell>
-                      <TableCell className="truncate">{rows[0].category_name || '—'}</TableCell>
+                      <TableCell className="truncate">
+                        {rows[0].category_name ? (
+                          <span
+                            className="inline-flex max-w-full items-center rounded-full border px-2 py-1 text-[11px] font-semibold leading-none"
+                            style={{ backgroundColor: categoryTone.bg, borderColor: categoryTone.border, color: categoryTone.text }}
+                          >
+                            <span className="truncate">{rows[0].category_name}</span>
+                          </span>
+                        ) : '—'}
+                      </TableCell>
                       <TableCell className="text-[hsl(var(--muted-foreground))] italic">Varios</TableCell>
                       <TableCell className="text-right tabular-nums">{totalStock}</TableCell>
                       <TableCell className="text-right text-[hsl(var(--muted-foreground))]">—</TableCell>
@@ -331,6 +356,8 @@ function ProductsTable({
                       <TableCell className="text-[hsl(var(--muted-foreground))]">—</TableCell>
                       <TableCell />
                     </motion.tr>
+                      )
+                    })()
                   )
 
                   const subRows = isExpanded

@@ -80,45 +80,56 @@ function isCompleto(item) { return item.type === 'recipe' && norm(item.categoryN
 /* ─── fila de item ────────────────────────────────────────── */
 function ItemRow({ item, qty, onAdd, onRemove }) {
   return (
-    <div className="flex items-center justify-between px-4 py-3 hover:bg-[hsl(var(--accent))] transition-colors">
-      <div className="min-w-0 flex-1 mr-3">
-        <p className="text-sm font-medium truncate">{item.name}</p>
-        {item.description && <p className="text-xs text-[hsl(var(--muted-foreground))] truncate">{item.description}</p>}
-        <p className="text-xs font-semibold text-[hsl(var(--primary))] mt-0.5">${formatCLP(item.price || 0)}</p>
+    <div
+      className={cn(
+        'group flex min-h-[92px] items-center justify-between gap-3 rounded-2xl border p-4 text-left transition-all',
+        qty > 0
+          ? 'border-[hsl(var(--primary))] bg-[hsl(var(--primary))]/10 shadow-sm'
+          : 'border-[hsl(var(--border))] bg-[hsl(var(--card))] hover:border-[hsl(var(--primary))]/50 hover:bg-[hsl(var(--accent))]'
+      )}
+    >
+      <div className="min-w-0 flex-1">
+        <p className="text-base font-bold leading-tight text-[hsl(var(--foreground))] line-clamp-2">{item.name}</p>
+        {item.description && <p className="mt-1 text-sm text-[hsl(var(--muted-foreground))] line-clamp-2">{item.description}</p>}
+        <p className="mt-2 text-lg font-black text-[hsl(var(--primary))]">${formatCLP(item.price || 0)}</p>
       </div>
-      <div className="flex items-center gap-2 shrink-0">
-        {qty > 0 && <button onClick={() => onRemove(item.key)}
-          className="w-7 h-7 rounded-full border border-[hsl(var(--border))] flex items-center justify-center text-sm font-bold hover:bg-[hsl(var(--accent))] transition-colors">−</button>}
-        {qty > 0 && <span className="w-5 text-center text-sm font-bold text-[hsl(var(--primary))]">{qty}</span>}
-        <button onClick={() => onAdd(item.key)}
-          className="w-7 h-7 rounded-full bg-[hsl(var(--primary))] flex items-center justify-center text-white text-sm font-bold hover:bg-[hsl(var(--primary))]/90 transition-colors">+</button>
+      <div className="flex shrink-0 items-center gap-2">
+        {qty > 0 && <button onClick={(event) => { event.stopPropagation(); onRemove(item.key) }}
+          className="flex h-11 w-11 touch-manipulation items-center justify-center rounded-full border border-[hsl(var(--border))] bg-[hsl(var(--background))] text-2xl font-black shadow-sm transition-colors hover:bg-[hsl(var(--accent))]">−</button>}
+        {qty > 0 && <span className="min-w-8 text-center text-xl font-black text-[hsl(var(--primary))]">{qty}</span>}
+        <button onClick={(event) => { event.stopPropagation(); onAdd(item.key) }}
+          className="flex h-12 w-12 touch-manipulation items-center justify-center rounded-full bg-[hsl(var(--primary))] text-2xl font-black text-white shadow-md transition-colors hover:bg-[hsl(var(--primary))]/90">+</button>
       </div>
     </div>
   )
 }
 
 /* ─── acordeón ────────────────────────────────────────────── */
-function CategoryAccordion({ label, emoji, items = [], selectedQtys, onAdd, onRemove }) {
-  const [open, setOpen] = useState(false)
+function CategoryAccordion({ label, items = [], selectedQtys, onAdd, onRemove }) {
+  const [open, setOpen] = useState(true)
   const count = items.reduce((s, it) => s + (selectedQtys[it.key] || 0), 0)
   return (
-    <div className="rounded-xl border border-[hsl(var(--border))] overflow-hidden">
+    <div className="overflow-hidden rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] shadow-sm">
       <button onClick={() => setOpen(o => !o)}
-        className="w-full flex items-center justify-between px-4 py-3 bg-[hsl(var(--accent))] hover:bg-[hsl(var(--accent))]/80 transition-colors">
-        <div className="flex items-center gap-2">
-          <span className="text-base">{emoji}</span>
-          <span className="text-sm font-semibold">{label}</span>
-          {items.length > 0 && <span className="text-xs text-[hsl(var(--muted-foreground))]">({items.length})</span>}
+        className="flex min-h-[58px] w-full items-center justify-between bg-[hsl(var(--accent))] px-4 py-3 transition-colors hover:bg-[hsl(var(--accent))]/80">
+        <div className="flex items-center gap-3">
+          <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-[hsl(var(--primary))]/10 text-sm font-black text-[hsl(var(--primary))] shadow-sm">
+            {label.slice(0, 2).toUpperCase()}
+          </span>
+          <div className="text-left">
+            <p className="text-base font-black leading-tight">{label}</p>
+            <p className="text-xs font-medium text-[hsl(var(--muted-foreground))]">{items.length} productos</p>
+          </div>
         </div>
         <div className="flex items-center gap-2">
-          {count > 0 && <span className="text-xs font-bold text-[hsl(var(--primary))] bg-[hsl(var(--primary))]/10 px-2 py-0.5 rounded-full">{count} sel.</span>}
+          {count > 0 && <span className="rounded-full bg-[hsl(var(--primary))] px-3 py-1 text-sm font-black text-white">{count}</span>}
           <ChevronIcon open={open} />
         </div>
       </button>
       {open && (
-        <div className="divide-y divide-[hsl(var(--border))]">
+        <div className="grid gap-3 p-3 sm:grid-cols-2 xl:grid-cols-3">
           {items.length === 0
-            ? <p className="text-sm text-[hsl(var(--muted-foreground))] text-center py-4">No dispone de productos</p>
+            ? <p className="col-span-full py-5 text-center text-sm text-[hsl(var(--muted-foreground))]">No dispone de productos</p>
             : items.map(it => <ItemRow key={it.key} item={it} qty={selectedQtys[it.key] || 0} onAdd={onAdd} onRemove={onRemove} />)
           }
         </div>
@@ -149,46 +160,45 @@ function CompleteCustomizer({ item, qty, customization, onChange, availableProdu
 
   const unitPrice = calcItemPrice(item.price, customization)
   const totalPrice = unitPrice * qty
+  const agregadosTotal = (customization.agregados || []).reduce((s, l) => {
+    const a = AGREGADOS.find(ag => ag.label === l)
+    return s + (a?.price || 0)
+  }, 0)
 
   return (
-    <div className="rounded-xl border border-[hsl(var(--border))] overflow-hidden">
-      {/* Header con precio actualizado */}
-      <div className="px-4 py-3 bg-[hsl(var(--accent))] flex items-center justify-between">
-        <div>
-          <p className="text-sm font-semibold text-[hsl(var(--foreground))]">{item.name}</p>
-          <p className="text-xs text-[hsl(var(--muted-foreground))]">
-            Base ${formatCLP(item.price)}
-            {customization.embutido && <span className="text-[hsl(var(--primary))]"> + embutido ${formatCLP(EMBUTIDO_SURCHARGE)}</span>}
-          </p>
+    <div className="overflow-hidden rounded-3xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] shadow-sm">
+      <div className="flex flex-wrap items-start justify-between gap-4 border-b border-[hsl(var(--border))] bg-gradient-to-br from-[hsl(var(--primary))]/12 via-[hsl(var(--accent))] to-[hsl(var(--card))] px-5 py-4">
+        <div className="min-w-0">
+          <p className="text-xs font-black uppercase tracking-[0.22em] text-[hsl(var(--primary))]">Completo</p>
+          <p className="mt-1 text-lg font-black leading-tight text-[hsl(var(--foreground))]">{item.name}</p>
+          <p className="mt-1 text-sm text-[hsl(var(--muted-foreground))]">Base ${formatCLP(item.price)} · cantidad {qty}</p>
         </div>
-        <div className="text-right">
-          <p className="text-sm font-bold text-[hsl(var(--primary))]">${formatCLP(unitPrice)}</p>
-          {qty > 1 && <p className="text-xs text-[hsl(var(--muted-foreground))]">×{qty} = ${formatCLP(totalPrice)}</p>}
+        <div className="rounded-2xl bg-[hsl(var(--card))]/90 px-4 py-3 text-right shadow-sm ring-1 ring-[hsl(var(--border))]">
+          <p className="text-xs font-bold text-[hsl(var(--muted-foreground))]">Unitario</p>
+          <p className="text-2xl font-black text-[hsl(var(--primary))]">${formatCLP(unitPrice)}</p>
+          {qty > 1 && <p className="text-xs font-semibold text-[hsl(var(--muted-foreground))]">Total ${formatCLP(totalPrice)}</p>}
         </div>
       </div>
 
-      <div className="px-4 py-4 flex flex-col gap-4">
-        {/* Embutido */}
-        <div>
-          <div className="flex items-center justify-between mb-2">
-            <p className="text-xs font-bold text-[hsl(var(--muted-foreground))] uppercase tracking-widest">
-              Embutido
-            </p>
-            <p className="text-xs text-[hsl(var(--muted-foreground))]">+${formatCLP(EMBUTIDO_SURCHARGE)} al cambiar</p>
+      <div className="grid gap-4 px-5 py-5 lg:grid-cols-[0.9fr_1.4fr]">
+        <section className="rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-4">
+          <div className="mb-3">
+            <p className="text-sm font-black text-[hsl(var(--foreground))]">Cambio de embutido</p>
+            <p className="text-xs text-[hsl(var(--muted-foreground))]">Opcional · +${formatCLP(EMBUTIDO_SURCHARGE)}</p>
           </div>
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-1">
             {EMBUTIDOS.map(e => {
               const available = hasIngredient(e.match)
               const selected  = customization.embutido === e.label
               return (
                 <button key={e.id} type="button" disabled={!available} onClick={() => setEmbutido(e.label)}
                   className={[
-                    'rounded-lg border px-3 py-2.5 text-xs font-semibold transition-all text-center',
+                    'min-h-14 rounded-2xl border px-4 py-3 text-sm font-black transition-all text-left',
                     !available
                       ? 'border-[hsl(var(--border))] bg-[hsl(var(--muted)/0.3)] text-[hsl(var(--muted-foreground))] opacity-50 cursor-not-allowed'
                       : selected
-                        ? 'border-[hsl(var(--primary))] bg-[hsl(var(--primary))] text-white shadow-sm'
-                        : 'border-[hsl(var(--border))] bg-[hsl(var(--card))] hover:border-[hsl(var(--primary))] hover:text-[hsl(var(--primary))]',
+                        ? 'border-[hsl(var(--primary))] bg-[hsl(var(--primary))] text-white shadow-md'
+                        : 'border-[hsl(var(--border))] bg-[hsl(var(--background))] hover:border-[hsl(var(--primary))] hover:text-[hsl(var(--primary))]',
                   ].join(' ')}>
                   {e.label}
                   {!available && <span className="block text-[10px] font-normal opacity-70">Sin stock</span>}
@@ -196,29 +206,32 @@ function CompleteCustomizer({ item, qty, customization, onChange, availableProdu
               )
             })}
           </div>
-        </div>
+        </section>
 
-        {/* Agregados */}
-        <div>
-          <p className="text-xs font-bold text-[hsl(var(--muted-foreground))] uppercase tracking-widest mb-2">
-            Agregados
-          </p>
-          <div className="grid grid-cols-2 gap-1.5">
+        <section className="rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-4">
+          <div className="mb-3 flex items-end justify-between gap-3">
+            <div>
+              <p className="text-sm font-black text-[hsl(var(--foreground))]">Agregados</p>
+              <p className="text-xs text-[hsl(var(--muted-foreground))]">Toca para sumar o quitar extras.</p>
+            </div>
+            {customization.agregados.length > 0 && <span className="rounded-full bg-[hsl(var(--primary))]/10 px-3 py-1 text-xs font-black text-[hsl(var(--primary))]">+${formatCLP(agregadosTotal)}</span>}
+          </div>
+          <div className="grid grid-cols-2 gap-2 xl:grid-cols-3">
             {AGREGADOS.map(a => {
               const available = hasIngredient(a.match)
               const selected  = customization.agregados.includes(a.label)
               return (
                 <button key={a.id} type="button" disabled={!available} onClick={() => toggleAgregado(a.label)}
                   className={[
-                    'rounded-lg border px-3 py-2 text-xs text-left transition-all flex items-center justify-between gap-1',
+                    'min-h-14 rounded-2xl border px-3 py-2 text-left transition-all flex flex-col justify-center gap-1',
                     !available
                       ? 'border-[hsl(var(--border))] bg-[hsl(var(--muted)/0.3)] text-[hsl(var(--muted-foreground))] opacity-50 cursor-not-allowed'
                       : selected
-                        ? 'border-[hsl(var(--primary))] bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))] font-semibold'
+                        ? 'border-[hsl(var(--primary))] bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))] shadow-sm'
                         : 'border-[hsl(var(--border))] bg-[hsl(var(--card))] hover:border-[hsl(var(--primary)/0.5)] hover:text-[hsl(var(--primary))]',
                   ].join(' ')}>
-                  <span className="truncate">{a.label}</span>
-                  <span className={`shrink-0 text-[10px] font-semibold ${selected ? 'text-[hsl(var(--primary))]' : 'text-[hsl(var(--muted-foreground))]'}`}>
+                  <span className="truncate text-sm font-black">{a.label}</span>
+                  <span className={`text-xs font-bold ${selected ? 'text-[hsl(var(--primary))]' : 'text-[hsl(var(--muted-foreground))]'}`}>
                     {!available ? 'Sin stock' : `$${formatCLP(a.price)}`}
                   </span>
                 </button>
@@ -226,21 +239,7 @@ function CompleteCustomizer({ item, qty, customization, onChange, availableProdu
             })}
           </div>
 
-          {/* Resumen de extras seleccionados */}
-          {customization.agregados.length > 0 && (
-            <div className="mt-3 pt-3 border-t border-[hsl(var(--border))] flex justify-between text-xs">
-              <span className="text-[hsl(var(--muted-foreground))]">
-                {customization.agregados.length} agregado{customization.agregados.length !== 1 ? 's' : ''}
-              </span>
-              <span className="font-semibold text-[hsl(var(--primary))]">
-                +${formatCLP(customization.agregados.reduce((s, l) => {
-                  const a = AGREGADOS.find(ag => ag.label === l)
-                  return s + (a?.price || 0)
-                }, 0))}
-              </span>
-            </div>
-          )}
-        </div>
+        </section>
       </div>
     </div>
   )
@@ -275,38 +274,39 @@ function SandwichCustomizer({ item, qty, customization, onChange, availableProdu
   }, 0)
 
   return (
-    <div className="rounded-xl border border-[hsl(var(--border))] overflow-hidden">
-      {/* Header con precio */}
-      <div className="px-4 py-3 bg-[hsl(var(--accent))] flex items-center justify-between">
-        <div>
-          <p className="text-sm font-semibold text-[hsl(var(--foreground))]">{item.name}</p>
-          <p className="text-xs text-[hsl(var(--muted-foreground))]">Base ${formatCLP(item.price)}</p>
+    <div className="overflow-hidden rounded-3xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] shadow-sm">
+      <div className="flex flex-wrap items-start justify-between gap-4 border-b border-[hsl(var(--border))] bg-gradient-to-br from-[hsl(var(--primary))]/12 via-[hsl(var(--accent))] to-[hsl(var(--card))] px-5 py-4">
+        <div className="min-w-0">
+          <p className="text-xs font-black uppercase tracking-[0.22em] text-[hsl(var(--primary))]">Sandwich</p>
+          <p className="mt-1 text-lg font-black leading-tight text-[hsl(var(--foreground))]">{item.name}</p>
+          <p className="mt-1 text-sm text-[hsl(var(--muted-foreground))]">Base ${formatCLP(item.price)} · cantidad {qty}</p>
         </div>
-        <div className="text-right">
-          <p className="text-sm font-bold text-[hsl(var(--primary))]">${formatCLP(unitPrice)}</p>
-          {qty > 1 && <p className="text-xs text-[hsl(var(--muted-foreground))]">×{qty} = ${formatCLP(totalPrice)}</p>}
+        <div className="rounded-2xl bg-[hsl(var(--card))]/90 px-4 py-3 text-right shadow-sm ring-1 ring-[hsl(var(--border))]">
+          <p className="text-xs font-bold text-[hsl(var(--muted-foreground))]">Unitario</p>
+          <p className="text-2xl font-black text-[hsl(var(--primary))]">${formatCLP(unitPrice)}</p>
+          {qty > 1 && <p className="text-xs font-semibold text-[hsl(var(--muted-foreground))]">Total ${formatCLP(totalPrice)}</p>}
         </div>
       </div>
 
-      <div className="px-4 py-4 flex flex-col gap-4">
-        {/* Proteína — radio exclusivo */}
-        <div>
-          <p className="text-xs font-bold text-[hsl(var(--muted-foreground))] uppercase tracking-widest mb-2">
-            Proteína
-          </p>
-          <div className="grid grid-cols-3 gap-2">
+      <div className="grid gap-4 px-5 py-5 lg:grid-cols-[0.9fr_1.4fr]">
+        <section className="rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-4">
+          <div className="mb-3">
+            <p className="text-sm font-black text-[hsl(var(--foreground))]">Proteína</p>
+            <p className="text-xs text-[hsl(var(--muted-foreground))]">Selecciona una para continuar.</p>
+          </div>
+          <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-1">
             {SANDWICH_PROTEINAS.map(p => {
               const available = hasIngredient(p.match)
               const selected  = customization.embutido === p.label
               return (
                 <button key={p.id} type="button" disabled={!available} onClick={() => setProteina(p.label)}
                   className={[
-                    'rounded-lg border px-3 py-2.5 text-xs font-semibold transition-all text-center',
+                    'min-h-14 rounded-2xl border px-4 py-3 text-sm font-black transition-all text-left',
                     !available
                       ? 'border-[hsl(var(--border))] bg-[hsl(var(--muted)/0.3)] text-[hsl(var(--muted-foreground))] opacity-50 cursor-not-allowed'
                       : selected
-                        ? 'border-[hsl(var(--primary))] bg-[hsl(var(--primary))] text-white shadow-sm'
-                        : 'border-[hsl(var(--border))] bg-[hsl(var(--card))] hover:border-[hsl(var(--primary))] hover:text-[hsl(var(--primary))]',
+                        ? 'border-[hsl(var(--primary))] bg-[hsl(var(--primary))] text-white shadow-md'
+                        : 'border-[hsl(var(--border))] bg-[hsl(var(--background))] hover:border-[hsl(var(--primary))] hover:text-[hsl(var(--primary))]',
                   ].join(' ')}>
                   {p.label}
                   {!available && <span className="block text-[10px] font-normal opacity-70">Sin stock</span>}
@@ -315,31 +315,34 @@ function SandwichCustomizer({ item, qty, customization, onChange, availableProdu
             })}
           </div>
           {!customization.embutido && (
-            <p className="text-xs text-amber-600 mt-1.5">Selecciona una proteína para continuar</p>
+            <p className="mt-3 rounded-xl bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-700">Selecciona una proteína para continuar</p>
           )}
-        </div>
+        </section>
 
-        {/* Agregados */}
-        <div>
-          <p className="text-xs font-bold text-[hsl(var(--muted-foreground))] uppercase tracking-widest mb-2">
-            Agregados
-          </p>
-          <div className="grid grid-cols-2 gap-1.5">
+        <section className="rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-4">
+          <div className="mb-3 flex items-end justify-between gap-3">
+            <div>
+              <p className="text-sm font-black text-[hsl(var(--foreground))]">Agregados</p>
+              <p className="text-xs text-[hsl(var(--muted-foreground))]">Toca para sumar o quitar extras.</p>
+            </div>
+            {customization.agregados.length > 0 && <span className="rounded-full bg-[hsl(var(--primary))]/10 px-3 py-1 text-xs font-black text-[hsl(var(--primary))]">+${formatCLP(agregadosTotal)}</span>}
+          </div>
+          <div className="grid grid-cols-2 gap-2 xl:grid-cols-3">
             {AGREGADOS.map(a => {
               const available = hasIngredient(a.match)
               const selected  = customization.agregados.includes(a.label)
               return (
                 <button key={a.id} type="button" disabled={!available} onClick={() => toggleAgregado(a.label)}
                   className={[
-                    'rounded-lg border px-3 py-2 text-xs text-left transition-all flex items-center justify-between gap-1',
+                    'min-h-14 rounded-2xl border px-3 py-2 text-left transition-all flex flex-col justify-center gap-1',
                     !available
                       ? 'border-[hsl(var(--border))] bg-[hsl(var(--muted)/0.3)] text-[hsl(var(--muted-foreground))] opacity-50 cursor-not-allowed'
                       : selected
-                        ? 'border-[hsl(var(--primary))] bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))] font-semibold'
+                        ? 'border-[hsl(var(--primary))] bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))] shadow-sm'
                         : 'border-[hsl(var(--border))] bg-[hsl(var(--card))] hover:border-[hsl(var(--primary)/0.5)] hover:text-[hsl(var(--primary))]',
                   ].join(' ')}>
-                  <span className="truncate">{a.label}</span>
-                  <span className={`shrink-0 text-[10px] font-semibold ${selected ? 'text-[hsl(var(--primary))]' : 'text-[hsl(var(--muted-foreground))]'}`}>
+                  <span className="truncate text-sm font-black">{a.label}</span>
+                  <span className={`text-xs font-bold ${selected ? 'text-[hsl(var(--primary))]' : 'text-[hsl(var(--muted-foreground))]'}`}>
                     {!available ? 'Sin stock' : `$${formatCLP(a.price)}`}
                   </span>
                 </button>
@@ -347,15 +350,7 @@ function SandwichCustomizer({ item, qty, customization, onChange, availableProdu
             })}
           </div>
 
-          {customization.agregados.length > 0 && (
-            <div className="mt-3 pt-3 border-t border-[hsl(var(--border))] flex justify-between text-xs">
-              <span className="text-[hsl(var(--muted-foreground))]">
-                {customization.agregados.length} agregado{customization.agregados.length !== 1 ? 's' : ''}
-              </span>
-              <span className="font-semibold text-[hsl(var(--primary))]">+${formatCLP(agregadosTotal)}</span>
-            </div>
-          )}
-        </div>
+        </section>
       </div>
     </div>
   )
@@ -502,7 +497,7 @@ export default function MesaDetailModal({ mesa, localId, cajaId, onClose, onTabl
         className={cn('absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity duration-300', visible ? 'opacity-100' : 'opacity-0')}
         onClick={handleClose}
       />
-      <div className={cn('absolute inset-y-0 right-0 w-full max-w-lg flex flex-col shadow-2xl bg-[hsl(var(--card))] border-l border-[hsl(var(--border))] overflow-hidden transition-transform duration-300 ease-out', visible ? 'translate-x-0' : 'translate-x-full')}>
+      <div className={cn('absolute inset-y-0 right-0 w-full md:max-w-3xl xl:max-w-4xl flex flex-col shadow-2xl bg-[hsl(var(--card))] border-l border-[hsl(var(--border))] overflow-hidden transition-transform duration-300 ease-out', visible ? 'translate-x-0' : 'translate-x-full')}>
 
         {/* ── Header ── */}
         <div className="px-5 pt-5 pb-3 border-b border-[hsl(var(--border))] shrink-0">
@@ -528,14 +523,14 @@ export default function MesaDetailModal({ mesa, localId, cajaId, onClose, onTabl
           <div className="flex-1 overflow-y-auto no-scrollbar min-h-0 px-5 py-4 space-y-3">
             {loading ? <Spinner /> : (
               <>
-                <CategoryAccordion label="Completos"   emoji="🌭" items={completosItems}   selectedQtys={selectedQtys} onAdd={handleAdd} onRemove={handleRemove} />
-                <CategoryAccordion label="Sandwich"    emoji="🥪" items={sandwichItems}    selectedQtys={selectedQtys} onAdd={handleAdd} onRemove={handleRemove} />
-                <CategoryAccordion label="Bebestibles" emoji="🥤" items={bebestiblesItems} selectedQtys={selectedQtys} onAdd={handleAdd} onRemove={handleRemove} />
+                <CategoryAccordion label="Completos"   items={completosItems}   selectedQtys={selectedQtys} onAdd={handleAdd} onRemove={handleRemove} />
+                <CategoryAccordion label="Sandwich"    items={sandwichItems}    selectedQtys={selectedQtys} onAdd={handleAdd} onRemove={handleRemove} />
+                <CategoryAccordion label="Bebestibles" items={bebestiblesItems} selectedQtys={selectedQtys} onAdd={handleAdd} onRemove={handleRemove} />
               </>
             )}
           </div>
         ) : (
-          <div className="flex-1 overflow-y-auto no-scrollbar min-h-0 px-5 py-4 space-y-4">
+          <div className="flex-1 overflow-y-auto no-scrollbar min-h-0 px-5 py-5 space-y-5">
             {menuItemsSelected.filter(isCompleto).map(it => (
               <CompleteCustomizer
                 key={it.key}
@@ -557,13 +552,13 @@ export default function MesaDetailModal({ mesa, localId, cajaId, onClose, onTabl
               />
             ))}
             {bebestiblesItems.filter(it => (selectedQtys[it.key] || 0) > 0).length > 0 && (
-              <div className="rounded-xl border border-[hsl(var(--border))] p-4">
-                <p className="text-xs font-bold text-[hsl(var(--muted-foreground))] uppercase tracking-widest mb-2">Bebestibles</p>
-                <div className="space-y-1">
+              <div className="rounded-3xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] p-5 shadow-sm">
+                <p className="text-sm font-black text-[hsl(var(--foreground))]">Bebestibles seleccionados</p>
+                <div className="mt-3 grid gap-2 sm:grid-cols-2">
                   {bebestiblesItems.filter(it => (selectedQtys[it.key] || 0) > 0).map(it => (
-                    <div key={it.key} className="flex justify-between text-sm">
-                      <span>{it.name}</span>
-                      <span className="font-medium text-[hsl(var(--muted-foreground))]">×{selectedQtys[it.key]}</span>
+                    <div key={it.key} className="flex items-center justify-between rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-4 py-3 text-sm">
+                      <span className="font-bold">{it.name}</span>
+                      <span className="rounded-full bg-[hsl(var(--primary))]/10 px-3 py-1 font-black text-[hsl(var(--primary))]">×{selectedQtys[it.key]}</span>
                     </div>
                   ))}
                 </div>
