@@ -5,11 +5,22 @@ import {
   ChevronDown, ChevronUp, Wifi, Eye, EyeOff,
   CheckCircle2, AlertCircle, ExternalLink, Link2,
 } from 'lucide-react'
-import { apiRequest } from '../../lib/apiClient'
+import { apiRequest, getAuthContext } from '../../lib/apiClient'
 import { toast } from 'sonner'
 
 const API_BASE = import.meta.env.VITE_API_URL || ''
 const EMPTY_MANUAL = { mp_pos_id: '', name: '' }
+
+function pointMachineId(value) {
+  const raw = String(value || '').trim()
+  if (!raw) return '—'
+  const parts = raw.split('__').filter(Boolean)
+  return parts[parts.length - 1] || raw
+}
+
+function displayMachineId(device) {
+  return device?.machine_id || pointMachineId(device?.id || device?.mp_pos_id)
+}
 
 export default function MPConfigDrawer({ localId, onClose, open = true }) {
   // ── Credentials ──────────────────────────────────────────────────────────
@@ -27,11 +38,9 @@ export default function MPConfigDrawer({ localId, onClose, open = true }) {
 
   // ── Devices ───────────────────────────────────────────────────────────────
   const [registered, setRegistered]   = useState([])
-  const [cajas, setCajas]             = useState([])
   const [discovered, setDiscovered]   = useState(null)
   const [loading, setLoading]         = useState(true)
   const [discovering, setDiscovering] = useState(false)
-  const [cajaFor, setCajaFor]         = useState({})
   const [linking, setLinking]         = useState(null)
 
   // ── Manual device ─────────────────────────────────────────────────────────
@@ -47,15 +56,15 @@ export default function MPConfigDrawer({ localId, onClose, open = true }) {
   async function fetchAll() {
     setLoading(true)
     try {
-      const [status, posData, cajasData] = await Promise.all([
-        apiRequest(`/locals/${localId}/mp-settings`),
-        apiRequest(`/webhooks/mercadopago-pos?local_id=${localId}`),
-        apiRequest(`/cajas?local_id=${localId}`).catch(() => []),
-      ])
+      const status = await apiRequest(`/locals/${localId}/mp-settings`)
       setMpStatus(status)
+
+      const [posData] = await Promise.all([
+        apiRequest(`/webhooks/mercadopago-pos?local_id=${localId}`).catch(() => []),
+      ])
       setRegistered(posData || [])
-      setCajas(cajasData || [])
     } catch (err) {
+      setMpStatus(null)
       toast.error('Error al cargar configuración: ' + err.message)
     } finally {
       setLoading(false)
@@ -70,16 +79,23 @@ export default function MPConfigDrawer({ localId, onClose, open = true }) {
     }
   }
 
-  function handleOAuthConnect() {
+  async function handleOAuthConnect() {
     if (!localId || oauthConnecting) return
     if (mpStatus?.oauth_available !== true) {
       setShowManualToken(true)
-      toast.info('OAuth MercadoPago no está configurado. Ingresa el Access Token manualmente.')
+      toast.info('La conexión automática aún no está configurada en el servidor.')
       return
     }
     cancelOAuthListeners()
 
-    const url = `${API_BASE}/api/mp-oauth/start?local_id=${encodeURIComponent(localId)}`
+    let token = ''
+    try {
+      token = (await getAuthContext()).token
+    } catch {
+      toast.error('Tu sesión expiró. Vuelve a iniciar sesión para conectar MercadoPago.')
+      return
+    }
+    const url = `${API_BASE}/api/mp-oauth/start?local_id=${encodeURIComponent(localId)}&auth_token=${encodeURIComponent(token)}`
     const popup = window.open(url, 'mp_oauth', 'width=660,height=730,left=200,top=80,toolbar=no,menubar=no,scrollbars=yes')
 
     if (!popup) {
@@ -190,15 +206,21 @@ export default function MPConfigDrawer({ localId, onClose, open = true }) {
 
   // ── Link / unlink handlers ────────────────────────────────────────────────
   async function handleLink(device) {
-    const cajaLabel = cajaFor[device.id]
-    if (!cajaLabel) { toast.error('Selecciona una caja antes de vincular'); return }
+    const terminalName = device.name || `POS ${displayMachineId(device)}`
     setLinking(device.id)
     try {
       await apiRequest('/webhooks/mercadopago-pos', {
         method: 'POST',
-        body: { mp_pos_id: device.id, local_id: localId, name: cajaLabel },
+        body: {
+          mp_pos_id: device.id,
+          local_id: localId,
+          name: terminalName,
+          pos_id: device.pos_id ? String(device.pos_id) : null,
+          terminal_id: device.terminal_id || device.id,
+          operating_mode: device.operating_mode || null,
+        },
       })
-      toast.success(`POS vinculado a ${cajaLabel}`)
+      toast.success(`POS vinculado: ${terminalName}`)
       setDiscovered(prev => prev?.filter(d => d.id !== device.id) ?? [])
       await fetchAll()
     } catch (err) {
@@ -238,10 +260,6 @@ export default function MPConfigDrawer({ localId, onClose, open = true }) {
       setSaving(false)
     }
   }
-
-  const cajaOptions = cajas.length > 0
-    ? cajas.map(c => c.name || `Caja ${c.id}`)
-    : ['Caja 1', 'Caja 2', 'Caja 3']
 
   return (
     <>
@@ -323,10 +341,14 @@ export default function MPConfigDrawer({ localId, onClose, open = true }) {
                   </div>
                 )}
 
-                {mpStatus?.oauth_available !== true && (
-                  <p className="text-xs text-center text-[hsl(var(--muted-foreground))]">
-                    La conexión automática OAuth no está habilitada en este servidor.
-                  </p>
+                {mpStatus && mpStatus.oauth_available !== true && (
+                  <div className="rounded-lg border border-sky-200 bg-sky-50 p-3 text-xs text-sky-800">
+                    <p className="font-semibold">Conexión automática pendiente de activación</p>
+                    <p className="mt-1">
+                      Cuando el servidor tenga OAuth configurado, podrás enlazar MercadoPago con un solo botón,
+                      sin copiar tokens manualmente.
+                    </p>
+                  </div>
                 )}
 
                 {/* OAuth — primary action */}
@@ -343,7 +365,7 @@ export default function MPConfigDrawer({ localId, onClose, open = true }) {
                   ) : (
                     <>
                       <Link2 className="h-4 w-4" />
-                      {mpStatus?.oauth_available === true ? 'Conectar con MercadoPago' : 'Ingresar token MercadoPago'}
+                  {mpStatus?.oauth_available === true ? 'Conectar con MercadoPago' : 'Conexión automática no disponible'}
                     </>
                   )}
                 </button>
@@ -354,7 +376,7 @@ export default function MPConfigDrawer({ localId, onClose, open = true }) {
                   className="flex items-center gap-1.5 text-xs text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] transition-colors mx-auto"
                 >
                   {showManualToken ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
-                  {mpStatus?.oauth_available === true ? '¿Prefieres ingresar tu token manualmente?' : 'Mostrar formulario de token'}
+                  {mpStatus?.oauth_available === true ? '¿Prefieres ingresar tu token manualmente?' : 'Usar token manual temporalmente'}
                 </button>
 
                 {showManualToken && (
@@ -439,29 +461,22 @@ export default function MPConfigDrawer({ localId, onClose, open = true }) {
                       <div className="flex items-center justify-between">
                         <div>
                           <p className="text-sm font-medium text-[hsl(var(--foreground))]">
-                            {device.external_pos_id || device.id}
+                            POS {displayMachineId(device)}
                           </p>
                           <p className="text-xs text-[hsl(var(--muted-foreground))] font-mono">
-                            {device.id} · {device.status?.state ?? '—'}
+                            ID completo: {device.id} · {device.status?.state ?? '—'}
                           </p>
                         </div>
                         <Wifi className="h-4 w-4 text-blue-500 shrink-0" />
                       </div>
                       <div className="flex gap-2">
-                        <select
-                          value={cajaFor[device.id] || ''}
-                          onChange={e => setCajaFor(prev => ({ ...prev, [device.id]: e.target.value }))}
-                          className="flex-1 h-8 border border-[hsl(var(--border))] rounded-md px-2 text-xs bg-[hsl(var(--card))] focus:outline-none focus:ring-2 focus:ring-blue-400/40"
-                        >
-                          <option value="">Asignar a caja...</option>
-                          {cajaOptions.map(label => (
-                            <option key={label} value={label}>{label}</option>
-                          ))}
-                        </select>
+                        <p className="flex-1 text-xs text-blue-700 bg-white/70 rounded-md px-2 py-1.5 border border-blue-100">
+                          Se vinculará como terminal del local, sin asociarla a una mesa.
+                        </p>
                         <Button
                           size="sm"
                           onClick={() => handleLink(device)}
-                          disabled={!cajaFor[device.id] || linking === device.id}
+                          disabled={linking === device.id}
                           className="h-8 px-3 text-xs"
                         >
                           {linking === device.id ? 'Vinculando...' : 'Vincular'}
@@ -490,28 +505,46 @@ export default function MPConfigDrawer({ localId, onClose, open = true }) {
                 {registered.map(pos => (
                   <li
                     key={pos.id}
-                    className="flex items-center justify-between p-3 border border-[hsl(var(--border))] rounded-lg bg-[hsl(var(--card))]"
+                    className="p-3 border border-[hsl(var(--border))] rounded-lg bg-[hsl(var(--card))] space-y-3"
                   >
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-medium text-[hsl(var(--foreground))]">
-                          {pos.name || 'Sin nombre'}
-                        </span>
-                        <span className="text-xs bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-400 px-2 py-0.5 rounded-full">
-                          Activo
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-medium text-[hsl(var(--foreground))]">
+                            POS {displayMachineId(pos)}
+                          </span>
+                          <span className="text-xs bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-400 px-2 py-0.5 rounded-full">
+                            Activo
+                          </span>
+                        </div>
+                        {pos.name && (
+                          <p className="text-xs text-[hsl(var(--muted-foreground))] mt-0.5">
+                            Nombre interno: {pos.name}
+                          </p>
+                        )}
+                        <p className="text-[11px] text-[hsl(var(--muted-foreground))] mt-0.5 font-mono break-all">
+                          ID completo: {pos.mp_pos_id}
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => handleDelete(pos)}
+                        title="Desvincular"
+                        className="p-1.5 rounded hover:bg-[hsl(var(--muted))] text-red-500 shrink-0"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                    <div className="rounded-lg bg-[hsl(var(--muted)/0.35)] p-2 space-y-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-xs text-[hsl(var(--muted-foreground))]">Modo de cobro</span>
+                        <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">
+                          STANDALONE
                         </span>
                       </div>
-                      <p className="text-xs text-[hsl(var(--muted-foreground))] mt-0.5 font-mono">
-                        {pos.mp_pos_id}
+                      <p className="text-xs text-[hsl(var(--muted-foreground))]">
+                        Ingresa el monto manualmente en el lector. Gestflow detecta el pago aprobado por monto y ventana de tiempo.
                       </p>
                     </div>
-                    <button
-                      onClick={() => handleDelete(pos)}
-                      title="Desvincular"
-                      className="p-1.5 rounded hover:bg-[hsl(var(--muted))] text-red-500"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
                   </li>
                 ))}
               </ul>
@@ -547,27 +580,14 @@ export default function MPConfigDrawer({ localId, onClose, open = true }) {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-[hsl(var(--foreground))] mb-1">Asignar a caja</label>
-                  {cajas.length > 0 ? (
-                    <select
-                      value={manualForm.name}
-                      onChange={e => setManualForm(f => ({ ...f, name: e.target.value }))}
-                      className="w-full h-9 border border-[hsl(var(--border))] rounded-md px-3 text-sm bg-[hsl(var(--card))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary)/0.3)]"
-                    >
-                      <option value="">Sin asignar</option>
-                      {cajas.map(c => (
-                        <option key={c.id} value={c.name || `Caja ${c.id}`}>{c.name || `Caja ${c.id}`}</option>
-                      ))}
-                    </select>
-                  ) : (
-                    <input
-                      type="text"
-                      value={manualForm.name}
-                      onChange={e => setManualForm(f => ({ ...f, name: e.target.value }))}
-                      placeholder="Ej: Caja 1"
-                      className="w-full h-9 border border-[hsl(var(--border))] rounded-md px-3 text-sm bg-[hsl(var(--card))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary)/0.3)]"
-                    />
-                  )}
+                  <label className="block text-xs font-medium text-[hsl(var(--foreground))] mb-1">Nombre del terminal</label>
+                  <input
+                    type="text"
+                    value={manualForm.name}
+                    onChange={e => setManualForm(f => ({ ...f, name: e.target.value }))}
+                    placeholder="Ej: POS barra"
+                    className="w-full h-9 border border-[hsl(var(--border))] rounded-md px-3 text-sm bg-[hsl(var(--card))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary)/0.3)]"
+                  />
                 </div>
                 <div className="flex justify-end">
                   <Button type="submit" size="sm" disabled={saving}>

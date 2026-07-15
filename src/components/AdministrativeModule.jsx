@@ -1103,7 +1103,7 @@ function ConfiguracionContent({ localId }) {
     if (!localId) return
     setLoading(true)
     getAuthContext().then(({ token }) =>
-      apiRequest(`/mercadopago-pos?local_id=${localId}`, { token })
+      apiRequest(`/webhooks/mercadopago-pos?local_id=${localId}`, { token })
         .then((data) => setPosList(Array.isArray(data) ? data : []))
         .catch(() => setError('Error cargando dispositivos POS'))
         .finally(() => setLoading(false))
@@ -1117,7 +1117,7 @@ function ConfiguracionContent({ localId }) {
     setError('')
     try {
       const { token } = await getAuthContext()
-      const newPos = await apiRequest('/mercadopago-pos', {
+      const newPos = await apiRequest('/webhooks/mercadopago-pos', {
         method: 'POST',
         token,
         body: { mp_pos_id: form.mp_pos_id.trim(), local_id: localId, name: form.name.trim() || null },
@@ -1134,7 +1134,7 @@ function ConfiguracionContent({ localId }) {
   const handleDelete = async (id) => {
     try {
       const { token } = await getAuthContext()
-      await apiRequest(`/mercadopago-pos/${id}`, { method: 'DELETE', token })
+      await apiRequest(`/webhooks/mercadopago-pos/${id}`, { method: 'DELETE', token })
       setPosList((prev) => prev.filter((p) => p.id !== id))
     } catch {
       setError('Error eliminando dispositivo')
