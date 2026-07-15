@@ -28,6 +28,7 @@ import {
 
 const PIE_COLORS = ['#16a34a', '#f59e0b', '#ef4444']
 const PAY_CHART_COLORS = ['#16a34a', '#3b82f6', '#8b5cf6', '#f59e0b', '#6b7280']
+const RECENT_ORDERS_PAGE_SIZE = 8
 
 const STAGGER = {
   hidden: {},
@@ -334,6 +335,7 @@ function LocalDashboard() {
   const [payChartView, setPayChartView]   = useState('line')
   const [ordersRefreshTick, setOrdersRefreshTick] = useState(0)
   const [guideOpen, setGuideOpen]         = useState(false)
+  const [recentPage, setRecentPage]       = useState(1)
 
   useEffect(() => {
     if (!localId) return
@@ -410,14 +412,22 @@ function LocalDashboard() {
   /* Procesos recientes */
   const recentOrders = useMemo(() =>
     [...orders]
-      .filter((o) => String(o.status || '').toLowerCase() !== 'cancelled')
       .sort((a, b) => {
         const da = parseApiDate(a.created_at)?.getTime() ?? 0
         const db = parseApiDate(b.created_at)?.getTime() ?? 0
         return db - da
       })
-      .slice(0, 8)
   , [orders])
+
+  const recentPageCount = Math.max(1, Math.ceil(recentOrders.length / RECENT_ORDERS_PAGE_SIZE))
+  const paginatedRecentOrders = useMemo(() => {
+    const start = (recentPage - 1) * RECENT_ORDERS_PAGE_SIZE
+    return recentOrders.slice(start, start + RECENT_ORDERS_PAGE_SIZE)
+  }, [recentOrders, recentPage])
+
+  useEffect(() => {
+    setRecentPage((page) => Math.min(page, recentPageCount))
+  }, [recentPageCount])
 
   /** Monto recaudado por método de pago (CLP). */
   const payAmountData = useMemo(() => {
@@ -712,9 +722,16 @@ function LocalDashboard() {
 
           {/* Procesos Recientes */}
           <section>
-            <div className="mb-3">
-              <h2 className="text-sm font-bold text-[hsl(var(--foreground))]">Procesos Recientes</h2>
-              <p className="text-xs text-[hsl(var(--muted-foreground))]">Últimas órdenes activas del local</p>
+            <div className="mb-3 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <h2 className="text-sm font-bold text-[hsl(var(--foreground))]">Procesos Recientes</h2>
+                <p className="text-xs text-[hsl(var(--muted-foreground))]">Últimas órdenes del local, incluidas canceladas</p>
+              </div>
+              {!ordersLoading && recentOrders.length > 0 && (
+                <p className="text-xs font-semibold text-[hsl(var(--muted-foreground))]">
+                  {recentOrders.length} orden{recentOrders.length === 1 ? '' : 'es'} cargada{recentOrders.length === 1 ? '' : 's'}
+                </p>
+              )}
             </div>
             <Card>
               <CardContent className="pt-4 pb-2 px-0">
@@ -735,11 +752,11 @@ function LocalDashboard() {
                         </tr>
                       </thead>
                       <tbody>
-                        {recentOrders.map((order, idx) => {
+                        {paginatedRecentOrders.map((order, idx) => {
                           const status   = String(order.status || '').toLowerCase()
                           const cfg      = STATUS_CFG[status] || STATUS_CFG.pending
                           const hora     = formatChileTime(order.created_at)
-                          const orderNum = recentOrders.length - idx
+                          const orderNum = recentOrders.length - ((recentPage - 1) * RECENT_ORDERS_PAGE_SIZE) - idx
                           const payLabel = paymentMethodLabel(order.payment_method)
                           return (
                             <tr key={order.id} className="border-b border-[hsl(var(--border))] last:border-0 hover:bg-[hsl(var(--muted)/0.4)] transition-colors">
@@ -757,6 +774,31 @@ function LocalDashboard() {
                         })}
                       </tbody>
                     </table>
+                    {recentOrders.length > RECENT_ORDERS_PAGE_SIZE && (
+                      <div className="flex flex-col gap-2 border-t border-[hsl(var(--border))] px-5 py-3 sm:flex-row sm:items-center sm:justify-between">
+                        <p className="text-xs text-[hsl(var(--muted-foreground))]">
+                          Página {recentPage} de {recentPageCount}
+                        </p>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setRecentPage((page) => Math.max(1, page - 1))}
+                            disabled={recentPage <= 1}
+                            className="h-9 rounded-lg border border-[hsl(var(--border))] px-3 text-xs font-bold text-[hsl(var(--foreground))] transition hover:bg-[hsl(var(--muted))] disabled:cursor-not-allowed disabled:opacity-45"
+                          >
+                            Anterior
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setRecentPage((page) => Math.min(recentPageCount, page + 1))}
+                            disabled={recentPage >= recentPageCount}
+                            className="h-9 rounded-lg border border-[hsl(var(--border))] px-3 text-xs font-bold text-[hsl(var(--foreground))] transition hover:bg-[hsl(var(--muted))] disabled:cursor-not-allowed disabled:opacity-45"
+                          >
+                            Siguiente
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
               </CardContent>
