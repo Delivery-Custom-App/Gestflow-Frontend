@@ -1,4 +1,4 @@
-import { getStoredSession, refreshSession } from './authClient'
+import { clearStoredSession, getStoredSession, refreshSession } from './authClient'
 import { getBusinessId } from '../utils/jwt'
 
 const apiBaseUrl = import.meta.env.VITE_API_URL || ''
@@ -169,8 +169,14 @@ export async function apiRequest(path, options = {}) {
   }
 
   if (response.status === 401 && retryOnUnauthorized) {
-    const refreshedSession = await getSession(true)
-    response = await makeRequest(refreshedSession.access_token)
+    try {
+      const refreshedSession = await getSession(true)
+      response = await makeRequest(refreshedSession.access_token)
+    } catch (authErr) {
+      clearStoredSession()
+      window.dispatchEvent(new CustomEvent('auth:session-expired'))
+      throw authErr
+    }
   }
 
   if (!response.ok) {

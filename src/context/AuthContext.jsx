@@ -38,25 +38,49 @@ export function AppAuthProvider({ children }) {
         return
       }
 
-      const refreshedSession = await refreshSession().catch(() => null)
-      const activeSession = refreshedSession || session
-      const accessToken = activeSession.access_token
+      try {
+        const refreshedSession = await refreshSession()
+        const activeSession = refreshedSession || session
+        const accessToken = activeSession.access_token
 
-      if (!accessToken) {
-        clearAuthState()
+        if (!accessToken) {
+          await clearPreviousSession()
+          setTimeout(() => setAppLoading(false), 600)
+          return
+        }
+
+        const sessionUser = await fetchCurrentUser(accessToken)
+        if (!sessionUser) {
+          await clearPreviousSession()
+          setTimeout(() => setAppLoading(false), 600)
+          return
+        }
+
+        const roleFromDb = getUserRole(sessionUser, accessToken)
+
+        setUser(sessionUser)
+        setUserRole(formatRoleLabel(roleFromDb))
         setTimeout(() => setAppLoading(false), 600)
-        return
+      } catch {
+        await clearPreviousSession()
+        setTimeout(() => setAppLoading(false), 600)
       }
-
-      const sessionUser = activeSession.user || await fetchCurrentUser(accessToken)
-      const roleFromDb = getUserRole(sessionUser, accessToken)
-
-      setUser(sessionUser)
-      setUserRole(formatRoleLabel(roleFromDb))
-      setTimeout(() => setAppLoading(false), 600)
     }
 
     checkSession()
+  }, [clearPreviousSession])
+
+  useEffect(() => {
+    const handleSessionExpired = () => {
+      clearAuthState()
+      setEmail('')
+      setPassword('')
+      setErrorMessage('Tu sesion expiro. Ingresa nuevamente.')
+      setSuccessMessage('')
+    }
+
+    window.addEventListener('auth:session-expired', handleSessionExpired)
+    return () => window.removeEventListener('auth:session-expired', handleSessionExpired)
   }, [clearAuthState])
 
   const handleSubmit = useCallback(async (event) => {
