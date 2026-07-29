@@ -7,6 +7,10 @@ import { isInventoryAdminRole } from '../utils/inventoryAccess'
 
 const AuthContext = createContext(null)
 
+function getAssignedLocalId(user) {
+  return user?.local_id || user?.app_metadata?.local_id || user?.user_metadata?.local_id || null
+}
+
 /**
  * Proveedor raíz de auth: sesión inicial, login, logout y contexto para la app.
  */
@@ -154,7 +158,7 @@ export function AppAuthProvider({ children }) {
     return {
       user: user ?? null,
       userRole: role,
-      assignedLocalId: user?.user_metadata?.local_id ?? null,
+      assignedLocalId: getAssignedLocalId(user),
       logout,
       isWorker: role != null && WORKER_ROLES.includes(role),
       isInventoryAdmin: isInventoryAdminRole(role),

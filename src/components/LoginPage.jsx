@@ -23,7 +23,7 @@ export default function LoginPage({ onShowRegister }) {
 
   return (
     <motion.main
-      className="min-h-screen bg-[#fbf7f0] text-stone-950"
+      className="login-light min-h-screen bg-[#fbf7f0] text-stone-950"
       initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
       transition={{ duration: 0.3 }}
     >
