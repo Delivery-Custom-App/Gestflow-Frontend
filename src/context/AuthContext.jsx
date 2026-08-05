@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
-import { isSupabaseConfigured, supabase } from '../lib/supabaseClient'
+import { clearStoredSession, fetchCurrentUser, getStoredSession, loginWithPassword, logoutSession, refreshSession } from '../lib/authClient'
 import { getUserRole } from '../utils/jwt'
 import { WORKER_ROLES } from '../constants/roles'
 import { formatRoleLabel } from '../auth/roleLabel'
@@ -7,15 +7,8 @@ import { isInventoryAdminRole } from '../utils/inventoryAccess'
 
 const AuthContext = createContext(null)
 
-function clearStoredAuthToken() {
-  if (typeof window === 'undefined') return
-
-  const keys = Object.keys(window.localStorage)
-  keys.forEach((key) => {
-    if (key.startsWith('sb-') && key.endsWith('-auth-token')) {
-      window.localStorage.removeItem(key)
-    }
-  })
+function getAssignedLocalId(user) {
+  return user?.local_id || user?.app_metadata?.local_id || user?.user_metadata?.local_id || null
 }
 
 /**
@@ -37,43 +30,61 @@ export function AppAuthProvider({ children }) {
   }, [])
 
   const clearPreviousSession = useCallback(async () => {
-    if (supabase) {
-      try {
-        await supabase.auth.signOut()
-      } catch {
-        // Si falla signOut igual forzamos limpieza local para evitar tokens stale.
-      }
-    }
-
-    clearStoredAuthToken()
+    clearStoredSession()
     clearAuthState()
   }, [clearAuthState])
 
   useEffect(() => {
     const checkSession = async () => {
-      if (!isSupabaseConfigured || !supabase) {
+      const session = getStoredSession()
+      if (!session?.access_token) {
         setTimeout(() => setAppLoading(false), 600)
         return
       }
 
-      const { data, error } = await supabase.auth.getSession()
-      const accessToken = data.session?.access_token
+      try {
+        const refreshedSession = await refreshSession()
+        const activeSession = refreshedSession || session
+        const accessToken = activeSession.access_token
 
-      if (error || !accessToken) {
-        clearAuthState()
+        if (!accessToken) {
+          await clearPreviousSession()
+          setTimeout(() => setAppLoading(false), 600)
+          return
+        }
+
+        const sessionUser = await fetchCurrentUser(accessToken)
+        if (!sessionUser) {
+          await clearPreviousSession()
+          setTimeout(() => setAppLoading(false), 600)
+          return
+        }
+
+        const roleFromDb = getUserRole(sessionUser, accessToken)
+
+        setUser(sessionUser)
+        setUserRole(formatRoleLabel(roleFromDb))
         setTimeout(() => setAppLoading(false), 600)
-        return
+      } catch {
+        await clearPreviousSession()
+        setTimeout(() => setAppLoading(false), 600)
       }
-
-      const sessionUser = data.session.user
-      const roleFromDb = getUserRole(sessionUser, accessToken)
-
-      setUser(sessionUser)
-      setUserRole(formatRoleLabel(roleFromDb))
-      setTimeout(() => setAppLoading(false), 600)
     }
 
     checkSession()
+  }, [clearPreviousSession])
+
+  useEffect(() => {
+    const handleSessionExpired = () => {
+      clearAuthState()
+      setEmail('')
+      setPassword('')
+      setErrorMessage('Tu sesion expiro. Ingresa nuevamente.')
+      setSuccessMessage('')
+    }
+
+    window.addEventListener('auth:session-expired', handleSessionExpired)
+    return () => window.removeEventListener('auth:session-expired', handleSessionExpired)
   }, [clearAuthState])
 
   const handleSubmit = useCallback(async (event) => {
@@ -81,11 +92,6 @@ export function AppAuthProvider({ children }) {
 
     setErrorMessage('')
     setSuccessMessage('')
-
-    if (!isSupabaseConfigured || !supabase) {
-      setErrorMessage('Supabase no esta configurado. Agrega VITE_SUPABASE_URL y VITE_SUPABASE_ANON_KEY.')
-      return
-    }
 
     if (!email || !password) {
       setErrorMessage('Ingresa correo y contrasena para continuar.')
@@ -95,28 +101,22 @@ export function AppAuthProvider({ children }) {
     setIsLoading(true)
 
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
+      const session = await loginWithPassword({
         email,
         password,
       })
 
-      if (error) {
-        await clearPreviousSession()
-        setErrorMessage(error.message || 'Error de autenticacion')
-        return
-      }
-
-      const accessToken = data.session?.access_token
+      const accessToken = session.access_token
       if (!accessToken) {
         await clearPreviousSession()
-        setErrorMessage('No se recibio session.access_token al iniciar sesion')
+        setErrorMessage('No se recibio access_token al iniciar sesion')
         return
       }
 
-      const sessionUser = data.session?.user || data.user
+      const sessionUser = session.user || await fetchCurrentUser(accessToken)
       if (!sessionUser) {
         await clearPreviousSession()
-        setErrorMessage('No se recibio el usuario autenticado en la sesion')
+        setErrorMessage('No se recibio el usuario autenticado')
         return
       }
 
@@ -133,23 +133,24 @@ export function AppAuthProvider({ children }) {
         window.location.replace(path)
         return
       }
+    } catch (error) {
+      await clearPreviousSession()
+      setErrorMessage(error?.message || 'Error de autenticacion')
     } finally {
       setIsLoading(false)
     }
   }, [email, password, clearPreviousSession])
 
   const logout = useCallback(async () => {
-    if (supabase) {
-      await supabase.auth.signOut()
-      setUser(null)
-      setUserRole(null)
-      setEmail('')
-      setPassword('')
-      setErrorMessage('')
-      setSuccessMessage('')
-      // Limpia la URL para que el próximo login arranque desde /
-      window.history.replaceState({}, document.title, '/')
-    }
+    await logoutSession()
+    setUser(null)
+    setUserRole(null)
+    setEmail('')
+    setPassword('')
+    setErrorMessage('')
+    setSuccessMessage('')
+    // Limpia la URL para que el próximo login arranque desde /
+    window.history.replaceState({}, document.title, '/')
   }, [])
 
   const value = useMemo(() => {
@@ -157,7 +158,7 @@ export function AppAuthProvider({ children }) {
     return {
       user: user ?? null,
       userRole: role,
-      assignedLocalId: user?.user_metadata?.local_id ?? null,
+      assignedLocalId: getAssignedLocalId(user),
       logout,
       isWorker: role != null && WORKER_ROLES.includes(role),
       isInventoryAdmin: isInventoryAdminRole(role),
@@ -197,7 +198,7 @@ export function useAuth() {
   return ctx
 }
 
-/** Tests / montajes aislados: contexto estático sin Supabase. */
+/** Tests / montajes aislados: contexto estático sin backend de auth. */
 export function AuthProvider({ user, userRole, logout, children }) {
   const role = userRole ?? null
   const value = useMemo(() => ({

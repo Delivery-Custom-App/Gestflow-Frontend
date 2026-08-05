@@ -1,7 +1,6 @@
 import { AnimatePresence } from 'framer-motion'
 import LoadingPage from './components/LoadingPage'
 import LoginPage from './components/LoginPage'
-import RegisterPage from './components/RegisterPage'
 import AuthenticatedApp from './routes/AuthenticatedRoutes'
 import NetworkErrorModal from './components/NetworkErrorModal'
 import MercadoPagoReturn from './components/MercadoPagoReturn'
@@ -10,7 +9,6 @@ import { ThemeProvider } from './context/ThemeContext'
 
 function AppContent() {
   const { appLoading, user } = useAuth()
-  const [showRegister, setShowRegister] = useState(false)
 
   return (
     <AnimatePresence mode="wait">

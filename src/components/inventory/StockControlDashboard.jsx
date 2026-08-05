@@ -5,10 +5,12 @@ import {
   deleteInventoryItem,
   getInventoryKpisByLocal,
   getInventoryProductsPage,
-  getInventoryStockList,
   patchInventoryProductUnitCost,
   patchInventoryStock,
   patchProduct,
+  getCategoriesForLocal,
+  patchCategory,
+  postCategory,
 } from '../../lib/inventoryApi'
 import InventoryShell from './InventoryShell'
 import LoadingSpinner from '../LoadingSpinner'
@@ -18,9 +20,10 @@ import CategoryFilterSelect from './CategoryFilterSelect'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Search, Package, CheckCircle, TrendingDown, AlertTriangle, DollarSign, HelpCircle, X } from 'lucide-react'
+import { Search, Package, CheckCircle, TrendingDown, AlertTriangle, DollarSign, HelpCircle, X, Plus, Pencil } from 'lucide-react'
 import PageTransition from '../PageTransition'
 import { formatCLPDisplay as formatMoney } from '../../lib/formatCLP'
+import { getCategoryTone } from '../../lib/categoryColor'
 
 const kpiContainerVariants = {
   hidden: {},
@@ -55,6 +58,11 @@ function StockControlDashboard() {
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const [categoryFilter, setCategoryFilter] = useState('')
   const [categoriesCatalog, setCategoriesCatalog] = useState([])
+  const [newCategoryName, setNewCategoryName] = useState('')
+  const [editingCategoryId, setEditingCategoryId] = useState('')
+  const [editingCategoryName, setEditingCategoryName] = useState('')
+  const [categoryActionError, setCategoryActionError] = useState('')
+  const [categorySaving, setCategorySaving] = useState(false)
   const [statusFilters, setStatusFilters] = useState([])
   const pageSize = 10
   const [guideOpen, setGuideOpen] = useState(false)
@@ -86,17 +94,12 @@ function StockControlDashboard() {
   const loadCategoriesCatalog = useCallback(async () => {
     if (!localId) return
     try {
-      const rows = await getInventoryStockList(localId, {})
+      const rows = await getCategoriesForLocal(localId)
       const arr = Array.isArray(rows) ? rows : []
-      const m = new Map()
-      for (const row of arr) {
-        const id = row.category_id != null ? String(row.category_id) : ''
-        const name = row.category_name != null ? String(row.category_name).trim() : ''
-        if (id && name) m.set(id, name)
-      }
       setCategoriesCatalog(
-        [...m.entries()]
-          .map(([id, name]) => ({ id, name }))
+        arr
+          .filter((row) => row?.id && row?.name)
+          .map((row) => ({ id: String(row.id), name: String(row.name).trim(), is_active: row.is_active !== false }))
           .sort((a, b) => a.name.localeCompare(b.name, 'es')),
       )
     } catch {
@@ -232,6 +235,48 @@ function StockControlDashboard() {
     [localId, load, loadItems, currentFilters],
   )
 
+  const handleCreateCategory = useCallback(async (event) => {
+    event.preventDefault()
+    const name = newCategoryName.trim()
+    if (!localId || !name) return
+    setCategoryActionError('')
+    setCategorySaving(true)
+    try {
+      await postCategory({ local_id: localId, name, is_active: true })
+      setNewCategoryName('')
+      await loadCategoriesCatalog()
+    } catch (e) {
+      setCategoryActionError(e?.message || 'No se pudo crear la categoría.')
+    } finally {
+      setCategorySaving(false)
+    }
+  }, [localId, newCategoryName, loadCategoriesCatalog])
+
+  const startEditCategory = useCallback((category) => {
+    setEditingCategoryId(category.id)
+    setEditingCategoryName(category.name)
+    setCategoryActionError('')
+  }, [])
+
+  const handleRenameCategory = useCallback(async (event) => {
+    event.preventDefault()
+    const name = editingCategoryName.trim()
+    if (!editingCategoryId || !name) return
+    setCategoryActionError('')
+    setCategorySaving(true)
+    try {
+      await patchCategory(editingCategoryId, { name })
+      setEditingCategoryId('')
+      setEditingCategoryName('')
+      await loadCategoriesCatalog()
+      await loadItems(currentFilters, currentPage)
+    } catch (e) {
+      setCategoryActionError(e?.message || 'No se pudo renombrar la categoría.')
+    } finally {
+      setCategorySaving(false)
+    }
+  }, [editingCategoryId, editingCategoryName, loadCategoriesCatalog, loadItems, currentFilters, currentPage])
+
   const handleKpiClick = (filterValue) => {
     if (!filterValue) { setStatusFilters([]); return }
     setStatusFilters((prev) => (prev.includes(filterValue) ? [] : [filterValue]))
@@ -348,7 +393,7 @@ function StockControlDashboard() {
               <Package size={22} />
             </span>
             <div>
-              <h1 className="text-xl font-bold text-[hsl(var(--foreground))]">Stock producto</h1>
+              <h1 className="text-xl font-bold text-[hsl(var(--foreground))]">Carta virtual</h1>
               <p className="text-sm text-[hsl(var(--muted-foreground))]">Gestiona existencias y costos para decisiones de reposición</p>
             </div>
           </header>
@@ -410,6 +455,68 @@ function StockControlDashboard() {
             })}
           </motion.section>
         ) : null}
+
+        <motion.div variants={sectionVariants} initial="hidden" animate="visible">
+        <Card>
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <div>
+                <CardTitle className="text-base">Categorías de carta</CardTitle>
+                <p className="text-xs text-[hsl(var(--muted-foreground))] mt-1">Crea y renombra las familias que ordenan tus productos.</p>
+              </div>
+              <form onSubmit={handleCreateCategory} className="flex gap-2 w-full sm:w-auto">
+                <input
+                  value={newCategoryName}
+                  onChange={(e) => setNewCategoryName(e.target.value)}
+                  placeholder="Nueva categoría"
+                  className="h-9 min-w-0 flex-1 sm:w-52 rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary)/0.3)]"
+                />
+                <Button type="submit" size="sm" disabled={categorySaving || !newCategoryName.trim()}>
+                  <Plus size={14} className="mr-1" /> Crear
+                </Button>
+              </form>
+            </div>
+          </CardHeader>
+          <CardContent className="pt-0 space-y-3">
+            {categoryActionError ? <div className="rounded-md bg-red-50 border border-red-200 text-red-700 text-sm px-3 py-2">{categoryActionError}</div> : null}
+            <div className="flex flex-wrap gap-2">
+              {categoriesCatalog.length === 0 ? (
+                <p className="text-sm text-[hsl(var(--muted-foreground))]">Aún no hay categorías.</p>
+              ) : categoriesCatalog.map((category) => (
+                editingCategoryId === category.id ? (
+                  <form key={category.id} onSubmit={handleRenameCategory} className="flex items-center gap-2 rounded-full border border-[hsl(var(--primary))]/30 bg-[hsl(var(--primary))]/10 px-2 py-1">
+                    <input
+                      value={editingCategoryName}
+                      onChange={(e) => setEditingCategoryName(e.target.value)}
+                      className="h-8 w-40 rounded-full border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3 text-sm focus:outline-none"
+                      autoFocus
+                    />
+                    <button type="submit" disabled={categorySaving} className="text-xs font-bold text-[hsl(var(--primary))]">Guardar</button>
+                    <button type="button" onClick={() => setEditingCategoryId('')} className="text-xs text-[hsl(var(--muted-foreground))]">Cancelar</button>
+                  </form>
+                ) : (
+                  (() => {
+                    const tone = getCategoryTone(category)
+                    return (
+                  <button
+                    key={category.id}
+                    type="button"
+                    onClick={() => startEditCategory(category)}
+                    className="inline-flex items-center gap-1.5 rounded-full border px-3 py-2 text-sm font-semibold transition-transform hover:-translate-y-0.5"
+                    style={{ backgroundColor: tone.bg, borderColor: tone.border, color: tone.text }}
+                  >
+                    <span className="h-2 w-2 rounded-full" style={{ backgroundColor: tone.rail }} />
+                    {category.name}
+                    <Pencil size={12} className="opacity-65" />
+                  </button>
+                    )
+                  })()
+                )
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+        </motion.div>
 
         <motion.div variants={sectionVariants} initial="hidden" animate="visible">
         <Card aria-labelledby="scd-inventory-heading">

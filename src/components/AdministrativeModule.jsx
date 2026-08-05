@@ -23,6 +23,7 @@ import {
   postTransfer,
 } from '../lib/administrativeApi'
 import { getAuthContext, apiRequest } from '../lib/apiClient'
+import { uploadReceipt } from '../lib/uploadApi'
 import { enrichDashboardWithChartData, generateIncomeTrendFromOrders, generateExpenseBreakdownFromData } from '../utils/chartDataHelpers'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -1102,7 +1103,7 @@ function ConfiguracionContent({ localId }) {
     if (!localId) return
     setLoading(true)
     getAuthContext().then(({ token }) =>
-      apiRequest(`/mercadopago-pos?local_id=${localId}`, { token })
+      apiRequest(`/webhooks/mercadopago-pos?local_id=${localId}`, { token })
         .then((data) => setPosList(Array.isArray(data) ? data : []))
         .catch(() => setError('Error cargando dispositivos POS'))
         .finally(() => setLoading(false))
@@ -1116,7 +1117,7 @@ function ConfiguracionContent({ localId }) {
     setError('')
     try {
       const { token } = await getAuthContext()
-      const newPos = await apiRequest('/mercadopago-pos', {
+      const newPos = await apiRequest('/webhooks/mercadopago-pos', {
         method: 'POST',
         token,
         body: { mp_pos_id: form.mp_pos_id.trim(), local_id: localId, name: form.name.trim() || null },
@@ -1133,7 +1134,7 @@ function ConfiguracionContent({ localId }) {
   const handleDelete = async (id) => {
     try {
       const { token } = await getAuthContext()
-      await apiRequest(`/mercadopago-pos/${id}`, { method: 'DELETE', token })
+      await apiRequest(`/webhooks/mercadopago-pos/${id}`, { method: 'DELETE', token })
       setPosList((prev) => prev.filter((p) => p.id !== id))
     } catch {
       setError('Error eliminando dispositivo')
@@ -1370,17 +1371,10 @@ function ReportarTransferenciaModal({ localId, onClose, onSaved }) {
     setSaving(true); setErr('')
     let receiptUrl = null
     try {
-      if (file && supabase) {
+      if (file) {
         setUploading(true)
-        const ext = file.name.split('.').pop()
-        const path = `transfers/${localId}/${Date.now()}.${ext}`
-        const { error: upErr } = await supabase.storage
-          .from('comprobantes')
-          .upload(path, file, { upsert: false, contentType: file.type })
+        receiptUrl = await uploadReceipt(file, { localId })
         setUploading(false)
-        if (upErr) throw new Error(`Error al subir imagen: ${upErr.message}`)
-        const { data: urlData } = supabase.storage.from('comprobantes').getPublicUrl(path)
-        receiptUrl = urlData?.publicUrl || null
       }
       await postTransfer({ local_id: localId, amount: amt, receipt_url: receiptUrl })
       onSaved()

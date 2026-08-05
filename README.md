@@ -8,7 +8,7 @@ Sistema de gestión para restaurantes. Frontend React que consume la [API FastAP
 |---|---|
 | Framework | React 19 + Vite 8 |
 | Router | React Router 6 |
-| Auth | Supabase Auth (JWT) |
+| Auth | JWT emitido por backend local |
 | Charts | Recharts |
 | Tests | Vitest + Testing Library |
 
@@ -32,10 +32,30 @@ Sistema de gestión para restaurantes. Frontend React que consume la [API FastAP
 
 ### Con Docker (recomendado)
 
-Desde el repo backend:
+Para levantar Postgres local con volumen persistente:
 
 ```bash
-.\scripts\docker-dev-up.ps1
+cp .env.db.example .env.db
+docker compose --env-file .env.db up -d postgres
+# DATABASE_URL para el backend: postgresql://gestflow:gestflow_dev_password@localhost:5432/gestflow
+```
+
+El volumen `gestflow_postgres_data` conserva los datos aunque el contenedor se reinicie o se recree.
+
+Comandos utiles:
+
+```bash
+docker compose --env-file .env.db ps
+docker compose --env-file .env.db logs -f postgres
+docker compose --env-file .env.db down
+docker compose --env-file .env.db down -v # borra tambien el volumen de datos
+```
+
+Luego levanta el backend apuntando a `DATABASE_URL` y el frontend con:
+
+```bash
+npm install
+npm run dev
 # Frontend: http://localhost:5173
 # API:      http://localhost:8000
 # Docs API: http://localhost:8000/api/docs
@@ -57,8 +77,6 @@ npm run dev
 Crea un archivo `.env.local` en la raíz del frontend (no existe por defecto, no se sube al repo):
 
 ```env
-VITE_SUPABASE_URL=https://<project>.supabase.co
-VITE_SUPABASE_ANON_KEY=<anon_key>
 VITE_API_URL=http://localhost:8000
 VITE_RECETAS_API_URL=http://localhost:8000
 ```
@@ -95,7 +113,7 @@ src/
 ├── hooks/            # Data fetching (useEffect + apiClient)
 ├── lib/
 │   ├── apiClient.js  # Fetch wrapper: auth, retry 401, error parsing
-│   ├── supabaseClient.js
+│   ├── authClient.js
 │   ├── inventoryApi.js
 │   ├── administrativeApi.js
 │   └── weeklyPurchasesApi.js
@@ -104,11 +122,11 @@ src/
 
 ## Auth flow
 
-1. Login vía Supabase Auth → JWT con `user_metadata.role` y `user_metadata.business_id`
+1. Login vía backend local → JWT con `role` y `business_id`
 2. `apiClient.js` inyecta el token en cada request (`Authorization: Bearer ...`)
 3. En 401, refresca sesión automáticamente y reintenta
 4. Backend (`deps.py`) extrae rol del JWT y aplica RBAC
 
 ## Seed data para pruebas
 
-Ver [docs/SEED_DATA.md](./docs/SEED_DATA.md) para instrucciones de carga de datos de prueba en Supabase.
+Ver [docs/SEED_DATA.md](./docs/SEED_DATA.md) para instrucciones de carga de datos de prueba.

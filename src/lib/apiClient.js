@@ -1,37 +1,29 @@
-import { supabase } from './supabaseClient'
+import { clearStoredSession, getStoredSession, refreshSession } from './authClient'
 import { getBusinessId } from '../utils/jwt'
 
 const apiBaseUrl = import.meta.env.VITE_API_URL || ''
 
 async function getSession(forceRefresh = false) {
-  if (!supabase) {
-    throw new Error('Supabase no esta configurado')
-  }
-
   if (forceRefresh) {
-    const { data, error } = await supabase.auth.refreshSession()
-    if (error || !data.session?.access_token) {
-      throw new Error(error?.message || 'No hay sesion activa')
+    const refreshed = await refreshSession()
+    if (!refreshed?.access_token) {
+      throw new Error('No hay sesion activa')
     }
 
-    return data.session
+    return refreshed
   }
 
-  const { data, error } = await supabase.auth.getSession()
-  if (error) {
-    throw new Error(error.message || 'No se pudo obtener la sesion')
+  const session = getStoredSession()
+  if (session?.access_token) {
+    return session
   }
 
-  if (data.session?.access_token) {
-    return data.session
+  const refreshed = await refreshSession()
+  if (!refreshed?.access_token) {
+    throw new Error('No hay sesion activa')
   }
 
-  const { data: refreshedData, error: refreshError } = await supabase.auth.refreshSession()
-  if (refreshError || !refreshedData.session?.access_token) {
-    throw new Error(refreshError?.message || 'No hay sesion activa')
-  }
-
-  return refreshedData.session
+  return refreshed
 }
 
 function buildUrl(path) {
@@ -114,7 +106,8 @@ export async function getAuthContext() {
 }
 
 export async function getOptionalAuthContext() {
-  if (!supabase) {
+  const session = getStoredSession()
+  if (!session?.access_token) {
     return {
       token: null,
       businessId: null,
@@ -123,21 +116,12 @@ export async function getOptionalAuthContext() {
   }
 
   try {
-    const { data, error } = await supabase.auth.getSession()
-    if (error || !data.session?.access_token) {
-      return {
-        token: null,
-        businessId: null,
-        user: null,
-      }
-    }
-
-    const token = data.session.access_token
+    const token = session.access_token
 
     return {
       token,
-      businessId: getBusinessId(data.session.user, token),
-      user: data.session.user,
+      businessId: getBusinessId(session.user, token),
+      user: session.user,
     }
   } catch {
     return {
@@ -184,9 +168,15 @@ export async function apiRequest(path, options = {}) {
     throw err
   }
 
-  if (response.status === 401 && retryOnUnauthorized && supabase) {
-    const refreshedSession = await getSession(true)
-    response = await makeRequest(refreshedSession.access_token)
+  if (response.status === 401 && retryOnUnauthorized) {
+    try {
+      const refreshedSession = await getSession(true)
+      response = await makeRequest(refreshedSession.access_token)
+    } catch (authErr) {
+      clearStoredSession()
+      window.dispatchEvent(new CustomEvent('auth:session-expired'))
+      throw authErr
+    }
   }
 
   if (!response.ok) {

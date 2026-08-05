@@ -277,6 +277,20 @@ input[type='number'] {
 /* Text */
 .dark .text-yellow-700   { color: rgb(253 224 71) !important; }
 
+/* Login keeps a deliberately light layout even when the app theme is dark. */
+.dark .login-light .bg-white { background-color: #fff !important; }
+.dark .login-light .bg-\[\#fbf7f0\] { background-color: #fbf7f0 !important; }
+.dark .login-light .text-stone-950 { color: #0c0a09 !important; }
+.dark .login-light .text-stone-700 { color: #44403c !important; }
+.dark .login-light .text-stone-600 { color: #57534e !important; }
+.dark .login-light .text-stone-500 { color: #78716c !important; }
+.dark .login-light input:-webkit-autofill,
+.dark .login-light input:-webkit-autofill:hover,
+.dark .login-light input:-webkit-autofill:focus {
+  -webkit-text-fill-color: #0c0a09 !important;
+  box-shadow: 0 0 0 1000px #fff inset !important;
+}
+
 /* ── Touch optimization (AC1) ───────────────────────────────── */
 /* Eliminates 300ms tap delay and prevents accidental double-tap zoom */
 button, [role="button"], a, input, select, textarea, label {

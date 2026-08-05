@@ -27,7 +27,7 @@ const modules = [
     title: 'Inventario',
     subtitle: 'Recetas, stock de productos y proveedores',
     Icon: Package,
-    features: ['Recetas', 'Stock de productos', 'Proveedores', 'Órdenes de Compra'],
+    features: ['Recetas', 'Carta virtual', 'Proveedores', 'Órdenes de Compra'],
     disabled: false,
   },
   {

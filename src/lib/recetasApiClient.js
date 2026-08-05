@@ -1,5 +1,3 @@
-import { apiRequest } from './apiClient'
-
 // SEC-04: si VITE_RECETAS_API_URL no está definida, se usa la URL del backend
 // principal (VITE_API_URL) en lugar de quedar vacía. Antes, al quedar vacía, las
 // llamadas iban al dominio actual (sin el endpoint) y rompían el módulo de recetas.
@@ -13,7 +11,7 @@ function buildRecetasUrl(path) {
 }
 
 /**
- * Peticiones al microservicio de recetas (misma auth Supabase que apiClient).
+ * Peticiones al microservicio de recetas (misma auth JWT local que apiClient).
  */
 export async function recetasApiRequest(path, options = {}) {
   const { method = 'GET', body, token: providedToken, headers = {}, retryOnUnauthorized = true } = options
@@ -40,12 +38,10 @@ export async function recetasApiRequest(path, options = {}) {
   let response = await makeRequest(token)
 
   if (response.status === 401 && retryOnUnauthorized) {
-    const { supabase } = await import('./supabaseClient')
-    if (supabase) {
-      const { data, error } = await supabase.auth.refreshSession()
-      if (!error && data.session?.access_token) {
-        response = await makeRequest(data.session.access_token)
-      }
+    const { refreshSession } = await import('./authClient')
+    const session = await refreshSession().catch(() => null)
+    if (session?.access_token) {
+      response = await makeRequest(session.access_token)
     }
   }
 

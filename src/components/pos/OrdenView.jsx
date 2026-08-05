@@ -3,7 +3,6 @@ import { useMesaDetail } from '../../hooks/useMesaDetail'
 import { useOrderManagement } from '../../hooks/useOrderManagement'
 import { apiRequest, getSplitPaymentSummary } from '../../lib/apiClient'
 import MesaDetailModal from './MesaDetailModal'
-import ComandaActions from './ComandaActions'
 import MultiPaymentModal from './MultiPaymentModal'
 import MercadoPagoModal from './MercadoPagoModal'
 import { Button } from '@/components/ui/button'
@@ -54,7 +53,7 @@ function fmtTime(dateStr) {
 
 let _printInProgress = false
 
-function openPrintWindow({ mesa, firstOrder, allItems, subtotal, iva, total }) {
+function openPrintWindow({ mesa, firstOrder, allItems, subtotal, iva, total, label = 'BOLETA' }) {
   if (_printInProgress) return
   _printInProgress = true
 
@@ -76,7 +75,7 @@ function openPrintWindow({ mesa, firstOrder, allItems, subtotal, iva, total }) {
 <html>
 <head>
   <meta charset="utf-8"/>
-  <title>Boleta ${orderId}</title>
+  <title>${label} ${orderId}</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { font-family: 'Courier New', Courier, monospace; font-size: 12px; color: #111; width: 280px; padding: 8px; }
@@ -96,7 +95,7 @@ function openPrintWindow({ mesa, firstOrder, allItems, subtotal, iva, total }) {
 <body>
   <div class="center">
     <h2>RESTAURANTE</h2>
-    <p style="font-weight:700">BOLETA</p>
+    <p style="font-weight:700">${label}</p>
     <p style="font-family:monospace">${orderId}</p>
   </div>
   <hr/>
@@ -219,6 +218,19 @@ function OrdenView({ mesa, localId, onBack, onTableUpdated }) {
     }
   }, [mesa, firstOrder, allItems, subtotal, iva, total, onTableUpdated, onBack])
 
+  const handlePrintChargeDetail = useCallback(() => {
+    if (!detail?.active_orders?.length) return
+    openPrintWindow({
+      mesa,
+      firstOrder,
+      allItems,
+      subtotal,
+      iva,
+      total,
+      label: 'DETALLE DE COBRO',
+    })
+  }, [detail?.active_orders?.length, mesa, firstOrder, allItems, subtotal, iva, total])
+
   const formatItemName = (item) => item.item_name || item.product_name || '—'
 
   const formatItemDetails = (item) => {
@@ -259,6 +271,7 @@ function OrdenView({ mesa, localId, onBack, onTableUpdated }) {
           open={showMPModal}
           orderId={firstOrder.id}
           total={total}
+          description={`Mesa ${mesa.name || mesa.numero || ''}`.trim()}
           onSuccess={handlePaymentSuccess}
           onClose={() => setShowMPModal(false)}
         />
@@ -266,7 +279,7 @@ function OrdenView({ mesa, localId, onBack, onTableUpdated }) {
 
       <div className="flex flex-col h-full">
         {/* Breadcrumb + acciones */}
-        <div className="flex items-center justify-between px-6 py-3 border-b border-[hsl(var(--border))] bg-[hsl(var(--card))] shrink-0">
+        <div className="space-y-3 px-4 lg:px-6 py-4 border-b border-[hsl(var(--border))] bg-[hsl(var(--card))] shrink-0">
           <div className="flex items-center gap-2 text-sm">
             <button
               onClick={onBack}
@@ -281,52 +294,60 @@ function OrdenView({ mesa, localId, onBack, onTableUpdated }) {
             )}
           </div>
 
-          <div className="flex items-center gap-2 flex-wrap">
-            {firstOrder?.id && (
-              <ComandaActions orderId={firstOrder.id} size="sm" showLabel={false} />
-            )}
+          <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3">
+            <Button
+              variant="outline"
+              onClick={handlePrintChargeDetail}
+              disabled={!detail?.active_orders?.length}
+              className="h-16 rounded-2xl border-blue-300 bg-blue-50 text-blue-800 hover:bg-blue-100 flex-col gap-1 text-sm font-bold"
+              title="Imprimir detalle de cobro"
+            >
+              <span className="text-xl leading-none">🖨️</span>
+              <span>Imprimir detalle</span>
+            </Button>
             {/* AC1 (OP-03): Dividir pago entre N comensales */}
             {firstOrder?.id && (
               <Button
                 variant="outline"
-                size="sm"
                 onClick={() => setShowSplitModal(true)}
                 disabled={!detail?.active_orders?.length}
                 className={hasSplits && !splitFullyPaid
-                  ? 'border-yellow-400 text-yellow-700 hover:bg-yellow-50'
+                  ? 'h-16 rounded-2xl border-yellow-400 bg-yellow-50 text-yellow-800 hover:bg-yellow-100 flex-col gap-1 text-sm font-bold'
                   : hasSplits && splitFullyPaid
-                  ? 'border-green-400 text-green-700 hover:bg-green-50'
-                  : ''
+                  ? 'h-16 rounded-2xl border-green-400 bg-green-50 text-green-800 hover:bg-green-100 flex-col gap-1 text-sm font-bold'
+                  : 'h-16 rounded-2xl border-slate-300 bg-slate-50 text-slate-800 hover:bg-slate-100 flex-col gap-1 text-sm font-bold'
                 }
               >
+                <span className="text-xl leading-none">⊘</span>
                 {hasSplits && splitFullyPaid ? '✓ Pago Dividido' : '⊘ Dividir Pago'}
               </Button>
             )}
             <Button
               variant="outline"
-              size="sm"
               onClick={handleCobrar}
               disabled={cobrarLoading || cancelLoading || !detail?.active_orders?.length || (hasSplits && !splitFullyPaid)}
-              className="bg-green-600 hover:bg-green-700 text-white font-semibold disabled:opacity-50"
+              className="h-16 rounded-2xl border-green-700 bg-green-600 hover:bg-green-700 text-white flex-col gap-1 text-sm font-bold disabled:opacity-50"
               title={hasSplits && !splitFullyPaid ? 'Aprueba todos los pagos divididos primero' : ''}
             >
-              {cobrarLoading ? 'Procesando...' : '💰 Cobrar e imprimir'}
+              <span className="text-xl leading-none">💰</span>
+              {cobrarLoading ? 'Procesando...' : 'Cobrar'}
             </Button>
             <Button
               variant="outline"
-              size="sm"
               onClick={() => setShowAddItems(true)}
               disabled={!localId}
+              className="h-16 rounded-2xl border-indigo-300 bg-indigo-50 text-indigo-800 hover:bg-indigo-100 flex-col gap-1 text-sm font-bold"
             >
-              + Agregar Otro Producto
+              <span className="text-xl leading-none">＋</span>
+              <span>Agregar producto</span>
             </Button>
             <Button
               variant="outline"
-              size="sm"
               onClick={handleCancelOrder}
               disabled={cancelLoading || cobrarLoading || !detail?.active_orders?.length}
-              className="text-red-600 border-red-200 hover:bg-red-50 hover:border-red-300"
+              className="h-16 rounded-2xl border-red-300 bg-red-50 text-red-700 hover:bg-red-100 flex-col gap-1 text-sm font-bold"
             >
+              <span className="text-xl leading-none">✕</span>
               {cancelLoading ? 'Cancelando...' : 'Cancelar'}
             </Button>
           </div>

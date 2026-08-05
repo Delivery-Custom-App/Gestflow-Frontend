@@ -4,15 +4,15 @@ import { apiRequest, createPointCharge, getPointOrderStatus, cancelPointCharge }
 const METHODS = [
   { key: 'CASH',               label: 'Efectivo',          icon: '💵', desc: null },
   { key: 'CARD',               label: 'Tarjeta',           icon: '💳', desc: null },
-  { key: 'MERCADOPAGO',        label: 'MercadoPago',       icon: '🔵', desc: 'QR · Link de pago · Cuotas' },
-  { key: 'MERCADOPAGO_POINT',  label: 'MercadoPago', icon: '🖥️', desc: 'Point Smart 2 · Débito · Crédito' },
+  { key: 'MERCADOPAGO',        label: 'MercadoPago Checkout', icon: '🔵', desc: 'QR · Link de pago · Cuotas' },
+  { key: 'MERCADOPAGO_POINT',  label: 'MercadoPago Point', icon: '🖥️', desc: 'Lector físico · Débito · Crédito' },
 ]
 
 function fmt(n) {
   return `$${Number(n || 0).toLocaleString('es-CL')}`
 }
 
-export default function MercadoPagoModal({ open, orderId, total, onSuccess, onClose }) {
+export default function MercadoPagoModal({ open, orderId, total, description, onSuccess, onClose }) {
   const [step, setStep]               = useState('select')
   // steps: 'select' | 'mp_checkout' | 'mp_demo' | 'point_ready' | 'point_waiting' | 'point_success'
   const [checkoutUrl, setCheckoutUrl] = useState(null)
@@ -20,6 +20,7 @@ export default function MercadoPagoModal({ open, orderId, total, onSuccess, onCl
   const [error, setError]             = useState(null)
   const [terminalMsg, setTerminalMsg] = useState('Conectando con la terminal...')
   const [paymentDetail, setPaymentDetail] = useState(null)
+  const [chargeInfo, setChargeInfo] = useState(null)
   const pollRef = useRef(null)
 
   const stopPolling = () => {
@@ -39,6 +40,7 @@ export default function MercadoPagoModal({ open, orderId, total, onSuccess, onCl
     setError(null)
     setTerminalMsg('Conectando con la terminal...')
     setPaymentDetail(null)
+    setChargeInfo(null)
   }
 
   const handleClose = () => { reset(); onClose() }
@@ -92,9 +94,10 @@ export default function MercadoPagoModal({ open, orderId, total, onSuccess, onCl
     setLoading(true)
     setError(null)
     try {
-      await createPointCharge(orderId, { amount: Math.round(total) })
+      const charge = await createPointCharge(orderId, { amount: Math.round(total), description })
+      setChargeInfo(charge || null)
       setStep('point_waiting')
-      setTerminalMsg('Esperando que el cliente pase la tarjeta...')
+      setTerminalMsg(charge?.message || 'Esperando que el cliente pase la tarjeta...')
       startPolling()
     } catch (err) {
       setError(err.message || 'Error al conectar con la terminal')
@@ -129,6 +132,13 @@ export default function MercadoPagoModal({ open, orderId, total, onSuccess, onCl
         if (s.payment_status === 'REJECTED') {
           stopPolling()
           setError('Pago rechazado por la terminal. Podés intentar de nuevo.')
+          setStep('point_ready')
+          return
+        }
+
+        if (s.order_status === 'CANCELLED') {
+          stopPolling()
+          setError('La orden fue cancelada durante el cobro.')
           setStep('point_ready')
           return
         }
@@ -173,7 +183,6 @@ export default function MercadoPagoModal({ open, orderId, total, onSuccess, onCl
           </div>
           <button
             onClick={handleClose}
-            disabled={step === 'point_waiting'}
             className="text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] text-xl leading-none disabled:opacity-30"
             disabled={step === 'point_waiting' || step === 'point_success'}
           >
@@ -214,16 +223,16 @@ export default function MercadoPagoModal({ open, orderId, total, onSuccess, onCl
                 <p className="text-3xl mb-1">🖥️</p>
                 <p className="text-sm font-semibold text-blue-900">Terminal MP Point</p>
                 <p className="text-xs text-blue-700 mt-2">
-                  1. Presiona el botón de cobro en la terminal
+                  1. En el lector Point, inicia un cobro manual
                 </p>
                 <p className="text-xs text-blue-700 mt-1">
-                  2. Ingresa <span className="font-bold">{fmt(total)}</span> en la terminal
+                  2. Ingresa exactamente <span className="font-bold">{fmt(total)}</span>
                 </p>
                 <p className="text-xs text-blue-700 mt-1">
                   3. Pide al cliente que pase su tarjeta
                 </p>
                 <p className="text-xs text-blue-400 mt-2">
-                  El sistema detectará el pago automáticamente.
+                  Gestflow detectará el pago aprobado automáticamente.
                 </p>
               </div>
               <button
@@ -233,7 +242,7 @@ export default function MercadoPagoModal({ open, orderId, total, onSuccess, onCl
               >
                 {loading
                   ? <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> Conectando...</>
-                  : '📲 Enviar cobro a terminal'
+                  : '📲 Iniciar cobro en Point'
                 }
               </button>
               {error && <p className="text-xs text-red-600 text-center">{error}</p>}
@@ -248,6 +257,11 @@ export default function MercadoPagoModal({ open, orderId, total, onSuccess, onCl
                   <div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin shrink-0" />
                   <p className="text-sm font-semibold text-blue-900">Terminal activa</p>
                 </div>
+                {chargeInfo?.terminal_id && (
+                  <p className="text-[11px] text-blue-500 pl-8 mb-1 font-mono break-all">
+                    Terminal: {chargeInfo.terminal_id}
+                  </p>
+                )}
                 <p className="text-xs text-blue-700 pl-8">{terminalMsg}</p>
                 <p className="text-xs text-blue-400 pl-8 mt-1">
                   El cliente puede pagar con débito o crédito.

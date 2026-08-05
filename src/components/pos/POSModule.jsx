@@ -14,8 +14,7 @@ import PrinterConfigModal from './PrinterConfigModal'
 import MPConfigDrawer from './MPConfigDrawer'
 import { useAuth } from '../../context/AuthContext'
 import { useCajaActiva } from '../../hooks/useCajaActiva'
-import { Button } from '@/components/ui/button'
-import { Printer, Settings2 } from 'lucide-react'
+import { CreditCard, PlusCircle, Printer } from 'lucide-react'
 
 export default function POSModule() {
   const { isWorker } = useAuth()
@@ -133,23 +132,56 @@ export default function POSModule() {
       <main className="flex-1 overflow-y-auto no-scrollbar p-4 lg:p-6 flex flex-col min-h-0">
         {/* Fila de acciones — solo visible en vista mesas */}
         {activeView === 'mesas' && !selectedOrdenMesa && !isWorker && (
-          <div className="flex items-center justify-end mb-4 pr-20">
-            <div className="flex items-center gap-2">
+          <div className="mb-5">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <button
                 onClick={() => setShowMPConfig(true)}
-                title="Configurar POS MercadoPago"
-                className="flex items-center justify-center w-8 h-8 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--card))] text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-950/30 transition-colors"
+                className="min-h-[86px] rounded-2xl border border-[hsl(var(--border))] border-l-4 border-l-blue-700 bg-[hsl(var(--card))] px-4 py-3 text-left text-[hsl(var(--foreground))] shadow-sm ring-1 ring-black/5 transition hover:bg-[hsl(var(--muted)/0.45)] active:scale-[0.99] focus:outline-none focus:ring-2 focus:ring-blue-500/60"
               >
-                <Settings2 size={15} />
+                <span className="flex items-center gap-3">
+                  <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-blue-700 text-white shadow-sm">
+                    <CreditCard size={23} />
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block text-sm font-black uppercase tracking-wide">Configurar POS</span>
+                    <span className="mt-1 block text-xs font-semibold leading-snug text-[hsl(var(--muted-foreground))]">
+                      Vincular MercadoPago Point y revisar terminales.
+                    </span>
+                  </span>
+                </span>
               </button>
               <button
                 onClick={() => setShowPrinterConfig(true)}
-                title="Configurar ticketera"
-                className="flex items-center justify-center w-8 h-8 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--card))] text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-950/30 transition-colors"
+                className="min-h-[86px] rounded-2xl border border-[hsl(var(--border))] border-l-4 border-l-amber-700 bg-[hsl(var(--card))] px-4 py-3 text-left text-[hsl(var(--foreground))] shadow-sm ring-1 ring-black/5 transition hover:bg-[hsl(var(--muted)/0.45)] active:scale-[0.99] focus:outline-none focus:ring-2 focus:ring-amber-500/60"
               >
-                <Printer size={15} />
+                <span className="flex items-center gap-3">
+                  <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-amber-700 text-white shadow-sm">
+                    <Printer size={23} />
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block text-sm font-black uppercase tracking-wide">Impresora</span>
+                    <span className="mt-1 block text-xs font-semibold leading-snug text-[hsl(var(--muted-foreground))]">
+                      Registrar ticketera, IP y prueba de conexión.
+                    </span>
+                  </span>
+                </span>
               </button>
-              <Button size="sm" onClick={() => setShowModal(true)}>Crear Mesa</Button>
+              <button
+                onClick={() => setShowModal(true)}
+                className="min-h-[86px] rounded-2xl border border-[hsl(var(--border))] border-l-4 border-l-emerald-700 bg-[hsl(var(--card))] px-4 py-3 text-left text-[hsl(var(--foreground))] shadow-sm ring-1 ring-black/5 transition hover:bg-[hsl(var(--muted)/0.45)] active:scale-[0.99] focus:outline-none focus:ring-2 focus:ring-emerald-500/60"
+              >
+                <span className="flex items-center gap-3">
+                  <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-emerald-700 text-white shadow-sm">
+                    <PlusCircle size={23} />
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block text-sm font-black uppercase tracking-wide">Crear mesa</span>
+                    <span className="mt-1 block text-xs font-semibold leading-snug text-[hsl(var(--muted-foreground))]">
+                      Agregar una mesa nueva al salón del local.
+                    </span>
+                  </span>
+                </span>
+              </button>
             </div>
           </div>
         )}
