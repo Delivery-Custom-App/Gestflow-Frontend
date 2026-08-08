@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
-import { WORKER_ROLES } from '../constants/roles'
+import { WORKER_ROLES, ADMIN_ROLES } from '../constants/roles'
 import { formatShortAddress } from '../lib/formatAddress'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 import { useNavigate, useParams } from 'react-router-dom'
@@ -19,6 +19,8 @@ import {
   getOrdersByLocal,
   getRendicionesDashboard,
   getTransfersByLocal,
+  patchExpense,
+  patchTransfer,
   postExpense,
   postTransfer,
 } from '../lib/administrativeApi'
@@ -622,19 +624,80 @@ function VentasContent({ orders, loading, error }) {
   )
 }
 
-function RendicionesContent({ rendiciones, expenses, transfers, loading, error }) {
-  const movements = safeArray(rendiciones?.movements)
+const MOVEMENT_STATUS_LABEL = {
+  pending:   'Pendiente',
+  approved:  'Aprobado',
+  rejected:  'Rechazado',
+  completed: 'Completado',
+  failed:    'Fallido',
+}
+
+function statusBucket(status) {
+  const s = String(status || '').toLowerCase()
+  if (s === 'pending') return 'pending'
+  if (s === 'approved' || s === 'completed') return 'confirmed'
+  if (s === 'rejected' || s === 'failed') return 'rejected'
+  return 'other'
+}
+
+function RendicionesContent({ rendiciones, expenses, transfers, loading, error, onRefresh }) {
+  const { userRole } = useAuth()
+  const canVerify = ADMIN_ROLES.includes(userRole)
+
+  const [typeFilter, setTypeFilter] = useState('all')
+  const [statusFilter, setStatusFilter] = useState('all')
+  const [busyId, setBusyId] = useState(null)
+  const [actionError, setActionError] = useState('')
+
   const expensesList = safeArray(expenses)
   const transfersList = safeArray(transfers)
-  const fallbackRows = [
-    ...expensesList.map((item) => ({ id: item.id, movement_type: 'expense',  amount: toNumber(item.amount), status: item.status || 'pending', occurred_at: item.expense_date || item.created_at, description: item.description })),
-    ...transfersList.map((item) => ({ id: item.id, movement_type: 'transfer', amount: toNumber(item.amount), status: item.status || 'pending', occurred_at: item.created_at, description: item.description || 'Rendición al centro de control', receipt_url: item.receipt_url })),
-  ]
-  const rows = (movements.length > 0 ? movements : fallbackRows)
-    .sort((a, b) => new Date(b.occurred_at || 0) - new Date(a.occurred_at || 0))
-    .slice(0, 12)
+  const movements = safeArray(rendiciones?.movements)
 
-  const isEmpty = !rendiciones && rows.length === 0 && !loading && !error
+  const movementRows = useMemo(() => {
+    if (expensesList.length === 0 && transfersList.length === 0 && movements.length > 0) {
+      return movements.map((m) => ({
+        id: m.id,
+        type: m.movement_type === 'transfer' ? 'transfer' : 'expense',
+        amount: toNumber(m.amount),
+        status: m.status || 'pending',
+        occurred_at: m.occurred_at,
+        description: m.movement_type === 'transfer' ? 'Rendición al centro de control' : (m.description || ''),
+        category: 'other',
+        receipt_url: m.receipt_url,
+      }))
+    }
+    return [
+      ...expensesList.map((item) => ({
+        id: item.id,
+        type: 'expense',
+        amount: toNumber(item.amount),
+        status: String(item.status || 'pending').toLowerCase(),
+        occurred_at: item.expense_date || item.created_at,
+        description: item.description || '',
+        category: item.category || 'other',
+        receipt_url: item.receipt_url,
+      })),
+      ...transfersList.map((item) => ({
+        id: item.id,
+        type: 'transfer',
+        amount: toNumber(item.amount),
+        status: String(item.status || 'pending').toLowerCase(),
+        occurred_at: item.created_at,
+        description: item.description || 'Rendición al centro de control',
+        receipt_url: item.receipt_url,
+      })),
+    ]
+  }, [expensesList, transfersList, movements])
+
+  const rows = useMemo(() => movementRows
+    .filter((r) => (typeFilter === 'all' ? true : r.type === typeFilter))
+    .filter((r) => (statusFilter === 'all' ? true : statusBucket(r.status) === statusFilter))
+    .sort((a, b) => new Date(b.occurred_at || 0) - new Date(a.occurred_at || 0)),
+  [movementRows, typeFilter, statusFilter])
+
+  const pendingRows = movementRows.filter((r) => statusBucket(r.status) === 'pending')
+
+  const isEmpty = !rendiciones && movementRows.length === 0 && !loading && !error
   const stateNode = <SectionState loading={loading} error={error} isEmpty={isEmpty} emptyMessage="Sin movimientos aún. Usa los botones 'Nuevo Gasto' y 'Reportar Transferencia' para registrar." />
   if (loading || error || isEmpty) return stateNode
 
@@ -648,32 +711,130 @@ function RendicionesContent({ rendiciones, expenses, transfers, loading, error }
     .map(([k, v]) => ({ category: EXPENSE_LABEL[k] || k, amount: v }))
     .sort((a, b) => b.amount - a.amount)
 
+  async function handleVerify(row, nextStatus) {
+    if (busyId) return
+    setBusyId(row.id)
+    setActionError('')
+    try {
+      if (row.type === 'expense') await patchExpense(row.id, { status: nextStatus })
+      else await patchTransfer(row.id, { status: nextStatus })
+      onRefresh?.()
+    } catch (e) {
+      setActionError(e.message || 'No se pudo actualizar el movimiento')
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  const actionOptions = (row) => {
+    if (row.type === 'transfer') return [
+      { label: 'Confirmar', status: 'completed', variant: 'default' },
+      { label: 'Rechazar',  status: 'failed',    variant: 'danger' },
+    ]
+    return [
+      { label: 'Aprobar',  status: 'approved', variant: 'default' },
+      { label: 'Rechazar', status: 'rejected', variant: 'danger' },
+    ]
+  }
+
+  const TYPE_FILTERS = [
+    { id: 'all',   label: 'Todos' },
+    { id: 'expense',  label: 'Compras' },
+    { id: 'transfer', label: 'Transferencias' },
+  ]
+  const STATUS_FILTERS = [
+    { id: 'all',      label: 'Todos' },
+    { id: 'pending',  label: 'Pendientes' },
+    { id: 'confirmed', label: 'Aprobados' },
+    { id: 'rejected', label: 'Rechazados' },
+  ]
+
   return (
     <div className="space-y-5">
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <KpiCard label="Total Rendido"         value={formatMoney(rendiciones?.completed_transfers_total)} sub="Transferido al centro de control" />
         <KpiCard label="Ingresos Registrados"  value={formatMoney(rendiciones?.approved_expenses_total)}  sub="Período consultado" accent="blue" />
         <KpiCard label="Consolidado Período"   value={formatMoney(rendiciones?.net_flow)}                 sub="Ingresos − rendiciones" accent="blue" />
-        <KpiCard label="Por Regularizar"       value={formatMoney(toNumber(rendiciones?.pending_expenses_total) + toNumber(rendiciones?.pending_transfers_total))} sub="Pendiente de confirmación" accent="warning" />
+        <KpiCard label="Por Regularizar"       value={formatMoney(toNumber(rendiciones?.pending_expenses_total) + toNumber(rendiciones?.pending_transfers_total))} sub={`${pendingRows.length} movimiento${pendingRows.length !== 1 ? 's' : ''} pendiente${pendingRows.length !== 1 ? 's' : ''}`} accent="warning" />
       </div>
       <Panel title="Distribución de Gastos" sub="Gastos del período por categoría" accent="red">
         <ExpenseBreakdown data={expenseBreakdown} />
       </Panel>
-      <Panel title="Movimientos de Rendiciones" sub="Transferencias y gastos registrados">
+      <Panel title="Verificar Movimientos" sub="Compras (gastos) y transferencias electrónicas. Aprueba o rechaza los pendientes para regularizar cada movimiento.">
+        <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div className="inline-flex w-fit rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--muted))] p-1">
+            {TYPE_FILTERS.map((opt) => (
+              <button
+                key={opt.id}
+                type="button"
+                onClick={() => setTypeFilter(opt.id)}
+                className={cn('rounded-md px-3 py-1.5 text-xs font-semibold transition-colors',
+                  typeFilter === opt.id
+                    ? 'bg-[hsl(var(--primary))] text-white shadow-sm'
+                    : 'text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]')}>
+                {opt.label}
+              </button>
+            ))}
+          </div>
+          <div className="inline-flex w-fit rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--muted))] p-1">
+            {STATUS_FILTERS.map((opt) => (
+              <button
+                key={opt.id}
+                type="button"
+                onClick={() => setStatusFilter(opt.id)}
+                className={cn('rounded-md px-3 py-1.5 text-xs font-semibold transition-colors',
+                  statusFilter === opt.id
+                    ? 'bg-[hsl(var(--primary))] text-white shadow-sm'
+                    : 'text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]')}>
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {actionError && (
+          <p className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">Error: {actionError}</p>
+        )}
+
         {rows.length === 0 ? (
-          <p className="text-sm text-[hsl(var(--muted-foreground))]">No existen movimientos en el rango actual.</p>
+          <p className="text-sm text-[hsl(var(--muted-foreground))]">No hay movimientos que coincidan con los filtros.</p>
         ) : (
           <div className="space-y-2">
-            {rows.map((row) => (
-              <RowCard
-                key={`${row.movement_type}-${row.id}`}
-                title={formatMoney(row.amount)}
-                sub={`${row.movement_type === 'transfer' ? 'Rendición' : 'Movimiento'} — ${formatDateTime(row.occurred_at)}`}
-                meta={row.description || (row.movement_type === 'transfer' ? 'Rendición al centro de control' : 'Sin descripción')}
-                pill={row.status || 'sin estado'}
-                receiptUrl={row.receipt_url || null}
-              />
-            ))}
+            {rows.map((row) => {
+              const isPending = statusBucket(row.status) === 'pending'
+              return (
+                <div key={`${row.type}-${row.id}`} className="rounded-lg border border-[hsl(var(--border))]">
+                  <RowCard
+                    title={formatMoney(row.amount)}
+                    sub={`${row.type === 'transfer' ? 'Rendición' : 'Compra'} — ${formatDateTime(row.occurred_at)}`}
+                    meta={row.type === 'transfer'
+                      ? row.description
+                      : `${EXPENSE_LABEL[row.category] || row.category}${row.description ? ` — ${row.description}` : ''}`}
+                    pill={MOVEMENT_STATUS_LABEL[row.status] || row.status}
+                    receiptUrl={row.receipt_url || null}
+                  />
+                  {canVerify && isPending && (
+                    <div className="flex items-center justify-end gap-2 border-t border-[hsl(var(--border))] px-3 py-2">
+                      {actionOptions(row).map((a) => (
+                        <Button
+                          key={a.status}
+                          size="sm"
+                          variant={a.variant}
+                          disabled={busyId !== null}
+                          onClick={() => handleVerify(row, a.status)}>
+                          {busyId === row.id ? 'Guardando...' : a.label}
+                        </Button>
+                      ))}
+                    </div>
+                  )}
+                  {!canVerify && isPending && (
+                    <div className="border-t border-[hsl(var(--border))] px-3 py-2 text-right text-[10px] uppercase tracking-wide text-[hsl(var(--muted-foreground))]">
+                      Solo administradores pueden verificar
+                    </div>
+                  )}
+                </div>
+              )
+            })}
           </div>
         )}
       </Panel>
@@ -1667,7 +1828,7 @@ function renderSectionContent(activeSection, payload) {
     case 'ventas':
       return <VentasContent orders={payload.orders} loading={payload.loading} error={payload.error} />
     case 'rendiciones':
-      return <RendicionesContent rendiciones={payload.rendiciones} expenses={payload.expenses} transfers={payload.transfers} loading={payload.loading} error={payload.error} />
+      return <RendicionesContent rendiciones={payload.rendiciones} expenses={payload.expenses} transfers={payload.transfers} loading={payload.loading} error={payload.error} onRefresh={payload.onRefresh} />
     case 'reportes': {
       const reportesIncome   = generateIncomeTrendFromOrders(payload.orders)
       const reportesExpenses = generateExpenseBreakdownFromData(payload.expenses)
