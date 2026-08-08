@@ -62,6 +62,14 @@ export function postTransfer(body) {
   return apiRequest('/transfers', { method: 'POST', body })
 }
 
+export function patchExpense(expenseId, body) {
+  return apiRequest(`/expenses/${expenseId}`, { method: 'PATCH', body })
+}
+
+export function patchTransfer(transferId, body) {
+  return apiRequest(`/transfers/${transferId}`, { method: 'PATCH', body })
+}
+
 export function getIncomeTrend(localId, token, days = 7) {
   const path = withQuery(`/dashboard/local/${localId}/trend`, { days })
   return apiRequest(path, { token })
