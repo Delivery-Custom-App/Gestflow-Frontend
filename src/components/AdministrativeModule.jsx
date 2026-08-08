@@ -30,7 +30,7 @@ import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 import { formatCLPCurrency as formatMoney } from '../lib/formatCLP'
 import { motion, AnimatePresence } from 'framer-motion'
-import { MapPin, TrendingDown, Send, X, Upload, ImageIcon, ChevronDown, ChevronRight, ShoppingCart, HelpCircle, BarChart2, CreditCard, ArrowLeftRight, Bell, Award, LayoutDashboard } from 'lucide-react'
+import { MapPin, TrendingDown, Send, X, Upload, ImageIcon, ChevronDown, ChevronUp, ChevronRight, ShoppingCart, HelpCircle, BarChart2, CreditCard, ArrowLeftRight, Bell, Award, LayoutDashboard } from 'lucide-react'
 
 const sections = [
   { id: 'dashboard',   label: 'Dashboard',      subtitle: 'Resumen general del sistema' },
@@ -391,8 +391,48 @@ function DashboardContent({ dashboard, loading, error }) {
   )
 }
 
+const PERIOD_OPTIONS = [
+  { id: 'week',  label: 'Semanal' },
+  { id: 'month', label: 'Mensual' },
+  { id: 'year',  label: 'Anual' },
+]
+
+const MONTH_NAMES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
+
+function santiagoYmd(iso) {
+  const d = parseApiDate(iso)
+  if (!d) return null
+  const ymd = d.toLocaleString('en-CA', { timeZone: 'America/Santiago', year: 'numeric', month: '2-digit', day: '2-digit' })
+  return ymd.length === 10 ? ymd : null
+}
+
+function periodMeta(ymd, granularity) {
+  const [y, m, d] = ymd.split('-').map(Number)
+  if (granularity === 'year') {
+    return { key: String(y), label: `Año ${y}`, sortKey: y, range: String(y) }
+  }
+  if (granularity === 'month') {
+    const key = `${y}-${String(m).padStart(2, '0')}`
+    const label = `${MONTH_NAMES[m - 1]} ${y}`
+    return { key, label, sortKey: y * 12 + (m - 1), range: label }
+  }
+  const base = new Date(Date.UTC(y, m - 1, d))
+  const diffToMon = (base.getUTCDay() + 6) % 7
+  const mon = new Date(base.getTime() - diffToMon * 86400000)
+  const sun = new Date(mon.getTime() + 6 * 86400000)
+  const fmt = (dt) => `${String(dt.getUTCDate()).padStart(2, '0')}/${String(dt.getUTCMonth() + 1).padStart(2, '0')}`
+  return {
+    key: mon.toISOString().slice(0, 10),
+    label: `Semana del ${fmt(mon)} al ${fmt(sun)}`,
+    sortKey: mon.getTime(),
+    range: `Semana ${fmt(mon)} — ${fmt(sun)}`,
+  }
+}
+
 function VentasContent({ orders, loading, error }) {
   const all = safeArray(orders)
+  const [granularity, setGranularity] = useState('month')
+  const [expandedKey, setExpandedKey] = useState(null)
 
   // Últimas 24 horas (ventana rodante)
   const cutoff24h = useMemo(() => new Date(Date.now() - 24 * 60 * 60 * 1000), [])
@@ -415,6 +455,44 @@ function VentasContent({ orders, loading, error }) {
     },
     { total: 0, count: 0, cash: 0, debit: 0, credit: 0, other: 0 }
   )
+
+  // ── Histórico consolidado por período ──
+  const buckets = useMemo(() => {
+    const map = new Map()
+    for (const o of all) {
+      if (_normalizeOrderStatus(o.status) === 'cancelled') continue
+      const ymd = santiagoYmd(o.created_at)
+      if (!ymd) continue
+      const meta = periodMeta(ymd, granularity)
+      if (!map.has(meta.key)) {
+        map.set(meta.key, { ...meta, total: 0, count: 0, orders: [] })
+      }
+      const bucket = map.get(meta.key)
+      bucket.total += getOrderAmount(o)
+      bucket.count += 1
+      bucket.orders.push(o)
+    }
+    return [...map.values()].sort((a, b) => (a.sortKey > b.sortKey ? -1 : a.sortKey < b.sortKey ? 1 : 0))
+  }, [all, granularity])
+
+  const histTotal = buckets.reduce((s, b) => s + b.total, 0)
+  const histCount = buckets.reduce((s, b) => s + b.count, 0)
+  const histAvg = histCount ? histTotal / histCount : 0
+
+  const methodBreakdown = useMemo(() => {
+    const acc = {}
+    for (const o of all) {
+      if (_normalizeOrderStatus(o.status) === 'cancelled') continue
+      const method = normalizePaymentMethod(o?.payment_method)
+      acc[method] = (acc[method] || 0) + getOrderAmount(o)
+    }
+    return Object.entries(acc)
+      .map(([label, total]) => ({ label, total }))
+      .sort((a, b) => b.total - a.total)
+  }, [all])
+
+  const methodTotal = methodBreakdown.reduce((s, m) => s + m.total, 0)
+  const periodNoun = granularity === 'week' ? 'semanas' : granularity === 'month' ? 'meses' : 'años'
 
   const stateNode = <SectionState loading={loading} error={error} isEmpty={false} emptyMessage="" />
   if (loading || error) return stateNode
@@ -443,6 +521,100 @@ function VentasContent({ orders, loading, error }) {
                 pill={normalizePaymentMethod(order.payment_method)}
               />
             ))}
+          </div>
+        )}
+      </Panel>
+
+      <Panel title="Histórico y Consolidados" sub="Registros consolidados por período. Excluye órdenes canceladas.">
+        <div className="mb-5 inline-flex rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--muted))] p-1">
+          {PERIOD_OPTIONS.map((opt) => (
+            <button
+              key={opt.id}
+              type="button"
+              onClick={() => { setGranularity(opt.id); setExpandedKey(null) }}
+              className={cn('rounded-md px-3 py-1.5 text-xs font-semibold transition-colors',
+                granularity === opt.id
+                  ? 'bg-[hsl(var(--primary))] text-white shadow-sm'
+                  : 'text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]')}>
+              {opt.label}
+            </button>
+          ))}
+        </div>
+
+        <div className="mb-5 grid grid-cols-2 gap-4 lg:grid-cols-4">
+          <KpiCard label="Total Consolidado" value={formatMoney(histTotal)} sub={`${histCount} ventas`} />
+          <KpiCard label="Ticket Promedio"   value={formatMoney(histAvg)}   sub="Por venta" accent="blue" />
+          <KpiCard label="Períodos"          value={String(buckets.length)} sub={periodNoun} accent="purple" />
+          <KpiCard label="Mayor Período"     value={formatMoney(buckets[0]?.total || 0)} sub={buckets[0]?.label || 'Sin ventas'} accent="warning" />
+        </div>
+
+        {buckets.length === 0 ? (
+          <p className="text-sm text-[hsl(var(--muted-foreground))]">No hay ventas históricas registradas.</p>
+        ) : (
+          <div className="space-y-2">
+            {buckets.map((bucket) => {
+              const isOpen = expandedKey === bucket.key
+              const pct = histTotal ? (bucket.total / histTotal) * 100 : 0
+              const bucketAvg = bucket.count ? bucket.total / bucket.count : 0
+              return (
+                <div key={bucket.key} className="rounded-lg border border-[hsl(var(--border))]">
+                  <button
+                    type="button"
+                    onClick={() => setExpandedKey(isOpen ? null : bucket.key)}
+                    className="flex w-full items-center justify-between gap-3 rounded-lg p-3 text-left transition-colors hover:bg-[hsl(var(--muted)/40)]">
+                    <div className="flex min-w-0 items-center gap-2">
+                      {isOpen
+                        ? <ChevronUp size={15} className="shrink-0 text-[hsl(var(--muted-foreground))]" />
+                        : <ChevronRight size={15} className="shrink-0 text-[hsl(var(--muted-foreground))]" />}
+                      <div className="min-w-0">
+                        <strong className="block truncate text-sm font-bold text-[hsl(var(--foreground))]">{bucket.label}</strong>
+                        <span className="block text-xs text-[hsl(var(--muted-foreground))]">{bucket.count} venta{bucket.count !== 1 ? 's' : ''} · {formatMoney(bucketAvg)} promedio</span>
+                      </div>
+                    </div>
+                    <div className="shrink-0 text-right">
+                      <strong className="block text-sm font-bold text-[hsl(var(--foreground))]">{formatMoney(bucket.total)}</strong>
+                      <span className="block text-xs text-[hsl(var(--muted-foreground))]">{pct.toFixed(0)}% del total</span>
+                    </div>
+                  </button>
+                  {isOpen && (
+                    <div className="space-y-2 border-t border-[hsl(var(--border))] p-3">
+                      {bucket.orders.map((order) => (
+                        <RowCard
+                          key={order.id}
+                          title={formatMoney(getOrderAmount(order))}
+                          sub={`#${String(order.id || '').slice(0, 8)} — ${normalizePaymentMethod(order.payment_method)} — ${formatDateTime(order.created_at)}`}
+                          meta={`Estado: ${order.status || '—'} · Fuente: ${order.source || '—'}`}
+                          pill={normalizePaymentMethod(order.payment_method)}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </Panel>
+
+      <Panel title="Distribución por Método de Pago" sub={`Histórico consolidado ${granularity === 'week' ? 'semanal' : granularity === 'month' ? 'mensual' : 'anual'}`}>
+        {methodBreakdown.length === 0 ? (
+          <p className="text-sm text-[hsl(var(--muted-foreground))]">No hay datos de métodos de pago.</p>
+        ) : (
+          <div className="space-y-3">
+            {methodBreakdown.map((m) => {
+              const pct = methodTotal ? (m.total / methodTotal) * 100 : 0
+              return (
+                <div key={m.label}>
+                  <div className="mb-1 flex items-center justify-between text-xs">
+                    <span className="text-[hsl(var(--muted-foreground))]">{m.label}</span>
+                    <span className="text-[hsl(var(--muted-foreground))]">{formatMoney(m.total)} · {pct.toFixed(0)}%</span>
+                  </div>
+                  <div className="h-1.5 w-full overflow-hidden rounded-full bg-[hsl(var(--border))]">
+                    <div className="h-full rounded-full bg-[hsl(var(--primary))]" style={{ width: `${pct}%` }} />
+                  </div>
+                </div>
+              )
+            })}
           </div>
         )}
       </Panel>
