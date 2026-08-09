@@ -11,7 +11,7 @@ import {
   DollarSign, FileText, BarChart3, Wallet, Bell, Gift,
   Table2, ChefHat,
   Package, Truck, ShoppingCart, BookMarked, PackageOpen,
-  LogOut, Utensils, HelpCircle, Phone, Mail, Moon, Sun, Users, RotateCcw, MapPin,
+  LogOut, Utensils, HelpCircle, Phone, Mail, Moon, Sun, Users, RotateCcw, MapPin, Building2,
 } from 'lucide-react'
 import { ExpandableTabs } from './ui/expandable-tabs'
 import CoachMark from './onboarding/CoachMark'
@@ -42,6 +42,7 @@ function deriveActiveKey(pathname) {
   if (pathname.includes('/administrativo/bonos'))         return 'bonos'
   if (pathname.includes('/administrativo'))               return 'administracion'
   if (pathname.includes('/usuarios'))                    return 'usuarios'
+  if (pathname.includes('/gestor'))                      return 'gestor'
   if (pathname.includes('/dashboard'))                    return 'dashboard'
   return 'locales'
 }
@@ -136,6 +137,7 @@ function Sidebar({ collapsed, onToggle, onClose }) {
     switch (item.key) {
       case 'locales':   navigate('/admin'); break
       case 'usuarios':  navigate('/usuarios'); break
+      case 'gestor':    navigate('/gestor'); break
       case 'dashboard': navigate(localId ? `/local/${localId}/dashboard` : '/admin', { state: navState }); break
       case 'pos-mesas':     if (localId) navigate(`/local/${localId}/pos`, { state: navState }); break
       case 'pos-kitchen':   if (localId) navigate(`/local/${localId}/pos/cocina`, { state: navState }); break
@@ -152,6 +154,7 @@ function Sidebar({ collapsed, onToggle, onClose }) {
 
   const discoverItems = [
     ...(isSuperAdmin ? [{ key: 'locales', label: 'Tus Franquicias', icon: Store }] : []),
+    ...(isSuperAdmin ? [{ key: 'gestor', label: 'Gestor de Negocios', icon: Building2 }] : []),
     ...(isSuperAdmin ? [{ key: 'usuarios', label: 'Usuarios', icon: Users }] : []),
     ...(!isWorker && localId ? [{ key: 'dashboard', label: 'Dashboard', icon: LayoutDashboard }] : []),
   ]
