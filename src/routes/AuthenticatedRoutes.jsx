@@ -22,6 +22,7 @@ const MesaDetail = lazy(() => import('../components/pos/MesaDetail'))
 const ReportesPage = lazy(() => import('../components/pos/ReportesPage'))
 const UserManagementPage = lazy(() => import('../components/UserManagementPage'))
 const UsersListPage = lazy(() => import('../components/UsersListPage'))
+const TenantManagerPage = lazy(() => import('../components/TenantManagerPage'))
 import { OnboardingProvider } from '../context/OnboardingContext'
 import { WORKER_ROLES } from '../constants/roles'
 import { isSuperAdminRole } from '../auth/roleLabel'
@@ -79,6 +80,7 @@ function SuperadminRoutes() {
       <Route element={<AdminLayout />}>
         <Route path="/" element={<Navigate to="/admin" replace />} />
         <Route path="/admin" element={<AdminDashboard />} />
+        <Route path="/gestor" element={<TenantManagerPage />} />
         <Route path="/usuarios" element={<UsersListPage />} />
         <Route path="/usuarios/crear" element={<UserManagementPage />} />
         {LocalRoutes()}
