@@ -163,13 +163,13 @@ function Sidebar({ collapsed, onToggle, onClose }) {
   }
 
   const discoverItems = [
-    ...((isSuperAdmin || isOwner) ? [{ key: 'locales', label: 'Tus Franquicias', icon: Store }] : []),
+    ...(isOwner ? [{ key: 'locales', label: 'Tus Franquicias', icon: Store }] : []),
     ...(isSuperAdmin ? [{ key: 'gestor', label: 'Gestor de Negocios', icon: Building2 }] : []),
     ...(isSuperAdmin ? [{ key: 'gestor-resumen', label: 'Resumen Global', icon: LayoutDashboard }] : []),
     ...(isSuperAdmin ? [{ key: 'gestor-usuarios', label: 'Usuarios', icon: Users }] : []),
     ...(isSuperAdmin ? [{ key: 'gestor-auditoria', label: 'Auditoría', icon: FileText }] : []),
     ...(isSuperAdmin ? [{ key: 'gestor-observabilidad', label: 'Observabilidad', icon: BarChart3 }] : []),
-    ...((isSuperAdmin || isOwner) ? [{ key: 'usuarios', label: 'Usuarios', icon: Users }] : []),
+    ...(isOwner ? [{ key: 'usuarios', label: 'Usuarios', icon: Users }] : []),
     ...(!isWorker && localId ? [{ key: 'dashboard', label: 'Dashboard', icon: LayoutDashboard }] : []),
   ]
 
