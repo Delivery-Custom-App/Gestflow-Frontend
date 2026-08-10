@@ -54,6 +54,33 @@ export function getCajasByLocal(localId, token) {
   return apiRequest(path, { token })
 }
 
+export function createCaja(body) {
+  return apiRequest('/cajas', { method: 'POST', body })
+}
+
+export function provisionCajaMp(cajaId) {
+  return apiRequest(`/cajas/${cajaId}/mp/provision`, { method: 'POST' })
+}
+
+export function verifyCajaMpPairing(cajaId) {
+  return apiRequest(`/cajas/${cajaId}/mp/verify-pairing`, { method: 'POST' })
+}
+
+export function putLocalMpLocation(localId, body) {
+  return apiRequest(`/locals/${localId}/mp-location`, { method: 'PUT', body })
+}
+
+export function getAvailableMpPos(localId) {
+  return apiRequest(`/locals/${localId}/mp/available-pos`)
+}
+
+export function assignExistingMpPos(cajaId, mercadopagoPosId) {
+  return apiRequest(`/cajas/${cajaId}/mp/assign-existing`, {
+    method: 'POST',
+    body: { mercadopago_pos_id: mercadopagoPosId },
+  })
+}
+
 export function postExpense(body) {
   return apiRequest('/expenses', { method: 'POST', body })
 }

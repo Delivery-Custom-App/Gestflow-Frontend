@@ -11,6 +11,7 @@ import { useAlerts } from '../hooks/useAlerts'
 import LoadingSpinner from './LoadingSpinner'
 import IncomeChart from './charts/IncomeChart'
 import ExpenseBreakdown from './charts/ExpenseBreakdown'
+import CajaMpPairingModal from './pos/CajaMpPairingModal'
 import {
   getCajasByLocal,
   getConsolidatedDashboard,
@@ -23,6 +24,7 @@ import {
   patchTransfer,
   postExpense,
   postTransfer,
+  createCaja,
 } from '../lib/administrativeApi'
 import { getAuthContext, apiRequest } from '../lib/apiClient'
 import { uploadReceipt } from '../lib/uploadApi'
@@ -233,7 +235,7 @@ function AmTable({ headers, rows, emptyMessage }) {
 
 // ── Section helpers ────────────────────────────────────────────
 
-function SectionActions({ activeSection, onNuevoGasto, onNuevaTransferencia }) {
+function SectionActions({ activeSection, onNuevoGasto, onNuevaTransferencia, onNuevaCaja }) {
   if (activeSection === 'ventas') {
     return null
   }
@@ -242,6 +244,13 @@ function SectionActions({ activeSection, onNuevoGasto, onNuevaTransferencia }) {
       <div className="flex gap-2">
         <Button variant="outline" onClick={onNuevoGasto}>+ Nuevo Gasto</Button>
         <Button onClick={onNuevaTransferencia}>Reportar Transferencia</Button>
+      </div>
+    )
+  }
+  if (activeSection === 'flujo-caja') {
+    return (
+      <div className="flex gap-2">
+        <Button onClick={onNuevaCaja}>+ Nueva Caja</Button>
       </div>
     )
   }
@@ -874,7 +883,19 @@ function ReportesContent({ consolidated, loading, error }) {
   )
 }
 
-function FlujoCajaContent({ dashboard, cajas, loading, error }) {
+const MP_PAIRING_BADGE = {
+  unprovisioned:    { label: 'Sin vincular',      variant: 'secondary' },
+  awaiting_pairing: { label: 'Esperando terminal', variant: 'warning' },
+  paired:           { label: 'Vinculada',          variant: 'success' },
+}
+
+const MP_PAIRING_ACTION = {
+  unprovisioned:    'Vincular MP',
+  awaiting_pairing: 'Verificar vinculación',
+  paired:           'Ver vinculación',
+}
+
+function FlujoCajaContent({ dashboard, cajas, loading, error, onManagePairing }) {
   const cajasList = safeArray(cajas)
   const stateNode = <SectionState loading={loading} error={error} isEmpty={!dashboard && !loading && !error} emptyMessage="Sin datos de flujo. Completa órdenes desde el POS y registra gastos para ver gráficos." />
   if (loading || error || (!dashboard && !loading && !error)) return stateNode
@@ -896,8 +917,24 @@ function FlujoCajaContent({ dashboard, cajas, loading, error }) {
       </div>
       <Panel title="Cajas del Local" sub="Fuente: endpoint /cajas por local">
         <AmTable
-          headers={['Nombre Caja', 'Estado']}
-          rows={cajasList.map((c) => [c.name || 'Caja sin nombre', c.is_active ? 'Activa' : 'Inactiva'])}
+          headers={['Nombre Caja', 'Estado', 'MercadoPago', 'Acciones']}
+          rows={cajasList.map((c) => {
+            const status = c.mp?.pairing_status || 'unprovisioned'
+            const badge = MP_PAIRING_BADGE[status] || MP_PAIRING_BADGE.unprovisioned
+            return [
+              c.name || 'Caja sin nombre',
+              c.is_active ? 'Activa' : 'Inactiva',
+              <div className="flex items-center gap-2" key={`mp-${c.id}`}>
+                <Badge variant={badge.variant}>{badge.label}</Badge>
+                {status === 'paired' && c.mp?.terminal_id && (
+                  <span className="text-xs text-[hsl(var(--muted-foreground))]">{c.mp.terminal_id}</span>
+                )}
+              </div>,
+              <Button key={`action-${c.id}`} size="sm" variant="outline" onClick={() => onManagePairing(c)}>
+                {MP_PAIRING_ACTION[status] || MP_PAIRING_ACTION.unprovisioned}
+              </Button>,
+            ]
+          })}
           emptyMessage="No hay cajas registradas para este local."
         />
       </Panel>
@@ -1817,6 +1854,90 @@ function ReportarTransferenciaModal({ localId, onClose, onSaved }) {
   )
 }
 
+// ── Modal Nueva Caja ────────────────────────────────────────
+
+function NuevaCajaModal({ localId, onClose, onSaved }) {
+  const [name,    setName]    = useState('')
+  const [saving,  setSaving]  = useState(false)
+  const [err,     setErr]     = useState('')
+  const [visible, setVisible] = useState(false)
+
+  useEffect(() => { requestAnimationFrame(() => setVisible(true)) }, [])
+
+  const handleClose = () => {
+    if (saving) return
+    setVisible(false)
+    setTimeout(onClose, 300)
+  }
+
+  const handleSubmit = async (e) => {
+    e.preventDefault()
+    if (!name.trim()) { setErr('Ingresa un nombre para la caja'); return }
+    setSaving(true); setErr('')
+    try {
+      await createCaja({ local_id: localId, name: name.trim(), is_active: true })
+      onSaved()
+      handleClose()
+    } catch (e) { setErr(e?.message || 'Error al guardar'); setSaving(false) }
+  }
+
+  const inputCls = 'h-9 w-full rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 text-sm text-[hsl(var(--foreground))] placeholder:text-[hsl(var(--muted-foreground))] shadow-sm focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary)/0.4)] transition-colors'
+  const labelCls = 'text-xs font-semibold text-[hsl(var(--muted-foreground))] uppercase tracking-wider'
+
+  return (
+    <div className="fixed inset-0 z-50">
+      <div className={cn('absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity duration-300', visible ? 'opacity-100' : 'opacity-0')} onClick={handleClose} />
+      <div className={cn('absolute inset-y-0 right-0 w-full max-w-md flex flex-col shadow-2xl overflow-y-auto no-scrollbar bg-[hsl(var(--card))] border-l border-[hsl(var(--border))] transition-transform duration-300 ease-out', visible ? 'translate-x-0' : 'translate-x-full')}>
+
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-[hsl(var(--border))] shrink-0">
+          <div className="flex items-center gap-3">
+            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[hsl(var(--primary)/0.1)]">
+              <CreditCard size={18} className="text-[hsl(var(--primary))]" />
+            </span>
+            <div>
+              <h2 className="text-base font-bold text-[hsl(var(--foreground))]">Nueva Caja</h2>
+              <p className="text-xs text-[hsl(var(--muted-foreground))]">Crear una caja para este local</p>
+            </div>
+          </div>
+          <button onClick={handleClose} disabled={saving}
+            className="flex h-7 w-7 items-center justify-center rounded-lg hover:bg-[hsl(var(--muted))] text-[hsl(var(--muted-foreground))] transition-colors disabled:opacity-40">
+            <X size={14} />
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="p-6 flex flex-col gap-4 flex-1">
+          {err && (
+            <div className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 dark:border-red-800/50 dark:bg-red-950/30 px-3 py-2">
+              <span className="h-1.5 w-1.5 rounded-full bg-red-500 shrink-0" />
+              <p className="text-xs text-red-600 dark:text-red-400">{err}</p>
+            </div>
+          )}
+
+          <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+            <div className="flex flex-col gap-1.5">
+              <label className={labelCls}>Nombre</label>
+              <input type="text" value={name} onChange={e => setName(e.target.value)} placeholder="Ej: Caja 1" className={inputCls} required autoFocus />
+            </div>
+
+            <div className="flex gap-2 justify-end pt-1">
+              <button type="button" onClick={handleClose} disabled={saving}
+                className="px-4 py-2 rounded-lg text-sm font-medium border border-[hsl(var(--border))] text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))] transition-colors disabled:opacity-40">
+                Cancelar
+              </button>
+              <button type="submit" disabled={saving}
+                className="px-5 py-2 rounded-lg text-sm font-semibold text-white bg-[hsl(var(--primary))] hover:opacity-90 shadow-sm transition-colors disabled:opacity-50">
+                {saving ? 'Guardando…' : 'Crear caja'}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function renderSectionContent(activeSection, payload) {
   switch (activeSection) {
     case 'dashboard': {
@@ -1840,7 +1961,7 @@ function renderSectionContent(activeSection, payload) {
     case 'flujo-caja': {
       const flujoDashboard = enrichDashboardWithChartData(payload.dashboard)
       const flujoExpenseData = generateExpenseBreakdownFromData(payload.expenses)
-      return <FlujoCajaContent dashboard={{ ...flujoDashboard, expenses_breakdown: flujoExpenseData }} cajas={payload.cajas} loading={payload.loading} error={payload.error} />
+      return <FlujoCajaContent dashboard={{ ...flujoDashboard, expenses_breakdown: flujoExpenseData }} cajas={payload.cajas} loading={payload.loading} error={payload.error} onManagePairing={payload.onManagePairing} />
     }
     case 'alertas':
       return <AlertasContent localId={payload.localId} />
@@ -1870,6 +1991,8 @@ function AdministrativeModule() {
   const [sectionError, setSectionError] = useState('')
   const [showNuevoGasto, setShowNuevoGasto]             = useState(false)
   const [showNuevaTransferencia, setShowNuevaTransferencia] = useState(false)
+  const [showNuevaCaja, setShowNuevaCaja]               = useState(false)
+  const [pairingCaja, setPairingCaja]                   = useState(null)
   const [refreshKey, setRefreshKey] = useState(0)
   const [guideOpen,  setGuideOpen]  = useState(false)
 
@@ -1954,6 +2077,21 @@ function AdministrativeModule() {
           onSaved={() => setRefreshKey(k => k + 1)}
         />
       )}
+      {showNuevaCaja && (
+        <NuevaCajaModal
+          localId={localId}
+          onClose={() => setShowNuevaCaja(false)}
+          onSaved={() => setRefreshKey(k => k + 1)}
+        />
+      )}
+      {pairingCaja && (
+        <CajaMpPairingModal
+          caja={pairingCaja}
+          localId={localId}
+          onClose={() => setPairingCaja(null)}
+          onUpdated={() => setRefreshKey(k => k + 1)}
+        />
+      )}
       <AnimatePresence>
         {guideOpen && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
@@ -2009,6 +2147,7 @@ function AdministrativeModule() {
               activeSection={activeSection}
               onNuevoGasto={() => setShowNuevoGasto(true)}
               onNuevaTransferencia={() => setShowNuevaTransferencia(true)}
+              onNuevaCaja={() => setShowNuevaCaja(true)}
             />
             <button
               onClick={() => setGuideOpen(true)}
@@ -2026,6 +2165,7 @@ function AdministrativeModule() {
           error:    sectionError,
           localId,
           onRefresh: () => setRefreshKey(k => k + 1),
+          onManagePairing: setPairingCaja,
         })}
       </main>
     </>
