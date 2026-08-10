@@ -23,6 +23,11 @@ const ReportesPage = lazy(() => import('../components/pos/ReportesPage'))
 const UserManagementPage = lazy(() => import('../components/UserManagementPage'))
 const UsersListPage = lazy(() => import('../components/UsersListPage'))
 const TenantManagerPage = lazy(() => import('../components/TenantManagerPage'))
+const TenantManagerDashboardPage = lazy(() => import('../components/TenantManagerDashboardPage'))
+const TenantDetailPage = lazy(() => import('../components/TenantDetailPage'))
+const GlobalAuditPage = lazy(() => import('../components/GlobalAuditPage'))
+const AdminUsersPage = lazy(() => import('../components/AdminUsersPage'))
+const ObservabilityPage = lazy(() => import('../components/ObservabilityPage'))
 import { OnboardingProvider } from '../context/OnboardingContext'
 import { WORKER_ROLES } from '../constants/roles'
 import { isSuperAdminRole } from '../auth/roleLabel'
@@ -81,6 +86,11 @@ function SuperadminRoutes() {
         <Route path="/" element={<Navigate to="/admin" replace />} />
         <Route path="/admin" element={<AdminDashboard />} />
         <Route path="/gestor" element={<TenantManagerPage />} />
+        <Route path="/gestor/resumen" element={<TenantManagerDashboardPage />} />
+        <Route path="/gestor/negocios/:businessId" element={<TenantDetailPage />} />
+        <Route path="/gestor/auditoria" element={<GlobalAuditPage />} />
+        <Route path="/gestor/usuarios" element={<AdminUsersPage />} />
+        <Route path="/gestor/observabilidad" element={<ObservabilityPage />} />
         <Route path="/usuarios" element={<UsersListPage />} />
         <Route path="/usuarios/crear" element={<UserManagementPage />} />
         {LocalRoutes()}

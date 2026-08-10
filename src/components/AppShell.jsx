@@ -42,6 +42,11 @@ function deriveActiveKey(pathname) {
   if (pathname.includes('/administrativo/bonos'))         return 'bonos'
   if (pathname.includes('/administrativo'))               return 'administracion'
   if (pathname.includes('/usuarios'))                    return 'usuarios'
+  if (pathname.includes('/gestor/resumen'))              return 'gestor-resumen'
+  if (pathname.includes('/gestor/negocios'))             return 'gestor'
+  if (pathname.includes('/gestor/auditoria'))            return 'gestor-auditoria'
+  if (pathname.includes('/gestor/usuarios'))             return 'gestor-usuarios'
+  if (pathname.includes('/gestor/observabilidad'))       return 'gestor-observabilidad'
   if (pathname.includes('/gestor'))                      return 'gestor'
   if (pathname.includes('/dashboard'))                    return 'dashboard'
   return 'locales'
@@ -138,6 +143,10 @@ function Sidebar({ collapsed, onToggle, onClose }) {
       case 'locales':   navigate('/admin'); break
       case 'usuarios':  navigate('/usuarios'); break
       case 'gestor':    navigate('/gestor'); break
+      case 'gestor-resumen':       navigate('/gestor/resumen'); break
+      case 'gestor-auditoria':     navigate('/gestor/auditoria'); break
+      case 'gestor-usuarios':      navigate('/gestor/usuarios'); break
+      case 'gestor-observabilidad': navigate('/gestor/observabilidad'); break
       case 'dashboard': navigate(localId ? `/local/${localId}/dashboard` : '/admin', { state: navState }); break
       case 'pos-mesas':     if (localId) navigate(`/local/${localId}/pos`, { state: navState }); break
       case 'pos-kitchen':   if (localId) navigate(`/local/${localId}/pos/cocina`, { state: navState }); break
@@ -155,7 +164,10 @@ function Sidebar({ collapsed, onToggle, onClose }) {
   const discoverItems = [
     ...(isSuperAdmin ? [{ key: 'locales', label: 'Tus Franquicias', icon: Store }] : []),
     ...(isSuperAdmin ? [{ key: 'gestor', label: 'Gestor de Negocios', icon: Building2 }] : []),
-    ...(isSuperAdmin ? [{ key: 'usuarios', label: 'Usuarios', icon: Users }] : []),
+    ...(isSuperAdmin ? [{ key: 'gestor-resumen', label: 'Resumen Global', icon: LayoutDashboard }] : []),
+    ...(isSuperAdmin ? [{ key: 'gestor-usuarios', label: 'Usuarios', icon: Users }] : []),
+    ...(isSuperAdmin ? [{ key: 'gestor-auditoria', label: 'Auditoría', icon: FileText }] : []),
+    ...(isSuperAdmin ? [{ key: 'gestor-observabilidad', label: 'Observabilidad', icon: BarChart3 }] : []),
     ...(!isWorker && localId ? [{ key: 'dashboard', label: 'Dashboard', icon: LayoutDashboard }] : []),
   ]
 

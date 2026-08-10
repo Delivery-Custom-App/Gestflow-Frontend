@@ -37,3 +37,20 @@ export async function getAuditLog({ businessId, action, limit, offset } = {}, to
   const path = withQuery('/audit', { business_id: businessId, action, limit, offset })
   return apiRequest(path, { token })
 }
+
+export async function getGlobalStats(token) {
+  return apiRequest('/tenant-manager/stats', { token })
+}
+
+export async function getBusinessStats(businessId, token) {
+  return apiRequest(`/tenant-manager/businesses/${businessId}/stats`, { token })
+}
+
+export async function listAllUsers({ role, businessId } = {}, token) {
+  const path = withQuery('/tenant-manager/users', { role, business_id: businessId })
+  return apiRequest(path, { token })
+}
+
+export async function getObservability(token) {
+  return apiRequest('/tenant-manager/observability', { token })
+}
