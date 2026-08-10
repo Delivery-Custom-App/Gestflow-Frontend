@@ -233,13 +233,13 @@ export default function UsersListPage() {
 
   const canDelete = (targetUser) => {
     const me = String(user?.id || '')
-    const myRole = String(userRole || '').toUpperCase()
-    const targetRole = String(targetUser.role || '').toUpperCase()
+    const myRole = String(userRole || '').toUpperCase().replace(/[\s_-]+/g, '')
+    const targetRole = String(targetUser.role || '').toUpperCase().replace(/[\s_-]+/g, '')
     if (me === String(targetUser.id)) return false
     if (targetRole === 'SUPERADMIN') return false
-    if (targetRole === 'ADMIN_NEGOCIO' && myRole !== 'SUPERADMIN') return false
-    if (targetRole === 'ADMIN' && myRole !== 'SUPERADMIN' && myRole !== 'ADMIN_NEGOCIO') return false
-    return myRole === 'SUPERADMIN' || myRole === 'ADMIN_NEGOCIO' || myRole === 'ADMIN'
+    if (targetRole === 'ADMINNEGOCIO' && myRole !== 'SUPERADMIN') return false
+    if (targetRole === 'ADMIN' && myRole !== 'SUPERADMIN' && myRole !== 'ADMINNEGOCIO') return false
+    return myRole === 'SUPERADMIN' || myRole === 'ADMINNEGOCIO' || myRole === 'ADMIN'
   }
 
   const onDelete = async (u) => {

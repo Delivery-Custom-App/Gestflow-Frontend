@@ -11,7 +11,7 @@ import {
   patchSupplier,
 } from '../../lib/providersApi'
 import { useAuth } from '../../context/AuthContext'
-import { isSuperAdminRole } from '../../auth/roleLabel'
+import { isInventoryAdminRole } from '../../utils/inventoryAccess'
 import { formatCLPDisplay as formatMoneyClp } from '../../lib/formatCLP'
 import InventoryShell from './InventoryShell'
 import LoadingSpinner from '../LoadingSpinner'
@@ -52,7 +52,7 @@ function supplierAvatar(name, index) {
 
 function SuppliersKpisDashboard() {
   const { isInventoryAdmin: canAccess, userRole } = useAuth()
-  const canEdit = isSuperAdminRole(userRole)
+  const canEdit = isInventoryAdminRole(userRole)
   const { localId } = useParams()
   const selectedLocal = useSelectedLocal(localId)
 
