@@ -78,23 +78,19 @@ function LocalRoutes() {
   )
 }
 
-/** SUPERADMIN: acceso total — Tus Locales, Usuarios, todos los locales */
+/** SUPERADMIN: solo plataforma (gestor) — sin locales operativos */
 function SuperadminRoutes() {
   return (
     <Routes>
       <Route element={<AdminLayout />}>
-        <Route path="/" element={<Navigate to="/admin" replace />} />
-        <Route path="/admin" element={<AdminDashboard />} />
+        <Route path="/" element={<Navigate to="/gestor" replace />} />
         <Route path="/gestor" element={<TenantManagerPage />} />
         <Route path="/gestor/resumen" element={<TenantManagerDashboardPage />} />
         <Route path="/gestor/negocios/:businessId" element={<TenantDetailPage />} />
         <Route path="/gestor/auditoria" element={<GlobalAuditPage />} />
         <Route path="/gestor/usuarios" element={<AdminUsersPage />} />
         <Route path="/gestor/observabilidad" element={<ObservabilityPage />} />
-        <Route path="/usuarios" element={<UsersListPage />} />
-        <Route path="/usuarios/crear" element={<UserManagementPage />} />
-        {LocalRoutes()}
-        <Route path="*" element={<Navigate to="/admin" replace />} />
+        <Route path="*" element={<Navigate to="/gestor" replace />} />
       </Route>
     </Routes>
   )
