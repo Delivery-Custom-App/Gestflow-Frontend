@@ -16,20 +16,28 @@ const UNITS = [
   { value: 'cucharadita', label: 'CUCHARADITA' },
 ]
 
-// Únicamente estas 2 categorías disponibles para el menú
-const MENU_CATEGORIES = ['Completos', 'Sandwich']
-
-function titleCase(str) {
-  if (!str) return ''
-  return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase()
-}
-
-/** Selector de categoría — solo clic, despliega Completos / Sandwich. */
+/**
+ * Selector de categoría de receta — typeahead sobre el catálogo real de
+ * categorías del local (tabla `categories`, la misma que usan productos).
+ * Filtra mientras se escribe; Enter/clic en una sugerencia resuelve la
+ * categoría existente o crea una nueva vía POST /categories.
+ */
 function MenuCategoryInput({ localId, selectedName, onResolve, disabled, error }) {
+  const [input, setInput]         = useState(selectedName || '')
+  const [categories, setCategories] = useState([])
   const [open, setOpen]           = useState(false)
   const [resolving, setResolving] = useState(false)
   const [resolveErr, setResolveErr] = useState('')
   const wrapperRef = useRef(null)
+
+  useEffect(() => { setInput(selectedName || '') }, [selectedName])
+
+  useEffect(() => {
+    if (!localId) return
+    getCategoriesForLocal(localId)
+      .then((rows) => setCategories(Array.isArray(rows) ? rows : []))
+      .catch(() => setCategories([]))
+  }, [localId])
 
   useEffect(() => {
     const handler = (e) => {
@@ -39,19 +47,27 @@ function MenuCategoryInput({ localId, selectedName, onResolve, disabled, error }
     return () => document.removeEventListener('mousedown', handler)
   }, [])
 
+  const suggestions = input.trim()
+    ? categories.filter((c) => c.name.toLowerCase().includes(input.toLowerCase().trim()))
+    : categories
+
   const resolveCategory = async (name) => {
-    if (!localId) return
+    if (!localId || !name.trim()) return
     setResolving(true)
     setResolveErr('')
     setOpen(false)
     try {
       const existing = await getCategoriesForLocal(localId)
-      const found = (Array.isArray(existing) ? existing : [])
-        .find(c => c.name.toLowerCase() === name.toLowerCase())
+      const existingRows = Array.isArray(existing) ? existing : []
+      setCategories(existingRows)
+      const found = existingRows.find(c => c.name.toLowerCase() === name.toLowerCase())
       if (found) {
+        setInput(found.name)
         onResolve(found.id, found.name)
       } else {
-        const created = await postCategory({ local_id: localId, name, is_active: true })
+        const created = await postCategory({ local_id: localId, name: name.trim(), is_active: true })
+        setCategories((prev) => [...prev, created])
+        setInput(created.name)
         onResolve(created.id, created.name)
       }
     } catch (err) {
@@ -61,42 +77,64 @@ function MenuCategoryInput({ localId, selectedName, onResolve, disabled, error }
     }
   }
 
+  const handleChange = (e) => {
+    setInput(e.target.value)
+    setOpen(true)
+    onResolve('', '')
+  }
+
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      if (!input.trim()) return
+      resolveCategory(suggestions.length > 0 ? suggestions[0].name : input)
+    }
+    if (e.key === 'Escape') setOpen(false)
+  }
+
   return (
     <div ref={wrapperRef} className="relative">
-      <button
-        type="button"
+      <input
+        type="text"
+        value={input}
+        onChange={handleChange}
+        onKeyDown={handleKeyDown}
+        onFocus={() => setOpen(true)}
         disabled={disabled || resolving}
-        onClick={() => setOpen(o => !o)}
-        className={`h-9 w-full rounded-md border px-3 text-sm text-left flex items-center justify-between shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary)/0.3)] disabled:opacity-50 ${
+        placeholder={resolving ? 'Guardando…' : 'Escribe la categoría y pulsa Enter'}
+        autoComplete="off"
+        className={`h-9 w-full rounded-md border px-3 text-sm shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary)/0.3)] disabled:opacity-50 ${
           error ? 'border-red-400' : 'border-[hsl(var(--border))] bg-[hsl(var(--card))] hover:border-[hsl(var(--primary)/0.5)]'
         }`}
-      >
-        <span className={selectedName ? 'text-[hsl(var(--foreground))]' : 'text-[hsl(var(--muted-foreground))]'}>
-          {resolving ? 'Guardando…' : (selectedName || 'Selecciona una categoría')}
-        </span>
-        <svg className={`w-4 h-4 text-[hsl(var(--muted-foreground))] transition-transform ${open ? 'rotate-180' : ''}`}
-          fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-        </svg>
-      </button>
+      />
 
       {open && (
-        <ul className="absolute top-full mt-1 left-0 right-0 z-50 rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--card))] shadow-lg overflow-hidden">
-          {MENU_CATEGORIES.map(cat => (
-            <li key={cat}>
-              <button
-                type="button"
-                onMouseDown={(e) => { e.preventDefault(); resolveCategory(cat) }}
-                className={`w-full text-left px-3 py-2.5 text-sm transition-colors ${
-                  selectedName === cat
-                    ? 'bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))] font-semibold'
-                    : 'hover:bg-[hsl(var(--accent))]'
-                }`}
-              >
-                {cat}
-              </button>
+        <ul className="absolute top-full mt-1 left-0 right-0 z-50 rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--card))] shadow-lg overflow-hidden max-h-44 overflow-y-auto">
+          {suggestions.length > 0 ? (
+            suggestions.map(cat => (
+              <li key={cat.id}>
+                <button
+                  type="button"
+                  onMouseDown={(e) => { e.preventDefault(); resolveCategory(cat.name) }}
+                  className={`w-full text-left px-3 py-2.5 text-sm transition-colors ${
+                    selectedName === cat.name
+                      ? 'bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))] font-semibold'
+                      : 'hover:bg-[hsl(var(--accent))]'
+                  }`}
+                >
+                  {cat.name}
+                </button>
+              </li>
+            ))
+          ) : input.trim() ? (
+            <li className="px-3 py-2 text-sm text-[hsl(var(--muted-foreground))]">
+              Pulsa Enter para crear &ldquo;{input.trim()}&rdquo;
             </li>
-          ))}
+          ) : (
+            <li className="px-3 py-2 text-sm text-[hsl(var(--muted-foreground))]">
+              Escribe para crear una categoría
+            </li>
+          )}
         </ul>
       )}
 

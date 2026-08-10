@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Solo para builds debug: permite trafico HTTP en claro hacia localhost/127.0.0.1
+  via "adb reverse tcp:8000 tcp:8000", para hablar con el backend local sin HTTPS.
+  No se aplica a release.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application android:usesCleartextTraffic="true" />
+</manifest>
