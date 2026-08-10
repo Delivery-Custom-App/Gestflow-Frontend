@@ -12,13 +12,15 @@ import { Button } from '@/components/ui/button'
 const ROLES = [
   { value: 'EMPLEADO',   label: 'Empleado — solo POS' },
   { value: 'ADMIN',      label: 'Admin — su local (inventario, etc.)' },
+  { value: 'ADMIN_NEGOCIO', label: 'Dueño de negocio — toda la franquicia' },
   { value: 'SUPERADMIN', label: 'Superadmin — acceso total' },
 ]
 
-const HIGH_ROLES = new Set(['ADMIN', 'SUPERADMIN'])
+const HIGH_ROLES = new Set(['ADMIN', 'ADMIN_NEGOCIO', 'SUPERADMIN'])
 
 const ROLE_WARNING = {
   ADMIN:      'Este usuario podrá administrar inventario, proveedores y reportes de su local.',
+  ADMIN_NEGOCIO: 'Este usuario será el dueño de la franquicia y podrá crear sub-administradores y ver toda su red.',
   SUPERADMIN: 'Este usuario tendrá acceso total al sistema, incluyendo todos los locales y configuraciones críticas.',
 }
 
