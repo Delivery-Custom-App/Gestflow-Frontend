@@ -16,7 +16,7 @@ import {
 import { ExpandableTabs } from './ui/expandable-tabs'
 import CoachMark from './onboarding/CoachMark'
 import { useOnboarding } from '../context/OnboardingContext'
-import { isSuperAdminRole } from '../auth/roleLabel'
+import { isSuperAdminRole, isAdminNegocioRole } from '../auth/roleLabel'
 import { WORKER_ROLES } from '../constants/roles'
 import { formatShortAddress } from '../lib/formatAddress'
 
@@ -95,6 +95,7 @@ function Sidebar({ collapsed, onToggle, onClose }) {
   const { user, userRole, logout } = useAuth()
   const { restart: restartTour } = useOnboarding()
   const isSuperAdmin = isSuperAdminRole(userRole)
+  const isOwner = isAdminNegocioRole(userRole)
   const isWorker = WORKER_ROLES.includes(userRole)
   const navigate = useNavigate()
   const { pathname, state: locState } = useLocation()
@@ -162,12 +163,13 @@ function Sidebar({ collapsed, onToggle, onClose }) {
   }
 
   const discoverItems = [
-    ...(isSuperAdmin ? [{ key: 'locales', label: 'Tus Franquicias', icon: Store }] : []),
+    ...((isSuperAdmin || isOwner) ? [{ key: 'locales', label: 'Tus Franquicias', icon: Store }] : []),
     ...(isSuperAdmin ? [{ key: 'gestor', label: 'Gestor de Negocios', icon: Building2 }] : []),
     ...(isSuperAdmin ? [{ key: 'gestor-resumen', label: 'Resumen Global', icon: LayoutDashboard }] : []),
     ...(isSuperAdmin ? [{ key: 'gestor-usuarios', label: 'Usuarios', icon: Users }] : []),
     ...(isSuperAdmin ? [{ key: 'gestor-auditoria', label: 'Auditoría', icon: FileText }] : []),
     ...(isSuperAdmin ? [{ key: 'gestor-observabilidad', label: 'Observabilidad', icon: BarChart3 }] : []),
+    ...((isSuperAdmin || isOwner) ? [{ key: 'usuarios', label: 'Usuarios', icon: Users }] : []),
     ...(!isWorker && localId ? [{ key: 'dashboard', label: 'Dashboard', icon: LayoutDashboard }] : []),
   ]
 

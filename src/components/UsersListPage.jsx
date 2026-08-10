@@ -13,11 +13,17 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useNavigate } from 'react-router-dom'
 
-// Roles ordenados Superadmin → Admin → Trabajador
+// Roles ordenados Superadmin → Dueño → Admin → Trabajador
 const ROLES_SUPERADMIN = [
   { value: 'SUPERADMIN', label: 'Super Administrador' },
+  { value: 'ADMIN_NEGOCIO', label: 'Dueño de Negocio' },
   { value: 'ADMIN',      label: 'Administrador' },
   { value: 'EMPLEADO',   label: 'Trabajador' },
+]
+// Dueño de negocio puede crear sub-admins y trabajadores de su franquicia
+const ROLES_OWNER = [
+  { value: 'ADMIN',    label: 'Administrador' },
+  { value: 'EMPLEADO', label: 'Trabajador' },
 ]
 // Admin solo puede crear Trabajadores
 const ROLES_ADMIN = [
@@ -27,6 +33,7 @@ const ROLES_ADMIN = [
 function roleBadge(role) {
   const r = String(role || '').toUpperCase()
   if (r === 'SUPERADMIN') return <Badge>{role}</Badge>
+  if (r === 'ADMIN_NEGOCIO') return <Badge>{role}</Badge>
   if (r === 'ADMIN')      return <Badge variant="info">{role}</Badge>
   if (r === 'EMPLEADO')   return <Badge variant="secondary">{role}</Badge>
   return <Badge variant="outline">{role}</Badge>
@@ -39,7 +46,11 @@ function CreateUserDrawer({ isOpen, onClose, onSuccess, locales, localesLoading,
   const [err, setErr]         = useState('')
   const [showPwd, setShowPwd] = useState(false)
 
-  const availableRoles = isSuperAdminRole(userRole) ? ROLES_SUPERADMIN : ROLES_ADMIN
+  const availableRoles = isSuperAdminRole(userRole)
+    ? ROLES_SUPERADMIN
+    : String(userRole || '').toLowerCase().replace(/\s+/g, '') === 'adminnegocio'
+      ? ROLES_OWNER
+      : ROLES_ADMIN
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }))
 
   const reset = () => {
@@ -222,12 +233,13 @@ export default function UsersListPage() {
 
   const canDelete = (targetUser) => {
     const me = String(user?.id || '')
-    const myRole = String(userRole || '').toUpperCase()
-    const targetRole = String(targetUser.role || '').toUpperCase()
+    const myRole = String(userRole || '').toUpperCase().replace(/[\s_-]+/g, '')
+    const targetRole = String(targetUser.role || '').toUpperCase().replace(/[\s_-]+/g, '')
     if (me === String(targetUser.id)) return false
     if (targetRole === 'SUPERADMIN') return false
-    if (targetRole === 'ADMIN' && myRole !== 'SUPERADMIN') return false
-    return myRole === 'SUPERADMIN' || myRole === 'ADMIN'
+    if (targetRole === 'ADMINNEGOCIO' && myRole !== 'SUPERADMIN') return false
+    if (targetRole === 'ADMIN' && myRole !== 'SUPERADMIN' && myRole !== 'ADMINNEGOCIO') return false
+    return myRole === 'SUPERADMIN' || myRole === 'ADMINNEGOCIO' || myRole === 'ADMIN'
   }
 
   const onDelete = async (u) => {

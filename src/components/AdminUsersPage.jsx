@@ -15,6 +15,7 @@ function formatDate(value) {
 
 const ROLE_BADGE = {
   SUPERADMIN: 'bg-violet-100 text-violet-700 border-violet-200',
+  ADMIN_NEGOCIO: 'bg-indigo-100 text-indigo-700 border-indigo-200',
   ADMIN: 'bg-blue-100 text-blue-700 border-blue-200',
   CAJERO: 'bg-emerald-100 text-emerald-700 border-emerald-200',
   EMPLEADO: 'bg-stone-100 text-stone-700 border-stone-200',
@@ -66,8 +67,9 @@ export default function AdminUsersPage() {
         (u.business_name || '').toLowerCase().includes(q))
     : users
 
-  const admins = filtered.filter((u) => String(u.role || '').toUpperCase() === 'ADMIN' || String(u.role || '').toUpperCase() === 'SUPERADMIN')
-  const others = filtered.filter((u) => !(String(u.role || '').toUpperCase() === 'ADMIN' || String(u.role || '').toUpperCase() === 'SUPERADMIN'))
+  const isOwnerOrAdmin = (u) => ['ADMIN_NEGOCIO', 'ADMIN', 'SUPERADMIN'].includes(String(u.role || '').toUpperCase())
+  const admins = filtered.filter((u) => isOwnerOrAdmin(u))
+  const others = filtered.filter((u) => !isOwnerOrAdmin(u))
 
   const renderRows = (rows) =>
     rows.length === 0 ? (
@@ -142,6 +144,7 @@ export default function AdminUsersPage() {
           >
             <option value="">Todos los roles</option>
             <option value="SUPERADMIN">SUPERADMIN</option>
+            <option value="ADMIN_NEGOCIO">ADMIN_NEGOCIO</option>
             <option value="ADMIN">ADMIN</option>
             <option value="CAJERO">CAJERO</option>
             <option value="EMPLEADO">EMPLEADO</option>

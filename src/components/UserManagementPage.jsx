@@ -12,13 +12,15 @@ import { Button } from '@/components/ui/button'
 const ROLES = [
   { value: 'EMPLEADO',   label: 'Empleado — solo POS' },
   { value: 'ADMIN',      label: 'Admin — su local (inventario, etc.)' },
+  { value: 'ADMIN_NEGOCIO', label: 'Dueño de negocio — toda la franquicia' },
   { value: 'SUPERADMIN', label: 'Superadmin — acceso total' },
 ]
 
-const HIGH_ROLES = new Set(['ADMIN', 'SUPERADMIN'])
+const HIGH_ROLES = new Set(['ADMIN', 'ADMIN_NEGOCIO', 'SUPERADMIN'])
 
 const ROLE_WARNING = {
   ADMIN:      'Este usuario podrá administrar inventario, proveedores y reportes de su local.',
+  ADMIN_NEGOCIO: 'Este usuario será el dueño de la franquicia y podrá crear sub-administradores y ver toda su red.',
   SUPERADMIN: 'Este usuario tendrá acceso total al sistema, incluyendo todos los locales y configuraciones críticas.',
 }
 
@@ -43,7 +45,12 @@ export default function UserManagementPage() {
   const [ok, setOk] = useState('')
   const [err, setErr] = useState('')
 
-  const availableRoles = isSuperAdminRole(userRole) ? ROLES : ROLES.filter((r) => r.value !== 'SUPERADMIN')
+  const isOwnerRole = String(userRole || '').toLowerCase().replace(/[\s_-]+/g, '') === 'adminnegocio'
+  const availableRoles = isSuperAdminRole(userRole)
+    ? ROLES
+    : isOwnerRole
+      ? ROLES.filter((r) => r.value === 'ADMIN' || r.value === 'EMPLEADO')
+      : ROLES.filter((r) => r.value === 'EMPLEADO')
   const needsConfirm = HIGH_ROLES.has(form.role)
 
   if (!isInventoryAdminRole(userRole)) {
@@ -77,7 +84,7 @@ export default function UserManagementPage() {
     setOk(''); setErr('')
     if (!form.name || !form.email || !form.password) { setErr('Completa nombre, correo y contraseña.'); return }
     if (form.password.length < 6) { setErr('La contraseña debe tener al menos 6 caracteres.'); return }
-    if (form.role !== 'SUPERADMIN' && !form.local_id) { setErr('Selecciona el local al que pertenece este usuario.'); return }
+    if (!['SUPERADMIN', 'ADMIN_NEGOCIO'].includes(form.role) && !form.local_id) { setErr('Selecciona el local al que pertenece este usuario.'); return }
     if (needsConfirm && !roleConfirmed) { setErr('Debes confirmar la asignación de este rol antes de continuar.'); return }
     setLoading(true)
     try {
@@ -162,7 +169,7 @@ export default function UserManagementPage() {
                 </div>
               </div>
 
-              {form.role !== 'SUPERADMIN' && (
+              {!['SUPERADMIN', 'ADMIN_NEGOCIO'].includes(form.role) && (
                 <div>
                   <label className={labelCls}>Local asignado</label>
                   <select className={inputCls} value={form.local_id} onChange={set('local_id')} disabled={localesLoading}>

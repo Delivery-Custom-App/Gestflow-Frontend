@@ -30,7 +30,7 @@ const AdminUsersPage = lazy(() => import('../components/AdminUsersPage'))
 const ObservabilityPage = lazy(() => import('../components/ObservabilityPage'))
 import { OnboardingProvider } from '../context/OnboardingContext'
 import { WORKER_ROLES } from '../constants/roles'
-import { isSuperAdminRole } from '../auth/roleLabel'
+import { isSuperAdminRole, isAdminNegocioRole } from '../auth/roleLabel'
 import { useAuth } from '../context/AuthContext'
 
 const ROUTER_FUTURE_FLAGS = { v7_startTransition: true, v7_relativeSplatPath: true }
@@ -91,6 +91,22 @@ function SuperadminRoutes() {
         <Route path="/gestor/auditoria" element={<GlobalAuditPage />} />
         <Route path="/gestor/usuarios" element={<AdminUsersPage />} />
         <Route path="/gestor/observabilidad" element={<ObservabilityPage />} />
+        <Route path="/usuarios" element={<UsersListPage />} />
+        <Route path="/usuarios/crear" element={<UserManagementPage />} />
+        {LocalRoutes()}
+        <Route path="*" element={<Navigate to="/admin" replace />} />
+      </Route>
+    </Routes>
+  )
+}
+
+/** ADMIN_NEGOCIO (dueño de franquicia): Tus Locales + Usuarios + todos sus locales */
+function OwnerRoutes() {
+  return (
+    <Routes>
+      <Route element={<AdminLayout />}>
+        <Route path="/" element={<Navigate to="/admin" replace />} />
+        <Route path="/admin" element={<AdminDashboard />} />
         <Route path="/usuarios" element={<UsersListPage />} />
         <Route path="/usuarios/crear" element={<UserManagementPage />} />
         {LocalRoutes()}
@@ -162,6 +178,8 @@ export default function AuthenticatedApp() {
   let routes
   if (isSuperAdminRole(userRole)) {
     routes = <SuperadminRoutes />
+  } else if (isAdminNegocioRole(userRole)) {
+    routes = <OwnerRoutes />
   } else if (WORKER_ROLES.includes(userRole)) {
     routes = <WorkerRoutes assignedLocalId={assignedLocalId} />
   } else {
