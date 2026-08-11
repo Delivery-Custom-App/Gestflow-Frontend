@@ -5,7 +5,7 @@ import {
   ChevronDown, ChevronUp, Wifi, Eye, EyeOff,
   CheckCircle2, AlertCircle, ExternalLink, Link2,
 } from 'lucide-react'
-import { apiRequest, getAuthContext } from '../../lib/apiClient'
+import { apiRequest, getAuthContext, setPointDeviceMode } from '../../lib/apiClient'
 import { toast } from 'sonner'
 
 const API_BASE = import.meta.env.VITE_API_URL || ''
@@ -47,6 +47,7 @@ export default function MPConfigDrawer({ localId, onClose, open = true }) {
   const [showManual, setShowManual]   = useState(false)
   const [manualForm, setManualForm]   = useState(EMPTY_MANUAL)
   const [saving, setSaving]           = useState(false)
+  const [togglingMode, setTogglingMode] = useState(null)
 
   useEffect(() => {
     if (open) fetchAll()
@@ -238,6 +239,20 @@ export default function MPConfigDrawer({ localId, onClose, open = true }) {
       await fetchAll()
     } catch (err) {
       toast.error('Error al desvincular: ' + err.message)
+    }
+  }
+
+  async function handleToggleMode(pos) {
+    const nextMode = pos.operating_mode === 'PDV' ? 'STANDALONE' : 'PDV'
+    setTogglingMode(pos.id)
+    try {
+      await setPointDeviceMode(pos.mp_pos_id, nextMode)
+      toast.success(nextMode === 'PDV' ? 'Modo PDV activado' : 'Modo STANDALONE activado')
+      await fetchAll()
+    } catch (err) {
+      toast.error('Error al cambiar el modo: ' + err.message)
+    } finally {
+      setTogglingMode(null)
     }
   }
 
@@ -550,6 +565,19 @@ export default function MPConfigDrawer({ localId, onClose, open = true }) {
                           ? 'Gestflow envía el cobro directamente a la terminal.'
                           : 'Ingresa el monto manualmente en el lector. Gestflow detecta el pago aprobado por monto y ventana de tiempo.'}
                       </p>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleToggleMode(pos)}
+                        disabled={togglingMode === pos.id}
+                        className="w-full h-8 text-xs"
+                      >
+                        {togglingMode === pos.id
+                          ? 'Cambiando...'
+                          : pos.operating_mode === 'PDV'
+                            ? 'Volver a STANDALONE'
+                            : 'Activar modo PDV'}
+                      </Button>
                     </div>
                   </li>
                 ))}

@@ -312,3 +312,11 @@ export async function cancelPointCharge(orderId) {
 export async function listPointDevices() {
   return apiRequest('/payments/point/devices')
 }
+
+/** Cambia el modo de operación del terminal entre PDV y STANDALONE. */
+export async function setPointDeviceMode(deviceId, operatingMode) {
+  return apiRequest(`/payments/point/devices/${deviceId}/mode`, {
+    method: 'PATCH',
+    body: { operating_mode: operatingMode },
+  })
+}
