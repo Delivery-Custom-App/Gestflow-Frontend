@@ -537,12 +537,18 @@ export default function MPConfigDrawer({ localId, onClose, open = true }) {
                     <div className="rounded-lg bg-[hsl(var(--muted)/0.35)] p-2 space-y-2">
                       <div className="flex items-center justify-between gap-2">
                         <span className="text-xs text-[hsl(var(--muted-foreground))]">Modo de cobro</span>
-                        <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">
-                          STANDALONE
+                        <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${
+                          pos.operating_mode === 'PDV'
+                            ? 'bg-emerald-100 text-emerald-700'
+                            : 'bg-blue-100 text-blue-700'
+                        }`}>
+                          {pos.operating_mode === 'PDV' ? 'PDV' : 'STANDALONE'}
                         </span>
                       </div>
                       <p className="text-xs text-[hsl(var(--muted-foreground))]">
-                        Ingresa el monto manualmente en el lector. Gestflow detecta el pago aprobado por monto y ventana de tiempo.
+                        {pos.operating_mode === 'PDV'
+                          ? 'Gestflow envía el cobro directamente a la terminal.'
+                          : 'Ingresa el monto manualmente en el lector. Gestflow detecta el pago aprobado por monto y ventana de tiempo.'}
                       </p>
                     </div>
                   </li>
