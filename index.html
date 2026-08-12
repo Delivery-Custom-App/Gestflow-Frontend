@@ -11,6 +11,19 @@
   </head>
   <body>
     <div id="root"></div>
+    <script>
+      // Aplica tema guardado ANTES del render (evita flash y estado obsoleto)
+      ;(function () {
+        try {
+          var p = localStorage.getItem('palette') || 'rutek'
+          var t = localStorage.getItem('theme')
+          var root = document.documentElement
+          root.setAttribute('data-palette', p)
+          if (t === 'dark') root.classList.add('dark')
+          else root.classList.remove('dark')
+        } catch (e) {}
+      })()
+    </script>
 <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>
