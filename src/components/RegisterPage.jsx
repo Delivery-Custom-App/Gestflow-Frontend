@@ -78,7 +78,7 @@ export default function RegisterPage({ onShowLogin }) {
           <h1 className="text-4xl font-extrabold tracking-tight text-[hsl(var(--primary))]">SibaGestion</h1>
         </div>
         <section className="relative w-full max-w-md rounded-2xl border border-[hsl(var(--primary-border,150,50%,75%))] bg-white/80 p-8 shadow-xl backdrop-blur-sm text-center flex flex-col gap-4">
-          <div className="text-5xl text-emerald-500">✓</div>
+          <div className="text-5xl text-[hsl(var(--primary))]">✓</div>
           <h2 className="text-xl font-bold text-[hsl(var(--foreground))]">¡Cuenta creada con éxito!</h2>
           <p className="text-sm text-[hsl(var(--muted-foreground))]">
             Tu cuenta ha sido registrada. Ya puedes iniciar sesión con tu correo y contraseña.
@@ -100,7 +100,7 @@ export default function RegisterPage({ onShowLogin }) {
           <Building2 className="h-8 w-8 text-white" />
         </div>
         <h1 className="text-4xl font-extrabold tracking-tight text-[hsl(var(--primary))]">SibaGestion</h1>
-        <p className="text-base text-emerald-500">Sistema de Gestión Integral</p>
+        <p className="text-base text-[hsl(var(--primary))]">Sistema de Gestión Integral</p>
       </div>
 
       <section

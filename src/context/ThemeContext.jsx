@@ -6,9 +6,17 @@ export function ThemeProvider({ children }) {
   const [darkMode, setDarkMode] = useState(() => {
     try {
       const stored = window.localStorage.getItem('theme')
-      return stored === null ? true : stored === 'dark'
+      return stored === null ? false : stored === 'dark'
     } catch {
-      return true
+      return false
+    }
+  })
+
+  const [palette, setPalette] = useState(() => {
+    try {
+      return window.localStorage.getItem('palette') || 'rutek'
+    } catch {
+      return 'rutek'
     }
   })
 
@@ -24,10 +32,18 @@ export function ThemeProvider({ children }) {
     } catch {}
   }, [darkMode])
 
+  useEffect(() => {
+    const root = document.documentElement
+    root.setAttribute('data-palette', palette)
+    try {
+      window.localStorage.setItem('palette', palette)
+    } catch {}
+  }, [palette])
+
   const toggleDarkMode = () => setDarkMode((v) => !v)
 
   return (
-    <ThemeContext.Provider value={{ darkMode, toggleDarkMode }}>
+    <ThemeContext.Provider value={{ darkMode, setDarkMode, toggleDarkMode, palette, setPalette }}>
       {children}
     </ThemeContext.Provider>
   )

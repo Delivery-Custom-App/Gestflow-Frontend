@@ -250,7 +250,7 @@ function KpiDetailDrawer({ open, onClose, dashboard, orders, dashLoading }) {
                       <XAxis dataKey="label" tick={{ fontSize: 9, fill: 'hsl(var(--muted-foreground))' }} tickLine={false} axisLine={false} interval={0} angle={-35} textAnchor="end" height={40} />
                       <YAxis tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} tick={{ fontSize: 9, fill: 'hsl(var(--muted-foreground))' }} tickLine={false} axisLine={false} width={36} />
                       <Tooltip formatter={(v) => [formatMoney(v), 'Ventas']} contentStyle={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: 8, fontSize: 11 }} />
-                      <Bar dataKey="total" fill="#16a34a" radius={[3, 3, 0, 0]} maxBarSize={36} />
+                      <Bar dataKey="total" fill="#16a34a" className="chart-brand-fill" radius={[3, 3, 0, 0]} maxBarSize={36} />
                     </BarChart>
                   </ResponsiveContainer>
                 ) : <p className="text-xs text-[hsl(var(--muted-foreground))] text-center py-3">Sin ventas hoy aún.</p>}
@@ -937,8 +937,9 @@ function LocalDashboard() {
                               dataKey="efectivo"
                               name="efectivo"
                               stroke="#16a34a"
+                              className="chart-brand-stroke"
                               strokeWidth={2}
-                              dot={{ r: 3, fill: '#16a34a' }}
+                              dot={{ r: 3, className: 'chart-brand-fill', fill: '#16a34a' }}
                               activeDot={{ r: 5 }}
                             />
                             <Line
