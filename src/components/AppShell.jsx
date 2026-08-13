@@ -11,7 +11,7 @@ import {
   DollarSign, FileText, BarChart3, Wallet, Bell, Gift, PlusCircle,
   Table2, ChefHat,
   Package, Truck, ShoppingCart, BookMarked, PackageOpen, UtensilsCrossed,
-  LogOut, Utensils, HelpCircle, Phone, Mail, Moon, Sun, Users, RotateCcw, MapPin, Building2, Settings,
+  LogOut, Utensils, HelpCircle, Phone, Mail, Users, RotateCcw, MapPin, Building2, Settings,
 } from 'lucide-react'
 import { ExpandableTabs } from './ui/expandable-tabs'
 import CoachMark from './onboarding/CoachMark'
@@ -610,7 +610,7 @@ function Sidebar({ collapsed, onToggle, onClose }) {
 }
 
 /* ── TopBar ─────────────────────────────────────────────────────── */
-function TopBar({ localId, darkMode, toggleDarkMode }) {
+function TopBar({ localId }) {
   const { userRole } = useAuth()
   const { locales } = useLocals()
   const { state: locState } = useLocation()
@@ -630,18 +630,14 @@ function TopBar({ localId, darkMode, toggleDarkMode }) {
   const showBell = Boolean(localId && !isWorkerRole)
   const tabs = [
     ...(showBell ? [{ title: 'Notificaciones', icon: Bell, badge: pendingCount || null }] : []),
-    { title: darkMode ? 'Modo Noche' : 'Modo Día', icon: darkMode ? Moon : Sun },
   ]
 
-  const bellIdx  = showBell ? 0 : -1
-  const themeIdx = showBell ? 1 : 0
+  const bellIdx = showBell ? 0 : -1
 
   const handleTabChange = (index) => {
     if (index === null) return
     if (index === bellIdx) {
       navigate(`/local/${localId}/administrativo/alertas`, { state: navState })
-    } else if (index === themeIdx) {
-      toggleDarkMode()
     }
   }
 
@@ -667,14 +663,16 @@ function TopBar({ localId, darkMode, toggleDarkMode }) {
       </div>
 
       {/* Right: expandable tab controls */}
-      <div className="shrink-0">
-        <ExpandableTabs
-          tabs={tabs}
-          activeColor="text-[hsl(var(--primary))]"
-          onChange={handleTabChange}
-          className="border-[hsl(var(--border))] bg-[hsl(var(--card))]"
-        />
-      </div>
+      {tabs.length > 0 && (
+        <div className="shrink-0">
+          <ExpandableTabs
+            tabs={tabs}
+            activeColor="text-[hsl(var(--primary))]"
+            onChange={handleTabChange}
+            className="border-[hsl(var(--border))] bg-[hsl(var(--card))]"
+          />
+        </div>
+      )}
     </div>
   )
 }
@@ -685,7 +683,6 @@ function AppShell() {
     try { return window.localStorage.getItem('appSidebarCollapsed') === '1' } catch { return false }
   })
   const [mobileOpen, setMobileOpen] = useState(false)
-  const { darkMode, toggleDarkMode } = useTheme()
 
   const { pathname } = useLocation()
   const localIdMatch = pathname.match(/\/local\/([^/]+)/)
@@ -737,7 +734,7 @@ function AppShell() {
 
       {/* Contenido principal */}
       <div className="flex-1 min-w-0 flex flex-col overflow-hidden bg-[hsl(var(--background))]">
-        <TopBar localId={localId} darkMode={darkMode} toggleDarkMode={toggleDarkMode} />
+        <TopBar localId={localId} />
         <Outlet />
       </div>
 
