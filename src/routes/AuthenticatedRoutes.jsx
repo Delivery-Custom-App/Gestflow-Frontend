@@ -20,6 +20,8 @@ const RecipesPage = lazy(() => import('../components/inventory/recipes/RecipesPa
 const POSModule = lazy(() => import('../components/pos/POSModule'))
 const MesaDetail = lazy(() => import('../components/pos/MesaDetail'))
 const ReportesPage = lazy(() => import('../components/pos/ReportesPage'))
+const VentaDirectaView = lazy(() => import('../components/pos/VentaDirectaView'))
+const RegistrarProductoView = lazy(() => import('../components/pos/RegistrarProductoView'))
 const UserManagementPage = lazy(() => import('../components/UserManagementPage'))
 const UsersListPage = lazy(() => import('../components/UsersListPage'))
 const TenantManagerPage = lazy(() => import('../components/TenantManagerPage'))
@@ -31,6 +33,7 @@ const ObservabilityPage = lazy(() => import('../components/ObservabilityPage'))
 import { OnboardingProvider } from '../context/OnboardingContext'
 import { WORKER_ROLES } from '../constants/roles'
 import { isSuperAdminRole, isAdminNegocioRole } from '../auth/roleLabel'
+import { isDirectSaleDemoUser } from '../constants/demoMode'
 import { useAuth } from '../context/AuthContext'
 
 const ROUTER_FUTURE_FLAGS = { v7_startTransition: true, v7_relativeSplatPath: true }
@@ -72,6 +75,8 @@ function LocalRoutes() {
       <Route path="/local/:localId/pos/cocina" element={<POSModule />} />
       <Route path="/local/:localId/pos/reportes" element={<ReportesPage />} />
       <Route path="/local/:localId/pos/mesa/:mesaId" element={<MesaDetail />} />
+      <Route path="/local/:localId/pos/venta-directa" element={<VentaDirectaView />} />
+      <Route path="/local/:localId/pos/registrar-producto" element={<RegistrarProductoView />} />
       <Route path="/local/:localId/dashboard" element={<LocalDashboard />} />
       <Route path="/local/:localId" element={<LocalModulesHomeRedirect />} />
     </>
@@ -137,16 +142,26 @@ function AdminRoutes({ assignedLocalId }) {
 
 /** TRABAJADOR: solo POS de su local asignado */
 function WorkerRoutes({ assignedLocalId }) {
-  const home = assignedLocalId ? `/local/${assignedLocalId}/pos` : '/'
+  const { user } = useAuth()
+  const isDirectSaleDemo = isDirectSaleDemoUser(user?.email)
+  const home = assignedLocalId
+    ? `/local/${assignedLocalId}/pos${isDirectSaleDemo ? '/venta-directa' : ''}`
+    : '/'
 
   if (assignedLocalId) {
     return (
       <Routes>
         <Route element={<AdminLayout />}>
           <Route path="/" element={<Navigate to={home} replace />} />
-          <Route path="/local/:localId/pos" element={<POSModule />} />
+          <Route
+            path="/local/:localId/pos"
+            element={isDirectSaleDemo ? <Navigate to={home} replace /> : <POSModule />}
+          />
           <Route path="/local/:localId/pos/cocina" element={<POSModule />} />
           <Route path="/local/:localId/pos/mesa/:mesaId" element={<MesaDetail />} />
+          <Route path="/local/:localId/pos/venta-directa" element={<VentaDirectaView />} />
+          <Route path="/local/:localId/pos/registrar-producto" element={<RegistrarProductoView />} />
+          <Route path="/local/:localId/administrativo/:sectionId?" element={<AdministrativeModule />} />
           <Route path="*" element={<Navigate to={home} replace />} />
         </Route>
       </Routes>
@@ -162,6 +177,8 @@ function WorkerRoutes({ assignedLocalId }) {
         <Route path="/local/:localId/pos" element={<POSModule />} />
         <Route path="/local/:localId/pos/cocina" element={<POSModule />} />
         <Route path="/local/:localId/pos/mesa/:mesaId" element={<MesaDetail />} />
+        <Route path="/local/:localId/pos/venta-directa" element={<VentaDirectaView />} />
+        <Route path="/local/:localId/administrativo/:sectionId?" element={<AdministrativeModule />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>

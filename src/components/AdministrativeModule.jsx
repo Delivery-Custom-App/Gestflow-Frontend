@@ -279,7 +279,6 @@ function DashboardContent({ dashboard, loading, error }) {
   const wc         = dashboard?.week_comparison || null
   const payments   = Array.isArray(dashboard?.payment_breakdown) ? dashboard.payment_breakdown : []
   const peakHour   = dashboard?.peak_hour != null ? `${dashboard.peak_hour}:00 – ${dashboard.peak_hour + 1}:00` : '—'
-  const cancelRate = toNumber(dashboard?.cancellation_rate).toFixed(1)
   const weekChange = wc ? toNumber(wc.change_pct) : null
   const weekSign   = weekChange !== null ? (weekChange >= 0 ? '+' : '') : ''
 
@@ -300,9 +299,7 @@ function DashboardContent({ dashboard, loading, error }) {
       {/* Fila 2 — métricas operativas */}
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <KpiCard label="Ticket Promedio"   value={formatMoney(dashboard?.avg_ticket)}        sub="Por orden este mes" accent="blue" />
-        <KpiCard label="Cancelaciones"     value={`${cancelRate}%`}                          sub="Órdenes canceladas mes" accent="red" />
         <KpiCard label="Stock Crítico"     value={toNumber(dashboard?.stock_critical_count)} sub={`${toNumber(dashboard?.stock_out_count)} sin stock`} accent="warning" />
-        <KpiCard label="Mesa Más Activa"   value={dashboard?.top_mesa_name || '—'}           sub="Mayor nº órdenes mes" accent="purple" />
       </div>
 
       {/* Fila 3 — meta + cajas */}

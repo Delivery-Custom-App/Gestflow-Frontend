@@ -221,10 +221,16 @@ export async function listPrinters(localId) {
   return apiRequest(`/printers?local_id=${localId}`)
 }
 
-export async function createPrinter({ local_id, name, model, ip_address, port, is_active }) {
+export async function createPrinter({ local_id, name, model, connection_type, ip_address, port, bluetooth_name, is_active }) {
   return apiRequest('/printers', {
     method: 'POST',
-    body: { local_id, name, model, ip_address, port: Number(port), is_active },
+    body: {
+      local_id, name, model, connection_type,
+      ip_address: connection_type === 'bluetooth' ? null : ip_address,
+      port: connection_type === 'bluetooth' ? null : Number(port),
+      bluetooth_name: connection_type === 'bluetooth' ? (bluetooth_name || null) : null,
+      is_active,
+    },
   })
 }
 
