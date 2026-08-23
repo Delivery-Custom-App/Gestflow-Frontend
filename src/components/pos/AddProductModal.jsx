@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useOrderItems } from '../../hooks/useOrderItems'
-import { apiRequest } from '../../lib/apiClient'
+import { createOrder } from '../../lib/salesApi'
+import { useCajaActiva } from '../../hooks/useCajaActiva'
 import {
   Dialog,
   DialogContent,
@@ -18,6 +19,7 @@ import { Label } from '@/components/ui/label'
  */
 export default function AddProductModal({ orderId, mesaId, localId, onClose, onProductAdded, products = [] }) {
   const [actualOrderId, setActualOrderId] = useState(orderId)
+  const { cajaId } = useCajaActiva(localId)
   const { createItem, loading: loadingItem, error: errorItem } = useOrderItems(actualOrderId)
   const [selectedProduct, setSelectedProduct] = useState(null)
   const [quantity, setQuantity] = useState(1)
@@ -40,15 +42,12 @@ export default function AddProductModal({ orderId, mesaId, localId, onClose, onP
     setLocalError(null)
 
     try {
-      const newOrder = await apiRequest('/orders', {
-        method: 'POST',
-        body: {
-          local_id: localId,
-          mesa_id: mesaId,
-          source: 'dine-in',
-          payment_method: 'CASH',
-          items: [],
-        },
+      const newOrder = await createOrder({
+        local_id: localId,
+        mesa_id: mesaId,
+        caja_id: cajaId || null,
+        source: 'dine_in',
+        items: [],
       })
       setActualOrderId(newOrder.id)
       return true

@@ -14,6 +14,7 @@ import PrinterConfigModal from './PrinterConfigModal'
 import MPConfigDrawer from './MPConfigDrawer'
 import { useAuth } from '../../context/AuthContext'
 import { useCajaActiva } from '../../hooks/useCajaActiva'
+import { isV2FeatureEnabled } from '../../lib/v2Features'
 import { CreditCard, PlusCircle, Printer } from 'lucide-react'
 
 export default function POSModule() {
@@ -133,7 +134,10 @@ export default function POSModule() {
         {/* Fila de acciones — solo visible en vista mesas */}
         {activeView === 'mesas' && !selectedOrdenMesa && !isWorker && (
           <div className="mb-5">
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className={`grid grid-cols-1 gap-3 ${
+              (isV2FeatureEnabled('mpConfig') || isV2FeatureEnabled('printers')) ? 'sm:grid-cols-3' : 'sm:grid-cols-1 sm:max-w-sm'
+            }`}>
+              {isV2FeatureEnabled('mpConfig') && (
               <button
                 onClick={() => setShowMPConfig(true)}
                 className="min-h-[86px] rounded-2xl border border-[hsl(var(--border))] border-l-4 border-l-blue-700 bg-[hsl(var(--card))] px-4 py-3 text-left text-[hsl(var(--foreground))] shadow-sm ring-1 ring-black/5 transition hover:bg-[hsl(var(--muted)/0.45)] active:scale-[0.99] focus:outline-none focus:ring-2 focus:ring-blue-500/60"
@@ -150,6 +154,8 @@ export default function POSModule() {
                   </span>
                 </span>
               </button>
+              )}
+              {isV2FeatureEnabled('printers') && (
               <button
                 onClick={() => setShowPrinterConfig(true)}
                 className="min-h-[86px] rounded-2xl border border-[hsl(var(--border))] border-l-4 border-l-amber-700 bg-[hsl(var(--card))] px-4 py-3 text-left text-[hsl(var(--foreground))] shadow-sm ring-1 ring-black/5 transition hover:bg-[hsl(var(--muted)/0.45)] active:scale-[0.99] focus:outline-none focus:ring-2 focus:ring-amber-500/60"
@@ -166,6 +172,7 @@ export default function POSModule() {
                   </span>
                 </span>
               </button>
+              )}
               <button
                 onClick={() => setShowModal(true)}
                 className="min-h-[86px] rounded-2xl border border-[hsl(var(--border))] border-l-4 border-l-emerald-700 bg-[hsl(var(--card))] px-4 py-3 text-left text-[hsl(var(--foreground))] shadow-sm ring-1 ring-black/5 transition hover:bg-[hsl(var(--muted)/0.45)] active:scale-[0.99] focus:outline-none focus:ring-2 focus:ring-emerald-500/60"
@@ -254,17 +261,21 @@ export default function POSModule() {
         />
       )}
 
+      {isV2FeatureEnabled('printers') && (
       <PrinterConfigModal
         open={showPrinterConfig}
         localId={localId}
         onClose={() => setShowPrinterConfig(false)}
       />
+      )}
 
+      {isV2FeatureEnabled('mpConfig') && (
       <MPConfigDrawer
         open={showMPConfig}
         localId={localId}
         onClose={() => setShowMPConfig(false)}
       />
+      )}
     </>
   )
 }

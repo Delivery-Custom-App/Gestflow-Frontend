@@ -1,8 +1,8 @@
 import { useState, useCallback } from 'react'
-import { apiRequest } from '../lib/apiClient'
+import { fetchPosMenu } from '../lib/salesApi'
 
 /**
- * Menú del local vía `/dashboard/menu`; búsqueda opcional con `?search=`.
+ * Menú del local compuesto desde V2 (local-products + products + categories).
  * Solo carga cuando se llama a `fetch()`.
  */
 export function useMenuPOS(localId) {
@@ -15,11 +15,9 @@ export function useMenuPOS(localId) {
     try {
       setLoading(true)
       setError(null)
-      const params = new URLSearchParams({ local_id: String(localId) })
-      if (searchTerm != null && String(searchTerm).trim()) {
-        params.set('search', String(searchTerm).trim())
-      }
-      const result = await apiRequest(`/dashboard/menu?${params}`)
+      const result = await fetchPosMenu(localId, {
+        search: searchTerm != null && String(searchTerm).trim() ? String(searchTerm).trim() : undefined,
+      })
       setData(result)
     } catch (err) {
       setError(err.message || 'Error al cargar el menú')

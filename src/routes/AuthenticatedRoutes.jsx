@@ -18,6 +18,7 @@ const WeeklyPurchasesPage = lazy(() => import('../components/inventory/weeklyPur
 const WeeklyPurchaseDetailPage = lazy(() => import('../components/inventory/weeklyPurchases/WeeklyPurchaseDetailPage'))
 const RecipesPage = lazy(() => import('../components/inventory/recipes/RecipesPage'))
 const POSModule = lazy(() => import('../components/pos/POSModule'))
+const HrModule = lazy(() => import('../components/hr/HrModule'))
 const MesaDetail = lazy(() => import('../components/pos/MesaDetail'))
 const ReportesPage = lazy(() => import('../components/pos/ReportesPage'))
 const VentaDirectaView = lazy(() => import('../components/pos/VentaDirectaView'))
@@ -71,6 +72,7 @@ function LocalRoutes() {
       <Route path="/local/:localId/inventario/proveedores" element={<SuppliersKpisDashboard />} />
       <Route path="/local/:localId/inventario" element={<InventoryHub />} />
       <Route path="/local/:localId/administrativo/:sectionId?" element={<AdministrativeModule />} />
+      <Route path="/local/:localId/rrhh" element={<HrModule />} />
       <Route path="/local/:localId/pos" element={<POSModule />} />
       <Route path="/local/:localId/pos/cocina" element={<POSModule />} />
       <Route path="/local/:localId/pos/reportes" element={<ReportesPage />} />
@@ -162,6 +164,7 @@ function WorkerRoutes({ assignedLocalId }) {
           <Route path="/local/:localId/pos/venta-directa" element={<VentaDirectaView />} />
           <Route path="/local/:localId/pos/registrar-producto" element={<RegistrarProductoView />} />
           <Route path="/local/:localId/administrativo/:sectionId?" element={<AdministrativeModule />} />
+          <Route path="/local/:localId/rrhh" element={<HrModule />} />
           <Route path="*" element={<Navigate to={home} replace />} />
         </Route>
       </Routes>
@@ -179,6 +182,7 @@ function WorkerRoutes({ assignedLocalId }) {
         <Route path="/local/:localId/pos/mesa/:mesaId" element={<MesaDetail />} />
         <Route path="/local/:localId/pos/venta-directa" element={<VentaDirectaView />} />
         <Route path="/local/:localId/administrativo/:sectionId?" element={<AdministrativeModule />} />
+        <Route path="/local/:localId/rrhh" element={<HrModule />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>

@@ -47,10 +47,28 @@ Cambios clave: `src/lib/authClient.js`, `src/utils/jwt.js`, `NetworkErrorModal`.
 
 ## Qué falta (próximos PRs en esta rama)
 
-1. Mapear clientes API (`inventoryApi`, `administrativeApi`, POS, etc.) a rutas V2
-2. Flujos que aún dependen de endpoints legacy (printers, split-payments, alerts SSE, register)
+1. ~~Mapear clientes API base (`inventoryApi`, locales, users, categorías) a rutas V2~~ (en curso en esta rama)
+2. Flujos que aún dependen de endpoints legacy (printers, split-payments, alerts SSE, register, suppliers)
 3. Roles UI: `EMPLEADO` / `ADMIN` / `ADMIN_NEGOCIO` / `SUPERADMIN` ya formatean bien vía `formatRoleLabel`
-4. Conectar POS/ventas al modelo V2 (`cajas`, `orders`, `pos-machines`)
+4. Conectar POS/ventas al modelo V2 (`cajas`, `orders`, `pos-machines`, mesas)
+
+### Adaptadores ventas/POS (esta rama)
+
+| Área | Adaptación |
+|---|---|
+| `salesApi.js` | orders+items, mesas (`nombre`/`status`), caja activa, menú POS compuesto |
+| Hooks POS | `useMesas*`, `useCajaActiva`, `useKitchenOrders`, `useMenuPOS`, `useOrder*` |
+| Cobro efectivo | `completeOrderCash` (camina estados en RESTAURANT) |
+| Stub / disable | splits, comandas, MP Point, `/cajas/*/mp/*` |
+
+### RRHH (Backend V2)
+
+| Pieza | Detalle |
+|---|---|
+| `hrApi.js` | employees, shifts, payroll-periods, leave-requests |
+| `HrModule.jsx` | `/local/:id/rrhh` — fichas, turnos, permisos |
+| Nav | Item **RRHH** (owners/admins; flag `hrModule`) |
+| Flujo usuario | Alta en `/usuarios` → ficha en RRHH con `user_id` |
 
 ## Notas
 

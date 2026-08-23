@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useMenuPOS } from '../../hooks/useMenuPOS'
-import { apiRequest } from '../../lib/apiClient'
+import { createOrder } from '../../lib/salesApi'
 import { formatCLP } from '../../lib/formatCLP'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -476,9 +476,12 @@ export default function MesaDetailModal({ mesa, localId, cajaId, onClose, onTabl
         const base = { item_name: itemName, quantity, unit_price: unitPrice }
         return it?.type === 'recipe' ? { ...base, recipe_id: it.id } : { ...base, product_id: it.id }
       })
-      await apiRequest('/orders', {
-        method: 'POST',
-        body: { local_id: localId, mesa_id: mesa.id, caja_id: cajaId || null, source: 'dine-in', payment_method: 'CASH', items },
+      await createOrder({
+        local_id: localId,
+        mesa_id: mesa.id,
+        caja_id: cajaId || null,
+        source: 'dine_in',
+        items,
       })
       onTableUpdated?.()
       onClose?.()

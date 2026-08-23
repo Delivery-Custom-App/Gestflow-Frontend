@@ -1,33 +1,36 @@
 import { useState, useEffect } from 'react'
-import { apiRequest } from '../lib/apiClient'
+import { getActiveCaja } from '../lib/salesApi'
 
 /**
- * Resuelve la caja activa del usuario actual.
- * Consulta user_cajas → devuelve la primera caja activa asignada.
+ * Resuelve la caja abierta del local (V2: lista /cajas + status=open).
  */
 export function useCajaActiva(localId) {
   const [cajaId, setCajaId] = useState(null)
+  const [caja, setCaja] = useState(null)
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
     if (!localId) return
     let cancelled = false
 
-    const fetch = async () => {
+    const fetchCaja = async () => {
       setLoading(true)
       try {
-        const data = await apiRequest(`/cajas/activa?local_id=${localId}`)
-        if (!cancelled && data?.caja_id) setCajaId(data.caja_id)
+        const active = await getActiveCaja(localId)
+        if (!cancelled && active?.id) {
+          setCajaId(active.id)
+          setCaja(active)
+        }
       } catch {
-        // sin caja asignada — continúa sin caja_id
+        // sin caja abierta
       } finally {
         if (!cancelled) setLoading(false)
       }
     }
 
-    fetch()
+    fetchCaja()
     return () => { cancelled = true }
   }, [localId])
 
-  return { cajaId, loading }
+  return { cajaId, caja, loading }
 }

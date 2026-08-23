@@ -12,6 +12,7 @@ import LoadingSpinner from './LoadingSpinner'
 import IncomeChart from './charts/IncomeChart'
 import ExpenseBreakdown from './charts/ExpenseBreakdown'
 import CajaMpPairingModal from './pos/CajaMpPairingModal'
+import { isV2FeatureEnabled } from '../lib/v2Features'
 import {
   getCajasByLocal,
   getConsolidatedDashboard,
@@ -894,6 +895,7 @@ const MP_PAIRING_ACTION = {
 
 function FlujoCajaContent({ dashboard, cajas, loading, error, onManagePairing }) {
   const cajasList = safeArray(cajas)
+  const showMpPairing = typeof onManagePairing === 'function'
   const stateNode = <SectionState loading={loading} error={error} isEmpty={!dashboard && !loading && !error} emptyMessage="Sin datos de flujo. Completa órdenes desde el POS y registra gastos para ver gráficos." />
   if (loading || error || (!dashboard && !loading && !error)) return stateNode
 
@@ -914,13 +916,17 @@ function FlujoCajaContent({ dashboard, cajas, loading, error, onManagePairing })
       </div>
       <Panel title="Cajas del Local" sub="Fuente: endpoint /cajas por local">
         <AmTable
-          headers={['Nombre Caja', 'Estado', 'MercadoPago', 'Acciones']}
+          headers={showMpPairing ? ['Nombre Caja', 'Estado', 'MercadoPago', 'Acciones'] : ['Nombre Caja', 'Estado']}
           rows={cajasList.map((c) => {
+            const base = [
+              c.name || 'Caja sin nombre',
+              c.is_active ? 'Abierta' : (c.status === 'closed' ? 'Cerrada' : (c.is_active ? 'Activa' : 'Inactiva')),
+            ]
+            if (!showMpPairing) return base
             const status = c.mp?.pairing_status || 'unprovisioned'
             const badge = MP_PAIRING_BADGE[status] || MP_PAIRING_BADGE.unprovisioned
             return [
-              c.name || 'Caja sin nombre',
-              c.is_active ? 'Activa' : 'Inactiva',
+              ...base,
               <div className="flex items-center gap-2" key={`mp-${c.id}`}>
                 <Badge variant={badge.variant}>{badge.label}</Badge>
                 {status === 'paired' && c.mp?.terminal_id && (
@@ -2081,7 +2087,7 @@ function AdministrativeModule() {
           onSaved={() => setRefreshKey(k => k + 1)}
         />
       )}
-      {pairingCaja && (
+      {isV2FeatureEnabled('cajaMpPairing') && pairingCaja && (
         <CajaMpPairingModal
           caja={pairingCaja}
           localId={localId}
@@ -2162,7 +2168,7 @@ function AdministrativeModule() {
           error:    sectionError,
           localId,
           onRefresh: () => setRefreshKey(k => k + 1),
-          onManagePairing: setPairingCaja,
+          onManagePairing: isV2FeatureEnabled('cajaMpPairing') ? setPairingCaja : undefined,
         })}
       </main>
     </>

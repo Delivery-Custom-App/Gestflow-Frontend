@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { apiRequest } from '../lib/apiClient'
+import { computeMesasKpis } from '../lib/salesApi'
 
 const POLL_INTERVAL_MS = 30_000
 
@@ -12,8 +12,7 @@ export function useMesasKPIs(localId) {
   const fetchKpis = useCallback(async () => {
     if (!localId) return
     try {
-      const data = await apiRequest(`/dashboard/mesas-kpis?local_id=${localId}`)
-      setKpis(data)
+      setKpis(await computeMesasKpis(localId))
       setError(null)
     } catch (err) {
       setError(err.message || 'Error al cargar KPIs de mesas')

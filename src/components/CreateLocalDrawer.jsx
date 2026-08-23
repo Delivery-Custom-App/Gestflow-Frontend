@@ -114,14 +114,18 @@ function CreateLocalDrawer({ isOpen, onClose, onSuccess }) {
         setGeocodeOk(coords !== null)
       }
 
+      // V2 LocalCreate: business_id, name, sales_model (address/phone aún no en schema).
+      const category = formData.category.trim().toUpperCase()
+      const salesModel =
+        category === 'RESTAURANT' || category === 'RESTAURANTE' ? 'RESTAURANT' : 'AL_PASO'
+
       const body = {
         business_id: businessId,
         name: formData.name.trim(),
-        address: formData.address.trim(),
-        phone: formData.phone.trim(),
+        sales_model: salesModel,
+        promotions_autonomy: false,
       }
-      if (formData.category.trim()) body.category = formData.category.trim()
-      if (coords) { body.lat = coords.lat; body.lng = coords.lng }
+      void coords // geocode OK para UX; coords no se persisten en V2 aún
 
       await apiRequest('/locals', { method: 'POST', token, body })
 

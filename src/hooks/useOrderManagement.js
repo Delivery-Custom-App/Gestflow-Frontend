@@ -1,8 +1,8 @@
 import { useState, useCallback } from 'react'
-import { apiRequest } from '../lib/apiClient'
+import { createOrder as createOrderV2, updateOrderStatus as updateOrderStatusV2 } from '../lib/salesApi'
 
 /**
- * Hook para crear órdenes y actualizar su estado
+ * Hook para crear órdenes y actualizar su estado (Backend V2).
  */
 export function useOrderManagement() {
   const [loading, setLoading] = useState(false)
@@ -12,12 +12,7 @@ export function useOrderManagement() {
     try {
       setLoading(true)
       setError(null)
-
-      const createdOrder = await apiRequest('/orders', {
-        method: 'POST',
-        body: orderData,
-      })
-      return createdOrder
+      return await createOrderV2(orderData)
     } catch (err) {
       const message = err.message || 'Error creando orden'
       setError(message)
@@ -27,16 +22,11 @@ export function useOrderManagement() {
     }
   }, [])
 
-  const updateOrderStatus = useCallback(async (orderId, status) => {
+  const updateOrderStatus = useCallback(async (orderId, status, createdAt) => {
     try {
       setLoading(true)
       setError(null)
-
-      const updatedOrder = await apiRequest(`/orders/${orderId}`, {
-        method: 'PATCH',
-        body: { status },
-      })
-      return updatedOrder
+      return await updateOrderStatusV2(orderId, status, createdAt)
     } catch (err) {
       const message = err.message || 'Error actualizando orden'
       setError(message)

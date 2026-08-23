@@ -65,11 +65,19 @@ function CreateUserDrawer({ isOpen, onClose, onSuccess, locales, localesLoading,
     e.preventDefault()
     setErr('')
     if (!form.name || !form.email || !form.password) { setErr('Completa nombre, correo y contraseña.'); return }
-    if (form.password.length < 6) { setErr('La contraseña debe tener al menos 6 caracteres.'); return }
+    if (form.password.length < 8) { setErr('La contraseña debe tener al menos 8 caracteres.'); return }
     if (form.role !== 'SUPERADMIN' && !form.local_id) { setErr('Selecciona el local al que pertenece este usuario.'); return }
     setLoading(true)
     try {
-      await createUser({ name: form.name.trim(), email: form.email.trim(), password: form.password, role: form.role, local_id: form.local_id || null })
+      const local = locales.find((l) => String(l.id) === String(form.local_id))
+      await createUser({
+        name: form.name.trim(),
+        email: form.email.trim(),
+        password: form.password,
+        role: form.role,
+        local_id: form.local_id || null,
+        business_id: local?.business_id || null,
+      })
       reset()
       onSuccess()
       onClose()

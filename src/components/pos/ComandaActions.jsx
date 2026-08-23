@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Printer, RotateCcw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { printComanda, reprintComanda } from '../../lib/apiClient'
+import { isV2FeatureEnabled } from '../../lib/v2Features'
 import { toast } from 'sonner'
 
 /**
@@ -15,6 +16,10 @@ import { toast } from 'sonner'
 export default function ComandaActions({ orderId, size = 'sm', showLabel = true }) {
   const [printing, setPrinting] = useState(false)
   const [reprinting, setReprinting] = useState(false)
+
+  if (!isV2FeatureEnabled('comandas')) {
+    return null
+  }
 
   async function handlePrint() {
     setPrinting(true)
@@ -41,7 +46,7 @@ export default function ComandaActions({ orderId, size = 'sm', showLabel = true 
     try {
       const res = await reprintComanda(orderId)
       if (res?.status === 'SENT') {
-        toast.success('Reimpresión enviada a la impresora')
+        toast.success('Reimpresión enviada')
       } else if (res?.warning) {
         toast.warning(res.warning)
       } else if (res?.status === 'FAILED') {
@@ -57,28 +62,14 @@ export default function ComandaActions({ orderId, size = 'sm', showLabel = true 
   }
 
   return (
-    <div className="flex gap-1.5">
-      <Button
-        variant="outline"
-        size={size}
-        onClick={handlePrint}
-        disabled={printing}
-        title="Imprimir comanda"
-        className="flex items-center gap-1.5"
-      >
-        <Printer className="w-4 h-4" />
-        {showLabel && <span>{printing ? 'Imprimiendo...' : 'Imprimir'}</span>}
+    <div className="flex items-center gap-2">
+      <Button size={size} variant="outline" onClick={handlePrint} disabled={printing || !orderId}>
+        <Printer className="h-4 w-4" />
+        {showLabel ? (printing ? 'Imprimiendo…' : 'Comanda') : null}
       </Button>
-      <Button
-        variant="outline"
-        size={size}
-        onClick={handleReprint}
-        disabled={reprinting}
-        title="Reimprimir comanda (copia)"
-        className="flex items-center gap-1.5 text-amber-600 border-amber-300 hover:bg-amber-50"
-      >
-        <RotateCcw className="w-4 h-4" />
-        {showLabel && <span>{reprinting ? 'Reimprimiendo...' : 'Reimprimir'}</span>}
+      <Button size={size} variant="ghost" onClick={handleReprint} disabled={reprinting || !orderId}>
+        <RotateCcw className="h-4 w-4" />
+        {showLabel ? (reprinting ? 'Reimprimiendo…' : 'Reimprimir') : null}
       </Button>
     </div>
   )

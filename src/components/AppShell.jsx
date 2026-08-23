@@ -20,6 +20,7 @@ import { isSuperAdminRole, isAdminNegocioRole } from '../auth/roleLabel'
 import { WORKER_ROLES } from '../constants/roles'
 import { isDirectSaleDemoUser } from '../constants/demoMode'
 import { formatShortAddress } from '../lib/formatAddress'
+import { isV2FeatureEnabled } from '../lib/v2Features'
 
 /* ── key sets for accordion auto-open ──────────────────────────── */
 const ADMIN_KEYS = new Set(['administracion', 'ventas', 'rendiciones', 'reportes', 'flujo-caja', 'alertas', 'bonos'])
@@ -44,6 +45,7 @@ function deriveActiveKey(pathname) {
   if (pathname.includes('/administrativo/alertas'))       return 'alertas'
   if (pathname.includes('/administrativo/bonos'))         return 'bonos'
   if (pathname.includes('/administrativo'))               return 'administracion'
+  if (pathname.includes('/rrhh'))                         return 'hr-hub'
   if (pathname.includes('/usuarios'))                    return 'usuarios'
   if (pathname.includes('/gestor/resumen'))              return 'gestor-resumen'
   if (pathname.includes('/gestor/negocios'))             return 'gestor'
@@ -153,6 +155,7 @@ function Sidebar({ collapsed, onToggle, onClose }) {
       case 'gestor-usuarios':      navigate('/gestor/usuarios'); break
       case 'gestor-observabilidad': navigate('/gestor/observabilidad'); break
       case 'dashboard': navigate(localId ? `/local/${localId}/dashboard` : '/admin', { state: navState }); break
+      case 'hr-hub':    if (localId) navigate(`/local/${localId}/rrhh`, { state: navState }); break
       case 'pos-mesas':     if (localId) navigate(`/local/${localId}/pos`, { state: navState }); break
       case 'pos-kitchen':   if (localId) navigate(`/local/${localId}/pos/cocina`, { state: navState }); break
       case 'pos-venta-directa': if (localId) navigate(`/local/${localId}/pos/venta-directa`, { state: navState }); break
@@ -176,6 +179,7 @@ function Sidebar({ collapsed, onToggle, onClose }) {
     ...(isSuperAdmin ? [{ key: 'gestor-auditoria', label: 'Auditoría', icon: FileText }] : []),
     ...(isSuperAdmin ? [{ key: 'gestor-observabilidad', label: 'Observabilidad', icon: BarChart3 }] : []),
     ...(isOwner ? [{ key: 'usuarios', label: 'Usuarios', icon: Users }] : []),
+    ...(isV2FeatureEnabled('hrModule') && localId ? [{ key: 'hr-hub', label: 'RRHH', icon: Users }] : []),
     ...(!isWorker && localId ? [{ key: 'dashboard', label: 'Dashboard', icon: LayoutDashboard }] : []),
   ]
 

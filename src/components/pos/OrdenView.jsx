@@ -1,7 +1,9 @@
 import { useEffect, useState, useMemo, useCallback, memo } from 'react'
 import { useMesaDetail } from '../../hooks/useMesaDetail'
 import { useOrderManagement } from '../../hooks/useOrderManagement'
-import { apiRequest, getSplitPaymentSummary } from '../../lib/apiClient'
+import { getSplitPaymentSummary } from '../../lib/apiClient'
+import { setMesaLibre } from '../../lib/salesApi'
+import { isV2FeatureEnabled } from '../../lib/v2Features'
 import MesaDetailModal from './MesaDetailModal'
 import MultiPaymentModal from './MultiPaymentModal'
 import MercadoPagoModal from './MercadoPagoModal'
@@ -162,6 +164,7 @@ function OrdenView({ mesa, localId, onBack, onTableUpdated }) {
 
   // AC2: Check split payment state whenever the order view loads or refreshes
   useEffect(() => {
+    if (!isV2FeatureEnabled('splitPayments')) return
     const orderId = detail?.active_orders?.[0]?.id
     if (!orderId) return
     getSplitPaymentSummary(orderId)
@@ -205,10 +208,7 @@ function OrdenView({ mesa, localId, onBack, onTableUpdated }) {
     setShowMPModal(false)
     setCobrarLoading(true)
     try {
-      await apiRequest(`/mesas/${mesa.id}/state`, {
-        method: 'PATCH',
-        body: { state: 'libre' },
-      })
+      await setMesaLibre(mesa.id)
       openPrintWindow({ mesa, firstOrder, allItems, subtotal, iva, total })
       onTableUpdated?.()
       onBack()
@@ -257,7 +257,7 @@ function OrdenView({ mesa, localId, onBack, onTableUpdated }) {
         />
       )}
 
-      {showSplitModal && firstOrder && (
+      {isV2FeatureEnabled('splitPayments') && showSplitModal && firstOrder && (
         <MultiPaymentModal
           order={firstOrder}
           orderTotal={total}
@@ -306,7 +306,7 @@ function OrdenView({ mesa, localId, onBack, onTableUpdated }) {
               <span>Imprimir detalle</span>
             </Button>
             {/* AC1 (OP-03): Dividir pago entre N comensales */}
-            {firstOrder?.id && (
+            {isV2FeatureEnabled('splitPayments') && firstOrder?.id && (
               <Button
                 variant="outline"
                 onClick={() => setShowSplitModal(true)}

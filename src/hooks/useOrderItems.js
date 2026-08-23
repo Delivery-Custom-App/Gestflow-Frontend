@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react'
-import { apiRequest } from '../lib/apiClient'
+import { addOrderItem } from '../lib/salesApi'
 
-export function useOrderItems(orderId) {
+export function useOrderItems(orderId, createdAt) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
 
@@ -16,14 +16,15 @@ export function useOrderItems(orderId) {
       setError(null)
 
       try {
-        return await apiRequest(`/orders/${orderId}/items`, {
-          method: 'POST',
-          body: {
+        return await addOrderItem(
+          orderId,
+          {
             product_id: productId,
-            quantity: parseInt(quantity),
+            quantity: parseInt(quantity, 10),
             unit_price: parseFloat(unitPrice),
           },
-        })
+          createdAt,
+        )
       } catch (err) {
         setError(err.message || 'Error al agregar producto')
         return null
@@ -31,59 +32,18 @@ export function useOrderItems(orderId) {
         setLoading(false)
       }
     },
-    [orderId],
+    [orderId, createdAt],
   )
 
-  const updateItem = useCallback(
-    async (itemId, quantity, unitPrice) => {
-      if (!orderId) {
-        setError('No hay orden activa')
-        return null
-      }
+  const updateItem = useCallback(async () => {
+    setError('Editar ítems de orden aún no está disponible en Backend V2')
+    return null
+  }, [])
 
-      setLoading(true)
-      setError(null)
-
-      try {
-        return await apiRequest(`/orders/${orderId}/items/${itemId}`, {
-          method: 'PATCH',
-          body: {
-            quantity: quantity !== undefined ? parseInt(quantity) : undefined,
-            unit_price: unitPrice !== undefined ? parseFloat(unitPrice) : undefined,
-          },
-        })
-      } catch (err) {
-        setError(err.message || 'Error al actualizar producto')
-        return null
-      } finally {
-        setLoading(false)
-      }
-    },
-    [orderId],
-  )
-
-  const deleteItem = useCallback(
-    async (itemId) => {
-      if (!orderId) {
-        setError('No hay orden activa')
-        return false
-      }
-
-      setLoading(true)
-      setError(null)
-
-      try {
-        await apiRequest(`/orders/${orderId}/items/${itemId}`, { method: 'DELETE' })
-        return true
-      } catch (err) {
-        setError(err.message || 'Error al eliminar producto')
-        return false
-      } finally {
-        setLoading(false)
-      }
-    },
-    [orderId],
-  )
+  const deleteItem = useCallback(async () => {
+    setError('Eliminar ítems de orden aún no está disponible en Backend V2')
+    return false
+  }, [])
 
   return { createItem, updateItem, deleteItem, loading, error }
 }

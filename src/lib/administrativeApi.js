@@ -1,3 +1,4 @@
+import { listCajas, listOrders, createCajaV2 } from './salesApi'
 import { apiRequest } from './apiClient'
 
 function withQuery(path, params) {
@@ -23,8 +24,37 @@ export function getConsolidatedDashboard(businessId, token) {
 }
 
 export function getOrdersByLocal(localId, token, status) {
-  const path = withQuery('/orders', { local_id: localId, status })
-  return apiRequest(path, { token })
+  void token
+  return listOrders(localId, { status })
+}
+
+export function getCajasByLocal(localId, token) {
+  void token
+  return listCajas(localId)
+}
+
+export function createCaja(body) {
+  return createCajaV2(body)
+}
+
+export async function provisionCajaMp() {
+  throw new Error('Provision MP de caja aún no disponible en Backend V2')
+}
+
+export async function verifyCajaMpPairing() {
+  throw new Error('Verificación MP de caja aún no disponible en Backend V2')
+}
+
+export async function putLocalMpLocation() {
+  throw new Error('Ubicación MP aún no disponible en Backend V2')
+}
+
+export async function getAvailableMpPos() {
+  return []
+}
+
+export async function assignExistingMpPos() {
+  throw new Error('Asignación MP POS aún no disponible en Backend V2')
 }
 
 export function getRendicionesDashboard(localId, token, options = {}) {
@@ -35,7 +65,6 @@ export function getRendicionesDashboard(localId, token, options = {}) {
     end_date: endDate,
     movement_limit: movementLimit,
   })
-
   return apiRequest(path, { token })
 }
 
@@ -47,38 +76,6 @@ export function getExpensesByLocal(localId, token, status) {
 export function getTransfersByLocal(localId, token, status) {
   const path = withQuery('/transfers', { local_id: localId, status })
   return apiRequest(path, { token })
-}
-
-export function getCajasByLocal(localId, token) {
-  const path = withQuery('/cajas', { local_id: localId })
-  return apiRequest(path, { token })
-}
-
-export function createCaja(body) {
-  return apiRequest('/cajas', { method: 'POST', body })
-}
-
-export function provisionCajaMp(cajaId) {
-  return apiRequest(`/cajas/${cajaId}/mp/provision`, { method: 'POST' })
-}
-
-export function verifyCajaMpPairing(cajaId) {
-  return apiRequest(`/cajas/${cajaId}/mp/verify-pairing`, { method: 'POST' })
-}
-
-export function putLocalMpLocation(localId, body) {
-  return apiRequest(`/locals/${localId}/mp-location`, { method: 'PUT', body })
-}
-
-export function getAvailableMpPos(localId) {
-  return apiRequest(`/locals/${localId}/mp/available-pos`)
-}
-
-export function assignExistingMpPos(cajaId, mercadopagoPosId) {
-  return apiRequest(`/cajas/${cajaId}/mp/assign-existing`, {
-    method: 'POST',
-    body: { mercadopago_pos_id: mercadopagoPosId },
-  })
 }
 
 export function postExpense(body) {

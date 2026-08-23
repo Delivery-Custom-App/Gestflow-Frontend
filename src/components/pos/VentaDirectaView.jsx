@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useParams } from 'react-router-dom'
 import { CreditCard, Printer } from 'lucide-react'
 import { apiRequest } from '../../lib/apiClient'
+import { createOrder, fetchProductsCatalog } from '../../lib/salesApi'
 import { formatCLP } from '../../lib/formatCLP'
 import { useCajaActiva } from '../../hooks/useCajaActiva'
 import { Button } from '@/components/ui/button'
@@ -11,6 +12,7 @@ import PrinterConfigModal from './PrinterConfigModal'
 import MPConfigDrawer from './MPConfigDrawer'
 import { printEscposViaBluetooth } from '../../lib/bluetoothPrinter'
 import { toast } from 'sonner'
+import { isV2FeatureEnabled } from '../../lib/v2Features'
 
 /**
  * Venta directa "al paso": listado plano de todos los productos sin receta
@@ -72,7 +74,7 @@ export default function VentaDirectaView() {
   const loadCatalog = useCallback(() => {
     if (!localId) return
     setLoading(true)
-    apiRequest(`/products/catalog?local_id=${localId}`)
+    fetchProductsCatalog(localId)
       .then((groups) => {
         const flat = (Array.isArray(groups) ? groups : []).flatMap((g) => g.products || [])
         setProducts(flat)
@@ -112,9 +114,12 @@ export default function VentaDirectaView() {
         const p = products.find((prod) => prod.id === id)
         return { product_id: id, quantity, unit_price: p?.price || 0 }
       })
-      const order = await apiRequest('/orders', {
-        method: 'POST',
-        body: { local_id: localId, mesa_id: null, caja_id: cajaId || null, source: 'mostrador', items },
+      const order = await createOrder({
+        local_id: localId,
+        mesa_id: null,
+        caja_id: cajaId || null,
+        source: 'mostrador',
+        items,
       })
       setActiveOrder({ id: order.id, total: order.total ?? subtotal })
       setShowMPModal(true)
@@ -126,6 +131,7 @@ export default function VentaDirectaView() {
   }
 
   const printReceipt = useCallback(async (orderId) => {
+    if (!isV2FeatureEnabled('receiptPrint')) return
     try {
       const res = await apiRequest(`/comandas/${orderId}/receipt`, { method: 'POST', body: {} })
       if (res?.warning) {
@@ -159,7 +165,7 @@ export default function VentaDirectaView() {
     setSelectedQtys({})
     setSuccessMsg('Venta registrada correctamente.')
     loadCatalog()
-    if (orderId) printReceipt(orderId)
+    if (orderId && isV2FeatureEnabled('receiptPrint')) printReceipt(orderId)
   }, [loadCatalog, activeOrder, printReceipt])
 
   return (
@@ -170,7 +176,9 @@ export default function VentaDirectaView() {
           <p className="text-sm text-[hsl(var(--muted-foreground))]">Selecciona productos y cobra sin pasar por mesa.</p>
         </div>
 
+        {(isV2FeatureEnabled('mpConfig') || isV2FeatureEnabled('printers')) && (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {isV2FeatureEnabled('mpConfig') && (
           <button
             onClick={() => setShowMPConfig(true)}
             className="min-h-[86px] rounded-2xl border border-[hsl(var(--border))] border-l-4 border-l-blue-700 bg-[hsl(var(--card))] px-4 py-3 text-left text-[hsl(var(--foreground))] shadow-sm ring-1 ring-black/5 transition hover:bg-[hsl(var(--muted)/0.45)] active:scale-[0.99] focus:outline-none focus:ring-2 focus:ring-blue-500/60"
@@ -187,6 +195,8 @@ export default function VentaDirectaView() {
               </span>
             </span>
           </button>
+          )}
+          {isV2FeatureEnabled('printers') && (
           <button
             onClick={() => setShowPrinterConfig(true)}
             className="min-h-[86px] rounded-2xl border border-[hsl(var(--border))] border-l-4 border-l-amber-700 bg-[hsl(var(--card))] px-4 py-3 text-left text-[hsl(var(--foreground))] shadow-sm ring-1 ring-black/5 transition hover:bg-[hsl(var(--muted)/0.45)] active:scale-[0.99] focus:outline-none focus:ring-2 focus:ring-amber-500/60"
@@ -203,7 +213,9 @@ export default function VentaDirectaView() {
               </span>
             </span>
           </button>
+          )}
         </div>
+        )}
 
         {error && (
           <div className="px-3 py-2 rounded-lg bg-red-50 border border-red-200 text-sm text-red-600">
@@ -261,17 +273,21 @@ export default function VentaDirectaView() {
         />
       )}
 
+      {isV2FeatureEnabled('printers') && (
       <PrinterConfigModal
         open={showPrinterConfig}
         localId={localId}
         onClose={() => setShowPrinterConfig(false)}
       />
+      )}
 
+      {isV2FeatureEnabled('mpConfig') && (
       <MPConfigDrawer
         open={showMPConfig}
         localId={localId}
         onClose={() => setShowMPConfig(false)}
       />
+      )}
     </div>
   )
 }
