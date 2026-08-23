@@ -17,10 +17,22 @@ export default function NetworkErrorModal() {
   const handleRetry = async () => {
     setRetrying(true)
     try {
-      const res = await fetch(`${import.meta.env.VITE_API_URL || ''}/api/health`, { method: 'HEAD' })
-      if (res.ok || res.status < 500) setError(null)
-    } catch {
-      // still offline — keep modal open
+      const base = import.meta.env.VITE_API_URL || ''
+      // Backend V2: GET /health. Legacy: /api/health (a veces solo proxy).
+      const candidates = base
+        ? [`${base}/health`, `${base}/api/health`]
+        : ['/health', '/api/health']
+      for (const url of candidates) {
+        try {
+          const res = await fetch(url, { method: 'GET' })
+          if (res.ok || res.status < 500) {
+            setError(null)
+            break
+          }
+        } catch {
+          // try next
+        }
+      }
     } finally {
       setRetrying(false)
     }
