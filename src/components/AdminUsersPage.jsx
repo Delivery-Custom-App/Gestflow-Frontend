@@ -1,10 +1,11 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Users, Loader2, Search } from 'lucide-react'
 import { getAuthContext, formatApiErrorDetail } from '../lib/apiClient'
-import { listAllUsers, listBusinesses } from '../lib/superAdminApi'
+import { listAllUsers, listBusinesses, updateUser } from '../lib/superAdminApi'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
+import { Button } from '@/components/ui/button'
 
 function formatDate(value) {
   if (!value) return '—'
@@ -21,6 +22,8 @@ const ROLE_BADGE = {
   EMPLEADO: 'bg-stone-100 text-stone-700 border-stone-200',
 }
 
+const EDITABLE_ROLES = ['ADMIN_NEGOCIO', 'ADMIN', 'EMPLEADO']
+
 export default function AdminUsersPage() {
   const [users, setUsers] = useState([])
   const [businesses, setBusinesses] = useState([])
@@ -28,12 +31,15 @@ export default function AdminUsersPage() {
   const [role, setRole] = useState('')
   const [search, setSearch] = useState('')
   const [loading, setLoading] = useState(true)
+  const [busyId, setBusyId] = useState('')
   const [err, setErr] = useState('')
+  const [meId, setMeId] = useState('')
 
   const load = useCallback(async () => {
     setLoading(true)
     try {
       const ctx = await getAuthContext()
+      setMeId(ctx.user?.id || ctx.userId || '')
       const data = await listAllUsers({ role: role || undefined, businessId: businessId || undefined }, ctx.token)
       setUsers(Array.isArray(data) ? data : [])
       setErr('')
@@ -52,12 +58,27 @@ export default function AdminUsersPage() {
     ;(async () => {
       try {
         const ctx = await getAuthContext()
+        if (ctx.user?.id) setMeId(ctx.user.id)
         const data = await listBusinesses(ctx.token)
         if (!cancelled) setBusinesses(Array.isArray(data) ? data : [])
       } catch { /* non-fatal */ }
     })()
     return () => { cancelled = true }
   }, [])
+
+  const patchUser = async (userId, body) => {
+    setBusyId(String(userId))
+    setErr('')
+    try {
+      const ctx = await getAuthContext()
+      await updateUser(userId, body, ctx.token)
+      await load()
+    } catch (e2) {
+      setErr(formatApiErrorDetail(e2.detail) || e2.message || 'No se pudo actualizar el usuario')
+    } finally {
+      setBusyId('')
+    }
+  }
 
   const q = search.trim().toLowerCase()
   const filtered = q
@@ -74,10 +95,14 @@ export default function AdminUsersPage() {
   const renderRows = (rows) =>
     rows.length === 0 ? (
       <tr>
-        <td colSpan="5" className="py-6 text-center text-[hsl(var(--muted-foreground))]">Sin usuarios.</td>
+        <td colSpan="6" className="py-6 text-center text-[hsl(var(--muted-foreground))]">Sin usuarios.</td>
       </tr>
     ) : (
-      rows.map((u) => (
+    rows.map((u) => {
+      const isSelf = String(u.id) === String(meId)
+      const isSuper = String(u.role || '').toUpperCase() === 'SUPERADMIN'
+      const busy = String(busyId) === String(u.id)
+      return (
         <tr key={u.id} className="hover:bg-[hsl(var(--muted)/0.4)] transition-colors">
           <td className="py-2.5 pr-3">
             <p className="text-sm font-semibold text-[hsl(var(--foreground))]">{u.name || '—'}</p>
@@ -85,9 +110,22 @@ export default function AdminUsersPage() {
           </td>
           <td className="py-2.5 pr-3 text-sm text-[hsl(var(--foreground))]">{u.business_name || '—'}</td>
           <td className="py-2.5 pr-3">
-            <Badge className={`text-[10px] font-bold uppercase tracking-wide rounded-full px-2 py-0.5 border ${ROLE_BADGE[String(u.role || '').toUpperCase()] || ROLE_BADGE.EMPLEADO}`}>
-              {u.role || '—'}
-            </Badge>
+            {isSuper ? (
+              <Badge className={`text-[10px] font-bold uppercase tracking-wide rounded-full px-2 py-0.5 border ${ROLE_BADGE.SUPERADMIN}`}>
+                SUPERADMIN
+              </Badge>
+            ) : (
+              <select
+                value={String(u.role || 'EMPLEADO').toUpperCase()}
+                disabled={busy}
+                onChange={(e) => patchUser(u.id, { role: e.target.value })}
+                className="rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-2 py-1 text-xs font-semibold uppercase"
+              >
+                {EDITABLE_ROLES.map((r) => (
+                  <option key={r} value={r}>{r}</option>
+                ))}
+              </select>
+            )}
           </td>
           <td className="py-2.5 pr-3">
             {u.is_active === false ? (
@@ -96,9 +134,23 @@ export default function AdminUsersPage() {
               <span className="text-xs font-medium text-emerald-700">Activo</span>
             )}
           </td>
-          <td className="py-2.5 text-xs text-[hsl(var(--muted-foreground))]">{formatDate(u.created_at)}</td>
+          <td className="py-2.5 pr-3 text-xs text-[hsl(var(--muted-foreground))]">{formatDate(u.created_at)}</td>
+          <td className="py-2.5">
+            {!isSuper && (
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={busy || isSelf}
+                onClick={() => patchUser(u.id, { is_active: u.is_active === false })}
+                title={isSelf ? 'No puedes desactivarte a ti mismo' : undefined}
+              >
+                {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : u.is_active === false ? 'Activar' : 'Desactivar'}
+              </Button>
+            )}
+          </td>
         </tr>
-      ))
+      )
+    })
     )
 
   return (
@@ -111,12 +163,11 @@ export default function AdminUsersPage() {
           <div>
             <h1 className="text-2xl font-bold text-[hsl(var(--foreground))]">Usuarios</h1>
             <p className="text-sm text-[hsl(var(--muted-foreground))]">
-              {filtered.length} usuario{filtered.length === 1 ? '' : 's'} en todas las franquicias
+              {filtered.length} usuario{filtered.length === 1 ? '' : 's'} — control de roles y activación
             </p>
           </div>
         </div>
 
-        {/* Filtros */}
         <div className="flex flex-col sm:flex-row gap-3">
           <div className="relative flex-1">
             <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[hsl(var(--muted-foreground))]" />
@@ -146,7 +197,6 @@ export default function AdminUsersPage() {
             <option value="SUPERADMIN">SUPERADMIN</option>
             <option value="ADMIN_NEGOCIO">ADMIN_NEGOCIO</option>
             <option value="ADMIN">ADMIN</option>
-            <option value="CAJERO">CAJERO</option>
             <option value="EMPLEADO">EMPLEADO</option>
           </select>
         </div>
@@ -163,14 +213,15 @@ export default function AdminUsersPage() {
               <CardContent className="p-5">
                 <h3 className="text-sm font-bold text-[hsl(var(--foreground))] mb-2">Administradores ({admins.length})</h3>
                 <div className="overflow-x-auto no-scrollbar">
-                  <table className="w-full text-sm min-w-[640px]">
+                  <table className="w-full text-sm min-w-[720px]">
                     <thead>
                       <tr className="text-left text-xs text-[hsl(var(--muted-foreground))] border-b border-[hsl(var(--border))]">
                         <th className="pb-2 pr-3 font-medium">Usuario</th>
                         <th className="pb-2 pr-3 font-medium">Franquicia</th>
                         <th className="pb-2 pr-3 font-medium">Rol</th>
                         <th className="pb-2 pr-3 font-medium">Estado</th>
-                        <th className="pb-2 font-medium">Creado</th>
+                        <th className="pb-2 pr-3 font-medium">Creado</th>
+                        <th className="pb-2 font-medium">Acciones</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-[hsl(var(--border))]">{renderRows(admins)}</tbody>
@@ -181,16 +232,17 @@ export default function AdminUsersPage() {
 
             <Card>
               <CardContent className="p-5">
-                <h3 className="text-sm font-bold text-[hsl(var(--foreground))] mb-2">Cajeros y empleados ({others.length})</h3>
+                <h3 className="text-sm font-bold text-[hsl(var(--foreground))] mb-2">Empleados ({others.length})</h3>
                 <div className="overflow-x-auto no-scrollbar">
-                  <table className="w-full text-sm min-w-[640px]">
+                  <table className="w-full text-sm min-w-[720px]">
                     <thead>
                       <tr className="text-left text-xs text-[hsl(var(--muted-foreground))] border-b border-[hsl(var(--border))]">
                         <th className="pb-2 pr-3 font-medium">Usuario</th>
                         <th className="pb-2 pr-3 font-medium">Franquicia</th>
                         <th className="pb-2 pr-3 font-medium">Rol</th>
                         <th className="pb-2 pr-3 font-medium">Estado</th>
-                        <th className="pb-2 font-medium">Creado</th>
+                        <th className="pb-2 pr-3 font-medium">Creado</th>
+                        <th className="pb-2 font-medium">Acciones</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-[hsl(var(--border))]">{renderRows(others)}</tbody>

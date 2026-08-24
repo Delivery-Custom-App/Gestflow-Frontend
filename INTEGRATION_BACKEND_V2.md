@@ -70,6 +70,26 @@ Cambios clave: `src/lib/authClient.js`, `src/utils/jwt.js`, `NetworkErrorModal`.
 | Nav | Item **RRHH** (owners/admins; flag `hrModule`) |
 | Flujo usuario | Alta en `/usuarios` → ficha en RRHH con `user_id` |
 
+### Gestor superadmin (`/gestor/*`)
+
+Adaptador: `src/lib/v2SuperAdminAdapter.js` — compone snapshot paralelo de V2.
+
+| Pantalla | Fuente V2 |
+|---|---|
+| `/gestor` (lista franquicias) | `GET /businesses` directo |
+| `/gestor/resumen` | Adaptador: `/businesses` + `/users` + `/locals` + `/orders` |
+| `/gestor/usuarios` | Adaptador: `/users` + mapa de `/businesses` |
+| `/gestor/negocios/:id` | Adaptador filtrado por negocio |
+| `/gestor/auditoria` | `GET /audit` (tabla `audit_log`) |
+| `/gestor/observabilidad` | `GET /tenant-manager/observability?business_id=` (métricas in-memory por tenant) |
+
+Notas gestor:
+- `name` se deriva del email en frontend (V2 no tiene columna `name`).
+- `is_active` en users/businesses es persistido; login bloquea usuarios o franquicias inactivas.
+- Control de usuarios: `PATCH /users/:id` (rol, is_active) desde `/gestor/usuarios`.
+- `DELETE /businesses` — borrado en cascada (SUPERADMIN); registra `business.delete` en auditoría.
+- Observabilidad: middleware in-memory + `GET /metrics` (Prometheus) con label `tenant_id`.
+
 ## Notas
 
 - Postgres V2: `localhost:5436` (no confundir con INGSW2 en 5433).

@@ -11,6 +11,8 @@ export const V2_FEATURES = {
   comandas: false,
   splitPayments: false,
   receiptPrint: false,
+  superAdminAudit: true,
+  superAdminObservability: true,
 }
 
 export function isV2FeatureEnabled(key) {

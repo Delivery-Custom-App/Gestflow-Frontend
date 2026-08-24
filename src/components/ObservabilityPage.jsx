@@ -2,7 +2,8 @@ import { useState, useEffect, useCallback } from 'react'
 import { motion } from 'framer-motion'
 import { Gauge, Loader2, RefreshCw } from 'lucide-react'
 import { getAuthContext, formatApiErrorDetail } from '../lib/apiClient'
-import { getObservability } from '../lib/superAdminApi'
+import { getObservability, listBusinesses } from '../lib/superAdminApi'
+import { isV2FeatureEnabled } from '../lib/v2Features'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -26,8 +27,16 @@ function formatMs(ms) {
   return ms >= 1000 ? `${(ms / 1000).toFixed(2)}s` : `${Math.round(ms)}ms`
 }
 
+function shortId(id) {
+  if (!id) return '—'
+  const s = String(id)
+  return s.length > 12 ? `${s.slice(0, 8)}…` : s
+}
+
 export default function ObservabilityPage() {
   const [data, setData] = useState(null)
+  const [businesses, setBusinesses] = useState([])
+  const [businessId, setBusinessId] = useState('')
   const [loading, setLoading] = useState(true)
   const [err, setErr] = useState('')
 
@@ -35,7 +44,9 @@ export default function ObservabilityPage() {
     setLoading(true)
     try {
       const ctx = await getAuthContext()
-      const stats = await getObservability(ctx.token)
+      const stats = await getObservability(ctx.token, {
+        businessId: businessId || undefined,
+      })
       setData(stats)
       setErr('')
     } catch (e2) {
@@ -44,14 +55,35 @@ export default function ObservabilityPage() {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [businessId])
 
   useEffect(() => { load() }, [load])
 
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      try {
+        const ctx = await getAuthContext()
+        const rows = await listBusinesses(ctx.token)
+        if (!cancelled) setBusinesses(Array.isArray(rows) ? rows : [])
+      } catch { /* non-fatal */ }
+    })()
+    return () => { cancelled = true }
+  }, [])
+
+  const businessName = (id) => {
+    if (!id) return 'Plataforma'
+    return businesses.find((b) => String(b.id) === String(id))?.name || shortId(id)
+  }
+
   const endpoints = data?.endpoints || []
+  const tenants = data?.tenants || []
   const maxAvg = endpoints.length ? Math.max(...endpoints.map((e) => e.avg_ms)) : 0
   const totalCalls = endpoints.reduce((acc, e) => acc + e.count, 0)
   const totalErrors = endpoints.reduce((acc, e) => acc + e.errors, 0)
+  const selectedName = businessId
+    ? businesses.find((b) => String(b.id) === String(businessId))?.name
+    : null
 
   return (
     <div className="flex-1 overflow-y-auto no-scrollbar bg-[hsl(var(--background))]">
@@ -64,16 +96,40 @@ export default function ObservabilityPage() {
             <div>
               <h1 className="text-2xl font-bold text-[hsl(var(--foreground))]">Observabilidad</h1>
               <p className="text-sm text-[hsl(var(--muted-foreground))]">
-                Latencia por endpoint · acumulado desde el último reinicio del servicio
+                Latencia por endpoint y por tenant · desde el último reinicio del servicio
               </p>
             </div>
           </div>
-          <Button variant="outline" size="sm" onClick={load} disabled={loading}>
-            <RefreshCw size={14} className={loading ? 'animate-spin' : ''} /> Refrescar
-          </Button>
+          <div className="flex items-center gap-2">
+            <select
+              value={businessId}
+              onChange={(e) => setBusinessId(e.target.value)}
+              className="w-full sm:w-64 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3 py-2 text-sm text-[hsl(var(--foreground))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary))]/40"
+            >
+              <option value="">Todos los tenants</option>
+              {businesses.map((b) => (
+                <option key={b.id} value={b.id}>{b.name}</option>
+              ))}
+            </select>
+            <Button variant="outline" size="sm" onClick={load} disabled={loading}>
+              <RefreshCw size={14} className={loading ? 'animate-spin' : ''} /> Refrescar
+            </Button>
+          </div>
         </div>
 
         {err && <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{err}</div>}
+
+        {!isV2FeatureEnabled('superAdminObservability') && (
+          <div className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+            Observabilidad no disponible en Backend V2 todavía. Las métricas de latencia por endpoint requieren middleware en el backend.
+          </div>
+        )}
+
+        {selectedName && (
+          <p className="text-xs text-[hsl(var(--muted-foreground))]">
+            Filtrando tráfico del tenant <span className="font-semibold text-[hsl(var(--foreground))]">{selectedName}</span>
+          </p>
+        )}
 
         {loading && !data ? (
           <p className="text-sm text-[hsl(var(--muted-foreground))] flex items-center gap-2">
@@ -102,12 +158,53 @@ export default function ObservabilityPage() {
               </Card>
             </div>
 
+            {!businessId && tenants.length > 0 && (
+              <Card>
+                <CardContent className="p-5">
+                  <h3 className="text-sm font-bold text-[hsl(var(--foreground))] mb-3">Tráfico por tenant</h3>
+                  <div className="overflow-x-auto no-scrollbar">
+                    <table className="w-full text-sm min-w-[480px]">
+                      <thead>
+                        <tr className="text-left text-xs text-[hsl(var(--muted-foreground))] border-b border-[hsl(var(--border))]">
+                          <th className="pb-2 pr-3 font-medium">Tenant</th>
+                          <th className="pb-2 pr-3 font-medium">Peticiones</th>
+                          <th className="pb-2 pr-3 font-medium">Avg</th>
+                          <th className="pb-2 font-medium">Errores</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-[hsl(var(--border))]">
+                        {tenants.map((t) => (
+                          <tr key={t.business_id || 'platform'} className="hover:bg-[hsl(var(--muted)/0.4)]">
+                            <td className="py-2 pr-3">
+                              <button
+                                type="button"
+                                className="text-left text-sm font-medium text-[hsl(var(--primary))] hover:underline"
+                                onClick={() => {
+                                  if (!t.is_platform && t.business_id) setBusinessId(String(t.business_id))
+                                }}
+                                disabled={t.is_platform}
+                              >
+                                {t.is_platform ? 'Plataforma (SUPERADMIN)' : businessName(t.business_id)}
+                              </button>
+                            </td>
+                            <td className="py-2 pr-3">{t.requests}</td>
+                            <td className="py-2 pr-3">{formatMs(t.avg_ms)}</td>
+                            <td className={`py-2 ${t.errors ? 'text-red-600 font-semibold' : ''}`}>{t.errors}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
             <Card>
               <CardContent className="p-5">
                 <h3 className="text-sm font-bold text-[hsl(var(--foreground))] mb-4">Latencia por endpoint</h3>
                 {endpoints.length === 0 ? (
                   <p className="text-xs text-[hsl(var(--muted-foreground))]">
-                    Aún no hay datos. Realiza peticiones a la API y vuelve a cargar para ver la latencia de cada endpoint.
+                    Aún no hay datos{selectedName ? ` para ${selectedName}` : ''}. Generá tráfico con usuarios del tenant y volvé a refrescar.
                   </p>
                 ) : (
                   <div className="flex flex-col divide-y divide-[hsl(var(--border))]">

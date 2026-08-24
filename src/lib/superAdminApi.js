@@ -1,4 +1,11 @@
 import { apiRequest } from './apiClient'
+import {
+  v2GetAuditLog,
+  v2GetBusinessStats,
+  v2GetGlobalStats,
+  v2GetObservability,
+  v2ListAllUsers,
+} from './v2SuperAdminAdapter'
 
 function withQuery(path, params) {
   const query = new URLSearchParams()
@@ -21,36 +28,41 @@ export async function getBusiness(businessId, token) {
   return apiRequest(`/businesses/${businessId}`, { token })
 }
 
-export async function createBusiness(body) {
-  return apiRequest('/businesses', { method: 'POST', body })
+export async function createBusiness(body, token) {
+  return apiRequest('/businesses', { method: 'POST', body, token })
 }
 
-export async function updateBusiness(businessId, body) {
-  return apiRequest(`/businesses/${businessId}`, { method: 'PATCH', body })
+export async function updateBusiness(businessId, body, token) {
+  return apiRequest(`/businesses/${businessId}`, { method: 'PATCH', body, token })
 }
 
-export async function deleteBusiness(businessId) {
-  return apiRequest(`/businesses/${businessId}`, { method: 'DELETE' })
+export async function deleteBusiness(businessId, token) {
+  return apiRequest(`/businesses/${businessId}`, { method: 'DELETE', token })
 }
 
-export async function getAuditLog({ businessId, action, limit, offset } = {}, token) {
-  const path = withQuery('/audit', { business_id: businessId, action, limit, offset })
-  return apiRequest(path, { token })
+export async function getAuditLog(opts = {}, token) {
+  return v2GetAuditLog(opts, token)
 }
 
 export async function getGlobalStats(token) {
-  return apiRequest('/tenant-manager/stats', { token })
+  return v2GetGlobalStats(token)
 }
 
 export async function getBusinessStats(businessId, token) {
-  return apiRequest(`/tenant-manager/businesses/${businessId}/stats`, { token })
+  return v2GetBusinessStats(businessId, token)
 }
 
 export async function listAllUsers({ role, businessId } = {}, token) {
-  const path = withQuery('/tenant-manager/users', { role, business_id: businessId })
-  return apiRequest(path, { token })
+  return v2ListAllUsers({ role, businessId }, token)
 }
 
-export async function getObservability(token) {
-  return apiRequest('/tenant-manager/observability', { token })
+export async function updateUser(userId, body, token) {
+  return apiRequest(`/users/${userId}`, { method: 'PATCH', body, token })
 }
+
+export async function getObservability(token, opts = {}) {
+  return v2GetObservability(token, opts)
+}
+
+// Legacy helper kept for callers that still build audit query strings.
+export { withQuery }
