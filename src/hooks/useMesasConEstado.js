@@ -21,7 +21,14 @@ export function useMesasConEstado(localId) {
       setError(null)
       setMesas(await listMesas(localId))
     } catch (err) {
-      setError(err.message || 'Error al cargar mesas')
+      console.error('Error al cargar mesas:', err)
+      let errorMessage = err.message || 'Error al cargar mesas'
+      // Extraer el mensaje de error limpio sin el código HTTP
+      if (errorMessage.includes(':')) {
+        const parts = errorMessage.split(':')
+        errorMessage = parts.slice(1).join(':').trim()
+      }
+      setError(errorMessage)
     } finally {
       setLoading(false)
     }

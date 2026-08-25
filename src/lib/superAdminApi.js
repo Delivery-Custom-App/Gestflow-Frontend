@@ -52,6 +52,18 @@ export async function getBusinessStats(businessId, token) {
   return v2GetBusinessStats(businessId, token)
 }
 
+export async function listBusinessLocals(businessId, token) {
+  return apiRequest(`/locals?business_id=${encodeURIComponent(String(businessId))}`, { token })
+}
+
+export async function updateLocalSalesModel(localId, salesModel, token) {
+  return apiRequest(`/locals/${encodeURIComponent(String(localId))}`, {
+    method: 'PATCH',
+    body: { sales_model: salesModel },
+    token,
+  })
+}
+
 export async function listAllUsers({ role, businessId } = {}, token) {
   return v2ListAllUsers({ role, businessId }, token)
 }

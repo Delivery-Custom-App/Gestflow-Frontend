@@ -4,15 +4,23 @@
  */
 export const V2_FEATURES = {
   hrModule: true,
-  mercadopagoPoint: false,
-  mpConfig: false,
-  cajaMpPairing: false,
+  mercadopagoPoint: true,
+  mpConfig: true,
+  cajaMpPairing: true,
   printers: false,
   comandas: false,
-  splitPayments: false,
+  splitPayments: true,
   receiptPrint: false,
   superAdminAudit: true,
   superAdminObservability: true,
+  /** Gastos, transferencias y dashboard de rendiciones (aún no en V2). */
+  rendiciones: false,
+  /** Endpoints legacy /dashboard/* (aún no en V2). Se calculan desde órdenes. */
+  adminDashboard: false,
+  /** Motor de alertas / SSE (aún no en V2). */
+  alerts: false,
+  /** Legacy /webhooks/mercadopago-pos discover+link — implementado en V2. */
+  mpPosWebhooks: true,
 }
 
 export function isV2FeatureEnabled(key) {

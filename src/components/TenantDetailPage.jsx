@@ -3,10 +3,16 @@ import { useParams, useNavigate, Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import {
   ArrowLeft, Building2, Store, Users, ShoppingCart, DollarSign, TrendingUp,
-  Loader2, Shield, History, Power,
+  Loader2, Shield, History, Power, UtensilsCrossed, Table2,
 } from 'lucide-react'
 import { getAuthContext, formatApiErrorDetail } from '../lib/apiClient'
-import { getBusinessStats, updateBusiness } from '../lib/superAdminApi'
+import {
+  getBusinessStats,
+  listBusinessLocals,
+  updateBusiness,
+  updateLocalSalesModel,
+} from '../lib/superAdminApi'
+import { SALES_MODEL, SALES_MODEL_LABEL, isAlPasoLocal } from '../lib/salesModel'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -96,20 +102,27 @@ export default function TenantDetailPage() {
   const { businessId } = useParams()
   const navigate = useNavigate()
   const [data, setData] = useState(null)
+  const [locals, setLocals] = useState([])
   const [loading, setLoading] = useState(true)
   const [toggling, setToggling] = useState(false)
+  const [savingLocalId, setSavingLocalId] = useState('')
   const [err, setErr] = useState('')
 
   const load = useCallback(async () => {
     setLoading(true)
     try {
       const ctx = await getAuthContext()
-      const stats = await getBusinessStats(businessId, ctx.token)
+      const [stats, localRows] = await Promise.all([
+        getBusinessStats(businessId, ctx.token),
+        listBusinessLocals(businessId, ctx.token),
+      ])
       setData(stats)
+      setLocals(Array.isArray(localRows) ? localRows : [])
       setErr('')
     } catch (e2) {
       setErr(formatApiErrorDetail(e2.detail) || e2.message || 'Error al cargar el detalle del negocio')
       setData(null)
+      setLocals([])
     } finally {
       setLoading(false)
     }
@@ -136,6 +149,25 @@ export default function TenantDetailPage() {
       setErr(formatApiErrorDetail(e2.detail) || e2.message || 'No se pudo cambiar el estado')
     } finally {
       setToggling(false)
+    }
+  }
+
+  const handleSalesModelChange = async (local, nextModel) => {
+    if (!local?.id || String(local.sales_model) === String(nextModel)) return
+    setSavingLocalId(String(local.id))
+    setErr('')
+    try {
+      const ctx = await getAuthContext()
+      await updateLocalSalesModel(local.id, nextModel, ctx.token)
+      setLocals((prev) =>
+        prev.map((row) =>
+          String(row.id) === String(local.id) ? { ...row, sales_model: nextModel } : row,
+        ),
+      )
+    } catch (e2) {
+      setErr(formatApiErrorDetail(e2.detail) || e2.message || 'No se pudo cambiar el modo de venta')
+    } finally {
+      setSavingLocalId('')
     }
   }
 
@@ -267,6 +299,58 @@ export default function TenantDetailPage() {
             </CardContent>
           </Card>
         </div>
+
+        {/* Modo de venta por local */}
+        <Card>
+          <CardContent className="p-5">
+            <div className="flex items-start justify-between gap-3 mb-4">
+              <div>
+                <h3 className="text-sm font-bold text-[hsl(var(--foreground))]">Modo de venta por local</h3>
+                <p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">
+                  Activa <strong>comida al paso</strong> para locales sin mesas (solo caja + menú).
+                  Con mesas mantiene el POS de restaurante.
+                </p>
+              </div>
+            </div>
+            {locals.length === 0 ? (
+              <p className="text-xs text-[hsl(var(--muted-foreground))]">Este negocio aún no tiene locales.</p>
+            ) : (
+              <div className="flex flex-col divide-y divide-[hsl(var(--border))]">
+                {locals.map((local) => {
+                  const alPaso = isAlPasoLocal(local)
+                  const saving = String(savingLocalId) === String(local.id)
+                  return (
+                    <div key={local.id} className="py-3 flex flex-wrap items-center justify-between gap-3">
+                      <div className="min-w-0 flex items-center gap-2.5">
+                        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[hsl(var(--muted))] text-[hsl(var(--foreground))] shrink-0">
+                          {alPaso ? <UtensilsCrossed size={16} /> : <Table2 size={16} />}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold text-[hsl(var(--foreground))] truncate">{local.name}</p>
+                          <p className="text-xs text-[hsl(var(--muted-foreground))]">
+                            {SALES_MODEL_LABEL[local.sales_model] || local.sales_model || '—'}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <select
+                          value={alPaso ? SALES_MODEL.AL_PASO : SALES_MODEL.RESTAURANT}
+                          disabled={saving}
+                          onChange={(e) => handleSalesModelChange(local, e.target.value)}
+                          className="h-9 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-2.5 text-xs font-medium disabled:opacity-60"
+                        >
+                          <option value={SALES_MODEL.RESTAURANT}>{SALES_MODEL_LABEL.RESTAURANT}</option>
+                          <option value={SALES_MODEL.AL_PASO}>{SALES_MODEL_LABEL.AL_PASO}</option>
+                        </select>
+                        {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin text-[hsl(var(--muted-foreground))]" /> : null}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </CardContent>
+        </Card>
 
         {/* Auditoría reciente */}
         <Card>

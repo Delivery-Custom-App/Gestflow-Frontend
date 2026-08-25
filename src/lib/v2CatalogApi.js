@@ -16,6 +16,21 @@ export async function fetchLocal(localId) {
   return apiRequest(`/locals/${localId}`)
 }
 
+export async function listLocals(businessId) {
+  const url = businessId
+    ? `/locals?business_id=${encodeURIComponent(String(businessId))}`
+    : '/locals'
+  const rows = await apiRequest(url)
+  return Array.isArray(rows) ? rows : []
+}
+
+export async function updateLocal(localId, body) {
+  return apiRequest(`/locals/${encodeURIComponent(String(localId))}`, {
+    method: 'PATCH',
+    body,
+  })
+}
+
 export async function fetchProductsMap() {
   const products = await apiRequest('/products')
   const map = new Map()

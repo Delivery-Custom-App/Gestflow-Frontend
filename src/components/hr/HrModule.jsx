@@ -1,11 +1,11 @@
 import { useMemo, useState } from 'react'
 import { useParams } from 'react-router-dom'
-import { useAuth } from '../context/AuthContext'
-import { useEmployees } from '../hooks/useEmployees'
-import { useShifts } from '../hooks/useShifts'
-import { useLeaveRequests } from '../hooks/useLeaveRequests'
-import { listUsers } from '../lib/apiClient'
-import { fetchLocal } from '../lib/salesApi'
+import { useAuth } from '../../context/AuthContext'
+import { useEmployees } from '../../hooks/useEmployees'
+import { useShifts } from '../../hooks/useShifts'
+import { useLeaveRequests } from '../../hooks/useLeaveRequests'
+import { listUsers } from '../../lib/apiClient'
+import { fetchLocal } from '../../lib/v2CatalogApi'
 import {
   formatEmployeeStatus,
   formatLeaveStatus,
@@ -14,10 +14,10 @@ import {
   formatShiftStatus,
   LEAVE_TYPES,
   PAY_FREQUENCIES,
-} from '../lib/hrApi'
-import { isAdminNegocioRole, isSuperAdminRole } from '../auth/roleLabel'
-import { formatCLPDisplay } from '../lib/formatCLP'
-import LoadingSpinner from './LoadingSpinner'
+} from '../../lib/hrApi'
+import { isAdminNegocioRole, isSuperAdminRole } from '../../auth/roleLabel'
+import { formatCLPDisplay } from '../../lib/formatCLP'
+import LoadingSpinner from '../LoadingSpinner'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'

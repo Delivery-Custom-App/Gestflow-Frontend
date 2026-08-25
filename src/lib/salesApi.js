@@ -306,20 +306,28 @@ export async function computeMesasKpis(localId) {
   const mesas = await listMesas(localId)
   const libres = mesas.filter((m) => m.state === 'libre').length
   const ocupadas = mesas.filter((m) => m.state === 'ocupada').length
+  const enCobro = mesas.filter((m) => m.state === 'en_cobro').length
   return {
+    total: mesas.length,
+    libres,
+    ocupadas,
+    en_cobro: enCobro,
     total_mesas: mesas.length,
     mesas_libres: libres,
     mesas_ocupadas: ocupadas,
-    mesas_en_cobro: 0,
+    mesas_en_cobro: enCobro,
     occupancy_rate: mesas.length ? Math.round((ocupadas / mesas.length) * 100) : 0,
   }
 }
 
 /**
- * Menú POS compuesto: local-products activos + products + categories.
- * Shape: { categories: [{ id, name, products: [...] }] }
+ * Catálogo de carta del local (misma fuente para Menú y Mesas/POS).
+ * - includeInactive=false → solo ítems vendibles (local-product + product activos)
+ * - includeInactive=true  → todos los vinculados al local (para el creador de menú)
+ *
+ * Shape: { categories: [{ id, name, products: [...] }], local_id }
  */
-export async function fetchPosMenu(localId, { search } = {}) {
+export async function fetchLocalMenuCatalog(localId, { search, includeInactive = false } = {}) {
   const [localProducts, products, categories] = await Promise.all([
     apiRequest('/local-products'),
     apiRequest('/products'),
@@ -334,33 +342,41 @@ export async function fetchPosMenu(localId, { search } = {}) {
   )
 
   const q = search ? String(search).trim().toLowerCase() : ''
-  const activeLocal = (Array.isArray(localProducts) ? localProducts : []).filter(
-    (lp) => String(lp.local_id) === String(localId) && lp.is_active !== false,
+  const localRows = (Array.isArray(localProducts) ? localProducts : []).filter(
+    (lp) => String(lp.local_id) === String(localId),
   )
 
   const byCategory = new Map()
   const uncategorized = []
 
-  for (const lp of activeLocal) {
+  for (const lp of localRows) {
     const product = productMap.get(String(lp.product_id))
-    if (!product || product.is_active === false || product.deleted_at) continue
+    if (!product || product.deleted_at) continue
+
+    const productActive = product.is_active !== false
+    const localActive = lp.is_active !== false
+    const onSale = productActive && localActive
+    if (!includeInactive && !onSale) continue
     if (q && !String(product.name || '').toLowerCase().includes(q)) continue
 
     const row = {
       id: product.id,
+      product_id: product.id,
       name: product.name,
+      product_name: product.name,
       price: Number(product.price) || 0,
       cost: Number(product.cost) || 0,
-      category_id: product.category_id,
+      category_id: product.category_id ? String(product.category_id) : null,
       stock_deduction_mode: product.stock_deduction_mode,
-      is_active: true,
+      is_active: onSale,
+      product_is_active: productActive,
+      local_product_is_active: localActive,
       local_product_id: lp.id,
     }
 
-    if (product.category_id) {
-      const key = String(product.category_id)
-      if (!byCategory.has(key)) byCategory.set(key, [])
-      byCategory.get(key).push(row)
+    if (row.category_id) {
+      if (!byCategory.has(row.category_id)) byCategory.set(row.category_id, [])
+      byCategory.get(row.category_id).push(row)
     } else {
       uncategorized.push(row)
     }
@@ -386,6 +402,14 @@ export async function fetchPosMenu(localId, { search } = {}) {
   }
 
   return { categories: categoryList, local_id: localId }
+}
+
+/**
+ * Menú POS compuesto: local-products activos + products + categories.
+ * Shape: { categories: [{ id, name, products: [...] }] }
+ */
+export async function fetchPosMenu(localId, { search } = {}) {
+  return fetchLocalMenuCatalog(localId, { search, includeInactive: false })
 }
 
 /** Compat `/products/catalog`: grupos con products. */

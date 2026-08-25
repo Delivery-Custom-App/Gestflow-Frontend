@@ -393,7 +393,7 @@ function StockControlDashboard() {
               <Package size={22} />
             </span>
             <div>
-              <h1 className="text-xl font-bold text-[hsl(var(--foreground))]">Carta virtual</h1>
+              <h1 className="text-xl font-bold text-[hsl(var(--foreground))]">Control de stock</h1>
               <p className="text-sm text-[hsl(var(--muted-foreground))]">Gestiona existencias y costos para decisiones de reposición</p>
             </div>
           </header>
