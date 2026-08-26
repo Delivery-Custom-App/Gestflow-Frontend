@@ -26,6 +26,8 @@ import {
   postExpense,
   postTransfer,
   createCaja,
+  getCajaResumen,
+  getMovimientosCaja,
 } from '../lib/administrativeApi'
 import { getAuthContext, apiRequest } from '../lib/apiClient'
 import { uploadReceipt } from '../lib/uploadApi'
@@ -913,11 +915,20 @@ const MP_PAIRING_ACTION = {
   paired:           'Ver vinculación',
 }
 
-function FlujoCajaContent({ dashboard, cajas, loading, error, onManagePairing }) {
+function FlujoCajaContent({ dashboard, cajas, loading, error, onManagePairing, onViewMovimientos }) {
   const cajasList = safeArray(cajas)
   const showMpPairing = typeof onManagePairing === 'function'
+  const showMovimientos = typeof onViewMovimientos === 'function'
+  const showActions = showMpPairing || showMovimientos
   const stateNode = <SectionState loading={loading} error={error} isEmpty={!dashboard && !loading && !error} emptyMessage="Sin datos de flujo. Completa órdenes desde el POS y registra gastos para ver gráficos." />
   if (loading || error || (!dashboard && !loading && !error)) return stateNode
+
+  const headers = [
+    'Nombre Caja',
+    'Estado',
+    ...(showMpPairing ? ['MercadoPago'] : []),
+    ...(showActions ? ['Acciones'] : []),
+  ]
 
   return (
     <div className="space-y-5">
@@ -936,27 +947,41 @@ function FlujoCajaContent({ dashboard, cajas, loading, error, onManagePairing })
       </div>
       <Panel title="Cajas del Local" sub="Fuente: endpoint /cajas por local">
         <AmTable
-          headers={showMpPairing ? ['Nombre Caja', 'Estado', 'MercadoPago', 'Acciones'] : ['Nombre Caja', 'Estado']}
+          headers={headers}
           rows={cajasList.map((c) => {
-            const base = [
+            const row = [
               c.name || 'Caja sin nombre',
               c.is_active ? 'Abierta' : (c.status === 'closed' ? 'Cerrada' : (c.is_active ? 'Activa' : 'Inactiva')),
             ]
-            if (!showMpPairing) return base
-            const status = c.mp?.pairing_status || 'unprovisioned'
-            const badge = MP_PAIRING_BADGE[status] || MP_PAIRING_BADGE.unprovisioned
-            return [
-              ...base,
-              <div className="flex items-center gap-2" key={`mp-${c.id}`}>
-                <Badge variant={badge.variant}>{badge.label}</Badge>
-                {status === 'paired' && c.mp?.terminal_id && (
-                  <span className="text-xs text-[hsl(var(--muted-foreground))]">{c.mp.terminal_id}</span>
-                )}
-              </div>,
-              <Button key={`action-${c.id}`} size="sm" variant="outline" onClick={() => onManagePairing(c)}>
-                {MP_PAIRING_ACTION[status] || MP_PAIRING_ACTION.unprovisioned}
-              </Button>,
-            ]
+            if (showMpPairing) {
+              const status = c.mp?.pairing_status || 'unprovisioned'
+              const badge = MP_PAIRING_BADGE[status] || MP_PAIRING_BADGE.unprovisioned
+              row.push(
+                <div className="flex items-center gap-2" key={`mp-${c.id}`}>
+                  <Badge variant={badge.variant}>{badge.label}</Badge>
+                  {status === 'paired' && c.mp?.terminal_id && (
+                    <span className="text-xs text-[hsl(var(--muted-foreground))]">{c.mp.terminal_id}</span>
+                  )}
+                </div>,
+              )
+            }
+            if (showActions) {
+              row.push(
+                <div className="flex items-center gap-2" key={`actions-${c.id}`}>
+                  {showMovimientos && (
+                    <Button size="sm" variant="outline" onClick={() => onViewMovimientos(c)}>
+                      Ver movimientos
+                    </Button>
+                  )}
+                  {showMpPairing && (
+                    <Button size="sm" variant="outline" onClick={() => onManagePairing(c)}>
+                      {MP_PAIRING_ACTION[c.mp?.pairing_status || 'unprovisioned'] || MP_PAIRING_ACTION.unprovisioned}
+                    </Button>
+                  )}
+                </div>,
+              )
+            }
+            return row
           })}
           emptyMessage="No hay cajas registradas para este local."
         />
@@ -1961,6 +1986,142 @@ function NuevaCajaModal({ localId, onClose, onSaved }) {
   )
 }
 
+const MOVIMIENTO_SOURCE_LABEL = {
+  dine_in: 'Mesa',
+  takeout: 'Para llevar',
+  mostrador: 'Mostrador',
+  delivery: 'Delivery',
+  haulmer_pos: 'Haulmer POS',
+  mercadopago_pos: 'Mercado Pago',
+}
+
+function CajaMovimientosModal({ caja, onClose }) {
+  const [resumen, setResumen] = useState(null)
+  const [movimientos, setMovimientos] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [err, setErr] = useState('')
+  const [visible, setVisible] = useState(false)
+
+  useEffect(() => { requestAnimationFrame(() => setVisible(true)) }, [])
+
+  useEffect(() => {
+    let ignore = false
+    async function load() {
+      setLoading(true); setErr('')
+      try {
+        const [resumenData, movimientosData] = await Promise.all([
+          getCajaResumen(caja.id),
+          getMovimientosCaja(caja.id),
+        ])
+        if (!ignore) { setResumen(resumenData); setMovimientos(movimientosData) }
+      } catch (e) {
+        if (!ignore) setErr(e?.message || 'No se pudo cargar el movimiento de la caja')
+      } finally {
+        if (!ignore) setLoading(false)
+      }
+    }
+    load()
+    return () => { ignore = true }
+  }, [caja.id])
+
+  const handleClose = () => {
+    setVisible(false)
+    setTimeout(onClose, 300)
+  }
+
+  return (
+    <div className="fixed inset-0 z-50">
+      <div className={cn('absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity duration-300', visible ? 'opacity-100' : 'opacity-0')} onClick={handleClose} />
+      <div className={cn('absolute inset-y-0 right-0 w-full max-w-md flex flex-col shadow-2xl overflow-y-auto no-scrollbar bg-[hsl(var(--card))] border-l border-[hsl(var(--border))] transition-transform duration-300 ease-out', visible ? 'translate-x-0' : 'translate-x-full')}>
+
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-[hsl(var(--border))] shrink-0">
+          <div className="flex items-center gap-3">
+            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[hsl(var(--primary)/0.1)]">
+              <ArrowLeftRight size={18} className="text-[hsl(var(--primary))]" />
+            </span>
+            <div>
+              <h2 className="text-base font-bold text-[hsl(var(--foreground))]">Movimientos de Caja</h2>
+              <p className="text-xs text-[hsl(var(--muted-foreground))]">{caja.name || 'Caja sin nombre'}</p>
+            </div>
+          </div>
+          <button onClick={handleClose}
+            className="flex h-7 w-7 items-center justify-center rounded-lg hover:bg-[hsl(var(--muted))] text-[hsl(var(--muted-foreground))] transition-colors">
+            <X size={14} />
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="p-6 flex flex-col gap-5 flex-1">
+          {err && (
+            <div className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 dark:border-red-800/50 dark:bg-red-950/30 px-3 py-2">
+              <span className="h-1.5 w-1.5 rounded-full bg-red-500 shrink-0" />
+              <p className="text-xs text-red-600 dark:text-red-400">{err}</p>
+            </div>
+          )}
+
+          {loading ? (
+            <LoadingSpinner message="Cargando movimientos..." />
+          ) : (
+            <>
+              {resumen && (
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--muted))] p-3">
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-[hsl(var(--muted-foreground))]">Apertura</p>
+                    <p className="mt-1 text-sm font-bold text-[hsl(var(--foreground))]">{formatMoney(Number(resumen.monto_apertura))}</p>
+                  </div>
+                  <div className="rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--muted))] p-3">
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-[hsl(var(--muted-foreground))]">Ingresos</p>
+                    <p className="mt-1 text-sm font-bold text-[hsl(var(--foreground))]">{formatMoney(Number(resumen.total_ingresos))}</p>
+                  </div>
+                  <div className="rounded-lg border border-[hsl(var(--primary)/0.3)] bg-[hsl(var(--primary)/0.08)] p-3">
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-[hsl(var(--muted-foreground))]">Total esperado</p>
+                    <p className="mt-1 text-sm font-bold text-[hsl(var(--foreground))]">{formatMoney(Number(resumen.total_esperado))}</p>
+                  </div>
+                </div>
+              )}
+
+              {resumen && resumen.por_metodo.length > 0 && (
+                <div>
+                  <h3 className="mb-2 text-xs font-bold uppercase tracking-wide text-[hsl(var(--muted-foreground))]">Desglose por método de pago</h3>
+                  <p className="mb-2 text-[11px] text-[hsl(var(--muted-foreground))]">Para arquear, compara el monto de Mercado Pago aquí contra el reporte de la app/sitio de Mercado Pago.</p>
+                  <div className="flex flex-col gap-1.5">
+                    {resumen.por_metodo.map((row) => (
+                      <div key={row.source} className="flex items-center justify-between rounded-lg border border-[hsl(var(--border))] px-3 py-2 text-sm">
+                        <span className="text-[hsl(var(--foreground))]">{MOVIMIENTO_SOURCE_LABEL[row.source] || row.source}</span>
+                        <span className="font-semibold text-[hsl(var(--foreground))]">{formatMoney(Number(row.total))}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div>
+                <h3 className="mb-2 text-xs font-bold uppercase tracking-wide text-[hsl(var(--muted-foreground))]">Movimientos</h3>
+                {movimientos.length === 0 ? (
+                  <p className="text-xs text-[hsl(var(--muted-foreground))]">Todavía no hay movimientos registrados en esta caja.</p>
+                ) : (
+                  <div className="flex flex-col gap-2">
+                    {movimientos.map((mov) => (
+                      <RowCard
+                        key={mov.id}
+                        title={formatMoney(Number(mov.monto))}
+                        sub={formatDateTime(mov.created_at)}
+                        meta={mov.order_id ? `Orden ${String(mov.order_id).slice(0, 8)}` : null}
+                        pill={MOVIMIENTO_SOURCE_LABEL[mov.payment_source] || mov.payment_source || mov.tipo}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function renderSectionContent(activeSection, payload) {
   switch (activeSection) {
     case 'dashboard': {
@@ -1984,7 +2145,7 @@ function renderSectionContent(activeSection, payload) {
     case 'flujo-caja': {
       const flujoDashboard = enrichDashboardWithChartData(payload.dashboard)
       const flujoExpenseData = generateExpenseBreakdownFromData(payload.expenses)
-      return <FlujoCajaContent dashboard={{ ...flujoDashboard, expenses_breakdown: flujoExpenseData }} cajas={payload.cajas} loading={payload.loading} error={payload.error} onManagePairing={payload.onManagePairing} />
+      return <FlujoCajaContent dashboard={{ ...flujoDashboard, expenses_breakdown: flujoExpenseData }} cajas={payload.cajas} loading={payload.loading} error={payload.error} onManagePairing={payload.onManagePairing} onViewMovimientos={payload.onViewMovimientos} />
     }
     case 'alertas':
       return <AlertasContent localId={payload.localId} />
@@ -2016,6 +2177,7 @@ function AdministrativeModule() {
   const [showNuevaTransferencia, setShowNuevaTransferencia] = useState(false)
   const [showNuevaCaja, setShowNuevaCaja]               = useState(false)
   const [pairingCaja, setPairingCaja]                   = useState(null)
+  const [movimientosCaja, setMovimientosCaja]           = useState(null)
   const [refreshKey, setRefreshKey] = useState(0)
   const [guideOpen,  setGuideOpen]  = useState(false)
 
@@ -2114,6 +2276,12 @@ function AdministrativeModule() {
           onUpdated={() => setRefreshKey(k => k + 1)}
         />
       )}
+      {movimientosCaja && (
+        <CajaMovimientosModal
+          caja={movimientosCaja}
+          onClose={() => setMovimientosCaja(null)}
+        />
+      )}
       <AnimatePresence>
         {guideOpen && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
@@ -2188,6 +2356,7 @@ function AdministrativeModule() {
           localId,
           onRefresh: () => setRefreshKey(k => k + 1),
           onManagePairing: isV2FeatureEnabled('cajaMpPairing') ? setPairingCaja : undefined,
+          onViewMovimientos: isV2FeatureEnabled('movimientosCaja') ? setMovimientosCaja : undefined,
         })}
       </main>
     </>

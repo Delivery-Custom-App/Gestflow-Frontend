@@ -128,6 +128,18 @@ export async function createCajaV2({ local_id, cashier_user_id, monto_apertura =
   return mapCajaOut(row)
 }
 
+/** Resumen de una caja: monto de apertura, total de ingresos y desglose por método de pago. */
+export async function getCajaResumen(cajaId) {
+  return apiRequest(`/cajas/${encodeURIComponent(String(cajaId))}/resumen`)
+}
+
+/** Movimientos (ingresos) registrados en una caja, más recientes primero. */
+export async function getMovimientosCaja(cajaId, { limit = 100, offset = 0 } = {}) {
+  const qs = new URLSearchParams({ limit: String(limit), offset: String(offset) })
+  const rows = await apiRequest(`/cajas/${encodeURIComponent(String(cajaId))}/movimientos?${qs.toString()}`)
+  return Array.isArray(rows) ? rows : []
+}
+
 export async function listMesas(localId) {
   const rows = await apiRequest(`/mesas?local_id=${encodeURIComponent(String(localId))}`)
   return (Array.isArray(rows) ? rows : []).map(mapMesaOut)

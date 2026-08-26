@@ -15,6 +15,8 @@ export const V2_FEATURES = {
   superAdminObservability: true,
   /** Gastos, transferencias y dashboard de rendiciones (aún no en V2). */
   rendiciones: false,
+  /** Resumen de caja (total esperado + desglose por método) y su lista de movimientos. */
+  movimientosCaja: true,
   /** Endpoints legacy /dashboard/* (aún no en V2). Se calculan desde órdenes. */
   adminDashboard: false,
   /** Motor de alertas / SSE (aún no en V2). */

@@ -1,4 +1,4 @@
-import { listCajas, listOrders, createCajaV2 } from './salesApi'
+import { listCajas, listOrders, createCajaV2, getCajaResumen, getMovimientosCaja } from './salesApi'
 import { apiRequest } from './apiClient'
 import { isV2FeatureEnabled } from './v2Features'
 
@@ -148,6 +148,8 @@ export function getCajasByLocal(localId, token) {
 export function createCaja(body) {
   return createCajaV2(body)
 }
+
+export { getCajaResumen, getMovimientosCaja }
 
 export async function provisionCajaMp() {
   throw new Error('Provision MP de caja aún no disponible en Backend V2')
