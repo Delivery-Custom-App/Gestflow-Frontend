@@ -1,11 +1,8 @@
-import { useCallback, useEffect, useState } from 'react'
-import { apiRequest, getAuthContext } from '../../lib/apiClient'
+import { useEffect, useState } from 'react'
+import { apiRequest } from '../../lib/apiClient'
 import {
-  getLocalById,
-  getSuppliersWithMetricsForBusiness,
   postCategory,
   postInventoryNewProduct,
-  postSupplier,
 } from '../../lib/inventoryApi'
 import CategoryTypeaheadField from './CategoryTypeaheadField'
 import { Button } from '@/components/ui/button'
@@ -47,48 +44,8 @@ function NuevoProductoModal({ open, localId, onClose, onSuccess }) {
   const [minStock,         setMinStock]         = useState('0')
   const [maxStock,         setMaxStock]         = useState('0')
   const [unitCost,         setUnitCost]         = useState('')
-  const [supplierId,       setSupplierId]       = useState('')
-  const [suppliers,        setSuppliers]        = useState([])
-  const [suppliersLoading, setSuppliersLoading] = useState(false)
-  const [suppliersError,   setSuppliersError]   = useState('')
-  const [newSupplierName,  setNewSupplierName]  = useState('')
-  const [addingSupplier,   setAddingSupplier]   = useState(false)
   const [categories,       setCategories]       = useState([])
   const [catsLoading,      setCatsLoading]      = useState(false)
-
-  const loadSuppliers = useCallback(async () => {
-    if (!localId) return
-    setSuppliersLoading(true)
-    setSuppliersError('')
-    try {
-      const [{ businessId: bidFromToken }, loc] = await Promise.all([
-        getAuthContext(),
-        getLocalById(localId).catch(() => null),
-      ])
-      const businessId =
-        loc?.business_id != null ? String(loc.business_id) :
-        bidFromToken != null     ? String(bidFromToken)     : null
-      if (!businessId) {
-        setSuppliers([])
-        setSupplierId('')
-        setSuppliersError('No se pudo determinar el negocio del local.')
-        return
-      }
-      const rows = await getSuppliersWithMetricsForBusiness(businessId, { localId })
-      const list = (Array.isArray(rows) ? rows : []).filter((s) => s.is_active !== false)
-      setSuppliers(list)
-      setSupplierId((prev) => {
-        if (prev && list.some((s) => String(s.id) === prev)) return prev
-        return list[0]?.id != null ? String(list[0].id) : ''
-      })
-    } catch (err) {
-      setSuppliers([])
-      setSupplierId('')
-      setSuppliersError(err?.message || 'No se pudieron cargar los proveedores.')
-    } finally {
-      setSuppliersLoading(false)
-    }
-  }, [localId])
 
   useEffect(() => {
     if (!open) return
@@ -101,18 +58,7 @@ function NuevoProductoModal({ open, localId, onClose, onSuccess }) {
     setMinStock('0')
     setMaxStock('0')
     setUnitCost('')
-    setNewSupplierName('')
   }, [open])
-
-  useEffect(() => {
-    if (!open || !localId) {
-      setSuppliers([])
-      setSupplierId('')
-      setSuppliersError('')
-      return
-    }
-    loadSuppliers()
-  }, [open, localId, loadSuppliers])
 
   useEffect(() => {
     if (!open || !localId) { setCategories([]); return }
@@ -123,31 +69,6 @@ function NuevoProductoModal({ open, localId, onClose, onSuccess }) {
       .finally(() => setCatsLoading(false))
   }, [open, localId])
 
-  const handleAddSupplier = async (e) => {
-    e?.preventDefault()
-    const name = newSupplierName.trim()
-    if (!name) { setError('Escribe el nombre del proveedor.'); return }
-    setAddingSupplier(true)
-    setError('')
-    try {
-      const { businessId: bidFromToken } = await getAuthContext()
-      let businessId = bidFromToken != null ? String(bidFromToken) : null
-      if (!businessId && localId) {
-        const loc = await getLocalById(localId)
-        if (loc?.business_id != null) businessId = String(loc.business_id)
-      }
-      if (!businessId) { setError('No se pudo determinar el negocio del local.'); return }
-      const created = await postSupplier({ name, business_id: businessId, local_id: localId })
-      setNewSupplierName('')
-      await loadSuppliers()
-      if (created?.id) setSupplierId(String(created.id))
-    } catch (err) {
-      setError(err?.message || 'No se pudo crear el proveedor.')
-    } finally {
-      setAddingSupplier(false)
-    }
-  }
-
   const onlyDigits = (val) => val.replace(/\D/g, '')
 
   const handleSubmit = async (e) => {
@@ -157,7 +78,6 @@ function NuevoProductoModal({ open, localId, onClose, onSuccess }) {
     const cost = Number(unitCost)
     if (!productName.trim())                    { setError('Ingresa el nombre del producto.'); return }
     if (!categoryName.trim())                   { setError('Escribe la categoría y pulsa Enter para confirmarla.'); return }
-    if (!supplierId)                            { setError('Selecciona un proveedor o agrega uno nuevo.'); return }
     if (!Number.isFinite(cost) || cost <= 0)    { setError('El costo unitario debe ser mayor que 0.'); return }
 
     setSubmitting(true)
@@ -170,7 +90,6 @@ function NuevoProductoModal({ open, localId, onClose, onSuccess }) {
         minStock:     Number(minStock)     || 0,
         maxStock:     Number(maxStock)     || 0,
         unitCost:     Math.round(cost),
-        supplierId,
       })
       onSuccess?.()
       onClose?.()
@@ -182,7 +101,6 @@ function NuevoProductoModal({ open, localId, onClose, onSuccess }) {
   }
 
   const handleClose = () => { if (!submitting) onClose?.() }
-  const canSubmit = suppliers.length > 0 && !!supplierId
 
   return (
     <>
@@ -231,12 +149,6 @@ function NuevoProductoModal({ open, localId, onClose, onSuccess }) {
               {error}
             </p>
           )}
-          {suppliersError && (
-            <p className="rounded-md bg-amber-50 border border-amber-200 text-amber-700 text-sm px-3 py-2">
-              {suppliersError}
-            </p>
-          )}
-
           {/* Nombre + Categoría */}
           <div className="grid grid-cols-2 gap-4">
             <div className="flex flex-col gap-1.5">
@@ -353,49 +265,15 @@ function NuevoProductoModal({ open, localId, onClose, onSuccess }) {
             </div>
           </fieldset>
 
-          {/* Proveedor */}
+          {/* Proveedor (opcional — módulo aún no disponible en Backend V2) */}
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="np-supplier">Proveedor <span className="text-red-500">*</span></Label>
-            <select
-              id="np-supplier"
-              value={supplierId}
-              onChange={(ev) => setSupplierId(ev.target.value)}
-              disabled={suppliersLoading || suppliers.length === 0 || submitting}
-              aria-busy={suppliersLoading}
-              className={selectCls}
-            >
-              <option value="">
-                {suppliersLoading
-                  ? 'Cargando proveedores…'
-                  : suppliers.length === 0
-                    ? 'Sin proveedores — agrega uno abajo'
-                    : 'Seleccionar proveedor'}
-              </option>
-              {suppliers.map((s) => (
-                <option key={s.id} value={String(s.id)}>{s.name}</option>
-              ))}
+            <Label htmlFor="np-supplier">Proveedor</Label>
+            <select id="np-supplier" value="" disabled className={selectCls}>
+              <option value="">Proveedores no disponibles aún (Backend V2)</option>
             </select>
-
-            {!suppliersLoading && suppliers.length === 0 && (
-              <div className="flex gap-2 mt-1">
-                <Input
-                  type="text"
-                  placeholder="Nombre del nuevo proveedor"
-                  value={newSupplierName}
-                  onChange={(ev) => setNewSupplierName(ev.target.value)}
-                  disabled={addingSupplier}
-                />
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={handleAddSupplier}
-                  disabled={addingSupplier || !newSupplierName.trim()}
-                  className="shrink-0"
-                >
-                  {addingSupplier ? 'Guardando…' : 'Agregar'}
-                </Button>
-              </div>
-            )}
+            <p className="text-xs text-[hsl(var(--muted-foreground))]">
+              El módulo de proveedores todavía no está disponible en Backend V2 — podés crear el producto sin asignarle uno.
+            </p>
           </div>
 
         </form>
@@ -405,7 +283,7 @@ function NuevoProductoModal({ open, localId, onClose, onSuccess }) {
           <Button type="button" variant="outline" onClick={handleClose} disabled={submitting}>
             Cancelar
           </Button>
-          <Button type="submit" form="np-form" disabled={submitting || !canSubmit}>
+          <Button type="submit" form="np-form" disabled={submitting}>
             {submitting ? 'Guardando…' : 'Guardar'}
           </Button>
         </div>

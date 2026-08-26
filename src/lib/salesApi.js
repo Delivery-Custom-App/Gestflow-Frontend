@@ -3,6 +3,25 @@
  * Normaliza enums, shapes y flujos legacy (items nested, caja activa, mesa detail).
  */
 import { apiRequest, getOptionalAuthContext } from './apiClient'
+import { fetchProductsMap } from './v2CatalogApi'
+
+/**
+ * Backend V2 solo devuelve product_id en order_items (sin nombre embebido).
+ * Resuelve nombre + total_price contra el catálogo para las pantallas que
+ * esperan el shape legacy (item_name/product_name/total_price).
+ */
+function enrichItemsWithProducts(items, productsMap) {
+  return (Array.isArray(items) ? items : []).map((item) => {
+    const product = productsMap.get(String(item.product_id))
+    const name = product?.name || null
+    return {
+      ...item,
+      product_name: name,
+      item_name: name,
+      total_price: Number(item.subtotal ?? Number(item.quantity) * Number(item.unit_price)) || 0,
+    }
+  })
+}
 
 const STATUS_TO_UI = {
   open: 'PENDING',
@@ -173,7 +192,10 @@ export async function deleteMesa() {
  */
 export async function getMesaDetail(mesaId) {
   const mesa = mapMesaOut(await apiRequest(`/mesas/${encodeURIComponent(String(mesaId))}`))
-  const orders = await apiRequest(`/orders?local_id=${encodeURIComponent(String(mesa.local_id))}`)
+  const [orders, productsMap] = await Promise.all([
+    apiRequest(`/orders?local_id=${encodeURIComponent(String(mesa.local_id))}`),
+    fetchProductsMap().catch(() => new Map()),
+  ])
   const active = (Array.isArray(orders) ? orders : []).filter(
     (o) => String(o.mesa_id) === String(mesaId) && ACTIVE_ORDER_STATUSES.has(String(o.status)),
   )
@@ -182,7 +204,7 @@ export async function getMesaDetail(mesaId) {
     active.map(async (order) => {
       try {
         const items = await apiRequest(orderResourcePath(order.id, order.created_at, '/items'))
-        return mapOrderOut({ ...order, items: Array.isArray(items) ? items : [] })
+        return mapOrderOut({ ...order, items: enrichItemsWithProducts(items, productsMap) })
       } catch {
         return mapOrderOut({ ...order, items: [] })
       }
@@ -217,7 +239,11 @@ export async function listOrders(localId, { status } = {}) {
 }
 
 export async function listOrderItems(orderId, createdAt) {
-  return apiRequest(orderResourcePath(orderId, createdAt, '/items'))
+  const [items, productsMap] = await Promise.all([
+    apiRequest(orderResourcePath(orderId, createdAt, '/items')),
+    fetchProductsMap().catch(() => new Map()),
+  ])
+  return enrichItemsWithProducts(items, productsMap)
 }
 
 export async function addOrderItem(orderId, body, createdAt) {
