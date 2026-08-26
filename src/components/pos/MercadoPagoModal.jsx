@@ -3,8 +3,6 @@ import { apiRequest, createPointCharge, getPointOrderStatus, cancelPointCharge }
 
 const METHODS = [
   { key: 'CASH',               label: 'Efectivo',          icon: '💵', desc: null },
-  { key: 'CARD',               label: 'Tarjeta',           icon: '💳', desc: null },
-  { key: 'MERCADOPAGO',        label: 'MercadoPago Checkout', icon: '🔵', desc: 'QR · Link de pago · Cuotas' },
   { key: 'MERCADOPAGO_POINT',  label: 'MercadoPago Point', icon: '🖥️', desc: 'Lector físico · Débito · Crédito' },
 ]
 
@@ -14,13 +12,13 @@ function fmt(n) {
 
 export default function MercadoPagoModal({ open, orderId, total, description, onSuccess, onClose }) {
   const [step, setStep]               = useState('select')
-  // steps: 'select' | 'mp_checkout' | 'mp_demo' | 'point_ready' | 'point_waiting' | 'point_success'
-  const [checkoutUrl, setCheckoutUrl] = useState(null)
+  // steps: 'select' | 'cash_amount' | 'point_waiting' | 'point_success'
   const [loading, setLoading]         = useState(false)
   const [error, setError]             = useState(null)
   const [terminalMsg, setTerminalMsg] = useState('Conectando con la terminal...')
   const [paymentDetail, setPaymentDetail] = useState(null)
   const [chargeInfo, setChargeInfo] = useState(null)
+  const [cashAmount, setCashAmount] = useState('')
   const pollRef = useRef(null)
 
   const stopPolling = () => {
@@ -35,61 +33,43 @@ export default function MercadoPagoModal({ open, orderId, total, description, on
   const reset = () => {
     stopPolling()
     setStep('select')
-    setCheckoutUrl(null)
     setLoading(false)
     setError(null)
     setTerminalMsg('Conectando con la terminal...')
     setPaymentDetail(null)
     setChargeInfo(null)
+    setCashAmount('')
   }
 
   const handleClose = () => { reset(); onClose() }
 
-  // ── Efectivo / Tarjeta / MP QR ────────────────────────────────────────────
-  const simulateAndComplete = async (method) => {
+  // ── Efectivo: registra monto recibido y calcula el vuelto ────────────────
+  const cashReceivedNumber = Number(cashAmount) || 0
+  const cashChange = cashReceivedNumber >= total ? cashReceivedNumber - total : 0
+
+  const handleConfirmCash = async () => {
+    if (!cashReceivedNumber || cashReceivedNumber < total) {
+      setError(`El monto recibido debe ser al menos ${fmt(total)}`)
+      return
+    }
     setLoading(true)
     setError(null)
     try {
-      await apiRequest('/orders/checkout/complete', {
-        method: 'POST',
-        body: { order_id: orderId, payment_method: method },
+      await apiRequest(`/orders/${orderId}`, {
+        method: 'PATCH',
+        body: { cash_received: cashReceivedNumber },
       })
       reset()
-      onSuccess(method)
+      onSuccess('CASH')
     } catch (err) {
-      setError(err.message || 'Error al procesar el pago')
-      setLoading(false)
-    }
-  }
-
-  const handleSelectMethod = async (method) => {
-    if (method === 'MERCADOPAGO_POINT') {
-      setStep('point_ready')
-      setError(null)
-      return
-    }
-    if (method !== 'MERCADOPAGO') {
-      await simulateAndComplete(method)
-      return
-    }
-    // Checkout Pro
-    setLoading(true)
-    setError(null)
-    try {
-      const data = await apiRequest('/orders/checkout/init', {
-        method: 'POST',
-        body: { order_id: orderId },
-      })
-      setCheckoutUrl(data.sandbox_init_point)
-      setStep('mp_checkout')
-    } catch {
-      setStep('mp_demo')
-    } finally {
+      setError(err.message || 'Error al registrar el pago en efectivo')
       setLoading(false)
     }
   }
 
   // ── Point Smart 2 ─────────────────────────────────────────────────────────
+  // Envía el cobro a la terminal apenas se elige el método — sin pantalla
+  // intermedia de instrucciones manuales.
   const handleSendToTerminal = async () => {
     setLoading(true)
     setError(null)
@@ -103,6 +83,17 @@ export default function MercadoPagoModal({ open, orderId, total, description, on
       setError(err.message || 'Error al conectar con la terminal')
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleSelectMethod = async (method) => {
+    if (method === 'MERCADOPAGO_POINT') {
+      await handleSendToTerminal()
+      return
+    }
+    if (method === 'CASH') {
+      setStep('cash_amount')
+      setError(null)
     }
   }
 
@@ -125,21 +116,21 @@ export default function MercadoPagoModal({ open, orderId, total, description, on
           setError(
             `No detectamos el pago en la terminal. Verificá que cobraste exactamente ${fmt(total)} y volvé a enviar el cobro.`
           )
-          setStep('point_ready')
+          setStep('select')
           return
         }
 
         if (s.payment_status === 'REJECTED') {
           stopPolling()
           setError('Pago rechazado por la terminal. Podés intentar de nuevo.')
-          setStep('point_ready')
+          setStep('select')
           return
         }
 
         if (s.order_status === 'CANCELLED') {
           stopPolling()
           setError('La orden fue cancelada durante el cobro.')
-          setStep('point_ready')
+          setStep('select')
           return
         }
 
@@ -164,7 +155,7 @@ export default function MercadoPagoModal({ open, orderId, total, description, on
       // ignorar — la orden puede ya haber expirado (TTL)
     } finally {
       setLoading(false)
-      setStep('point_ready')
+      setStep('select')
       setError(null)
     }
   }
@@ -216,36 +207,49 @@ export default function MercadoPagoModal({ open, orderId, total, description, on
             </>
           )}
 
-          {/* ── Point: confirmar envío ───────────────────────────────────────── */}
-          {step === 'point_ready' && (
+          {/* ── Efectivo: monto recibido y vuelto ───────────────────────────── */}
+          {step === 'cash_amount' && (
             <div className="space-y-3">
-              <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 text-center">
-                <p className="text-3xl mb-1">🖥️</p>
-                <p className="text-sm font-semibold text-blue-900">Terminal MP Point</p>
-                <p className="text-xs text-blue-700 mt-2">
-                  1. En el lector Point, inicia un cobro manual
-                </p>
-                <p className="text-xs text-blue-700 mt-1">
-                  2. Ingresa exactamente <span className="font-bold">{fmt(total)}</span>
-                </p>
-                <p className="text-xs text-blue-700 mt-1">
-                  3. Pide al cliente que pase su tarjeta
-                </p>
-                <p className="text-xs text-blue-400 mt-2">
-                  Gestflow detectará el pago aprobado automáticamente.
-                </p>
+              <div>
+                <label className="mb-1.5 block text-xs font-semibold text-[hsl(var(--muted-foreground))]">Monto recibido</label>
+                <input
+                  type="number"
+                  min={total}
+                  autoFocus
+                  value={cashAmount}
+                  onChange={(e) => { setCashAmount(e.target.value); setError(null) }}
+                  placeholder={fmt(total)}
+                  className="w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 py-2.5 text-lg font-bold text-[hsl(var(--foreground))] outline-none focus:border-[hsl(var(--primary))]"
+                />
               </div>
-              <button
-                disabled={loading}
-                onClick={handleSendToTerminal}
-                className="w-full py-2.5 rounded-xl bg-[#009ee3] hover:bg-[#0082c0] text-white text-sm font-semibold disabled:opacity-50 transition-colors flex items-center justify-center gap-2"
-              >
-                {loading
-                  ? <><div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> Conectando...</>
-                  : '📲 Iniciar cobro en Point'
-                }
-              </button>
+
+              <div className="flex gap-2">
+                {[total, total + 1000, total + 2000, total + 5000].map((amt) => (
+                  <button
+                    key={amt}
+                    type="button"
+                    onClick={() => { setCashAmount(String(Math.round(amt))); setError(null) }}
+                    className="flex-1 py-1.5 rounded-lg border border-[hsl(var(--border))] text-xs font-semibold text-[hsl(var(--foreground))] hover:border-[hsl(var(--primary))] hover:bg-[hsl(var(--accent))] transition-colors"
+                  >
+                    {fmt(amt)}
+                  </button>
+                ))}
+              </div>
+
+              <div className="flex items-center justify-between rounded-xl bg-[hsl(var(--accent))] px-4 py-3">
+                <span className="text-sm text-[hsl(var(--muted-foreground))]">Vuelto</span>
+                <span className="text-lg font-bold text-[hsl(var(--primary))]">{fmt(cashChange)}</span>
+              </div>
+
               {error && <p className="text-xs text-red-600 text-center">{error}</p>}
+
+              <button
+                disabled={loading || !cashReceivedNumber}
+                onClick={handleConfirmCash}
+                className="w-full py-2.5 rounded-xl bg-[hsl(var(--primary))] hover:bg-[hsl(var(--primary))]/90 text-white text-sm font-semibold disabled:opacity-50 transition-colors"
+              >
+                {loading ? 'Registrando...' : 'Confirmar pago en efectivo'}
+              </button>
             </div>
           )}
 
@@ -277,37 +281,6 @@ export default function MercadoPagoModal({ open, orderId, total, description, on
             </div>
           )}
 
-          {/* ── MP Checkout Pro ───────────────────────────────────────────── */}
-          {step === 'mp_checkout' && (
-            <div className="space-y-4">
-              <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 text-center">
-                <p className="text-sm font-semibold text-blue-900 mb-1">🔵 Checkout MercadoPago</p>
-                <p className="text-xs text-blue-700 mb-3">
-                  Abre el link en el dispositivo del cliente para que complete el pago.
-                </p>
-                <a
-                  href={checkoutUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-block px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
-                >
-                  Abrir Checkout →
-                </a>
-              </div>
-              <div className="border-t border-[hsl(var(--border))] pt-3 text-center space-y-2">
-                <p className="text-xs text-[hsl(var(--muted-foreground))]">Sandbox — simula la aprobación:</p>
-                <button
-                  disabled={loading}
-                  onClick={() => simulateAndComplete('MERCADOPAGO')}
-                  className="w-full py-2.5 rounded-xl bg-green-600 hover:bg-green-700 text-white text-sm font-semibold disabled:opacity-50 transition-colors"
-                >
-                  {loading ? 'Procesando...' : '✓ Simular Pago Aprobado'}
-                </button>
-              </div>
-              {error && <p className="text-xs text-red-600 text-center">{error}</p>}
-            </div>
-          )}
-
           {/* ── Point: pago detectado ─────────────────────────────────────── */}
           {step === 'point_success' && (
             <div className="space-y-3">
@@ -334,26 +307,6 @@ export default function MercadoPagoModal({ open, orderId, total, description, on
               >
                 Confirmar y cerrar
               </button>
-            </div>
-          )}
-
-          {/* ── MP demo (sin credenciales) ────────────────────────────────── */}
-          {step === 'mp_demo' && (
-            <div className="space-y-3">
-              <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4 text-center">
-                <p className="text-sm font-medium text-yellow-800 mb-1">⚠ MercadoPago — Modo Demo</p>
-                <p className="text-xs text-yellow-700">
-                  No hay credenciales MP configuradas. Simula el cobro para demostrar el flujo.
-                </p>
-              </div>
-              <button
-                disabled={loading}
-                onClick={() => simulateAndComplete('MERCADOPAGO')}
-                className="w-full py-2.5 rounded-xl bg-green-600 hover:bg-green-700 text-white text-sm font-semibold disabled:opacity-50 transition-colors"
-              >
-                {loading ? 'Procesando...' : '✓ Simular Pago Aprobado'}
-              </button>
-              {error && <p className="text-xs text-red-600 text-center">{error}</p>}
             </div>
           )}
         </div>

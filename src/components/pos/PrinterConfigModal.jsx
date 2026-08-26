@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
-import { Printer, Trash2, Wifi, WifiOff, Pencil, X } from 'lucide-react'
+import { Printer, Trash2, Wifi, WifiOff, Bluetooth, Pencil, X } from 'lucide-react'
 import {
   listPrinters,
   createPrinter,
@@ -8,9 +8,10 @@ import {
   deletePrinter,
   testPrinterConnection,
 } from '../../lib/apiClient'
+import { printEscposViaBluetooth, isBluetoothSupported } from '../../lib/bluetoothPrinter'
 import { toast } from 'sonner'
 
-const EMPTY_FORM = { name: '', model: '', ip_address: '', port: 9100, is_active: true }
+const EMPTY_FORM = { name: '', model: '', connection_type: 'network', ip_address: '', port: 9100, bluetooth_name: '', is_active: true }
 
 export default function PrinterConfigModal({ localId, onClose, open = true }) {
   const [printers, setPrinters] = useState([])
@@ -41,8 +42,10 @@ export default function PrinterConfigModal({ localId, onClose, open = true }) {
     setForm({
       name: printer.name,
       model: printer.model || '',
-      ip_address: printer.ip_address,
-      port: printer.port,
+      connection_type: printer.connection_type || 'network',
+      ip_address: printer.ip_address || '',
+      port: printer.port || 9100,
+      bluetooth_name: printer.bluetooth_name || '',
       is_active: printer.is_active,
     })
   }
@@ -54,8 +57,9 @@ export default function PrinterConfigModal({ localId, onClose, open = true }) {
 
   async function handleSave(e) {
     e.preventDefault()
-    if (!form.name.trim() || !form.ip_address.trim()) {
-      toast.error('Nombre e IP son obligatorios')
+    const isBluetooth = form.connection_type === 'bluetooth'
+    if (!form.name.trim() || (!isBluetooth && !form.ip_address.trim())) {
+      toast.error(isBluetooth ? 'El nombre es obligatorio' : 'Nombre e IP son obligatorios')
       return
     }
     setSaving(true)
@@ -64,13 +68,15 @@ export default function PrinterConfigModal({ localId, onClose, open = true }) {
         await updatePrinter(editingId, {
           name: form.name,
           model: form.model || null,
-          ip_address: form.ip_address,
-          port: Number(form.port),
+          connection_type: form.connection_type,
+          ip_address: isBluetooth ? null : form.ip_address,
+          port: isBluetooth ? null : Number(form.port),
+          bluetooth_name: isBluetooth ? (form.bluetooth_name || null) : null,
           is_active: form.is_active,
         })
         toast.success('Impresora actualizada')
       } else {
-        await createPrinter({ local_id: localId, ...form, port: Number(form.port) })
+        await createPrinter({ local_id: localId, ...form })
         toast.success('Impresora registrada')
       }
       setEditingId(null)
@@ -98,12 +104,29 @@ export default function PrinterConfigModal({ localId, onClose, open = true }) {
     setTestingId(printer.id)
     try {
       const res = await testPrinterConnection(printer.id)
-      if (res?.ok) {
-        toast.success(res.message || 'Conexión exitosa')
-      } else {
+      if (!res?.ok) {
         toast.error(res?.message || 'Error de conexión')
+        return
       }
+
+      if (printer.connection_type === 'bluetooth') {
+        if (!res.payload_base64) {
+          toast.error('El servidor no devolvió el ticket de prueba')
+          return
+        }
+        toast.info('Elige la impresora en el selector de Bluetooth...')
+        const result = await printEscposViaBluetooth(res.payload_base64, printer.bluetooth_name)
+        toast.success(`Enviado a ${result.deviceName} por Bluetooth`)
+        return
+      }
+
+      toast.success(res.message || 'Conexión exitosa')
     } catch (err) {
+      // El usuario canceló el selector de Bluetooth — no es un error real.
+      if (err?.name === 'NotFoundError') {
+        toast.info('Selección de dispositivo cancelada')
+        return
+      }
       toast.error('Error al probar: ' + err.message)
     } finally {
       setTestingId(null)
@@ -151,6 +174,55 @@ export default function PrinterConfigModal({ localId, onClose, open = true }) {
               {editingId ? 'Editar impresora' : 'Agregar impresora'}
             </h3>
 
+            <div>
+              <label className="block text-sm font-medium text-[hsl(var(--foreground))] mb-1">Tipo de conexión</label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setForm(f => ({ ...f, connection_type: 'network' }))}
+                  className={`h-9 rounded-md border text-sm font-medium transition-colors ${
+                    form.connection_type === 'network'
+                      ? 'border-[hsl(var(--primary))] bg-[hsl(var(--primary))] text-white'
+                      : 'border-[hsl(var(--border))] bg-[hsl(var(--card))] text-[hsl(var(--foreground))] hover:border-[hsl(var(--primary))]/50'
+                  }`}
+                >
+                  📶 Red (IP)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setForm(f => ({ ...f, connection_type: 'bluetooth' }))}
+                  className={`h-9 rounded-md border text-sm font-medium transition-colors ${
+                    form.connection_type === 'bluetooth'
+                      ? 'border-[hsl(var(--primary))] bg-[hsl(var(--primary))] text-white'
+                      : 'border-[hsl(var(--border))] bg-[hsl(var(--card))] text-[hsl(var(--foreground))] hover:border-[hsl(var(--primary))]/50'
+                  }`}
+                >
+                  🔵 Bluetooth
+                </button>
+              </div>
+              {form.connection_type === 'bluetooth' && !isBluetoothSupported() && (
+                <p className="mt-1.5 text-xs text-amber-600">
+                  Este navegador no soporta Web Bluetooth — usa Chrome o Edge para probar la conexión.
+                </p>
+              )}
+            </div>
+
+            {form.connection_type === 'bluetooth' && (
+              <div>
+                <label className="block text-sm font-medium text-[hsl(var(--foreground))] mb-1">Nombre Bluetooth del dispositivo</label>
+                <input
+                  type="text"
+                  value={form.bluetooth_name}
+                  onChange={e => setForm(f => ({ ...f, bluetooth_name: e.target.value }))}
+                  placeholder="Ej: PRT5090BT"
+                  className="w-full h-9 border border-[hsl(var(--border))] rounded-md px-3 text-sm bg-[hsl(var(--card))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary)/0.3)]"
+                />
+                <p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">
+                  El nombre con el que aparece al emparejar desde el Bluetooth del sistema (no del navegador). Sin esto, el selector muestra todos los dispositivos cercanos.
+                </p>
+              </div>
+            )}
+
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="block text-sm font-medium text-[hsl(var(--foreground))] mb-1">Nombre *</label>
@@ -173,6 +245,7 @@ export default function PrinterConfigModal({ localId, onClose, open = true }) {
                   className="w-full h-9 border border-[hsl(var(--border))] rounded-md px-3 text-sm bg-[hsl(var(--card))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary)/0.3)]"
                 />
               </div>
+              {form.connection_type === 'network' && (
               <div>
                 <label className="block text-sm font-medium text-[hsl(var(--foreground))] mb-1">IP *</label>
                 <input
@@ -184,6 +257,8 @@ export default function PrinterConfigModal({ localId, onClose, open = true }) {
                   required
                 />
               </div>
+              )}
+              {form.connection_type === 'network' && (
               <div>
                 <label className="block text-sm font-medium text-[hsl(var(--foreground))] mb-1">Puerto *</label>
                 <input
@@ -196,6 +271,7 @@ export default function PrinterConfigModal({ localId, onClose, open = true }) {
                   required
                 />
               </div>
+              )}
             </div>
 
             <div className="flex items-center gap-2">
@@ -247,17 +323,24 @@ export default function PrinterConfigModal({ localId, onClose, open = true }) {
                         )}
                       </div>
                       <p className="text-xs text-[hsl(var(--muted-foreground))] mt-0.5">
-                        {p.model ? `${p.model} · ` : ''}{p.ip_address}:{p.port}
+                        {p.model ? `${p.model} · ` : ''}
+                        {p.connection_type === 'bluetooth' ? 'Bluetooth' : `${p.ip_address}:${p.port}`}
                       </p>
                     </div>
                     <div className="flex gap-1">
                       <button
                         onClick={() => handleTest(p)}
                         disabled={testingId === p.id}
-                        title="Probar conexión"
+                        title={p.connection_type === 'bluetooth' ? 'Probar por Bluetooth' : 'Probar conexión'}
                         className="p-1.5 rounded hover:bg-[hsl(var(--muted))] text-[hsl(var(--primary))] disabled:opacity-50"
                       >
-                        {testingId === p.id ? <WifiOff className="w-4 h-4 animate-pulse" /> : <Wifi className="w-4 h-4" />}
+                        {testingId === p.id ? (
+                          <WifiOff className="w-4 h-4 animate-pulse" />
+                        ) : p.connection_type === 'bluetooth' ? (
+                          <Bluetooth className="w-4 h-4" />
+                        ) : (
+                          <Wifi className="w-4 h-4" />
+                        )}
                       </button>
                       <button
                         onClick={() => handleEdit(p)}

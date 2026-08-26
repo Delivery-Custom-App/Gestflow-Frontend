@@ -8,7 +8,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { cn } from '@/lib/utils'
 import {
   LayoutDashboard, Store, ChevronDown, ChevronLeft, ChevronRight,
-  DollarSign, FileText, BarChart3, Wallet, Bell, Gift,
+  DollarSign, FileText, BarChart3, Wallet, Bell, Gift, PlusCircle,
   Table2, ChefHat,
   Package, Truck, ShoppingCart, BookMarked, PackageOpen,
   LogOut, Utensils, HelpCircle, Phone, Mail, Users, RotateCcw, MapPin, Building2, Settings,
@@ -18,11 +18,12 @@ import CoachMark from './onboarding/CoachMark'
 import { useOnboarding } from '../context/OnboardingContext'
 import { isSuperAdminRole, isAdminNegocioRole } from '../auth/roleLabel'
 import { WORKER_ROLES } from '../constants/roles'
+import { isDirectSaleDemoUser } from '../constants/demoMode'
 import { formatShortAddress } from '../lib/formatAddress'
 
 /* ── key sets for accordion auto-open ──────────────────────────── */
 const ADMIN_KEYS = new Set(['administracion', 'ventas', 'rendiciones', 'reportes', 'flujo-caja', 'alertas', 'bonos'])
-const POS_KEYS   = new Set(['pos', 'pos-mesas', 'pos-kitchen'])
+const POS_KEYS   = new Set(['pos', 'pos-mesas', 'pos-kitchen', 'pos-venta-directa', 'pos-registrar-producto'])
 const INV_KEYS   = new Set(['inv-hub', 'inv-prov', 'inv-stock', 'inv-compras', 'inv-recetas'])
 
 /* ── active-key derived from pathname ──────────────────────────── */
@@ -32,6 +33,8 @@ function deriveActiveKey(pathname) {
   if (pathname.includes('/inventario/compras-semanales')) return 'inv-compras'
   if (pathname.includes('/inventario/recipes'))           return 'inv-recetas'
   if (pathname.includes('/inventario'))                   return 'inv-hub'
+  if (pathname.includes('/pos/registrar-producto'))       return 'pos-registrar-producto'
+  if (pathname.includes('/pos/venta-directa'))            return 'pos-venta-directa'
   if (pathname.includes('/pos/cocina'))                   return 'pos-kitchen'
   if (pathname.includes('/pos'))                          return 'pos-mesas'
   if (pathname.includes('/administrativo/ventas'))        return 'ventas'
@@ -69,7 +72,7 @@ const ACCORDIONS = [
   },
   {
     key: 'pos',
-    label: 'POS Restaurante',
+    label: 'POS',
     icon: Table2,
     items: [
       { key: 'pos-mesas',   label: 'Gestión de Mesas', icon: Table2  },
@@ -98,6 +101,7 @@ function Sidebar({ collapsed, onToggle, onClose }) {
   const isSuperAdmin = isSuperAdminRole(userRole)
   const isOwner = isAdminNegocioRole(userRole)
   const isWorker = WORKER_ROLES.includes(userRole)
+  const isDemoUser = isDirectSaleDemoUser(user?.email)
   const navigate = useNavigate()
   const { pathname, state: locState } = useLocation()
 
@@ -168,7 +172,7 @@ function Sidebar({ collapsed, onToggle, onClose }) {
     if (!localId) return
     switch (key) {
       case 'administracion': navigate(`/local/${localId}/administrativo/ventas`, { state: navState }); break
-      case 'pos':            navigate(`/local/${localId}/pos`, { state: navState }); break
+      case 'pos':            navigate(isDemoUser ? `/local/${localId}/pos/venta-directa` : `/local/${localId}/pos`, { state: navState }); break
       case 'inventario':     navigate(`/local/${localId}/inventario`, { state: navState }); break
       default: break
     }
@@ -187,6 +191,8 @@ function Sidebar({ collapsed, onToggle, onClose }) {
       case 'dashboard': navigate(localId ? `/local/${localId}/dashboard` : '/admin', { state: navState }); break
       case 'pos-mesas':     if (localId) navigate(`/local/${localId}/pos`, { state: navState }); break
       case 'pos-kitchen':   if (localId) navigate(`/local/${localId}/pos/cocina`, { state: navState }); break
+      case 'pos-venta-directa': if (localId) navigate(`/local/${localId}/pos/venta-directa`, { state: navState }); break
+      case 'pos-registrar-producto': if (localId) navigate(`/local/${localId}/pos/registrar-producto`, { state: navState }); break
       case 'inv-hub':       if (localId) navigate(`/local/${localId}/inventario`, { state: navState }); break
       case 'inv-prov':      if (localId) navigate(`/local/${localId}/inventario/proveedores`, { state: navState }); break
       case 'inv-stock':     if (localId) navigate(`/local/${localId}/inventario/stock`, { state: navState }); break
@@ -209,9 +215,33 @@ function Sidebar({ collapsed, onToggle, onClose }) {
     ...(!isWorker && localId ? [{ key: 'dashboard', label: 'Dashboard', icon: LayoutDashboard }] : []),
   ]
 
+  // Recorte temporal de demo (local "Rustik", venta al paso), scoped por
+  // email — no afecta a otros usuarios reales.
+  const DEMO_QUICK_ITEMS = [
+    { key: 'pos-venta-directa', label: 'Venta directa', icon: DollarSign },
+    { key: 'pos-registrar-producto', label: 'Registrar productos', icon: PlusCircle },
+  ]
+  const WORKER_FINANCE_ITEM_KEYS = new Set(['ventas', 'rendiciones'])
   const visibleAccordions = isWorker
-    ? ACCORDIONS.filter((s) => s.key === 'pos')
-    : ACCORDIONS
+    ? (isDemoUser
+        ? ACCORDIONS
+            .filter((s) => s.key === 'pos' || s.key === 'administracion')
+            .map((s) => s.key === 'pos'
+              ? { ...s, label: 'Punto de venta', items: DEMO_QUICK_ITEMS }
+              : { ...s, label: 'Finanzas', items: s.items.filter((i) => WORKER_FINANCE_ITEM_KEYS.has(i.key)) })
+        : ACCORDIONS.filter((s) => s.key === 'pos'))
+    : isDemoUser
+      // Cuenta admin de demo: solo POS (accesos rápidos, sin mesas/cocina —
+      // "Configurar POS"/"Impresora" ya viven dentro de Venta directa) y
+      // Finanzas — sin Inventario.
+      ? ACCORDIONS
+          .filter((s) => s.key !== 'inventario')
+          .map((s) => {
+            if (s.key === 'pos') return { ...s, items: DEMO_QUICK_ITEMS }
+            if (s.key === 'administracion') return { ...s, label: 'Finanzas', items: s.items.filter((i) => WORKER_FINANCE_ITEM_KEYS.has(i.key)) }
+            return s
+          })
+      : ACCORDIONS
 
   const navBtn = (item, small = false) => {
     const isActive = activeKey === item.key
