@@ -1,10 +1,16 @@
 import { useEffect, useRef, useState } from 'react'
-import { apiRequest, createPointCharge, getPointOrderStatus, cancelPointCharge } from '../../lib/apiClient'
+import { createPointCharge, getPointOrderStatus, cancelPointCharge } from '../../lib/apiClient'
+import { completeOrderCash } from '../../lib/salesApi'
+import { isV2FeatureEnabled } from '../../lib/v2Features'
 
-const METHODS = [
+const ALL_METHODS = [
   { key: 'CASH',               label: 'Efectivo',          icon: '💵', desc: null },
   { key: 'MERCADOPAGO_POINT',  label: 'MercadoPago Point', icon: '🖥️', desc: 'Lector físico · Débito · Crédito' },
 ]
+
+const METHODS = ALL_METHODS.filter(
+  (m) => m.key !== 'MERCADOPAGO_POINT' || isV2FeatureEnabled('mercadopagoPoint'),
+)
 
 function fmt(n) {
   return `$${Number(n || 0).toLocaleString('es-CL')}`
@@ -55,10 +61,7 @@ export default function MercadoPagoModal({ open, orderId, total, description, on
     setLoading(true)
     setError(null)
     try {
-      await apiRequest(`/orders/${orderId}`, {
-        method: 'PATCH',
-        body: { cash_received: cashReceivedNumber },
-      })
+      await completeOrderCash(orderId, cashReceivedNumber)
       reset()
       onSuccess('CASH')
     } catch (err) {
@@ -88,6 +91,10 @@ export default function MercadoPagoModal({ open, orderId, total, description, on
 
   const handleSelectMethod = async (method) => {
     if (method === 'MERCADOPAGO_POINT') {
+      if (!isV2FeatureEnabled('mercadopagoPoint')) {
+        setError('MercadoPago Point aún no está disponible en Backend V2')
+        return
+      }
       await handleSendToTerminal()
       return
     }

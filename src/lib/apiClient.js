@@ -200,19 +200,62 @@ export async function apiRequest(path, options = {}) {
   return response.json()
 }
 
-export async function createUser({ name, email, password, role, local_id, business_id }) {
-  return apiRequest('/auth/admin/create-user', {
+function mapRoleToV2(role) {
+  const raw = String(role || '').trim()
+  const upper = raw.toUpperCase().replace(/[\s-]+/g, '_')
+  const aliases = {
+    EMPLEADO: 'EMPLEADO',
+    EMPLEADA: 'EMPLEADO',
+    CAJERO: 'EMPLEADO',
+    CAJERA: 'EMPLEADO',
+    ADMIN: 'ADMIN',
+    ADMIN_NEGOCIO: 'ADMIN_NEGOCIO',
+    SUPERADMIN: 'SUPERADMIN',
+  }
+  if (aliases[upper]) return aliases[upper]
+  const lower = raw.toLowerCase()
+  if (lower === 'empleado' || lower === 'cajero') return 'EMPLEADO'
+  if (lower === 'admin') return 'ADMIN'
+  return upper || 'EMPLEADO'
+}
+
+function displayNameFromUser(u) {
+  if (u?.name) return u.name
+  const email = String(u?.email || '')
+  const local = email.split('@')[0]
+  return local || '—'
+}
+
+/** V2: POST /users (sin name/phone). */
+export async function createUser({ name: _name, email, password, role, local_id, business_id }) {
+  let resolvedBusinessId = business_id || null
+  if (!resolvedBusinessId && local_id) {
+    const local = await apiRequest(`/locals/${local_id}`)
+    resolvedBusinessId = local?.business_id || null
+  }
+  return apiRequest('/users', {
     method: 'POST',
-    body: { name, email, password, role, local_id: local_id || null, business_id: business_id || null },
+    body: {
+      email,
+      password,
+      role: mapRoleToV2(role),
+      local_id: local_id || null,
+      business_id: resolvedBusinessId,
+    },
   })
 }
 
 export async function listUsers(businessId) {
-  return apiRequest(businessId ? `/users?business_id=${businessId}` : '/users')
+  const rows = await apiRequest('/users')
+  const list = Array.isArray(rows) ? rows : []
+  const filtered = businessId
+    ? list.filter((u) => String(u.business_id || '') === String(businessId))
+    : list
+  return filtered.map((u) => ({ ...u, name: displayNameFromUser(u) }))
 }
 
-export async function deleteUser(id) {
-  return apiRequest(`/users/${id}`, { method: 'DELETE' })
+export async function deleteUser() {
+  throw new Error('Eliminar usuarios aún no está disponible en Backend V2')
 }
 
 // ─── Printers (OP-02) ─────────────────────────────────────────────────────────

@@ -4,18 +4,48 @@ import {
   mergeCategoryIntoCache,
   setCachedCategories,
 } from './categoryCatalogCache'
+import {
+  createProductWithInventory,
+  fetchCategoriesForBusiness,
+  fetchEnrichedInventoryForLocal,
+  fetchLocal,
+  paginate,
+  stockStatus,
+} from './v2CatalogApi'
 
-export function getInventoryKpisByLocal(localId) {
-  return apiRequest(`/inventory/kpis/${localId}`)
+function computeKpis(rows) {
+  let optimal = 0
+  let low = 0
+  let critical = 0
+  let totalValue = 0
+  for (const row of rows) {
+    const status = row.stock_status || stockStatus(row.stock_current, row.stock_min)
+    if (status === 'CRITICO') critical += 1
+    else if (status === 'BAJO') low += 1
+    else optimal += 1
+    totalValue += Number(row.total_value) || 0
+  }
+  return {
+    total_products: rows.length,
+    optimal_stock_count: optimal,
+    low_stock_count: low,
+    critical_stock_count: critical,
+    total_inventory_value: totalValue,
+  }
+}
+
+export async function getInventoryKpisByLocal(localId) {
+  const { rows } = await fetchEnrichedInventoryForLocal(localId)
+  return computeKpis(rows)
 }
 
 /**
  * @param {object} [filters]
- * @param {string} [filters.category] - UUID categoría
- * @param {string} [filters.search] - texto parcial nombre
- * @param {string[]} [filters.status] - uno o más: CRITICO, BAJO, OPTIMO
- * @param {number} [filters.limit] - paginación servidor (opcional)
- * @param {number} [filters.offset] - paginación servidor (opcional)
+ * @param {string} [filters.category]
+ * @param {string} [filters.search]
+ * @param {string[]} [filters.status]
+ * @param {number} [filters.limit]
+ * @param {number} [filters.offset]
  */
 export function buildInventoryStockListPath(localId, filters = {}) {
   const params = new URLSearchParams()
@@ -33,18 +63,17 @@ export function buildInventoryStockListPath(localId, filters = {}) {
     params.set('offset', String(Math.max(0, Math.floor(Number(filters.offset)))))
   }
   const qs = params.toString()
-  return `/inventory/locals/${localId}/stock${qs ? `?${qs}` : ''}`
+  return `/inventory?local_id=${encodeURIComponent(String(localId))}${qs ? `&${qs}` : ''}`
 }
 
-export function getInventoryStockList(localId, filters = {}) {
-  return apiRequest(buildInventoryStockListPath(localId, filters))
+export async function getInventoryStockList(localId, filters = {}) {
+  const { rows } = await fetchEnrichedInventoryForLocal(localId, filters)
+  if (filters.limit == null && filters.offset == null) return rows
+  return paginate(rows, filters).items
 }
 
 /**
- * Listado paginado (HU-42 /products): body { items, total, limit, offset }.
- * @param {object} [filters]
- * @param {number} [filters.limit] default 50
- * @param {number} [filters.offset] default 0
+ * Listado paginado: body { items, total, limit, offset }.
  */
 export function buildInventoryProductsPath(localId, filters = {}) {
   const params = new URLSearchParams()
@@ -59,27 +88,18 @@ export function buildInventoryProductsPath(localId, filters = {}) {
   const offset = filters.offset != null ? Math.max(0, Math.floor(Number(filters.offset))) : 0
   params.set('limit', String(limit))
   params.set('offset', String(offset))
-  return `/inventory/locals/${localId}/products?${params.toString()}`
+  return `/inventory?local_id=${encodeURIComponent(String(localId))}&${params.toString()}`
 }
 
 export async function getInventoryProductsPage(localId, filters = {}) {
-  const path = buildInventoryProductsPath(localId, filters)
-  const data = await apiRequest(path)
-  if (!data || typeof data !== 'object') {
-    return { items: [], total: 0, limit: filters.limit ?? 50, offset: filters.offset ?? 0 }
-  }
-  return {
-    items: Array.isArray(data.items) ? data.items : [],
-    total: Number(data.total) || 0,
-    limit: Number(data.limit) || 50,
-    offset: Number(data.offset) || 0,
-  }
+  const { rows } = await fetchEnrichedInventoryForLocal(localId, filters)
+  return paginate(rows, {
+    limit: filters.limit ?? 50,
+    offset: filters.offset ?? 0,
+  })
 }
 
-/**
- * Proveedores activos del negocio asociado al local.
- * @param {{ search?: string, category?: string }} [filters] - HU-85
- */
+/** Proveedores: aún no en Backend V2 — stubs seguros. */
 export function buildInventorySuppliersForLocalPath(localId, filters = {}) {
   const params = new URLSearchParams()
   if (filters.search && String(filters.search).trim()) {
@@ -92,20 +112,15 @@ export function buildInventorySuppliersForLocalPath(localId, filters = {}) {
   return `/inventory/locals/${localId}/suppliers${qs ? `?${qs}` : ''}`
 }
 
-export function getInventorySuppliersForLocal(localId, filters = {}) {
-  return apiRequest(buildInventorySuppliersForLocalPath(localId, filters))
+export async function getInventorySuppliersForLocal() {
+  return []
 }
 
 /** Local por id (incluye business_id). */
 export function getLocalById(localId) {
-  return apiRequest(`/locals/${localId}`)
+  return fetchLocal(localId)
 }
 
-/**
- * Listado de proveedores con métricas agregadas (HU-68): unidades en inventario y valor estimado (CLP).
- * GET /suppliers?business_id=&local_id=
- * @param {{ search?: string, category?: string, localId?: string }} [filters]
- */
 export function buildSuppliersWithMetricsPath(businessId, filters = {}) {
   const params = new URLSearchParams()
   params.set('business_id', String(businessId))
@@ -121,29 +136,20 @@ export function buildSuppliersWithMetricsPath(businessId, filters = {}) {
   return `/suppliers?${params.toString()}`
 }
 
-export function getSuppliersWithMetricsForBusiness(businessId, filters = {}) {
-  return apiRequest(buildSuppliersWithMetricsPath(businessId, filters))
+export async function getSuppliersWithMetricsForBusiness() {
+  return []
 }
 
-/**
- * Detalle de proveedor con KPIs y líneas de inventario (HU-69).
- * GET /suppliers/{supplier_id}?business_id=
- */
 export function buildSupplierDetailPath(supplierId, businessId) {
   const params = new URLSearchParams()
   params.set('business_id', String(businessId))
   return `/suppliers/${encodeURIComponent(String(supplierId))}?${params.toString()}`
 }
 
-export function getSupplierDetailForBusiness(supplierId, businessId) {
-  return apiRequest(buildSupplierDetailPath(supplierId, businessId))
+export async function getSupplierDetailForBusiness() {
+  throw new Error('Proveedores aún no están disponibles en Backend V2')
 }
 
-/**
- * HU-84: histórico de compras por producto desde órdenes semanales (cantidades recibidas, totales CLP).
- * GET /suppliers/{supplier_id}/purchase-history?business_id=&week_from=&week_to=
- * @param {{ weekFrom?: string, weekTo?: string }} [opts] - lunes YYYY-MM-DD opcional
- */
 export function buildSupplierPurchaseHistoryPath(supplierId, businessId, opts = {}) {
   const params = new URLSearchParams()
   params.set('business_id', String(businessId))
@@ -156,34 +162,18 @@ export function buildSupplierPurchaseHistoryPath(supplierId, businessId, opts = 
   return `/suppliers/${encodeURIComponent(String(supplierId))}/purchase-history?${params.toString()}`
 }
 
-export function getSupplierPurchaseHistoryForBusiness(supplierId, businessId, opts = {}) {
-  return apiRequest(buildSupplierPurchaseHistoryPath(supplierId, businessId, opts))
+export async function getSupplierPurchaseHistoryForBusiness() {
+  return []
 }
 
-/**
- * Crea un proveedor en el negocio. `business_id` opcional: el backend usa el del usuario si es admin.
- * Alta rápida: `{ name }`. Registro completo (HU-86): también `rut`, `address`, `category`, `contact_name`, `phone`, `email`.
- * @param {object} body
- */
-export function postSupplier(body) {
-  return apiRequest('/suppliers', { method: 'POST', body })
+export async function postSupplier() {
+  throw new Error('Proveedores aún no están disponibles en Backend V2')
 }
 
-/** HU-34: condiciones comerciales y datos de proveedor (PATCH parcial). */
-export function patchSupplier(supplierId, businessId, body) {
-  const params = new URLSearchParams()
-  params.set('business_id', String(businessId))
-  return apiRequest(`/suppliers/${encodeURIComponent(String(supplierId))}?${params.toString()}`, {
-    method: 'PATCH',
-    body,
-  })
+export async function patchSupplier() {
+  throw new Error('Proveedores aún no están disponibles en Backend V2')
 }
 
-/**
- * KPIs de proveedores y compras (insumos aprobados) por mes. Requiere Admin/Superadmin.
- * @param {string} localId - UUID del local (el backend resuelve el negocio).
- * @param {{ year?: number, month?: number }} [opts] - mes calendario; por defecto mes actual en servidor.
- */
 export function buildSupplierKpisPath(localId, opts = {}) {
   const params = new URLSearchParams()
   params.set('local_id', String(localId))
@@ -195,50 +185,67 @@ export function buildSupplierKpisPath(localId, opts = {}) {
   return `/suppliers/kpis?${params.toString()}`
 }
 
-export function getSupplierKpisByLocal(localId, opts = {}) {
-  return apiRequest(buildSupplierKpisPath(localId, opts))
+export async function getSupplierKpisByLocal() {
+  return {
+    suppliers_count: 0,
+    purchases_count: 0,
+    purchases_total_clp: 0,
+  }
 }
 
-/** GET /categories?local_id= — listado del local (HU-87). */
+/** Categorías del negocio del local (V2: business_id). */
 export function buildCategoriesListPath(localId) {
-  const params = new URLSearchParams()
-  params.set('local_id', String(localId))
-  return `/categories?${params.toString()}`
+  return `/categories?local_id=${encodeURIComponent(String(localId))}`
 }
 
 export async function getCategoriesForLocal(localId) {
-  const data = await apiRequest(buildCategoriesListPath(localId))
-  const rows = Array.isArray(data) ? data : []
-  setCachedCategories(localId, rows)
-  return rows
+  const local = await fetchLocal(localId)
+  const rows = await fetchCategoriesForBusiness(local.business_id)
+  const normalized = rows.map((c) => ({
+    ...c,
+    is_active: true,
+    local_id: localId,
+  }))
+  setCachedCategories(localId, normalized)
+  return normalized
 }
 
-/** Lista categorías usando caché en memoria (HU-87). */
 export async function loadCategoriesForLocalCached(localId) {
   const cached = getCachedCategories(localId)
   if (cached) return cached
-  const data = await getCategoriesForLocal(localId)
-  const rows = Array.isArray(data) ? data : []
-  setCachedCategories(localId, rows)
-  return rows
+  return getCategoriesForLocal(localId)
 }
 
-/** POST /categories — ADMIN+; body { local_id, name, is_active }. */
-export function postCategory(body) {
-  return apiRequest('/categories', { method: 'POST', body })
+/** POST /categories — body V2 { name, business_id }; acepta local_id legacy. */
+export async function postCategory(body) {
+  let businessId = body.business_id || null
+  if (!businessId && body.local_id) {
+    const local = await fetchLocal(body.local_id)
+    businessId = local.business_id
+  }
+  if (!businessId) throw new Error('business_id o local_id requerido para crear categoría')
+  return apiRequest('/categories', {
+    method: 'POST',
+    body: {
+      name: String(body.name || '').trim(),
+      business_id: businessId,
+    },
+  })
 }
 
 export function patchCategory(categoryId, body) {
   return apiRequest(`/categories/${encodeURIComponent(String(categoryId))}`, {
     method: 'PATCH',
-    body,
+    body: { name: body.name },
   })
 }
 
-/**
- * Resuelve el nombre canónico: reutiliza categoría existente (comparación sin distinguir mayúsculas)
- * o crea una nueva vía POST y actualiza la caché (HU-87).
- */
+export function deleteCategory(categoryId) {
+  return apiRequest(`/categories/${encodeURIComponent(String(categoryId))}`, {
+    method: 'DELETE',
+  })
+}
+
 export async function resolveCategoryNameForLocal(localId, rawName) {
   const trimmed = String(rawName || '').trim()
   if (!trimmed) {
@@ -247,9 +254,7 @@ export async function resolveCategoryNameForLocal(localId, rawName) {
 
   let rows = getCachedCategories(localId)
   if (!rows) {
-    const data = await getCategoriesForLocal(localId)
-    rows = Array.isArray(data) ? data : []
-    setCachedCategories(localId, rows)
+    rows = await getCategoriesForLocal(localId)
   }
 
   const hit = rows.find((r) => String(r.name || '').toLowerCase() === trimmed.toLowerCase())
@@ -260,60 +265,91 @@ export async function resolveCategoryNameForLocal(localId, rawName) {
   const created = await postCategory({
     local_id: localId,
     name: trimmed,
-    is_active: true,
   })
   const row = created && typeof created === 'object' ? created : null
   if (row?.id != null && row?.name != null) {
-    mergeCategoryIntoCache(localId, row)
+    mergeCategoryIntoCache(localId, { ...row, is_active: true, local_id: localId })
     return String(row.name).trim()
   }
-  mergeCategoryIntoCache(localId, { id: row?.id, name: trimmed, is_active: true })
+  mergeCategoryIntoCache(localId, { id: row?.id, name: trimmed, is_active: true, local_id: localId })
   return trimmed
 }
 
-/** PATCH /products/{id} — actualiza campos del producto (name, description, price…). */
 export function patchProduct(productId, body) {
+  const mapped = { ...body }
+  if (mapped.unitCost != null && mapped.cost == null) {
+    mapped.cost = mapped.unitCost
+    delete mapped.unitCost
+  }
+  if (mapped.unit_cost != null && mapped.cost == null) {
+    mapped.cost = mapped.unit_cost
+    delete mapped.unit_cost
+  }
   return apiRequest(`/products/${encodeURIComponent(String(productId))}`, {
     method: 'PATCH',
-    body,
+    body: mapped,
   })
 }
 
-export function postInventoryNewProduct(localId, body) {
-  return apiRequest(`/inventory/locals/${localId}/new-product`, {
-    method: 'POST',
-    body,
+export async function postInventoryNewProduct(localId, body) {
+  const categoryName = body.category || body.category_name || null
+  let categoryId = body.category_id || null
+  if (!categoryId && categoryName) {
+    const name = await resolveCategoryNameForLocal(localId, categoryName)
+    const cats = await getCategoriesForLocal(localId)
+    const hit = cats.find((c) => String(c.name).toLowerCase() === String(name).toLowerCase())
+    categoryId = hit?.id || null
+  }
+
+  const result = await createProductWithInventory(localId, {
+    name: body.productName || body.name || body.product_name,
+    category_id: categoryId,
+    price: body.price ?? body.unitCost ?? body.unit_cost ?? 0,
+    cost: body.unitCost ?? body.unit_cost ?? body.cost ?? 0,
+    stock_actual: body.currentStock ?? body.stock_actual ?? body.stock ?? 0,
+    stock_min: body.minStock ?? body.stock_min ?? 0,
+    stock_max: body.maxStock ?? body.stock_max ?? null,
+    stock_deduction_mode: body.stock_deduction_mode || 'DIRECT_STOCK',
   })
+  return result.inventory
 }
 
-/** Actualiza stock o mínimo; la API devuelve la fila con total_value recalculado (stock × costo). */
-export function patchInventoryStock(localId, inventoryId, body) {
-  return apiRequest(`/inventory/locals/${localId}/stock/${inventoryId}`, {
+/** Actualiza stock/mín/máx vía PATCH /inventory/{id}. */
+export async function patchInventoryStock(_localId, inventoryId, body) {
+  const patch = {}
+  if (body.stock != null) patch.stock_actual = body.stock
+  if (body.stock_actual != null) patch.stock_actual = body.stock_actual
+  if (body.stock_current != null) patch.stock_actual = body.stock_current
+  if (body.min_stock != null) patch.stock_min = body.min_stock
+  if (body.stock_min != null) patch.stock_min = body.stock_min
+  if (body.max_stock != null) patch.stock_max = body.max_stock
+  if (body.stock_max != null) patch.stock_max = body.stock_max
+  return apiRequest(`/inventory/${encodeURIComponent(String(inventoryId))}`, {
     method: 'PATCH',
-    body,
+    body: patch,
   })
 }
 
-/** Actualiza costo unitario (products.price); respuesta con total_value recalculado. */
-export function patchInventoryProductUnitCost(localId, productId, body) {
-  return apiRequest(`/inventory/locals/${localId}/products/${productId}/unit-cost`, {
+/** Actualiza costo unitario en products.cost. */
+export async function patchInventoryProductUnitCost(_localId, productId, body) {
+  const cost = body.unitCost ?? body.unit_cost ?? body.cost
+  return apiRequest(`/products/${encodeURIComponent(String(productId))}`, {
     method: 'PATCH',
-    body,
+    body: { cost },
   })
 }
 
-/** Elimina el registro de inventario y el producto asociado del local. */
-export function deleteInventoryItem(localId, inventoryId) {
-  return apiRequest(`/inventory/locals/${localId}/stock/${inventoryId}`, {
-    method: 'DELETE',
-  })
+/** Soft: desactiva el producto (V2 no tiene DELETE de inventario). */
+export async function deleteInventoryItem(_localId, inventoryId) {
+  const inv = await apiRequest(`/inventory/${encodeURIComponent(String(inventoryId))}`)
+  if (inv?.product_id) {
+    await apiRequest(`/products/${encodeURIComponent(String(inv.product_id))}`, {
+      method: 'DELETE',
+    })
+  }
+  return null
 }
 
-/** Elimina un proveedor del negocio (nullifica supplier_id en productos asociados). */
-export function deleteSupplier(supplierId, businessId) {
-  const params = new URLSearchParams()
-  params.set('business_id', String(businessId))
-  return apiRequest(`/suppliers/${encodeURIComponent(String(supplierId))}?${params.toString()}`, {
-    method: 'DELETE',
-  })
+export async function deleteSupplier() {
+  throw new Error('Proveedores aún no están disponibles en Backend V2')
 }

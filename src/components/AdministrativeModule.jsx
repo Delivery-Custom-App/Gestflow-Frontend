@@ -12,6 +12,7 @@ import LoadingSpinner from './LoadingSpinner'
 import IncomeChart from './charts/IncomeChart'
 import ExpenseBreakdown from './charts/ExpenseBreakdown'
 import CajaMpPairingModal from './pos/CajaMpPairingModal'
+import { isV2FeatureEnabled } from '../lib/v2Features'
 import {
   getCajasByLocal,
   getConsolidatedDashboard,
@@ -240,6 +241,7 @@ function SectionActions({ activeSection, onNuevoGasto, onNuevaTransferencia, onN
     return null
   }
   if (activeSection === 'rendiciones') {
+    if (!isV2FeatureEnabled('rendiciones')) return null
     return (
       <div className="flex gap-2">
         <Button variant="outline" onClick={onNuevoGasto}>+ Nuevo Gasto</Button>
@@ -649,6 +651,7 @@ function statusBucket(status) {
 function RendicionesContent({ rendiciones, expenses, transfers, loading, error, onRefresh }) {
   const { userRole } = useAuth()
   const canVerify = ADMIN_ROLES.includes(userRole)
+  const rendicionesEnabled = isV2FeatureEnabled('rendiciones')
 
   const [typeFilter, setTypeFilter] = useState('all')
   const [statusFilter, setStatusFilter] = useState('all')
@@ -700,6 +703,18 @@ function RendicionesContent({ rendiciones, expenses, transfers, loading, error, 
     .filter((r) => (statusFilter === 'all' ? true : statusBucket(r.status) === statusFilter))
     .sort((a, b) => new Date(b.occurred_at || 0) - new Date(a.occurred_at || 0)),
   [movementRows, typeFilter, statusFilter])
+
+  if (!rendicionesEnabled) {
+    return (
+      <div className="rounded-xl border border-amber-200 bg-amber-50 text-amber-900 p-6 space-y-2">
+        <p className="text-sm font-semibold">Rendiciones aún no disponibles</p>
+        <p className="text-sm text-amber-800/90">
+          Gastos, transferencias y el dashboard de rendiciones todavía no están migrados a Backend V2.
+          Esta sección se habilitará cuando existan esos endpoints.
+        </p>
+      </div>
+    )
+  }
 
   const pendingRows = movementRows.filter((r) => statusBucket(r.status) === 'pending')
 
@@ -855,6 +870,12 @@ function ReportesContent({ consolidated, loading, error }) {
 
   return (
     <div className="space-y-5">
+      {consolidated?._source === 'orders_v2' && (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900">
+          Métricas calculadas desde las órdenes del local en Backend V2. Gastos, metas y consolidado multi-local
+          aún no están migrados.
+        </div>
+      )}
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <KpiCard label="Ventas Diarias (Consolidado)" value={formatMoney(consolidated?.daily_sales)}      sub={`${toNumber(consolidated?.local_count)} locales`} />
         <KpiCard label="Ventas Mensuales"             value={formatMoney(consolidated?.monthly_sales)}     sub="Consolidado negocio" />
@@ -894,6 +915,7 @@ const MP_PAIRING_ACTION = {
 
 function FlujoCajaContent({ dashboard, cajas, loading, error, onManagePairing }) {
   const cajasList = safeArray(cajas)
+  const showMpPairing = typeof onManagePairing === 'function'
   const stateNode = <SectionState loading={loading} error={error} isEmpty={!dashboard && !loading && !error} emptyMessage="Sin datos de flujo. Completa órdenes desde el POS y registra gastos para ver gráficos." />
   if (loading || error || (!dashboard && !loading && !error)) return stateNode
 
@@ -914,13 +936,17 @@ function FlujoCajaContent({ dashboard, cajas, loading, error, onManagePairing })
       </div>
       <Panel title="Cajas del Local" sub="Fuente: endpoint /cajas por local">
         <AmTable
-          headers={['Nombre Caja', 'Estado', 'MercadoPago', 'Acciones']}
+          headers={showMpPairing ? ['Nombre Caja', 'Estado', 'MercadoPago', 'Acciones'] : ['Nombre Caja', 'Estado']}
           rows={cajasList.map((c) => {
+            const base = [
+              c.name || 'Caja sin nombre',
+              c.is_active ? 'Abierta' : (c.status === 'closed' ? 'Cerrada' : (c.is_active ? 'Activa' : 'Inactiva')),
+            ]
+            if (!showMpPairing) return base
             const status = c.mp?.pairing_status || 'unprovisioned'
             const badge = MP_PAIRING_BADGE[status] || MP_PAIRING_BADGE.unprovisioned
             return [
-              c.name || 'Caja sin nombre',
-              c.is_active ? 'Activa' : 'Inactiva',
+              ...base,
               <div className="flex items-center gap-2" key={`mp-${c.id}`}>
                 <Badge variant={badge.variant}>{badge.label}</Badge>
                 {status === 'paired' && c.mp?.terminal_id && (
@@ -2034,9 +2060,8 @@ function AdministrativeModule() {
           updates.transfers = safeArray(transfers)
         }
         if (activeSection === 'reportes') {
-          if (!businessId) throw new Error('No se encontró business_id en el token para obtener reportes consolidados')
           const [consolidated, orders, expenses] = await Promise.all([
-            getConsolidatedDashboard(businessId, token),
+            getConsolidatedDashboard(businessId, token, { localId }),
             getOrdersByLocal(localId, token),
             getExpensesByLocal(localId, token),
           ])
@@ -2081,7 +2106,7 @@ function AdministrativeModule() {
           onSaved={() => setRefreshKey(k => k + 1)}
         />
       )}
-      {pairingCaja && (
+      {isV2FeatureEnabled('cajaMpPairing') && pairingCaja && (
         <CajaMpPairingModal
           caja={pairingCaja}
           localId={localId}
@@ -2162,7 +2187,7 @@ function AdministrativeModule() {
           error:    sectionError,
           localId,
           onRefresh: () => setRefreshKey(k => k + 1),
-          onManagePairing: setPairingCaja,
+          onManagePairing: isV2FeatureEnabled('cajaMpPairing') ? setPairingCaja : undefined,
         })}
       </main>
     </>

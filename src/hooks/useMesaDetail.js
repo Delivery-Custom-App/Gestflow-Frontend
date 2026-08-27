@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
-import { apiRequest } from '../lib/apiClient'
+import { getMesaDetail } from '../lib/salesApi'
 
-/** Detalle de mesa y órdenes activas vía GET /mesas/:id/detail. */
+/** Detalle de mesa y órdenes activas (compuesto en FE contra V2). */
 export function useMesaDetail(mesaId) {
   const [detail, setDetail] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -16,9 +16,7 @@ export function useMesaDetail(mesaId) {
     try {
       setLoading(true)
       setError(null)
-
-      const data = await apiRequest(`/mesas/${mesaId}/detail`)
-      setDetail(data)
+      setDetail(await getMesaDetail(mesaId))
     } catch (err) {
       setError(err.message || 'Error obteniendo detalle de mesa')
       console.error('Error fetching mesa detail:', err)

@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
+import { Link } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Building2, Plus, Pencil, Trash2, X, Loader2, Search, History, Power, ShieldAlert, HelpCircle } from 'lucide-react'
+import { Building2, Plus, Pencil, Trash2, X, Loader2, Search, History, Power, ShieldAlert, HelpCircle, ExternalLink } from 'lucide-react'
 import { getAuthContext } from '../lib/apiClient'
 import {
   listBusinesses,
@@ -34,6 +35,8 @@ const ACTION_LABEL = {
   'business.create': 'Creación de franquicia',
   'business.update': 'Actualización de franquicia',
   'business.delete': 'Eliminación de franquicia',
+  'business.deactivate': 'Suspensión de franquicia',
+  'business.reactivate': 'Reactivación de franquicia',
 }
 
 function formatDate(value) {
@@ -75,15 +78,32 @@ function BusinessDrawer({ isOpen, onClose, onSuccess, editing }) {
     e.preventDefault()
     setErr('')
     if (!form.name.trim()) { setErr('El nombre de la franquicia es obligatorio.'); return }
+    if (!editing && !form.rut.trim()) { setErr('El RUT es obligatorio.'); return }
     setLoading(true)
     try {
+      const ctx = await getAuthContext()
       if (editing) {
-        const body = { name: form.name.trim(), rut: form.rut.trim() || null }
-        if (form.plan !== editing.plan) body.plan = form.plan
-        if ((form.is_active !== false) !== (editing.is_active !== false)) body.is_active = form.is_active !== false
-        await updateBusiness(editing.id, body)
+        await updateBusiness(
+          editing.id,
+          {
+            name: form.name.trim(),
+            ...(form.rut.trim() !== (editing.rut || '').trim() ? { rut: form.rut.trim() } : {}),
+            ...(form.plan !== editing.plan ? { plan: form.plan } : {}),
+            ...((form.is_active !== false) !== (editing.is_active !== false)
+              ? { is_active: form.is_active !== false }
+              : {}),
+          },
+          ctx.token,
+        )
       } else {
-        await createBusiness({ name: form.name.trim(), rut: form.rut.trim() || null, plan: form.plan })
+        await createBusiness(
+          {
+            name: form.name.trim(),
+            rut: form.rut.trim(),
+            plan: form.plan || 'basic',
+          },
+          ctx.token,
+        )
       }
       onSuccess()
       onClose()
@@ -127,7 +147,7 @@ function BusinessDrawer({ isOpen, onClose, onSuccess, editing }) {
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="b-rut">RUT</Label>
+            <Label htmlFor="b-rut">RUT {!editing && <span className="text-red-500">*</span>}</Label>
             <Input id="b-rut" placeholder="76.123.456-7" value={form.rut} onChange={set('rut')} disabled={loading} />
           </div>
 
@@ -197,6 +217,56 @@ function ConfirmDeleteModal({ business, onCancel, onConfirm, loading }) {
           <Button variant="outline" onClick={onCancel} disabled={loading}>Cancelar</Button>
           <Button variant="destructive" onClick={onConfirm} disabled={loading}>
             {loading ? <span className="flex items-center gap-2"><Loader2 className="h-3.5 w-3.5 animate-spin" />Eliminando…</span> : 'Eliminar'}
+          </Button>
+        </div>
+      </motion.div>
+    </div>
+  )
+}
+
+function ConfirmSuspendModal({ business, onCancel, onConfirm, loading }) {
+  const suspending = business?.is_active !== false
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[600] p-4" onClick={onCancel}>
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95, y: 12 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.96, y: 8 }}
+        transition={{ duration: 0.2 }}
+        onClick={(e) => e.stopPropagation()}
+        className="bg-[hsl(var(--card))] border border-[hsl(var(--border))] rounded-2xl shadow-2xl w-full max-w-sm p-6"
+      >
+        <div className="flex items-center gap-3 mb-3">
+          <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${suspending ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}`}>
+            <Power size={18} />
+          </div>
+          <h3 className="text-lg font-bold text-[hsl(var(--foreground))]">
+            {suspending ? 'Suspender franquicia' : 'Reactivar franquicia'}
+          </h3>
+        </div>
+        <p className="text-sm text-[hsl(var(--muted-foreground))] mb-6">
+          {suspending ? (
+            <>
+              Vas a suspender <span className="font-semibold text-[hsl(var(--foreground))]">{business.name}</span>.
+              Sus usuarios no podrán iniciar sesión hasta que la reactives. Los datos se conservan.
+            </>
+          ) : (
+            <>
+              Vas a reactivar <span className="font-semibold text-[hsl(var(--foreground))]">{business.name}</span>.
+              Sus usuarios activos podrán volver a entrar.
+            </>
+          )}
+        </p>
+        <div className="flex items-center justify-end gap-3">
+          <Button variant="outline" onClick={onCancel} disabled={loading}>Cancelar</Button>
+          <Button
+            variant={suspending ? 'destructive' : 'default'}
+            onClick={onConfirm}
+            disabled={loading}
+          >
+            {loading ? (
+              <span className="flex items-center gap-2"><Loader2 className="h-3.5 w-3.5 animate-spin" />Guardando…</span>
+            ) : suspending ? 'Suspender' : 'Reactivar'}
           </Button>
         </div>
       </motion.div>
@@ -286,7 +356,9 @@ export default function TenantManagerPage() {
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [editing, setEditing] = useState(null)
   const [confirmDelete, setConfirmDelete] = useState(null)
+  const [confirmSuspend, setConfirmSuspend] = useState(null)
   const [deleting, setDeleting] = useState(false)
+  const [suspending, setSuspending] = useState(false)
   const [auditTarget, setAuditTarget] = useState(null)
   const [guideOpen, setGuideOpen] = useState(false)
 
@@ -307,19 +379,28 @@ export default function TenantManagerPage() {
 
   useEffect(() => { load() }, [load])
 
-  const handleToggleActive = async (b) => {
+  const onToggleActive = async () => {
+    if (!confirmSuspend) return
+    setSuspending(true)
     try {
-      await updateBusiness(b.id, { is_active: !(b.is_active !== false) })
-      load()
+      const ctx = await getAuthContext()
+      const next = !(confirmSuspend.is_active !== false)
+      await updateBusiness(confirmSuspend.id, { is_active: next }, ctx.token)
+      setConfirmSuspend(null)
+      await load()
     } catch (e2) {
       setErr(formatApiErrorDetail(e2.detail) || e2.message || 'Error al cambiar el estado')
+      setConfirmSuspend(null)
+    } finally {
+      setSuspending(false)
     }
   }
 
   const onDelete = async () => {
     setDeleting(true)
     try {
-      await deleteBusiness(confirmDelete.id)
+      const ctx = await getAuthContext()
+      await deleteBusiness(confirmDelete.id, ctx.token)
       setConfirmDelete(null)
       load()
     } catch (e2) {
@@ -361,9 +442,9 @@ export default function TenantManagerPage() {
                 {[
                   { title: 'Lista de franquicias', desc: 'Cada franquicia es un negocio con sus propios locales. Aquí las ves todas, con su RUT, plan y estado.' },
                   { title: 'Crear / editar', desc: 'Registra una nueva franquicia con nombre, RUT y plan, o actualiza los datos de una existente.' },
-                  { title: 'Activar / desactivar', desc: 'El interruptor de estado permite suspender el acceso de una franquicia sin borrar sus datos.' },
-                  { title: 'Auditoría', desc: 'Cada creación, edición o eliminación queda registrada con usuario y fecha.' },
-                  { title: 'Eliminar', desc: 'Solo superadministradores. Borra la franquicia y todos sus datos. Es irreversible.', highlight: true },
+                  { title: 'Activar / desactivar', desc: 'Suspende el acceso de una franquicia: sus usuarios no pueden iniciar sesión. Los datos se conservan y puedes reactivarla cuando quieras.' },
+                  { title: 'Auditoría', desc: 'Cada creación, edición o suspensión queda registrada con usuario y fecha.' },
+                  { title: 'Eliminar', desc: 'Borrado irreversible de la franquicia y todos sus datos (locales, usuarios, catálogo, ventas). Preferí Suspender si solo querés cortar acceso.', highlight: true },
                 ].map(({ title, desc, highlight }) => (
                   <div key={title} className={`flex gap-3 rounded-xl p-3 ${highlight ? 'bg-red-50 border border-red-200' : 'bg-[hsl(var(--muted)/0.4)]'}`}>
                     <div>
@@ -424,11 +505,16 @@ export default function TenantManagerPage() {
           ) : (
             <div className="flex flex-col gap-2">
               {filtered.map((b) => (
-                <Card key={b.id} className="overflow-hidden">
+                <Card key={b.id} className={`overflow-hidden ${b.is_active === false ? 'opacity-80' : ''}`}>
                   <div className="px-5 py-4 flex items-center justify-between gap-4">
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2.5">
-                        <p className="text-sm font-bold text-[hsl(var(--foreground))] truncate">{b.name || '—'}</p>
+                        <Link
+                          to={`/gestor/negocios/${b.id}`}
+                          className="text-sm font-bold text-[hsl(var(--foreground))] truncate hover:text-[hsl(var(--primary))]"
+                        >
+                          {b.name || '—'}
+                        </Link>
                         <span className={`text-[10px] font-bold uppercase tracking-wide rounded-full px-2 py-0.5 border ${PLAN_BADGE[b.plan] || PLAN_BADGE.starter}`}>
                           {PLAN_LABEL[b.plan] || b.plan}
                         </span>
@@ -440,9 +526,9 @@ export default function TenantManagerPage() {
 
                     <div className="flex items-center gap-1 shrink-0">
                       <button
-                        onClick={() => handleToggleActive(b)}
-                        title={b.is_active !== false ? 'Desactivar franquicia' : 'Activar franquicia'}
-                        className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-medium transition-colors"
+                        onClick={() => setConfirmSuspend(b)}
+                        title={b.is_active !== false ? 'Suspender franquicia' : 'Reactivar franquicia'}
+                        className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-medium transition-colors hover:bg-[hsl(var(--muted))]"
                       >
                         {b.is_active !== false ? (
                           <><Power size={13} className="text-emerald-600" /><span className="text-emerald-700">Activa</span></>
@@ -450,6 +536,11 @@ export default function TenantManagerPage() {
                           <><Power size={13} className="text-red-500" /><span className="text-red-600">Inactiva</span></>
                         )}
                       </button>
+                      <Button variant="ghost" size="sm" asChild title="Ver detalle">
+                        <Link to={`/gestor/negocios/${b.id}`}>
+                          <ExternalLink size={14} />
+                        </Link>
+                      </Button>
                       <Button variant="ghost" size="sm" onClick={() => setAuditTarget(b)} title="Ver auditoría">
                         <History size={14} />
                       </Button>
@@ -482,6 +573,17 @@ export default function TenantManagerPage() {
             onCancel={() => setConfirmDelete(null)}
             onConfirm={onDelete}
             loading={deleting}
+          />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {confirmSuspend && (
+          <ConfirmSuspendModal
+            business={confirmSuspend}
+            onCancel={() => setConfirmSuspend(null)}
+            onConfirm={onToggleActive}
+            loading={suspending}
           />
         )}
       </AnimatePresence>

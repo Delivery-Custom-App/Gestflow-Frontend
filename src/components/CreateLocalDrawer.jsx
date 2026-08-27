@@ -36,7 +36,7 @@ async function geocodeAddress(address) {
 }
 
 function CreateLocalDrawer({ isOpen, onClose, onSuccess }) {
-  const [formData, setFormData]       = useState({ name: '', address: '', phone: '', category: '' })
+  const [formData, setFormData]       = useState({ name: '', address: '', phone: '', sales_model: 'RESTAURANT' })
   const [loading, setLoading]         = useState(false)
   const [geocoding, setGeocoding]     = useState(false)
   const [geocodeOk, setGeocodeOk]     = useState(null)   // true | false | null
@@ -114,18 +114,21 @@ function CreateLocalDrawer({ isOpen, onClose, onSuccess }) {
         setGeocodeOk(coords !== null)
       }
 
+      // V2 LocalCreate: business_id, name, sales_model (address/phone aún no en schema).
+      const salesModel =
+        formData.sales_model === 'AL_PASO' ? 'AL_PASO' : 'RESTAURANT'
+
       const body = {
         business_id: businessId,
         name: formData.name.trim(),
-        address: formData.address.trim(),
-        phone: formData.phone.trim(),
+        sales_model: salesModel,
+        promotions_autonomy: false,
       }
-      if (formData.category.trim()) body.category = formData.category.trim()
-      if (coords) { body.lat = coords.lat; body.lng = coords.lng }
+      void coords // geocode OK para UX; coords no se persisten en V2 aún
 
       await apiRequest('/locals', { method: 'POST', token, body })
 
-      setFormData({ name: '', address: '', phone: '', category: '' })
+      setFormData({ name: '', address: '', phone: '', sales_model: 'RESTAURANT' })
       setSelectedCoords(null)
       setGeocodeOk(null)
       onSuccess()
@@ -267,18 +270,23 @@ function CreateLocalDrawer({ isOpen, onClose, onSuccess }) {
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="category">
-              Categoría
-              <span className="ml-2 text-xs font-normal text-[hsl(var(--muted-foreground))]">(opcional)</span>
+            <Label htmlFor="sales_model">
+              Modo de venta <span className="text-red-500">*</span>
             </Label>
-            <Input
-              id="category" name="category"
-              placeholder="Ej: Zona Norte, Centro, Mall"
-              value={formData.category}
+            <select
+              id="sales_model"
+              name="sales_model"
+              value={formData.sales_model}
               onChange={handleChange}
               disabled={isBusy}
-            />
-            <p className="text-xs text-[hsl(var(--muted-foreground))]">Los locales con la misma categoría se agruparán en la vista.</p>
+              className="flex h-10 w-full rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--ring))]"
+            >
+              <option value="RESTAURANT">Con mesas (restaurante)</option>
+              <option value="AL_PASO">Comida al paso (caja + menú, sin mesas)</option>
+            </select>
+            <p className="text-xs text-[hsl(var(--muted-foreground))]">
+              Al paso oculta mesas/cocina y deja venta de mostrador con menú.
+            </p>
           </div>
 
           {error && (

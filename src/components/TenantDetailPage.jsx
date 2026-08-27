@@ -3,24 +3,39 @@ import { useParams, useNavigate, Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import {
   ArrowLeft, Building2, Store, Users, ShoppingCart, DollarSign, TrendingUp,
-  Loader2, Shield, History,
+  Loader2, Shield, History, Power, UtensilsCrossed, Table2,
 } from 'lucide-react'
 import { getAuthContext, formatApiErrorDetail } from '../lib/apiClient'
-import { getBusinessStats } from '../lib/superAdminApi'
+import {
+  getBusinessStats,
+  listBusinessLocals,
+  updateBusiness,
+  updateLocalSalesModel,
+} from '../lib/superAdminApi'
+import { SALES_MODEL, SALES_MODEL_LABEL, isAlPasoLocal } from '../lib/salesModel'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 
-const PLAN_LABEL = { enterprise: 'Enterprise', professional: 'Professional', starter: 'Standard' }
+const PLAN_LABEL = { enterprise: 'Enterprise', professional: 'Professional', starter: 'Standard', basic: 'Standard' }
 const PLAN_BADGE = {
   enterprise: 'bg-violet-100 text-violet-700 border-violet-200',
   professional: 'bg-blue-100 text-blue-700 border-blue-200',
   starter: 'bg-stone-100 text-stone-700 border-stone-200',
+  basic: 'bg-stone-100 text-stone-700 border-stone-200',
 }
 
 const ACTION_LABEL = {
   'business.create': 'Creación de franquicia',
   'business.update': 'Actualización de franquicia',
   'business.delete': 'Eliminación de franquicia',
+  'business.deactivate': 'Suspensión de franquicia',
+  'business.reactivate': 'Reactivación de franquicia',
+  'user.create': 'Alta de usuario',
+  'user.update': 'Actualización de usuario',
+  'user.role_change': 'Cambio de rol',
+  'user.deactivate': 'Desactivación de usuario',
+  'user.reactivate': 'Reactivación de usuario',
 }
 
 function formatCurrency(value) {
@@ -87,25 +102,74 @@ export default function TenantDetailPage() {
   const { businessId } = useParams()
   const navigate = useNavigate()
   const [data, setData] = useState(null)
+  const [locals, setLocals] = useState([])
   const [loading, setLoading] = useState(true)
+  const [toggling, setToggling] = useState(false)
+  const [savingLocalId, setSavingLocalId] = useState('')
   const [err, setErr] = useState('')
 
   const load = useCallback(async () => {
     setLoading(true)
     try {
       const ctx = await getAuthContext()
-      const stats = await getBusinessStats(businessId, ctx.token)
+      const [stats, localRows] = await Promise.all([
+        getBusinessStats(businessId, ctx.token),
+        listBusinessLocals(businessId, ctx.token),
+      ])
       setData(stats)
+      setLocals(Array.isArray(localRows) ? localRows : [])
       setErr('')
     } catch (e2) {
       setErr(formatApiErrorDetail(e2.detail) || e2.message || 'Error al cargar el detalle del negocio')
       setData(null)
+      setLocals([])
     } finally {
       setLoading(false)
     }
   }, [businessId])
 
   useEffect(() => { load() }, [load])
+
+  const handleToggleActive = async () => {
+    if (!data?.business) return
+    const next = data.business.is_active === false
+    const ok = window.confirm(
+      next
+        ? `¿Reactivar "${data.business.name}"? Sus usuarios activos podrán volver a entrar.`
+        : `¿Suspender "${data.business.name}"? Sus usuarios no podrán iniciar sesión hasta que la reactives.`
+    )
+    if (!ok) return
+    setToggling(true)
+    setErr('')
+    try {
+      const ctx = await getAuthContext()
+      await updateBusiness(businessId, { is_active: next }, ctx.token)
+      await load()
+    } catch (e2) {
+      setErr(formatApiErrorDetail(e2.detail) || e2.message || 'No se pudo cambiar el estado')
+    } finally {
+      setToggling(false)
+    }
+  }
+
+  const handleSalesModelChange = async (local, nextModel) => {
+    if (!local?.id || String(local.sales_model) === String(nextModel)) return
+    setSavingLocalId(String(local.id))
+    setErr('')
+    try {
+      const ctx = await getAuthContext()
+      await updateLocalSalesModel(local.id, nextModel, ctx.token)
+      setLocals((prev) =>
+        prev.map((row) =>
+          String(row.id) === String(local.id) ? { ...row, sales_model: nextModel } : row,
+        ),
+      )
+    } catch (e2) {
+      setErr(formatApiErrorDetail(e2.detail) || e2.message || 'No se pudo cambiar el modo de venta')
+    } finally {
+      setSavingLocalId('')
+    }
+  }
 
   if (loading) {
     return (
@@ -130,6 +194,7 @@ export default function TenantDetailPage() {
 
   const business = data.business || {}
   const stats = data.stats || {}
+  const isActive = business.is_active !== false
 
   return (
     <div className="flex-1 overflow-y-auto no-scrollbar bg-[hsl(var(--background))]">
@@ -149,20 +214,41 @@ export default function TenantDetailPage() {
               <Badge className={`text-[10px] font-bold uppercase tracking-wide rounded-full px-2 py-0.5 border ${PLAN_BADGE[business.plan] || PLAN_BADGE.starter}`}>
                 {PLAN_LABEL[business.plan] || business.plan}
               </Badge>
-              {business.is_active === false ? (
-                <span className="text-xs font-medium text-red-600">Inactiva</span>
-              ) : (
+              {isActive ? (
                 <span className="text-xs font-medium text-emerald-700">Activa</span>
+              ) : (
+                <span className="text-xs font-medium text-red-600">Inactiva · acceso bloqueado</span>
               )}
             </div>
             <p className="text-sm text-[hsl(var(--muted-foreground))] mt-0.5">
               {business.rut || 'Sin RUT'} · Creada {formatDate(business.created_at)}
             </p>
           </div>
-          <Link to="/gestor/auditoria" className="text-sm font-medium text-[hsl(var(--primary))] hover:underline">
-            Ver auditoría global
-          </Link>
+          <div className="flex items-center gap-2">
+            <Button
+              variant={isActive ? 'outline' : 'default'}
+              size="sm"
+              onClick={handleToggleActive}
+              disabled={toggling}
+            >
+              {toggling ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Power size={14} className={isActive ? 'text-red-500' : 'text-emerald-600'} />
+              )}
+              {isActive ? 'Suspender' : 'Reactivar'}
+            </Button>
+            <Link to="/gestor/auditoria" className="text-sm font-medium text-[hsl(var(--primary))] hover:underline">
+              Ver auditoría global
+            </Link>
+          </div>
         </div>
+
+        {!isActive && (
+          <div className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+            Esta franquicia está suspendida. Los usuarios del tenant no pueden iniciar sesión hasta que la reactives.
+          </div>
+        )}
 
         {err && <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{err}</div>}
 
@@ -213,6 +299,58 @@ export default function TenantDetailPage() {
             </CardContent>
           </Card>
         </div>
+
+        {/* Modo de venta por local */}
+        <Card>
+          <CardContent className="p-5">
+            <div className="flex items-start justify-between gap-3 mb-4">
+              <div>
+                <h3 className="text-sm font-bold text-[hsl(var(--foreground))]">Modo de venta por local</h3>
+                <p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">
+                  Activa <strong>comida al paso</strong> para locales sin mesas (solo caja + menú).
+                  Con mesas mantiene el POS de restaurante.
+                </p>
+              </div>
+            </div>
+            {locals.length === 0 ? (
+              <p className="text-xs text-[hsl(var(--muted-foreground))]">Este negocio aún no tiene locales.</p>
+            ) : (
+              <div className="flex flex-col divide-y divide-[hsl(var(--border))]">
+                {locals.map((local) => {
+                  const alPaso = isAlPasoLocal(local)
+                  const saving = String(savingLocalId) === String(local.id)
+                  return (
+                    <div key={local.id} className="py-3 flex flex-wrap items-center justify-between gap-3">
+                      <div className="min-w-0 flex items-center gap-2.5">
+                        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[hsl(var(--muted))] text-[hsl(var(--foreground))] shrink-0">
+                          {alPaso ? <UtensilsCrossed size={16} /> : <Table2 size={16} />}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold text-[hsl(var(--foreground))] truncate">{local.name}</p>
+                          <p className="text-xs text-[hsl(var(--muted-foreground))]">
+                            {SALES_MODEL_LABEL[local.sales_model] || local.sales_model || '—'}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <select
+                          value={alPaso ? SALES_MODEL.AL_PASO : SALES_MODEL.RESTAURANT}
+                          disabled={saving}
+                          onChange={(e) => handleSalesModelChange(local, e.target.value)}
+                          className="h-9 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-2.5 text-xs font-medium disabled:opacity-60"
+                        >
+                          <option value={SALES_MODEL.RESTAURANT}>{SALES_MODEL_LABEL.RESTAURANT}</option>
+                          <option value={SALES_MODEL.AL_PASO}>{SALES_MODEL_LABEL.AL_PASO}</option>
+                        </select>
+                        {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin text-[hsl(var(--muted-foreground))]" /> : null}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </CardContent>
+        </Card>
 
         {/* Auditoría reciente */}
         <Card>

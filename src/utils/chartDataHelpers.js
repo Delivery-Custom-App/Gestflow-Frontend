@@ -34,7 +34,9 @@ export function generateIncomeTrendFromOrders(orders = [], range = '7d') {
     orders.forEach((order) => {
       const key = new Date(order.created_at || Date.now())
         .toLocaleDateString('es-CL', { day: '2-digit', month: '2-digit' })
-      if (key in dailyMap) dailyMap[key] += Number(order.total) || Number(order.subtotal) || 0
+      if (key in dailyMap) {
+        dailyMap[key] += Number(order.total_amount) || Number(order.total) || Number(order.subtotal) || 0
+      }
     })
     const total = Object.values(dailyMap).reduce((s, v) => s + v, 0)
     const avg = Math.round(total / 7)
@@ -61,7 +63,7 @@ export function generateIncomeTrendFromOrders(orders = [], range = '7d') {
     const t = new Date(order.created_at || now).getTime()
     if (t < windowStart || t > now) return
     const bucket = buckets.find((b) => t >= b.start && t < b.end)
-    if (bucket) bucket.ingresos += Number(order.total) || Number(order.subtotal) || 0
+    if (bucket) bucket.ingresos += Number(order.total_amount) || Number(order.total) || Number(order.subtotal) || 0
   })
 
   const total = buckets.reduce((s, b) => s + b.ingresos, 0)

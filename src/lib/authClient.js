@@ -55,6 +55,8 @@ async function parseAuthResponse(response) {
     throw new Error(json?.detail || json?.message || response.statusText || 'Error de autenticacion')
   }
 
+  // Backend V2: { access_token, token_type }
+  // Legacy INGSW2: { session: { access_token, refresh_token, user } } o equivalente
   const session = json.session || json
   const accessToken = session.access_token || session.token
   if (!accessToken) {
@@ -75,22 +77,43 @@ export async function loginWithPassword({ email, password }) {
     body: JSON.stringify({ email, password }),
   })
   const session = await parseAuthResponse(response)
+
+  // V2 no embebe user en el login — completar con /auth/me
+  if (!session.user) {
+    const me = await fetchCurrentUser(session.access_token)
+    if (me) session.user = me
+  }
+
   writeSession(session)
   return session
 }
 
+/**
+ * Backend V2 no expone /auth/refresh todavía.
+ * Si no hay refresh_token, se mantiene la sesión actual (access JWT).
+ */
 export async function refreshSession() {
   const current = getStoredSession()
-  if (!current?.refresh_token) return null
+  if (!current?.access_token) return null
+  if (!current.refresh_token) return current
 
-  const response = await fetch(buildUrl('/auth/refresh'), {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ refresh_token: current.refresh_token }),
-  })
-  const session = await parseAuthResponse(response)
-  writeSession(session)
-  return session
+  try {
+    const response = await fetch(buildUrl('/auth/refresh'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refresh_token: current.refresh_token }),
+    })
+    if (!response.ok) {
+      // Endpoint inexistente o token inválido — no borrar sesión si el access sigue vivo
+      if (response.status === 404) return current
+      return null
+    }
+    const session = await parseAuthResponse(response)
+    writeSession(session)
+    return session
+  } catch {
+    return current
+  }
 }
 
 export async function fetchCurrentUser(token) {
@@ -101,6 +124,7 @@ export async function fetchCurrentUser(token) {
   if (!response.ok) return null
 
   const json = await response.json().catch(() => null)
+  // V2: MeResponse plano { id, email, role, business_id, local_id }
   const user = json?.user || json
   if (user && typeof window !== 'undefined') {
     window.localStorage.setItem(USER_KEY, JSON.stringify(user))
@@ -112,10 +136,11 @@ export async function logoutSession() {
   const session = getStoredSession()
   try {
     if (session?.access_token) {
+      // V2 aún no tiene /auth/logout — ignorar 404
       await fetch(buildUrl('/auth/logout'), {
         method: 'POST',
         headers: { Authorization: `Bearer ${session.access_token}` },
-      })
+      }).catch(() => null)
     }
   } finally {
     clearStoredSession()

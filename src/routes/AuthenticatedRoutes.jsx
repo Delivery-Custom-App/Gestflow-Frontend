@@ -1,4 +1,4 @@
-import { lazy, Suspense } from 'react'
+import { lazy, Suspense, useMemo } from 'react'
 import { BrowserRouter as Router, Routes, Route, Navigate, useParams, useLocation } from 'react-router-dom'
 import AppShell from '../components/AppShell'
 import ErrorBoundary from '../components/ErrorBoundary'
@@ -13,11 +13,13 @@ const LocalDashboard = lazy(() => import('../components/LocalDashboard'))
 const AdministrativeModule = lazy(() => import('../components/AdministrativeModule'))
 const InventoryHub = lazy(() => import('../components/inventory/InventoryHub'))
 const StockControlDashboard = lazy(() => import('../components/inventory/StockControlDashboard'))
+const MenuBuilderPage = lazy(() => import('../components/inventory/MenuBuilderPage'))
 const SuppliersKpisDashboard = lazy(() => import('../components/inventory/SuppliersKpisDashboard'))
 const WeeklyPurchasesPage = lazy(() => import('../components/inventory/weeklyPurchases/WeeklyPurchasesPage'))
 const WeeklyPurchaseDetailPage = lazy(() => import('../components/inventory/weeklyPurchases/WeeklyPurchaseDetailPage'))
 const RecipesPage = lazy(() => import('../components/inventory/recipes/RecipesPage'))
 const POSModule = lazy(() => import('../components/pos/POSModule'))
+const HrModule = lazy(() => import('../components/hr/HrModule'))
 const MesaDetail = lazy(() => import('../components/pos/MesaDetail'))
 const ReportesPage = lazy(() => import('../components/pos/ReportesPage'))
 const VentaDirectaView = lazy(() => import('../components/pos/VentaDirectaView'))
@@ -34,12 +36,32 @@ import { OnboardingProvider } from '../context/OnboardingContext'
 import { WORKER_ROLES } from '../constants/roles'
 import { isSuperAdminRole, isAdminNegocioRole } from '../auth/roleLabel'
 import { isDirectSaleDemoUser } from '../constants/demoMode'
+import { isAlPasoLocal } from '../lib/salesModel'
 import { useAuth } from '../context/AuthContext'
+import { useLocals } from '../hooks/useLocals'
 
 const ROUTER_FUTURE_FLAGS = { v7_startTransition: true, v7_relativeSplatPath: true }
 
 function AdminLayout() {
   return <AppShell />
+}
+
+function useLocalIsAlPaso(localId) {
+  const { user } = useAuth()
+  const { locales } = useLocals()
+  return useMemo(() => {
+    if (isDirectSaleDemoUser(user?.email)) return true
+    const local = locales.find((l) => String(l.id) === String(localId))
+    return isAlPasoLocal(local)
+  }, [locales, localId, user?.email])
+}
+
+/** Si el local es comida al paso, /pos (mesas) redirige a venta directa. */
+function RestaurantPosOrRedirect() {
+  const { localId } = useParams()
+  const alPaso = useLocalIsAlPaso(localId)
+  if (alPaso) return <Navigate to={`/local/${localId}/pos/venta-directa`} replace />
+  return <POSModule />
 }
 
 function LocalModulesHomeRedirect() {
@@ -62,7 +84,8 @@ function LegacyComprasDetailRedirect() {
 function LocalRoutes() {
   return (
     <>
-      <Route path="/local/:localId/inventario/stock" element={<StockControlDashboard />} />
+      <Route path="/local/:localId/inventario/stock" element={<MenuBuilderPage />} />
+      <Route path="/local/:localId/inventario/stock-control" element={<StockControlDashboard />} />
       <Route path="/local/:localId/inventario/recipes" element={<RecipesPage />} />
       <Route path="/local/:localId/inventario/compras-semanales/:orderId" element={<WeeklyPurchaseDetailPage />} />
       <Route path="/local/:localId/inventario/compras-semanales" element={<WeeklyPurchasesPage />} />
@@ -71,7 +94,8 @@ function LocalRoutes() {
       <Route path="/local/:localId/inventario/proveedores" element={<SuppliersKpisDashboard />} />
       <Route path="/local/:localId/inventario" element={<InventoryHub />} />
       <Route path="/local/:localId/administrativo/:sectionId?" element={<AdministrativeModule />} />
-      <Route path="/local/:localId/pos" element={<POSModule />} />
+      <Route path="/local/:localId/rrhh" element={<HrModule />} />
+      <Route path="/local/:localId/pos" element={<RestaurantPosOrRedirect />} />
       <Route path="/local/:localId/pos/cocina" element={<POSModule />} />
       <Route path="/local/:localId/pos/reportes" element={<ReportesPage />} />
       <Route path="/local/:localId/pos/mesa/:mesaId" element={<MesaDetail />} />
@@ -141,28 +165,28 @@ function AdminRoutes({ assignedLocalId }) {
 }
 
 /** TRABAJADOR: solo POS de su local asignado */
-function WorkerRoutes({ assignedLocalId }) {
-  const { user } = useAuth()
-  const isDirectSaleDemo = isDirectSaleDemoUser(user?.email)
+function WorkerPosHomeRedirect({ assignedLocalId }) {
+  const alPaso = useLocalIsAlPaso(assignedLocalId)
   const home = assignedLocalId
-    ? `/local/${assignedLocalId}/pos${isDirectSaleDemo ? '/venta-directa' : ''}`
+    ? `/local/${assignedLocalId}/pos${alPaso ? '/venta-directa' : ''}`
     : '/'
+  return <Navigate to={home} replace />
+}
 
+function WorkerRoutes({ assignedLocalId }) {
   if (assignedLocalId) {
     return (
       <Routes>
         <Route element={<AdminLayout />}>
-          <Route path="/" element={<Navigate to={home} replace />} />
-          <Route
-            path="/local/:localId/pos"
-            element={isDirectSaleDemo ? <Navigate to={home} replace /> : <POSModule />}
-          />
+          <Route path="/" element={<WorkerPosHomeRedirect assignedLocalId={assignedLocalId} />} />
+          <Route path="/local/:localId/pos" element={<RestaurantPosOrRedirect />} />
           <Route path="/local/:localId/pos/cocina" element={<POSModule />} />
           <Route path="/local/:localId/pos/mesa/:mesaId" element={<MesaDetail />} />
           <Route path="/local/:localId/pos/venta-directa" element={<VentaDirectaView />} />
           <Route path="/local/:localId/pos/registrar-producto" element={<RegistrarProductoView />} />
           <Route path="/local/:localId/administrativo/:sectionId?" element={<AdministrativeModule />} />
-          <Route path="*" element={<Navigate to={home} replace />} />
+          <Route path="/local/:localId/rrhh" element={<HrModule />} />
+          <Route path="*" element={<WorkerPosHomeRedirect assignedLocalId={assignedLocalId} />} />
         </Route>
       </Routes>
     )
@@ -174,11 +198,12 @@ function WorkerRoutes({ assignedLocalId }) {
       <Route element={<AdminLayout />}>
         <Route path="/" element={<Navigate to="/admin" replace />} />
         <Route path="/admin" element={<AdminDashboard />} />
-        <Route path="/local/:localId/pos" element={<POSModule />} />
+        <Route path="/local/:localId/pos" element={<RestaurantPosOrRedirect />} />
         <Route path="/local/:localId/pos/cocina" element={<POSModule />} />
         <Route path="/local/:localId/pos/mesa/:mesaId" element={<MesaDetail />} />
         <Route path="/local/:localId/pos/venta-directa" element={<VentaDirectaView />} />
         <Route path="/local/:localId/administrativo/:sectionId?" element={<AdministrativeModule />} />
+        <Route path="/local/:localId/rrhh" element={<HrModule />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>

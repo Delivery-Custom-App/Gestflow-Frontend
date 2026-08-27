@@ -36,19 +36,19 @@ export default function LoginPage({ onShowRegister }) {
           />
           <div className="absolute inset-0 bg-gradient-to-r from-stone-950/85 via-stone-950/45 to-stone-950/20" />
           <div className="relative z-10 flex items-center gap-3 p-10">
-            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-500 shadow-lg shadow-black/25">
+            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[hsl(var(--primary))] shadow-lg shadow-black/25">
               <Building2 className="h-6 w-6 text-white" />
             </div>
             <span className="text-lg font-black tracking-tight">Gestflow</span>
           </div>
           <div className="relative z-10 max-w-2xl p-10 pb-16">
-            <p className="text-xs font-black uppercase tracking-[0.22em] text-emerald-200">Restaurantes · POS · Operación</p>
+            <p className="text-xs font-black uppercase tracking-[0.22em] text-[hsl(var(--primary-tint))]">Restaurantes · POS · Operación</p>
             <h1 className="mt-4 max-w-[11ch] text-6xl font-black leading-[0.95] tracking-[-0.06em] xl:text-7xl">Tu local en orden, todos los días.</h1>
             <p className="mt-6 max-w-xl text-lg leading-8 text-white/80">Controla mesas, carta, inventario y pagos desde una vista simple para equipos reales en hora punta.</p>
             <div className="mt-8 flex flex-wrap gap-3">
               {['Pedidos claros', 'Caja conectada', 'Carta actualizada'].map((item) => (
                 <span key={item} className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-4 py-2 text-sm font-bold backdrop-blur">
-                  <CheckCircle2 className="h-4 w-4 text-emerald-200" />
+                  <CheckCircle2 className="h-4 w-4 text-[hsl(var(--primary-tint))]" />
                   {item}
                 </span>
               ))}
@@ -59,7 +59,7 @@ export default function LoginPage({ onShowRegister }) {
         <section className="flex min-h-screen items-center justify-center px-5 py-10 sm:px-8">
           <div className="w-full max-w-[420px]">
             <div className="mb-9 flex items-center gap-3 lg:hidden">
-              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-600 shadow-lg shadow-emerald-900/15">
+              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[hsl(var(--primary))] shadow-lg shadow-[hsl(var(--primary)/0.3)]">
                 <Building2 className="h-6 w-6 text-white" />
               </div>
               <div>
@@ -69,7 +69,7 @@ export default function LoginPage({ onShowRegister }) {
             </div>
 
             <div className="mb-8">
-              <p className="text-xs font-black uppercase tracking-[0.2em] text-emerald-700">Acceso operativo</p>
+              <p className="text-xs font-black uppercase tracking-[0.2em] text-[hsl(var(--primary))]">Acceso operativo</p>
               <h2 className="mt-3 text-4xl font-black tracking-[-0.045em] text-stone-950">Ingresa a tu panel</h2>
               <p className="mt-3 text-base leading-7 text-stone-600">Usa tus credenciales para continuar con la gestión del local.</p>
             </div>
@@ -85,7 +85,7 @@ export default function LoginPage({ onShowRegister }) {
               value={email}
               onChange={(event) => setEmail(event.target.value)}
               disabled={isLoading}
-              className="h-12 rounded-xl border-2 border-stone-300 bg-white text-base font-semibold text-stone-950 shadow-sm placeholder:text-stone-500 focus:border-emerald-600 focus:ring-4 focus:ring-emerald-600/15"
+              className="h-12 rounded-xl border-2 border-stone-300 bg-white text-base font-semibold text-stone-950 shadow-sm placeholder:text-stone-500 focus:border-[hsl(var(--primary))] focus:ring-4 focus:ring-[hsl(var(--primary)/0.15)]"
             />
           </div>
 
@@ -100,7 +100,7 @@ export default function LoginPage({ onShowRegister }) {
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
                 disabled={isLoading}
-                className="h-12 rounded-xl border-2 border-stone-300 bg-white pr-11 text-base font-semibold text-stone-950 shadow-sm placeholder:text-stone-500 focus:border-emerald-600 focus:ring-4 focus:ring-emerald-600/15"
+                className="h-12 rounded-xl border-2 border-stone-300 bg-white pr-11 text-base font-semibold text-stone-950 shadow-sm placeholder:text-stone-500 focus:border-[hsl(var(--primary))] focus:ring-4 focus:ring-[hsl(var(--primary)/0.15)]"
               />
               <button
                 type="button"
@@ -114,7 +114,7 @@ export default function LoginPage({ onShowRegister }) {
             </div>
           </div>
 
-          <Button type="submit" className="mt-2 h-12 rounded-xl border-0 bg-emerald-600 text-base font-black text-white shadow-lg shadow-emerald-900/15 hover:bg-emerald-500" disabled={isLoading || !email || !password}>
+          <Button type="submit" className="mt-2 h-12 rounded-xl border-0 bg-[hsl(var(--primary))] text-base font-black text-white shadow-lg shadow-[hsl(var(--primary)/0.25)] hover:bg-[hsl(var(--primary)/0.9)]" disabled={isLoading || !email || !password}>
             {isLoading ? 'Validando...' : <span className="inline-flex items-center gap-2">Entrar <ArrowRight className="h-4 w-4" /></span>}
           </Button>
 
@@ -129,7 +129,7 @@ export default function LoginPage({ onShowRegister }) {
             Tras iniciar sesión, recetas (práctica):{' '}
             <a
               href="/practica/recetas"
-              className="font-bold text-emerald-700 underline"
+              className="font-bold text-[hsl(var(--primary))] underline"
             >
               /practica/recetas
             </a>
@@ -142,7 +142,7 @@ export default function LoginPage({ onShowRegister }) {
             <button
               type="button"
               onClick={onShowRegister}
-              className="text-sm font-bold text-emerald-700 hover:underline"
+              className="text-sm font-bold text-[hsl(var(--primary))] hover:underline"
             >
               Regístrate aquí
             </button>

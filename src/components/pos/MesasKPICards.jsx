@@ -1,71 +1,95 @@
 import { useMesasKPIs } from '../../hooks/useMesasKPIs'
+import { Table2, Users, CircleDollarSign, CheckCircle2 } from 'lucide-react'
+import { cn } from '@/lib/utils'
 
 const KPI_CONFIG = [
   {
     key: 'total',
-    label: 'Total Mesas',
-    colorClass: 'text-[hsl(var(--primary))]',
-    bgClass: 'bg-[hsl(var(--primary))]/10',
-    icon: (
-      <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" className="w-5 h-5">
-        <rect x="3" y="8" width="18" height="3" rx="1.5" stroke="currentColor" strokeWidth="1.8" />
-        <path d="M5 11V18M19 11V18" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-        <path d="M3 18H21" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-      </svg>
-    ),
-  },
-  {
-    key: 'libres',
-    label: 'Mesas Libres',
-    colorClass: 'text-[hsl(var(--mesa-libre))]',
-    bgClass: 'bg-[hsl(var(--mesa-libre))]/10',
-    icon: (
-      <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" className="w-5 h-5">
-        <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.8" />
-        <path d="M8 12L11 15L16 9" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-      </svg>
-    ),
+    label: 'Total mesas',
+    featured: true,
+    icon: Table2,
   },
   {
     key: 'ocupadas',
-    label: 'Mesas Ocupadas',
-    colorClass: 'text-[hsl(var(--mesa-ocupada))]',
-    bgClass: 'bg-[hsl(var(--mesa-ocupada))]/10',
-    icon: (
-      <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" className="w-5 h-5">
-        <circle cx="12" cy="8" r="3.5" stroke="currentColor" strokeWidth="1.8" />
-        <path d="M5 19C5 15.686 8.134 13 12 13C15.866 13 19 15.686 19 19" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-      </svg>
-    ),
+    label: 'Ocupadas',
+    valueClass: 'text-[hsl(var(--mesa-ocupada))]',
+    icon: Users,
   },
   {
     key: 'en_cobro',
-    label: 'Mesas en Cobro',
-    colorClass: 'text-[hsl(var(--mesa-cobro))]',
-    bgClass: 'bg-[hsl(var(--mesa-cobro))]/10',
-    icon: (
-      <svg viewBox="0 0 24 24" fill="none" aria-hidden="true" className="w-5 h-5">
-        <rect x="3" y="6" width="18" height="13" rx="2" stroke="currentColor" strokeWidth="1.8" />
-        <path d="M3 10H21" stroke="currentColor" strokeWidth="1.8" />
-        <path d="M7 15H10M14 15H17" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-      </svg>
-    ),
+    label: 'En cobro',
+    valueClass: 'text-[hsl(var(--mesa-cobro))]',
+    icon: CircleDollarSign,
+  },
+  {
+    key: 'libres',
+    label: 'Disponibles',
+    valueClass: 'text-[hsl(var(--mesa-libre))]',
+    icon: CheckCircle2,
   },
 ]
 
+function resolveKpiValue(kpis, key) {
+  if (!kpis) return 0
+  const aliases = {
+    total: ['total', 'total_mesas'],
+    libres: ['libres', 'mesas_libres'],
+    ocupadas: ['ocupadas', 'mesas_ocupadas'],
+    en_cobro: ['en_cobro', 'mesas_en_cobro'],
+  }
+  for (const alias of aliases[key] || [key]) {
+    if (kpis[alias] != null) return kpis[alias]
+  }
+  return 0
+}
+
 function KPICard({ config, value, loading, index }) {
+  const Icon = config.icon
   const staggerClass = `stagger-${Math.min(index + 1, 6)}`
+
+  if (config.featured) {
+    return (
+      <article
+        className={cn(
+          'animate-fade-in-up',
+          staggerClass,
+          'relative overflow-hidden rounded-2xl border border-[hsl(var(--primary)/0.35)]',
+          'bg-[hsl(var(--primary))] p-4 text-white shadow-sm',
+        )}
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-white/80">{config.label}</p>
+            <p className="mt-2 text-3xl font-bold leading-none tracking-tight">
+              {loading ? '—' : value ?? 0}
+            </p>
+          </div>
+          <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/15">
+            <Icon size={20} />
+          </span>
+        </div>
+      </article>
+    )
+  }
+
   return (
-    <article className={`animate-fade-in-up ${staggerClass} flex items-center gap-3 p-4 bg-[hsl(var(--card))] rounded-xl border border-[hsl(var(--border))] shadow-sm`}>
-      <div className={`w-10 h-10 flex items-center justify-center rounded-lg shrink-0 ${config.bgClass} ${config.colorClass}`}>
-        {config.icon}
-      </div>
+    <article
+      className={cn(
+        'animate-fade-in-up',
+        staggerClass,
+        'flex items-start justify-between gap-3 rounded-2xl border border-[hsl(var(--border))]',
+        'bg-[hsl(var(--card))] p-4 shadow-sm',
+      )}
+    >
       <div>
-        <p className="text-2xl font-bold text-[hsl(var(--foreground))] leading-none">
+        <p className="text-xs font-medium text-[hsl(var(--muted-foreground))]">{config.label}</p>
+        <p className={cn('mt-2 text-3xl font-bold leading-none tracking-tight', config.valueClass)}>
           {loading ? '—' : value ?? 0}
         </p>
-        <p className="text-xs text-[hsl(var(--muted-foreground))] mt-0.5">{config.label}</p>
       </div>
+      <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[hsl(var(--muted))] text-[hsl(var(--muted-foreground))]">
+        <Icon size={18} />
+      </span>
     </article>
   )
 }
@@ -73,15 +97,10 @@ function KPICard({ config, value, loading, index }) {
 export default function MesasKPICards({ localId, onRefreshReady }) {
   const { kpis, loading, error, refresh } = useMesasKPIs(localId)
 
-  // Expose refresh fn to parent (POSModule)
   if (onRefreshReady) onRefreshReady(refresh)
 
   return (
     <section className="space-y-3">
-      <div className="flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-[hsl(var(--foreground))]">Estado de Mesas</h3>
-      </div>
-
       {error && (
         <p className="text-xs text-[hsl(var(--destructive))]">{error}</p>
       )}
@@ -91,13 +110,12 @@ export default function MesasKPICards({ localId, onRefreshReady }) {
           <KPICard
             key={config.key}
             config={config}
-            value={kpis?.[config.key]}
+            value={resolveKpiValue(kpis, config.key)}
             loading={loading}
             index={i}
           />
         ))}
       </div>
-
     </section>
   )
 }

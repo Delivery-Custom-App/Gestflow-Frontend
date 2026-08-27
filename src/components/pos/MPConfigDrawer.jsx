@@ -6,10 +6,12 @@ import {
   CheckCircle2, AlertCircle, ExternalLink, Link2,
 } from 'lucide-react'
 import { apiRequest, getAuthContext, setPointDeviceMode } from '../../lib/apiClient'
+import { isV2FeatureEnabled } from '../../lib/v2Features'
 import { toast } from 'sonner'
 
 const API_BASE = import.meta.env.VITE_API_URL || ''
 const EMPTY_MANUAL = { mp_pos_id: '', name: '' }
+const MP_POS_WEBHOOKS = isV2FeatureEnabled('mpPosWebhooks')
 
 function pointMachineId(value) {
   const raw = String(value || '').trim()
@@ -60,10 +62,12 @@ export default function MPConfigDrawer({ localId, onClose, open = true }) {
       const status = await apiRequest(`/locals/${localId}/mp-settings`)
       setMpStatus(status)
 
-      const [posData] = await Promise.all([
-        apiRequest(`/webhooks/mercadopago-pos?local_id=${localId}`).catch(() => []),
-      ])
-      setRegistered(posData || [])
+      if (MP_POS_WEBHOOKS) {
+        const posData = await apiRequest(`/webhooks/mercadopago-pos?local_id=${localId}`).catch(() => [])
+        setRegistered(posData || [])
+      } else {
+        setRegistered([])
+      }
     } catch (err) {
       setMpStatus(null)
       toast.error('Error al cargar configuración: ' + err.message)
@@ -112,7 +116,11 @@ export default function MPConfigDrawer({ localId, onClose, open = true }) {
       if (e.data.type === 'mp_oauth_success') {
         finish(true)
       } else if (e.data.type === 'mp_oauth_error') {
-        finish(false, e.data.detail || 'Error desconocido')
+        const detail = e.data.detail || 'Error desconocido'
+        const tip = typeof window !== 'undefined' && window.location.hostname === 'localhost'
+          ? ' Si el popup de MP dice “Tenemos un problema”, agregá http://localhost:8002/api/mp-oauth/callback como Redirect URI en el panel de desarrolladores.'
+          : ''
+        finish(false, detail + tip)
       }
     }
 
@@ -184,6 +192,10 @@ export default function MPConfigDrawer({ localId, onClose, open = true }) {
 
   // ── Discover handler ──────────────────────────────────────────────────────
   async function handleDiscover() {
+    if (!MP_POS_WEBHOOKS) {
+      toast.info('Importar dispositivos Point aún no está disponible en Backend V2. Podés registrar el ID manualmente.')
+      return
+    }
     setDiscovering(true)
     try {
       const data = await apiRequest(`/webhooks/mercadopago-pos/discover?local_id=${localId}`)
@@ -207,6 +219,10 @@ export default function MPConfigDrawer({ localId, onClose, open = true }) {
 
   // ── Link / unlink handlers ────────────────────────────────────────────────
   async function handleLink(device) {
+    if (!MP_POS_WEBHOOKS) {
+      toast.info('Vincular Point aún no está disponible en Backend V2.')
+      return
+    }
     const terminalName = device.name || `POS ${displayMachineId(device)}`
     setLinking(device.id)
     try {
@@ -232,6 +248,10 @@ export default function MPConfigDrawer({ localId, onClose, open = true }) {
   }
 
   async function handleDelete(pos) {
+    if (!MP_POS_WEBHOOKS) {
+      toast.info('Desvincular Point aún no está disponible en Backend V2.')
+      return
+    }
     if (!confirm(`¿Desvincular el POS "${pos.name || pos.mp_pos_id}"?`)) return
     try {
       await apiRequest(`/webhooks/mercadopago-pos/${pos.id}`, { method: 'DELETE' })
@@ -258,6 +278,10 @@ export default function MPConfigDrawer({ localId, onClose, open = true }) {
 
   async function handleManualAdd(e) {
     e.preventDefault()
+    if (!MP_POS_WEBHOOKS) {
+      toast.info('Registro de Point aún no está disponible en Backend V2.')
+      return
+    }
     if (!manualForm.mp_pos_id.trim()) { toast.error('El ID del dispositivo es obligatorio'); return }
     setSaving(true)
     try {
@@ -366,6 +390,19 @@ export default function MPConfigDrawer({ localId, onClose, open = true }) {
                   </div>
                 )}
 
+                {mpStatus?.oauth_available === true && typeof window !== 'undefined' && window.location.hostname === 'localhost' && (
+                  <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900 space-y-1.5">
+                    <p className="font-semibold">Redirect URI requerida en el panel de MercadoPago</p>
+                    <p>
+                      Si ves “Tenemos un problema…”, agregá esta URI exacta en tu aplicación MP
+                      (Developers → tu app → Redirect URIs), además de la de producción:
+                    </p>
+                    <code className="block break-all rounded bg-white/80 px-2 py-1.5 font-mono text-[11px] border border-amber-100">
+                      {mpStatus.oauth_redirect_uri || 'http://localhost:8002/api/mp-oauth/callback'}
+                    </code>
+                  </div>
+                )}
+
                 {/* OAuth — primary action */}
                 <button
                   onClick={handleOAuthConnect}
@@ -460,6 +497,13 @@ export default function MPConfigDrawer({ localId, onClose, open = true }) {
             <p className="text-xs text-[hsl(var(--muted-foreground))]">
               Trae automáticamente los lectores Point registrados en tu cuenta MercadoPago.
             </p>
+
+            {!MP_POS_WEBHOOKS && (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+                La importación automática de Point aún no está en Backend V2. Podés conectar la cuenta
+                por OAuth y registrar el dispositivo manualmente más abajo.
+              </div>
+            )}
 
             {discovered !== null && (
               <div className="space-y-2">

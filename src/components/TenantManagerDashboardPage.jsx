@@ -239,7 +239,7 @@ export default function TenantManagerDashboardPage() {
                         </Badge>
                       </td>
                       <td className="py-2.5 pr-3">
-                        {t.is_active ? (
+                        {t.is_active !== false ? (
                           <span className="text-xs font-medium text-emerald-700">Activa</span>
                         ) : (
                           <span className="text-xs font-medium text-red-600">Inactiva</span>
