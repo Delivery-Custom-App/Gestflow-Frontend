@@ -240,6 +240,12 @@ export function patchCategory(categoryId, body) {
   })
 }
 
+export function deleteCategory(categoryId) {
+  return apiRequest(`/categories/${encodeURIComponent(String(categoryId))}`, {
+    method: 'DELETE',
+  })
+}
+
 export async function resolveCategoryNameForLocal(localId, rawName) {
   const trimmed = String(rawName || '').trim()
   if (!trimmed) {

@@ -18,10 +18,18 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Skeleton } from '@/components/ui/skeleton'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { formatCLPOrDash as formatClp } from '../../lib/formatCLP'
 import { getCategoryTone } from '../../lib/categoryColor'
 
 const STATUS_LABEL = { OPTIMO: 'óptimo', BAJO: 'bajo', CRITICO: 'crítico' }
+const NO_CATEGORY_VALUE = '__NONE__'
 
 function ProductsTable({
   items,
@@ -36,14 +44,17 @@ function ProductsTable({
   onPatchStock,
   onPatchUnitCost,
   onPatchProductName,
+  onPatchCategory,
   onDeleteItem,
   statusFilters = [],
+  categoriesCatalog = [],
 }) {
   const [editingRow, setEditingRow] = useState(null)
   const [nameDraft, setNameDraft] = useState('')
   const [maxStockDraft, setMaxStockDraft] = useState('')
   const [minStockDraft, setMinStockDraft] = useState('')
   const [costDraft, setCostDraft] = useState('')
+  const [categoryDraft, setCategoryDraft] = useState(NO_CATEGORY_VALUE)
   const [formError, setFormError] = useState('')
   const [saving, setSaving] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
@@ -83,6 +94,7 @@ function ProductsTable({
     setMaxStockDraft('')
     setMinStockDraft('')
     setCostDraft('')
+    setCategoryDraft(NO_CATEGORY_VALUE)
     setFormError('')
     setConfirmDelete(false)
   }
@@ -93,6 +105,7 @@ function ProductsTable({
     setMaxStockDraft(row.stock_max != null ? String(row.stock_max) : '')
     setMinStockDraft(String(row.stock_min ?? 0))
     setCostDraft(String(Math.round(Number(row.unit_cost_clp ?? 0))))
+    setCategoryDraft(row.category_id ? String(row.category_id) : NO_CATEGORY_VALUE)
     setFormError('')
   }
 
@@ -139,6 +152,11 @@ function ProductsTable({
 
       if (onPatchUnitCost && nextUnitCost !== currentUnitCost) {
         await onPatchUnitCost(editingRow, nextUnitCost)
+      }
+
+      const currentCategoryId = editingRow.category_id ? String(editingRow.category_id) : NO_CATEGORY_VALUE
+      if (onPatchCategory && categoryDraft !== currentCategoryId) {
+        await onPatchCategory(editingRow, categoryDraft === NO_CATEGORY_VALUE ? null : categoryDraft)
       }
 
       closeEditModal()
@@ -424,6 +442,28 @@ function ProductsTable({
               disabled={saving}
               className="h-10"
             />
+          </div>
+
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="edit-category" className="text-sm font-semibold">Categoría</Label>
+            <Select value={categoryDraft} onValueChange={setCategoryDraft} disabled={saving}>
+              <SelectTrigger id="edit-category" className="h-10">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent className="z-[600]">
+                <SelectItem value={NO_CATEGORY_VALUE}>Ninguno</SelectItem>
+                {categoriesCatalog.map((category) => (
+                  <SelectItem key={category.id} value={category.id}>
+                    {category.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {categoryDraft === NO_CATEGORY_VALUE ? (
+              <p className="text-xs text-[hsl(var(--muted-foreground))]">
+                Sin categoría, este producto no aparecerá disponible para seleccionar en el menú.
+              </p>
+            ) : null}
           </div>
 
           <div className="grid grid-cols-2 gap-4">

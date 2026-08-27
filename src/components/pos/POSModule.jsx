@@ -8,8 +8,7 @@ import KitchenDisplay from './KitchenDisplay'
 import CreateMesaModal from './CreateMesaModal'
 import EditMesaModal from './EditMesaModal'
 import DeleteMesaModal from './DeleteMesaModal'
-import MesaDetailModal from './MesaDetailModal'
-import OrdenView from './OrdenView'
+import MesaWorkspace from './MesaWorkspace'
 import PrinterConfigModal from './PrinterConfigModal'
 import MPConfigDrawer from './MPConfigDrawer'
 import { useAuth } from '../../context/AuthContext'
@@ -32,9 +31,7 @@ export default function POSModule() {
   const [showDeleteModal, setShowDeleteModal] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState(null)
-  const [selectedMesaDetail, setSelectedMesaDetail] = useState(null)
-  const [showMesaDetail, setShowMesaDetail] = useState(false)
-  const [selectedOrdenMesa, setSelectedOrdenMesa] = useState(null)
+  const [selectedMesa, setSelectedMesa] = useState(null)
   const [showPrinterConfig, setShowPrinterConfig] = useState(false)
   const [showMPConfig, setShowMPConfig] = useState(false)
   const kpiRefreshRef = useRef(null)
@@ -48,22 +45,11 @@ export default function POSModule() {
   // para que los hijos memoizados (MesasVisualization/MesaCard) no re-rendericen
   // cuando POSModule cambia de estado por otra causa (AC1, H1).
   const handleMesaSelect = useCallback((mesa) => {
-    const state = mesa.state || 'libre'
-    if (state === 'ocupada' || state === 'en_cobro') {
-      setSelectedOrdenMesa(mesa)
-    } else {
-      setSelectedMesaDetail(mesa)
-      setShowMesaDetail(true)
-    }
+    setSelectedMesa(mesa)
   }, [])
 
-  const handleMesaDetailClose = useCallback(() => {
-    setShowMesaDetail(false)
-    setSelectedMesaDetail(null)
-  }, [])
-
-  const handleOrdenViewBack = useCallback(() => {
-    setSelectedOrdenMesa(null)
+  const handleWorkspaceBack = useCallback(() => {
+    setSelectedMesa(null)
     refreshMesas()
     if (kpiRefreshRef.current) kpiRefreshRef.current()
   }, [refreshMesas])
@@ -130,7 +116,7 @@ export default function POSModule() {
   return (
     <>
       <main className="flex-1 overflow-y-auto no-scrollbar p-4 lg:p-6 flex flex-col min-h-0">
-        {activeView === 'mesas' && !selectedOrdenMesa && (
+        {activeView === 'mesas' && !selectedMesa && (
           <div className="mb-5 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <h1 className="text-2xl font-bold tracking-tight text-[hsl(var(--foreground))]">Mesas</h1>
@@ -169,11 +155,12 @@ export default function POSModule() {
             )}
           </div>
         )}
-        {selectedOrdenMesa ? (
-          <OrdenView
-            mesa={selectedOrdenMesa}
+        {selectedMesa ? (
+          <MesaWorkspace
+            mesa={selectedMesa}
             localId={localId}
-            onBack={handleOrdenViewBack}
+            cajaId={cajaId}
+            onBack={handleWorkspaceBack}
             onTableUpdated={handleTableUpdated}
           />
         ) : activeView === 'mesas' ? (
@@ -254,16 +241,6 @@ export default function POSModule() {
           onConfirm={handleConfirmDelete}
           isDeleting={isDeleting}
           error={deleteError}
-        />
-      )}
-
-      {showMesaDetail && selectedMesaDetail && (
-        <MesaDetailModal
-          mesa={selectedMesaDetail}
-          localId={localId}
-          cajaId={cajaId}
-          onClose={handleMesaDetailClose}
-          onTableUpdated={handleTableUpdated}
         />
       )}
 

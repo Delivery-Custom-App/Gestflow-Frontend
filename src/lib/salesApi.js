@@ -305,11 +305,19 @@ export async function createOrder(orderData = {}) {
     }
   }
 
-  return mapOrderOut({ ...order, items: createdItems })
+  // `order` es la orden vacía devuelta por POST /orders (total=0); el backend
+  // recalcula order.total recién al agregar cada ítem, pero ese valor nunca
+  // vuelve en la respuesta de /items — lo recomputamos acá con los subtotales.
+  const computedTotal = createdItems.reduce(
+    (s, it) => s + (Number(it.subtotal) || (Number(it.unit_price) || 0) * (Number(it.quantity) || 0)),
+    0,
+  )
+
+  return mapOrderOut({ ...order, total: computedTotal, items: createdItems })
 }
 
-export async function updateOrderStatus(orderId, status, createdAt) {
-  const body = { status: toV2OrderStatus(status) }
+export async function updateOrderStatus(orderId, status, createdAt, extra = {}) {
+  const body = { status: toV2OrderStatus(status), ...extra }
   const path = orderResourcePath(orderId, createdAt)
   const updated = await apiRequest(path, { method: 'PATCH', body })
   return mapOrderOut(updated)
@@ -317,15 +325,20 @@ export async function updateOrderStatus(orderId, status, createdAt) {
 
 /** Completa orden (cobro efectivo). En RESTAURANT camina open→preparing→ready→completed. */
 export async function completeOrderCash(orderId, _cashReceived, createdAt) {
+  const extra = { payment_method: 'cash' }
   try {
-    return await updateOrderStatus(orderId, 'completed', createdAt)
+    return await updateOrderStatus(orderId, 'completed', createdAt, extra)
   } catch (err) {
     const msg = String(err?.message || err?.detail || '')
     if (!/transici[oó]n inv[aá]lida|400/i.test(msg)) throw err
     await updateOrderStatus(orderId, 'preparing', createdAt)
     await updateOrderStatus(orderId, 'ready', createdAt)
-    return updateOrderStatus(orderId, 'completed', createdAt)
+    return updateOrderStatus(orderId, 'completed', createdAt, extra)
   }
+}
+
+export async function cancelOrder(orderId, createdAt) {
+  return updateOrderStatus(orderId, 'cancelled', createdAt)
 }
 
 export async function computeMesasKpis(localId) {
@@ -354,10 +367,11 @@ export async function computeMesasKpis(localId) {
  * Shape: { categories: [{ id, name, products: [...] }], local_id }
  */
 export async function fetchLocalMenuCatalog(localId, { search, includeInactive = false } = {}) {
-  const [localProducts, products, categories] = await Promise.all([
+  const [localProducts, products, categories, inventory] = await Promise.all([
     apiRequest('/local-products'),
     apiRequest('/products'),
     apiRequest('/categories'),
+    apiRequest('/inventory'),
   ])
 
   const productMap = new Map(
@@ -366,6 +380,11 @@ export async function fetchLocalMenuCatalog(localId, { search, includeInactive =
   const categoryMap = new Map(
     (Array.isArray(categories) ? categories : []).map((c) => [String(c.id), c]),
   )
+  const stockMap = new Map(
+    (Array.isArray(inventory) ? inventory : [])
+      .filter((row) => String(row.local_id) === String(localId))
+      .map((row) => [String(row.product_id), Number(row.stock_actual) || 0]),
+  )
 
   const q = search ? String(search).trim().toLowerCase() : ''
   const localRows = (Array.isArray(localProducts) ? localProducts : []).filter(
@@ -373,7 +392,6 @@ export async function fetchLocalMenuCatalog(localId, { search, includeInactive =
   )
 
   const byCategory = new Map()
-  const uncategorized = []
 
   for (const lp of localRows) {
     const product = productMap.get(String(lp.product_id))
@@ -392,6 +410,7 @@ export async function fetchLocalMenuCatalog(localId, { search, includeInactive =
       product_name: product.name,
       price: Number(product.price) || 0,
       cost: Number(product.cost) || 0,
+      stock: stockMap.get(String(product.id)) || 0,
       category_id: product.category_id ? String(product.category_id) : null,
       stock_deduction_mode: product.stock_deduction_mode,
       is_active: onSale,
@@ -400,12 +419,10 @@ export async function fetchLocalMenuCatalog(localId, { search, includeInactive =
       local_product_id: lp.id,
     }
 
-    if (row.category_id) {
-      if (!byCategory.has(row.category_id)) byCategory.set(row.category_id, [])
-      byCategory.get(row.category_id).push(row)
-    } else {
-      uncategorized.push(row)
-    }
+    // Un producto sin categoría no puede seleccionarse en el menú (evita huérfanos).
+    if (!row.category_id) continue
+    if (!byCategory.has(row.category_id)) byCategory.set(row.category_id, [])
+    byCategory.get(row.category_id).push(row)
   }
 
   const categoryList = []
@@ -418,14 +435,6 @@ export async function fetchLocalMenuCatalog(localId, { search, includeInactive =
     })
   }
   categoryList.sort((a, b) => a.name.localeCompare(b.name, 'es'))
-
-  if (uncategorized.length) {
-    categoryList.push({
-      id: '__none__',
-      name: 'Sin categoría',
-      products: uncategorized.sort((a, b) => a.name.localeCompare(b.name, 'es')),
-    })
-  }
 
   return { categories: categoryList, local_id: localId }
 }
