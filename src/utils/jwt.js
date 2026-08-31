@@ -62,11 +62,12 @@ export function getBusinessId(user, token) {
   const claims = token ? decodeJWT(token) : null
 
   return pickFirstNonEmpty(
+    user?.business_id,
     user?.app_metadata?.business_id,
     user?.user_metadata?.business_id,
+    claims?.business_id,
     claims?.app_metadata?.business_id,
     claims?.user_metadata?.business_id,
-    claims?.business_id,
   )
 }
 
@@ -80,15 +81,16 @@ export function getUserRole(user, token) {
   const claims = token ? decodeJWT(token) : null
 
   const role = pickFirstNonEmpty(
+    user?.role,
     user?.app_metadata?.role,
     user?.app_metadata?.user_role,
     user?.user_metadata?.role,
     user?.user_metadata?.user_role,
+    claims?.role,
     claims?.app_metadata?.role,
     claims?.app_metadata?.user_role,
     claims?.user_metadata?.role,
     claims?.user_metadata?.user_role,
-    claims?.role,
   )
 
   return role

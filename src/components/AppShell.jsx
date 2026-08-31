@@ -8,30 +8,36 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { cn } from '@/lib/utils'
 import {
   LayoutDashboard, Store, ChevronDown, ChevronLeft, ChevronRight,
-  DollarSign, FileText, BarChart3, Wallet, Bell, Gift,
+  DollarSign, FileText, BarChart3, Wallet, Bell, Gift, PlusCircle,
   Table2, ChefHat,
-  Package, Truck, ShoppingCart, BookMarked, PackageOpen,
-  LogOut, Utensils, HelpCircle, Phone, Mail, Moon, Sun, Users, RotateCcw, MapPin, Building2,
+  Package, Truck, ShoppingCart, BookMarked, PackageOpen, UtensilsCrossed,
+  LogOut, Utensils, HelpCircle, Phone, Mail, Users, RotateCcw, MapPin, Building2, Settings,
 } from 'lucide-react'
 import { ExpandableTabs } from './ui/expandable-tabs'
 import CoachMark from './onboarding/CoachMark'
 import { useOnboarding } from '../context/OnboardingContext'
 import { isSuperAdminRole, isAdminNegocioRole } from '../auth/roleLabel'
 import { WORKER_ROLES } from '../constants/roles'
+import { isDirectSaleDemoUser } from '../constants/demoMode'
 import { formatShortAddress } from '../lib/formatAddress'
+import { isV2FeatureEnabled } from '../lib/v2Features'
+import { isAlPasoLocal } from '../lib/salesModel'
 
 /* ── key sets for accordion auto-open ──────────────────────────── */
 const ADMIN_KEYS = new Set(['administracion', 'ventas', 'rendiciones', 'reportes', 'flujo-caja', 'alertas', 'bonos'])
-const POS_KEYS   = new Set(['pos', 'pos-mesas', 'pos-kitchen'])
-const INV_KEYS   = new Set(['inv-hub', 'inv-prov', 'inv-stock', 'inv-compras', 'inv-recetas'])
+const POS_KEYS   = new Set(['pos', 'pos-mesas', 'pos-kitchen', 'pos-venta-directa', 'pos-registrar-producto'])
+const INV_KEYS   = new Set(['inv-hub', 'inv-prov', 'inv-stock', 'inv-stock-ctrl', 'inv-compras', 'inv-recetas'])
 
 /* ── active-key derived from pathname ──────────────────────────── */
 function deriveActiveKey(pathname) {
   if (pathname.includes('/inventario/proveedores'))       return 'inv-prov'
+  if (pathname.includes('/inventario/stock-control'))     return 'inv-stock-ctrl'
   if (pathname.includes('/inventario/stock'))             return 'inv-stock'
   if (pathname.includes('/inventario/compras-semanales')) return 'inv-compras'
   if (pathname.includes('/inventario/recipes'))           return 'inv-recetas'
   if (pathname.includes('/inventario'))                   return 'inv-hub'
+  if (pathname.includes('/pos/registrar-producto'))       return 'pos-registrar-producto'
+  if (pathname.includes('/pos/venta-directa'))            return 'pos-venta-directa'
   if (pathname.includes('/pos/cocina'))                   return 'pos-kitchen'
   if (pathname.includes('/pos'))                          return 'pos-mesas'
   if (pathname.includes('/administrativo/ventas'))        return 'ventas'
@@ -41,6 +47,7 @@ function deriveActiveKey(pathname) {
   if (pathname.includes('/administrativo/alertas'))       return 'alertas'
   if (pathname.includes('/administrativo/bonos'))         return 'bonos'
   if (pathname.includes('/administrativo'))               return 'administracion'
+  if (pathname.includes('/rrhh'))                         return 'hr-hub'
   if (pathname.includes('/usuarios'))                    return 'usuarios'
   if (pathname.includes('/gestor/resumen'))              return 'gestor-resumen'
   if (pathname.includes('/gestor/negocios'))             return 'gestor'
@@ -69,7 +76,7 @@ const ACCORDIONS = [
   },
   {
     key: 'pos',
-    label: 'POS Restaurante',
+    label: 'POS',
     icon: Table2,
     items: [
       { key: 'pos-mesas',   label: 'Gestión de Mesas', icon: Table2  },
@@ -81,11 +88,12 @@ const ACCORDIONS = [
     label: 'Inventario',
     icon: PackageOpen,
     items: [
-      { key: 'inv-hub',     label: 'Estado Inventario', icon: PackageOpen  },
-      { key: 'inv-prov',    label: 'Proveedores',              icon: Truck        },
-      { key: 'inv-stock',   label: 'Carta virtual',            icon: Package      },
-      { key: 'inv-compras', label: 'Pedidos',                  icon: ShoppingCart },
-      { key: 'inv-recetas', label: 'Recetas',                  icon: BookMarked   },
+      { key: 'inv-hub',        label: 'Estado Inventario', icon: PackageOpen  },
+      { key: 'inv-prov',       label: 'Proveedores',       icon: Truck        },
+      { key: 'inv-stock',      label: 'Menú',              icon: UtensilsCrossed },
+      { key: 'inv-stock-ctrl', label: 'Control de stock',  icon: Package      },
+      { key: 'inv-compras',    label: 'Pedidos',           icon: ShoppingCart },
+      { key: 'inv-recetas',    label: 'Recetas',           icon: BookMarked   },
     ],
   },
 ]
@@ -94,20 +102,63 @@ const ACCORDIONS = [
 function Sidebar({ collapsed, onToggle, onClose }) {
   const { user, userRole, logout } = useAuth()
   const { restart: restartTour } = useOnboarding()
+  const { palette, setPalette, darkMode, setDarkMode } = useTheme()
   const isSuperAdmin = isSuperAdminRole(userRole)
   const isOwner = isAdminNegocioRole(userRole)
   const isWorker = WORKER_ROLES.includes(userRole)
+  const isDemoUser = isDirectSaleDemoUser(user?.email)
+  const { locales } = useLocals()
   const navigate = useNavigate()
   const { pathname, state: locState } = useLocation()
 
   const localIdMatch = pathname.match(/\/local\/([^/]+)/)
   const localId  = localIdMatch ? localIdMatch[1] : null
+  const currentLocal = useMemo(
+    () => locales.find((l) => String(l.id) === String(localId)) || locState?.local || null,
+    [locales, localId, locState],
+  )
+  const isAlPaso = isAlPasoLocal(currentLocal) || isDemoUser
   const activeKey = deriveActiveKey(pathname)
   const navState  = locState?.local ? { local: locState.local } : localId ? { local: { id: localId } } : {}
 
   const [userOpen, setUserOpen] = useState({ administracion: false, pos: false, inventario: false })
   const [userClosed, setUserClosed] = useState({ administracion: false, pos: false, inventario: false })
   const [helpOpen, setHelpOpen] = useState(false)
+  const [settingsOpen, setSettingsOpen] = useState(false)
+
+  const PALETTES = [
+    { key: 'rutek',  label: 'Default', hint: 'Azul · crema',  swatches: ['#2563EB', '#F7F4F0'] },
+    { key: 'legacy', label: 'Legacy',  hint: 'Verde actual',  swatches: ['#10b981', '#0a1410'] },
+  ]
+
+  // La paleta cambia SOLO colores; el modo claro/oscuro es un control aparte.
+  // Escribe directo al DOM + localStorage además de React, para que el swap
+  // CSS ocurra sí o sí en el clic (a prueba de contextos obsoletos/HMR).
+  const applyPalette = (key) => {
+    setPalette(key)
+    try {
+      document.documentElement.setAttribute('data-palette', key)
+      window.localStorage.setItem('palette', key)
+    } catch {}
+  }
+
+  const applyMode = (dark) => {
+    setDarkMode(dark)
+    try {
+      document.documentElement.classList.toggle('dark', dark)
+      window.localStorage.setItem('theme', dark ? 'dark' : 'light')
+    } catch {}
+  }
+
+  const resetAppearance = () => {
+    applyPalette('rutek')
+    applyMode(false)
+  }
+
+  const livePrimary = typeof window !== 'undefined'
+    ? (window.getComputedStyle?.(document.documentElement).getPropertyValue('--primary').trim() || '—')
+    : '—'
+  const liveAttr = typeof window !== 'undefined' ? document.documentElement.getAttribute('data-palette') : null
 
   const isOpen = (key) => {
     if (userClosed[key]) return false
@@ -132,7 +183,7 @@ function Sidebar({ collapsed, onToggle, onClose }) {
     if (!localId) return
     switch (key) {
       case 'administracion': navigate(`/local/${localId}/administrativo/ventas`, { state: navState }); break
-      case 'pos':            navigate(`/local/${localId}/pos`, { state: navState }); break
+      case 'pos':            navigate(isAlPaso ? `/local/${localId}/pos/venta-directa` : `/local/${localId}/pos`, { state: navState }); break
       case 'inventario':     navigate(`/local/${localId}/inventario`, { state: navState }); break
       default: break
     }
@@ -149,11 +200,15 @@ function Sidebar({ collapsed, onToggle, onClose }) {
       case 'gestor-usuarios':      navigate('/gestor/usuarios'); break
       case 'gestor-observabilidad': navigate('/gestor/observabilidad'); break
       case 'dashboard': navigate(localId ? `/local/${localId}/dashboard` : '/admin', { state: navState }); break
+      case 'hr-hub':    if (localId) navigate(`/local/${localId}/rrhh`, { state: navState }); break
       case 'pos-mesas':     if (localId) navigate(`/local/${localId}/pos`, { state: navState }); break
       case 'pos-kitchen':   if (localId) navigate(`/local/${localId}/pos/cocina`, { state: navState }); break
+      case 'pos-venta-directa': if (localId) navigate(`/local/${localId}/pos/venta-directa`, { state: navState }); break
+      case 'pos-registrar-producto': if (localId) navigate(`/local/${localId}/pos/registrar-producto`, { state: navState }); break
       case 'inv-hub':       if (localId) navigate(`/local/${localId}/inventario`, { state: navState }); break
       case 'inv-prov':      if (localId) navigate(`/local/${localId}/inventario/proveedores`, { state: navState }); break
       case 'inv-stock':     if (localId) navigate(`/local/${localId}/inventario/stock`, { state: navState }); break
+      case 'inv-stock-ctrl': if (localId) navigate(`/local/${localId}/inventario/stock-control`, { state: navState }); break
       case 'inv-compras':   if (localId) navigate(`/local/${localId}/inventario/compras-semanales`, { state: navState }); break
       case 'inv-recetas':   if (localId) navigate(`/local/${localId}/inventario/recipes`, { state: navState }); break
       default:
@@ -170,12 +225,37 @@ function Sidebar({ collapsed, onToggle, onClose }) {
     ...(isSuperAdmin ? [{ key: 'gestor-auditoria', label: 'Auditoría', icon: FileText }] : []),
     ...(isSuperAdmin ? [{ key: 'gestor-observabilidad', label: 'Observabilidad', icon: BarChart3 }] : []),
     ...(isOwner ? [{ key: 'usuarios', label: 'Usuarios', icon: Users }] : []),
+    ...(isV2FeatureEnabled('hrModule') && localId ? [{ key: 'hr-hub', label: 'RRHH', icon: Users }] : []),
     ...(!isWorker && localId ? [{ key: 'dashboard', label: 'Dashboard', icon: LayoutDashboard }] : []),
   ]
 
+  // Comida al paso (sales_model AL_PASO) o demo legacy por email:
+  // caja + menú, sin mesas/cocina.
+  const AL_PASO_POS_ITEMS = [
+    { key: 'pos-venta-directa', label: 'Venta directa', icon: DollarSign },
+    { key: 'pos-registrar-producto', label: 'Registrar productos', icon: PlusCircle },
+  ]
+  const WORKER_FINANCE_ITEM_KEYS = new Set(['ventas', 'rendiciones'])
   const visibleAccordions = isWorker
-    ? ACCORDIONS.filter((s) => s.key === 'pos')
-    : ACCORDIONS
+    ? (isAlPaso
+        ? ACCORDIONS
+            .filter((s) => s.key === 'pos' || s.key === 'administracion')
+            .map((s) => s.key === 'pos'
+              ? { ...s, label: 'Punto de venta', items: AL_PASO_POS_ITEMS }
+              : { ...s, label: 'Finanzas', items: s.items.filter((i) => WORKER_FINANCE_ITEM_KEYS.has(i.key)) })
+        : ACCORDIONS.filter((s) => s.key === 'pos'))
+    : isAlPaso
+      ? ACCORDIONS.map((s) => {
+          if (s.key === 'pos') return { ...s, label: 'Punto de venta', items: AL_PASO_POS_ITEMS }
+          if (s.key === 'inventario') {
+            return {
+              ...s,
+              items: s.items.filter((i) => i.key === 'inv-stock' || i.key === 'inv-hub' || i.key === 'inv-stock-ctrl'),
+            }
+          }
+          return s
+        })
+      : ACCORDIONS
 
   const navBtn = (item, small = false) => {
     const isActive = activeKey === item.key
@@ -257,7 +337,7 @@ function Sidebar({ collapsed, onToggle, onClose }) {
           </div>
         )}
 
-        {/* Accordions */}
+        {/* Accordions: menú + submenú expansible */}
         {localId && visibleAccordions.map((section) => {
           const open = isOpen(section.key)
           const hasActive = activeKey === section.key || section.items.some((i) => activeKey === i.key)
@@ -335,6 +415,116 @@ function Sidebar({ collapsed, onToggle, onClose }) {
 
       {/* Footer */}
       <div className="px-2 pb-4 border-t border-[hsl(var(--border))] pt-3">
+        {/* Ajustes */}
+        <button
+          onClick={() => { if (collapsed) { onToggle(); setSettingsOpen(true) } else setSettingsOpen((v) => !v) }}
+          title={collapsed ? 'Ajustes' : undefined}
+          className={cn(
+            'w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors mb-1 cursor-pointer',
+            settingsOpen
+              ? 'bg-[hsl(var(--accent))] text-[hsl(var(--foreground))]'
+              : 'text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--accent))] hover:text-[hsl(var(--foreground))]',
+            collapsed && 'justify-center px-0',
+          )}
+        >
+          <Settings size={16} className="shrink-0" />
+          <AnimatePresence>
+            {!collapsed && (
+              <motion.span initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex-1 text-left">
+                Ajustes
+              </motion.span>
+            )}
+          </AnimatePresence>
+        </button>
+
+        {/* Panel ajustes */}
+        <AnimatePresence>
+          {settingsOpen && !collapsed && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              transition={{ duration: 0.2 }}
+              className="overflow-hidden mb-2"
+            >
+              <div className="rounded-lg bg-[hsl(var(--muted))] px-3 py-3 space-y-2">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-[hsl(var(--muted-foreground))]">Apariencia</span>
+                <div className="grid grid-cols-2 gap-2">
+                  {PALETTES.map((p) => {
+                    const selected = palette === p.key
+                    return (
+                      <button
+                        key={p.key}
+                        type="button"
+                        onClick={() => applyPalette(p.key)}
+                        aria-pressed={selected}
+                        className={cn(
+                          'flex flex-col items-start gap-1.5 rounded-lg border p-2 text-left transition-colors cursor-pointer',
+                          selected
+                            ? 'border-[hsl(var(--primary))] bg-[hsl(var(--card))]'
+                            : 'border-[hsl(var(--border))] bg-[hsl(var(--card))] hover:border-[hsl(var(--primary)/0.5)]',
+                        )}
+                      >
+                        <span className="flex items-center gap-1">
+                          {p.swatches.map((c) => (
+                            <span key={c} className="h-3.5 w-3.5 rounded-full border border-black/10" style={{ backgroundColor: c }} />
+                          ))}
+                        </span>
+                        <span className="text-xs font-semibold text-[hsl(var(--foreground))]">{p.label}</span>
+                        <span className="text-[10px] text-[hsl(var(--muted-foreground))]">{p.hint}</span>
+                      </button>
+                    )
+                  })}
+                </div>
+
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-[hsl(var(--muted-foreground))]">Modo</span>
+                  <div className="flex gap-1">
+                    <button
+                      type="button"
+                      onClick={() => applyMode(false)}
+                      aria-pressed={!darkMode}
+                      className={cn(
+                        'px-2 py-1 rounded-md text-[11px] font-semibold transition-colors cursor-pointer',
+                        !darkMode
+                          ? 'bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))]'
+                          : 'bg-[hsl(var(--card))] text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]',
+                      )}
+                    >
+                      Claro
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => applyMode(true)}
+                      aria-pressed={darkMode}
+                      className={cn(
+                        'px-2 py-1 rounded-md text-[11px] font-semibold transition-colors cursor-pointer',
+                        darkMode
+                          ? 'bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))]'
+                          : 'bg-[hsl(var(--card))] text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]',
+                      )}
+                    >
+                      Oscuro
+                    </button>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={resetAppearance}
+                  className="w-full text-left text-[10px] text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] transition-colors cursor-pointer"
+                >
+                  Restablecer apariencia (Default, claro)
+                </button>
+
+                <p className="text-[9px] text-[hsl(var(--muted-foreground))] opacity-70">
+                  debug: attr={liveAttr ?? '—'} · primary={livePrimary}
+                </p>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         {/* Ayuda / Soporte */}
         <button
           onClick={() => { if (collapsed) { onToggle(); setHelpOpen(true) } else setHelpOpen((v) => !v) }}
@@ -420,7 +610,7 @@ function Sidebar({ collapsed, onToggle, onClose }) {
 }
 
 /* ── TopBar ─────────────────────────────────────────────────────── */
-function TopBar({ localId, darkMode, toggleDarkMode }) {
+function TopBar({ localId }) {
   const { userRole } = useAuth()
   const { locales } = useLocals()
   const { state: locState } = useLocation()
@@ -440,18 +630,14 @@ function TopBar({ localId, darkMode, toggleDarkMode }) {
   const showBell = Boolean(localId && !isWorkerRole)
   const tabs = [
     ...(showBell ? [{ title: 'Notificaciones', icon: Bell, badge: pendingCount || null }] : []),
-    { title: darkMode ? 'Modo Noche' : 'Modo Día', icon: darkMode ? Moon : Sun },
   ]
 
-  const bellIdx  = showBell ? 0 : -1
-  const themeIdx = showBell ? 1 : 0
+  const bellIdx = showBell ? 0 : -1
 
   const handleTabChange = (index) => {
     if (index === null) return
     if (index === bellIdx) {
       navigate(`/local/${localId}/administrativo/alertas`, { state: navState })
-    } else if (index === themeIdx) {
-      toggleDarkMode()
     }
   }
 
@@ -477,14 +663,16 @@ function TopBar({ localId, darkMode, toggleDarkMode }) {
       </div>
 
       {/* Right: expandable tab controls */}
-      <div className="shrink-0">
-        <ExpandableTabs
-          tabs={tabs}
-          activeColor="text-[hsl(var(--primary))]"
-          onChange={handleTabChange}
-          className="border-[hsl(var(--border))] bg-[hsl(var(--card))]"
-        />
-      </div>
+      {tabs.length > 0 && (
+        <div className="shrink-0">
+          <ExpandableTabs
+            tabs={tabs}
+            activeColor="text-[hsl(var(--primary))]"
+            onChange={handleTabChange}
+            className="border-[hsl(var(--border))] bg-[hsl(var(--card))]"
+          />
+        </div>
+      )}
     </div>
   )
 }
@@ -495,7 +683,6 @@ function AppShell() {
     try { return window.localStorage.getItem('appSidebarCollapsed') === '1' } catch { return false }
   })
   const [mobileOpen, setMobileOpen] = useState(false)
-  const { darkMode, toggleDarkMode } = useTheme()
 
   const { pathname } = useLocation()
   const localIdMatch = pathname.match(/\/local\/([^/]+)/)
@@ -513,7 +700,7 @@ function AppShell() {
   }
 
   return (
-    <div className="flex h-screen bg-gradient-to-br from-[#0a1410] via-[#0d1a14] to-[#091210]">
+    <div className="flex h-screen bg-gradient-to-br from-[#1a1a1a] via-[#121110] to-[#0c0b0a]">
 
       {/* Overlay backdrop (solo móvil) */}
       <AnimatePresence>
@@ -547,7 +734,7 @@ function AppShell() {
 
       {/* Contenido principal */}
       <div className="flex-1 min-w-0 flex flex-col overflow-hidden bg-[hsl(var(--background))]">
-        <TopBar localId={localId} darkMode={darkMode} toggleDarkMode={toggleDarkMode} />
+        <TopBar localId={localId} />
         <Outlet />
       </div>
 

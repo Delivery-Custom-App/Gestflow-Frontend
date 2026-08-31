@@ -35,6 +35,11 @@ export default defineConfig({
         target: devProxyTarget,
         changeOrigin: true,
       },
+      // Backend V2 expone /health fuera de /api
+      '/health': {
+        target: devProxyTarget,
+        changeOrigin: true,
+      },
     },
   },
 })

@@ -15,11 +15,13 @@ import {
   getAlerts,
   resolveAlert as apiResolveAlert,
 } from '../lib/alertsApi'
+import { isV2FeatureEnabled } from '../lib/v2Features'
 
 const POLL_INTERVAL_MS  = 30_000       // refresca lista cada 30s
 const EVAL_INTERVAL_MS  = 5 * 60_000   // re-evalúa inventario cada 5 min
 const SSE_RETRY_MS      = 5_000
 const API_BASE          = import.meta.env.VITE_API_URL || ''
+const ALERTS_ENABLED    = isV2FeatureEnabled('alerts')
 
 export function useAlerts(localId) {
   const [alerts, setAlerts]           = useState([])
@@ -35,7 +37,7 @@ export function useAlerts(localId) {
 
   // ── Fetch list ──────────────────────────────────────────────
   const fetchAlerts = useCallback(async () => {
-    if (!localId) return
+    if (!ALERTS_ENABLED || !localId) return
     try {
       const { token } = await getAuthContext()
       tokenRef.current = token
@@ -51,7 +53,7 @@ export function useAlerts(localId) {
 
   // ── Evaluate + fetch (silencioso) ───────────────────────────
   const silentEvaluate = useCallback(async () => {
-    if (!localId) return
+    if (!ALERTS_ENABLED || !localId) return
     try {
       const { token } = await getAuthContext()
       await apiEvaluateAlerts(localId, token)
@@ -63,7 +65,7 @@ export function useAlerts(localId) {
 
   // ── SSE connection ──────────────────────────────────────────
   const openSSE = useCallback(() => {
-    if (!localId || !tokenRef.current || !window.EventSource) return
+    if (!ALERTS_ENABLED || !localId || !tokenRef.current || !window.EventSource) return
 
     const url = `${API_BASE}/api/alerts/stream?local_id=${localId}&token=${encodeURIComponent(tokenRef.current)}`
     const es = new EventSource(url)
@@ -90,12 +92,14 @@ export function useAlerts(localId) {
 
   // ── Polling fallback ────────────────────────────────────────
   const startPolling = useCallback(() => {
+    if (!ALERTS_ENABLED) return
     if (pollRef.current) clearInterval(pollRef.current)
     pollRef.current = setInterval(fetchAlerts, POLL_INTERVAL_MS)
   }, [fetchAlerts])
 
   // ── Evaluación periódica automática ────────────────────────
   const startAutoEval = useCallback(() => {
+    if (!ALERTS_ENABLED) return
     if (evalRef.current) clearInterval(evalRef.current)
     evalRef.current = setInterval(silentEvaluate, EVAL_INTERVAL_MS)
   }, [silentEvaluate])
@@ -103,7 +107,10 @@ export function useAlerts(localId) {
   // ── Bootstrap ───────────────────────────────────────────────
   useEffect(() => {
     mounted.current = true
-    if (!localId) return
+    if (!ALERTS_ENABLED || !localId) {
+      setLoading(false)
+      return
+    }
 
     setLoading(true)
     // 1. Evalúa inventario al abrir la sección → genera/resuelve alertas del local
@@ -126,12 +133,14 @@ export function useAlerts(localId) {
 
   // ── Acciones manuales ───────────────────────────────────────
   const resolveAlert = useCallback(async (alertId) => {
+    if (!ALERTS_ENABLED) return
     const { token } = await getAuthContext()
     await apiResolveAlert(alertId, token)
     await fetchAlerts()
   }, [fetchAlerts])
 
   const evaluateAlerts = useCallback(async () => {
+    if (!ALERTS_ENABLED) return { created: 0, resolved: 0 }
     const { token } = await getAuthContext()
     const result = await apiEvaluateAlerts(localId, token)
     await fetchAlerts()

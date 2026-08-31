@@ -11,6 +11,7 @@ import {
   getCategoriesForLocal,
   patchCategory,
   postCategory,
+  deleteCategory,
 } from '../../lib/inventoryApi'
 import InventoryShell from './InventoryShell'
 import LoadingSpinner from '../LoadingSpinner'
@@ -63,6 +64,7 @@ function StockControlDashboard() {
   const [editingCategoryName, setEditingCategoryName] = useState('')
   const [categoryActionError, setCategoryActionError] = useState('')
   const [categorySaving, setCategorySaving] = useState(false)
+  const [deletingCategoryId, setDeletingCategoryId] = useState('')
   const [statusFilters, setStatusFilters] = useState([])
   const pageSize = 10
   const [guideOpen, setGuideOpen] = useState(false)
@@ -218,6 +220,21 @@ function StockControlDashboard() {
     [load, loadItems, currentFilters, currentPage],
   )
 
+  const handlePatchCategory = useCallback(
+    async (row, categoryId) => {
+      setActionError('')
+      try {
+        await patchProduct(row.product_id, { category_id: categoryId })
+        await load()
+        await loadItems(currentFilters, currentPage)
+      } catch (e) {
+        setActionError(e?.message || 'No se pudo actualizar la categoría.')
+        throw e
+      }
+    },
+    [load, loadItems, currentFilters, currentPage],
+  )
+
   const handleDeleteItem = useCallback(
     async (row) => {
       if (!localId) return
@@ -276,6 +293,22 @@ function StockControlDashboard() {
       setCategorySaving(false)
     }
   }, [editingCategoryId, editingCategoryName, loadCategoriesCatalog, loadItems, currentFilters, currentPage])
+
+  const handleDeleteCategory = useCallback(async (categoryId) => {
+    setCategoryActionError('')
+    setDeletingCategoryId(categoryId)
+    try {
+      await deleteCategory(categoryId)
+      setEditingCategoryId('')
+      setEditingCategoryName('')
+      await loadCategoriesCatalog()
+      await loadItems(currentFilters, currentPage)
+    } catch (e) {
+      setCategoryActionError(e?.message || 'No se pudo eliminar la categoría.')
+    } finally {
+      setDeletingCategoryId('')
+    }
+  }, [loadCategoriesCatalog, loadItems, currentFilters, currentPage])
 
   const handleKpiClick = (filterValue) => {
     if (!filterValue) { setStatusFilters([]); return }
@@ -393,7 +426,7 @@ function StockControlDashboard() {
               <Package size={22} />
             </span>
             <div>
-              <h1 className="text-xl font-bold text-[hsl(var(--foreground))]">Carta virtual</h1>
+              <h1 className="text-xl font-bold text-[hsl(var(--foreground))]">Control de stock</h1>
               <p className="text-sm text-[hsl(var(--muted-foreground))]">Gestiona existencias y costos para decisiones de reposición</p>
             </div>
           </header>
@@ -492,6 +525,18 @@ function StockControlDashboard() {
                       autoFocus
                     />
                     <button type="submit" disabled={categorySaving} className="text-xs font-bold text-[hsl(var(--primary))]">Guardar</button>
+                    <button
+                      type="button"
+                      disabled={deletingCategoryId === category.id}
+                      onClick={() => {
+                        if (window.confirm(`¿Eliminar la categoría "${category.name}"? Esta acción no se puede deshacer.`)) {
+                          handleDeleteCategory(category.id)
+                        }
+                      }}
+                      className="text-xs font-bold text-[hsl(var(--destructive))] disabled:opacity-50"
+                    >
+                      {deletingCategoryId === category.id ? 'Eliminando...' : 'Eliminar'}
+                    </button>
                     <button type="button" onClick={() => setEditingCategoryId('')} className="text-xs text-[hsl(var(--muted-foreground))]">Cancelar</button>
                   </form>
                 ) : (
@@ -566,8 +611,10 @@ function StockControlDashboard() {
               onPatchStock={handlePatchStock}
               onPatchUnitCost={handlePatchUnitCost}
               onPatchProductName={handlePatchProductName}
+              onPatchCategory={handlePatchCategory}
               onDeleteItem={handleDeleteItem}
               statusFilters={statusFilters}
+              categoriesCatalog={categoriesCatalog}
             />
           </CardContent>
         </Card>

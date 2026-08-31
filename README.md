@@ -1,6 +1,11 @@
 # SibaGestion — Frontend
 
-Sistema de gestión para restaurantes. Frontend React que consume la [API FastAPI](../Delivery-Custom-App-INGSW2).
+Sistema de gestión para restaurantes. Frontend React.
+
+**Backend canónico (integración en curso):** [Gestflow-Backend-V2](../Gestflow-Backend-V2)  
+Guía: [`INTEGRATION_BACKEND_V2.md`](INTEGRATION_BACKEND_V2.md) · rama `integration/backend-v2`
+
+**Legacy (demo):** [API FastAPI INGSW2](../Delivery-Custom-App-INGSW2)
 
 ## Stack
 
@@ -8,7 +13,7 @@ Sistema de gestión para restaurantes. Frontend React que consume la [API FastAP
 |---|---|
 | Framework | React 19 + Vite 8 |
 | Router | React Router 6 |
-| Auth | JWT emitido por backend local |
+| Auth | JWT emitido por Backend V2 (o legacy) |
 | Charts | Recharts |
 | Tests | Vitest + Testing Library |
 
@@ -24,15 +29,26 @@ Sistema de gestión para restaurantes. Frontend React que consume la [API FastAP
 ## Roles
 
 - **Superadmin** — acceso total, gestión de negocios y locales
-- **Admin** — gestión de su negocio (inventario, reportes, staff)
-- **Cajero** — POS, órdenes, caja
-- **Empleado** — POS, órdenes
+- **Admin Negocio** — gestión de su business
+- **Admin** — gestión de su local
+- **Empleado** — POS / operaciones de local
 
-## Desarrollo local
+## Desarrollo local (Backend V2)
 
-### Con Docker (recomendado)
+```bash
+# Terminal 1 — Backend V2
+cd ../Gestflow-Backend-V2
+docker compose up -d
+uvicorn app.main:app --reload --port 8000
 
-Para levantar Postgres local con volumen persistente:
+# Terminal 2 — Frontend
+cp .env.local.example .env.local   # VITE_API_URL=http://localhost:8000
+npm run dev
+```
+
+Login seed V2: `admin@gestflow.dev` / `admin123`
+
+### Con Docker (legacy / Postgres del frontend)
 
 ```bash
 cp .env.db.example .env.db

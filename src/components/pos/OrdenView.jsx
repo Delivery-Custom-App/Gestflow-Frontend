@@ -1,141 +1,25 @@
-import { useEffect, useState, useMemo, useCallback, memo } from 'react'
+import { useEffect, useState, useCallback, memo } from 'react'
+import { ArrowLeft, Printer, Split, DollarSign, Plus, X, MoreVertical } from 'lucide-react'
 import { useMesaDetail } from '../../hooks/useMesaDetail'
 import { useOrderManagement } from '../../hooks/useOrderManagement'
-import { apiRequest, getSplitPaymentSummary } from '../../lib/apiClient'
+import { useOrderTotals } from '../../hooks/useOrderTotals'
+import { getSplitPaymentSummary } from '../../lib/apiClient'
+import { setMesaLibre } from '../../lib/salesApi'
+import { isV2FeatureEnabled } from '../../lib/v2Features'
 import MesaDetailModal from './MesaDetailModal'
 import MultiPaymentModal from './MultiPaymentModal'
 import MercadoPagoModal from './MercadoPagoModal'
 import { Button } from '@/components/ui/button'
-import { formatChileTime } from '../../utils/chileDateTime'
-
-const STATUS_BADGE = {
-  pending:   'bg-yellow-100 text-yellow-700',
-  preparing: 'bg-blue-100 text-blue-700',
-  ready:     'bg-green-100 text-green-700',
-  completed: 'bg-gray-100 text-gray-600',
-  cancelled: 'bg-red-100 text-red-600',
-}
-
-const PAYMENT_STATUS_BADGE = {
-  APPROVED:   'bg-green-100 text-green-700',
-  REJECTED:   'bg-red-100 text-red-700',
-  IN_PROCESS: 'bg-yellow-100 text-yellow-700',
-  PENDING:    'bg-gray-100 text-gray-600',
-  CANCELLED:  'bg-red-50 text-red-500',
-}
-
-const PAYMENT_STATUS_LABEL = {
-  APPROVED:   'Aprobado',
-  REJECTED:   'Rechazado',
-  IN_PROCESS: 'En Proceso',
-  PENDING:    'Pendiente',
-  CANCELLED:  'Cancelado',
-}
-
-const STATUS_LABEL = {
-  pending:   'Pendiente',
-  preparing: 'Preparando',
-  ready:     'En Cobro',
-  completed: 'Completado',
-  cancelled: 'Cancelado',
-}
-
-function fmt(dateStr) {
-  if (!dateStr) return '—'
-  const d = new Date(dateStr)
-  return d.toLocaleDateString('es-CL', { day: 'numeric', month: 'short', year: 'numeric' })
-}
-
-function fmtTime(dateStr) {
-  if (!dateStr) return '—'
-  return formatChileTime(dateStr)
-}
-
-let _printInProgress = false
-
-function openPrintWindow({ mesa, firstOrder, allItems, subtotal, iva, total, label = 'BOLETA' }) {
-  if (_printInProgress) return
-  _printInProgress = true
-
-  const now = new Date()
-  const dateStr = now.toLocaleDateString('es-CL', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'America/Santiago' })
-  const timeStr = formatChileTime(now.toISOString())
-  const orderId = firstOrder?.id ? `#${String(firstOrder.id).slice(0, 8).toUpperCase()}` : '—'
-
-  const itemsHTML = allItems.map(item => `
-    <tr>
-      <td>${item.quantity}</td>
-      <td>${item.item_name || item.product_name || '—'}</td>
-      <td class="right">$${(item.unit_price || 0).toLocaleString('es-CL')}</td>
-      <td class="right">$${(item.total_price || 0).toLocaleString('es-CL')}</td>
-    </tr>
-  `).join('')
-
-  const html = `<!doctype html>
-<html>
-<head>
-  <meta charset="utf-8"/>
-  <title>${label} ${orderId}</title>
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: 'Courier New', Courier, monospace; font-size: 12px; color: #111; width: 280px; padding: 8px; }
-    h2 { font-size: 18px; text-align: center; }
-    .center { text-align: center; margin-bottom: 4px; }
-    hr { border: none; border-top: 1px solid #222; margin: 8px 0; }
-    table { width: 100%; border-collapse: collapse; }
-    th { text-align: left; padding-bottom: 6px; font-size: 11px; }
-    td { padding: 2px 0; vertical-align: top; }
-    .right { text-align: right; }
-    .row { display: flex; justify-content: space-between; margin: 4px 0; }
-    .total { font-weight: 700; font-size: 14px; }
-    .small { font-size: 11px; margin-top: 6px; }
-    @media print { @page { margin: 4mm; size: 72mm auto; } }
-  </style>
-</head>
-<body>
-  <div class="center">
-    <h2>RESTAURANTE</h2>
-    <p style="font-weight:700">${label}</p>
-    <p style="font-family:monospace">${orderId}</p>
-  </div>
-  <hr/>
-  <div class="row"><span>ATENCION:</span><span>${mesa.name || '—'}</span></div>
-  <hr/>
-  <table>
-    <thead>
-      <tr>
-        <th>CANT</th>
-        <th>DETALLE</th>
-        <th class="right">P.UNIT</th>
-        <th class="right">TOTAL</th>
-      </tr>
-    </thead>
-    <tbody>${itemsHTML}</tbody>
-  </table>
-  <hr/>
-  <div class="row"><span>Subtotal:</span><span>$ ${subtotal.toLocaleString('es-CL')}</span></div>
-  <div class="row"><span>IVA 19%:</span><span>$ ${iva.toLocaleString('es-CL')}</span></div>
-  <div class="row total"><span>TOTAL:</span><span>$ ${total.toLocaleString('es-CL')}</span></div>
-  <p class="small">Fecha: ${dateStr} ${timeStr}</p>
-</body>
-</html>`
-
-  const iframe = document.createElement('iframe')
-  iframe.style.cssText = 'position:fixed;right:0;bottom:0;width:1px;height:1px;border:none;opacity:0'
-  document.body.appendChild(iframe)
-  const doc = iframe.contentDocument || iframe.contentWindow.document
-  doc.open()
-  doc.write(html)
-  doc.close()
-  iframe.onload = () => {
-    iframe.contentWindow.focus()
-    iframe.contentWindow.print()
-    setTimeout(() => {
-      _printInProgress = false
-      if (document.body.contains(iframe)) document.body.removeChild(iframe)
-    }, 3000)
-  }
-}
+import { cn } from '@/lib/utils'
+import {
+  STATUS_BADGE,
+  STATUS_LABEL,
+  PAYMENT_STATUS_BADGE,
+  PAYMENT_STATUS_LABEL,
+  fmt,
+  fmtTime,
+  openPrintWindow,
+} from './order-panel/orderPrint'
 
 function OrdenView({ mesa, localId, onBack, onTableUpdated }) {
   const { detail, loading, error: mesaError, refresh } = useMesaDetail(mesa.id)
@@ -148,20 +32,13 @@ function OrdenView({ mesa, localId, onBack, onTableUpdated }) {
   const [splitFullyPaid, setSplitFullyPaid]     = useState(false)
   const [hasSplits, setHasSplits]               = useState(false)
   const [showMPModal, setShowMPModal]           = useState(false)
+  const [showMobileMenu, setShowMobileMenu]     = useState(false)
 
-  // Totales derivados memoizados: se recalculan solo cuando cambia `detail`,
-  // no en cada render (AC4 — carrito de alta frecuencia).
-  const { allItems, subtotal, iva, total, firstOrder } = useMemo(() => {
-    const allItems = (detail?.active_orders || []).flatMap(o => o.items || [])
-    const subtotal = allItems.reduce((s, item) => s + (item.total_price || 0), 0)
-    const iva = Math.round(subtotal * 0.19)
-    const total = subtotal + iva
-    const firstOrder = detail?.active_orders?.[0]
-    return { allItems, subtotal, iva, total, firstOrder }
-  }, [detail])
+  const { allItems, subtotal, iva, total, firstOrder } = useOrderTotals(detail)
 
   // AC2: Check split payment state whenever the order view loads or refreshes
   useEffect(() => {
+    if (!isV2FeatureEnabled('splitPayments')) return
     const orderId = detail?.active_orders?.[0]?.id
     if (!orderId) return
     getSplitPaymentSummary(orderId)
@@ -205,10 +82,7 @@ function OrdenView({ mesa, localId, onBack, onTableUpdated }) {
     setShowMPModal(false)
     setCobrarLoading(true)
     try {
-      await apiRequest(`/mesas/${mesa.id}/state`, {
-        method: 'PATCH',
-        body: { state: 'libre' },
-      })
+      await setMesaLibre(mesa.id)
       openPrintWindow({ mesa, firstOrder, allItems, subtotal, iva, total })
       onTableUpdated?.()
       onBack()
@@ -257,7 +131,7 @@ function OrdenView({ mesa, localId, onBack, onTableUpdated }) {
         />
       )}
 
-      {showSplitModal && firstOrder && (
+      {isV2FeatureEnabled('splitPayments') && showSplitModal && firstOrder && (
         <MultiPaymentModal
           order={firstOrder}
           orderTotal={total}
@@ -278,78 +152,154 @@ function OrdenView({ mesa, localId, onBack, onTableUpdated }) {
       )}
 
       <div className="flex flex-col h-full">
-        {/* Breadcrumb + acciones */}
-        <div className="space-y-3 px-4 lg:px-6 py-4 border-b border-[hsl(var(--border))] bg-[hsl(var(--card))] shrink-0">
-          <div className="flex items-center gap-2 text-sm">
-            <button
-              onClick={onBack}
-              className="flex items-center gap-1 text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] transition-colors"
-            >
-              ← Mesas
-            </button>
-            <span className="text-[hsl(var(--muted-foreground))]">/</span>
-            <span className="font-medium text-[hsl(var(--foreground))]">{mesa.name}</span>
-            {mesa.zona && (
-              <span className="text-xs text-[hsl(var(--muted-foreground))]">— {mesa.zona}</span>
-            )}
+        {/* Header mejorado mobile-first */}
+        <div className="bg-[hsl(var(--card))] border-b border-[hsl(var(--border))] shrink-0">
+          {/* Breadcrumb */}
+          <div className="px-4 lg:px-6 pt-4 pb-3">
+            <div className="flex items-center gap-2">
+              <button
+                onClick={onBack}
+                className="flex items-center gap-2 text-sm font-medium text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] transition-colors"
+              >
+                <ArrowLeft size={16} />
+                <span className="hidden sm:inline">Mesas</span>
+              </button>
+              <span className="text-[hsl(var(--muted-foreground))]">/</span>
+              <span className="text-sm font-semibold text-[hsl(var(--foreground))]">{mesa.name}</span>
+              {mesa.zona && (
+                <>
+                  <span className="hidden md:inline text-[hsl(var(--muted-foreground))]">·</span>
+                  <span className="hidden md:inline text-xs text-[hsl(var(--muted-foreground))]">{mesa.zona}</span>
+                </>
+              )}
+            </div>
           </div>
 
-          <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3">
-            <Button
-              variant="outline"
-              onClick={handlePrintChargeDetail}
-              disabled={!detail?.active_orders?.length}
-              className="h-16 rounded-2xl border-blue-300 bg-blue-50 text-blue-800 hover:bg-blue-100 flex-col gap-1 text-sm font-bold"
-              title="Imprimir detalle de cobro"
-            >
-              <span className="text-xl leading-none">🖨️</span>
-              <span>Imprimir detalle</span>
-            </Button>
-            {/* AC1 (OP-03): Dividir pago entre N comensales */}
-            {firstOrder?.id && (
+          {/* Acciones principales */}
+          <div className="px-4 lg:px-6 pb-4">
+            <div className="flex flex-wrap gap-2">
+              {/* Acción principal: Cobrar */}
+              <Button
+                onClick={handleCobrar}
+                disabled={cobrarLoading || cancelLoading || !detail?.active_orders?.length || (hasSplits && !splitFullyPaid)}
+                className={cn(
+                  "flex-1 min-w-[140px] h-11 rounded-xl font-semibold shadow-sm",
+                  "bg-[hsl(var(--primary))] hover:bg-[hsl(var(--primary))]/90 text-white",
+                  "disabled:opacity-50 disabled:cursor-not-allowed"
+                )}
+                title={hasSplits && !splitFullyPaid ? 'Aprueba todos los pagos divididos primero' : ''}
+              >
+                <DollarSign size={18} className="mr-2" />
+                {cobrarLoading ? 'Procesando...' : 'Cobrar'}
+              </Button>
+
+              {/* Agregar productos */}
+              <Button
+                onClick={() => setShowAddItems(true)}
+                disabled={!localId}
+                variant="outline"
+                className="flex-1 min-w-[140px] h-11 rounded-xl font-medium"
+              >
+                <Plus size={18} className="mr-2" />
+                Agregar
+              </Button>
+
+              {/* Acciones secundarias - Desktop */}
+              <div className="hidden lg:flex gap-2">
+                {/* Imprimir */}
+                <Button
+                  onClick={handlePrintChargeDetail}
+                  disabled={!detail?.active_orders?.length}
+                  variant="outline"
+                  size="icon"
+                  className="h-11 w-11 rounded-xl"
+                  title="Imprimir detalle"
+                >
+                  <Printer size={18} />
+                </Button>
+
+                {/* Dividir pago */}
+                {isV2FeatureEnabled('splitPayments') && firstOrder?.id && (
+                  <Button
+                    onClick={() => setShowSplitModal(true)}
+                    disabled={!detail?.active_orders?.length}
+                    variant="outline"
+                    size="icon"
+                    className={cn(
+                      "h-11 w-11 rounded-xl",
+                      hasSplits && splitFullyPaid && "border-green-500 bg-green-50 text-green-700 hover:bg-green-100",
+                      hasSplits && !splitFullyPaid && "border-yellow-500 bg-yellow-50 text-yellow-700 hover:bg-yellow-100"
+                    )}
+                    title={hasSplits && splitFullyPaid ? 'Pago dividido completo' : 'Dividir pago'}
+                  >
+                    <Split size={18} />
+                  </Button>
+                )}
+
+                {/* Cancelar */}
+                <Button
+                  onClick={handleCancelOrder}
+                  disabled={cancelLoading || cobrarLoading || !detail?.active_orders?.length}
+                  variant="outline"
+                  size="icon"
+                  className="h-11 w-11 rounded-xl border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300"
+                  title="Cancelar orden"
+                >
+                  <X size={18} />
+                </Button>
+              </div>
+
+              {/* Menú móvil */}
               <Button
                 variant="outline"
-                onClick={() => setShowSplitModal(true)}
-                disabled={!detail?.active_orders?.length}
-                className={hasSplits && !splitFullyPaid
-                  ? 'h-16 rounded-2xl border-yellow-400 bg-yellow-50 text-yellow-800 hover:bg-yellow-100 flex-col gap-1 text-sm font-bold'
-                  : hasSplits && splitFullyPaid
-                  ? 'h-16 rounded-2xl border-green-400 bg-green-50 text-green-800 hover:bg-green-100 flex-col gap-1 text-sm font-bold'
-                  : 'h-16 rounded-2xl border-slate-300 bg-slate-50 text-slate-800 hover:bg-slate-100 flex-col gap-1 text-sm font-bold'
-                }
+                size="icon"
+                className="lg:hidden h-11 w-11 rounded-xl"
+                onClick={() => setShowMobileMenu(!showMobileMenu)}
               >
-                <span className="text-xl leading-none">⊘</span>
-                {hasSplits && splitFullyPaid ? '✓ Pago Dividido' : '⊘ Dividir Pago'}
+                <MoreVertical size={18} />
               </Button>
+            </div>
+
+            {/* Menú desplegable móvil */}
+            {showMobileMenu && (
+              <div className="lg:hidden mt-3 p-3 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] space-y-2">
+                <Button
+                  onClick={() => { handlePrintChargeDetail(); setShowMobileMenu(false) }}
+                  disabled={!detail?.active_orders?.length}
+                  variant="ghost"
+                  className="w-full justify-start h-11"
+                >
+                  <Printer size={18} className="mr-2" />
+                  Imprimir detalle
+                </Button>
+
+                {isV2FeatureEnabled('splitPayments') && firstOrder?.id && (
+                  <Button
+                    onClick={() => { setShowSplitModal(true); setShowMobileMenu(false) }}
+                    disabled={!detail?.active_orders?.length}
+                    variant="ghost"
+                    className={cn(
+                      "w-full justify-start h-11",
+                      hasSplits && splitFullyPaid && "text-green-700",
+                      hasSplits && !splitFullyPaid && "text-yellow-700"
+                    )}
+                  >
+                    <Split size={18} className="mr-2" />
+                    {hasSplits && splitFullyPaid ? 'Pago dividido ✓' : 'Dividir pago'}
+                  </Button>
+                )}
+
+                <Button
+                  onClick={() => { handleCancelOrder(); setShowMobileMenu(false) }}
+                  disabled={cancelLoading || cobrarLoading || !detail?.active_orders?.length}
+                  variant="ghost"
+                  className="w-full justify-start h-11 text-red-600 hover:text-red-700 hover:bg-red-50"
+                >
+                  <X size={18} className="mr-2" />
+                  {cancelLoading ? 'Cancelando...' : 'Cancelar orden'}
+                </Button>
+              </div>
             )}
-            <Button
-              variant="outline"
-              onClick={handleCobrar}
-              disabled={cobrarLoading || cancelLoading || !detail?.active_orders?.length || (hasSplits && !splitFullyPaid)}
-              className="h-16 rounded-2xl border-green-700 bg-green-600 hover:bg-green-700 text-white flex-col gap-1 text-sm font-bold disabled:opacity-50"
-              title={hasSplits && !splitFullyPaid ? 'Aprueba todos los pagos divididos primero' : ''}
-            >
-              <span className="text-xl leading-none">💰</span>
-              {cobrarLoading ? 'Procesando...' : 'Cobrar'}
-            </Button>
-            <Button
-              variant="outline"
-              onClick={() => setShowAddItems(true)}
-              disabled={!localId}
-              className="h-16 rounded-2xl border-indigo-300 bg-indigo-50 text-indigo-800 hover:bg-indigo-100 flex-col gap-1 text-sm font-bold"
-            >
-              <span className="text-xl leading-none">＋</span>
-              <span>Agregar producto</span>
-            </Button>
-            <Button
-              variant="outline"
-              onClick={handleCancelOrder}
-              disabled={cancelLoading || cobrarLoading || !detail?.active_orders?.length}
-              className="h-16 rounded-2xl border-red-300 bg-red-50 text-red-700 hover:bg-red-100 flex-col gap-1 text-sm font-bold"
-            >
-              <span className="text-xl leading-none">✕</span>
-              {cancelLoading ? 'Cancelando...' : 'Cancelar'}
-            </Button>
           </div>
         </div>
 

@@ -3,6 +3,7 @@ import { motion } from 'framer-motion'
 import { History, Loader2, Search } from 'lucide-react'
 import { getAuthContext, formatApiErrorDetail } from '../lib/apiClient'
 import { getAuditLog, listBusinesses } from '../lib/superAdminApi'
+import { isV2FeatureEnabled } from '../lib/v2Features'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
@@ -11,6 +12,13 @@ const ACTION_LABEL = {
   'business.create': 'Creación de franquicia',
   'business.update': 'Actualización de franquicia',
   'business.delete': 'Eliminación de franquicia',
+  'business.deactivate': 'Suspensión de franquicia',
+  'business.reactivate': 'Reactivación de franquicia',
+  'user.create': 'Alta de usuario',
+  'user.update': 'Actualización de usuario',
+  'user.role_change': 'Cambio de rol',
+  'user.deactivate': 'Desactivación de usuario',
+  'user.reactivate': 'Reactivación de usuario',
 }
 
 function formatDateTime(value) {
@@ -108,6 +116,12 @@ export default function GlobalAuditPage() {
         </div>
 
         {err && <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{err}</div>}
+
+        {!isV2FeatureEnabled('superAdminAudit') && (
+          <div className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+            Auditoría no disponible en Backend V2 todavía. Los eventos de crear, editar o eliminar franquicias no se registran aún.
+          </div>
+        )}
 
         {loading ? (
           <p className="text-sm text-[hsl(var(--muted-foreground))] flex items-center gap-2">

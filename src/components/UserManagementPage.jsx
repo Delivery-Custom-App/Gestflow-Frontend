@@ -83,16 +83,18 @@ export default function UserManagementPage() {
     e.preventDefault()
     setOk(''); setErr('')
     if (!form.name || !form.email || !form.password) { setErr('Completa nombre, correo y contraseña.'); return }
-    if (form.password.length < 6) { setErr('La contraseña debe tener al menos 6 caracteres.'); return }
+    if (form.password.length < 8) { setErr('La contraseña debe tener al menos 8 caracteres.'); return }
     if (!['SUPERADMIN', 'ADMIN_NEGOCIO'].includes(form.role) && !form.local_id) { setErr('Selecciona el local al que pertenece este usuario.'); return }
     if (needsConfirm && !roleConfirmed) { setErr('Debes confirmar la asignación de este rol antes de continuar.'); return }
     setLoading(true)
     try {
+      const local = locales.find((l) => String(l.id) === String(form.local_id))
       await createUser({
         name: form.name.trim(), email: form.email.trim(), password: form.password,
         role: form.role, local_id: form.local_id || null,
+        business_id: local?.business_id || null,
       })
-      const localName = locales.find((l) => String(l.id) === String(form.local_id))?.name
+      const localName = local?.name
       setOk(`Usuario "${form.email.trim()}" creado como ${form.role}${localName ? ` en "${localName}"` : ''}.`)
       setForm({ name: '', email: '', password: '', role: 'EMPLEADO', local_id: '' })
       setRoleConfirmed(false)

@@ -1,12 +1,11 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { apiRequest } from '../lib/apiClient'
+import { listOrderItems, listOrders, updateOrderStatus as updateOrderStatusV2 } from '../lib/salesApi'
 
 const POLL_INTERVAL_MS = 30_000
 const ACTIVE_STATUSES = ['PENDING', 'PREPARING', 'READY']
 
 /**
- * Fetches all active orders (PENDING, PREPARING, READY) for a local,
- * including their items. Polls every 30s.
+ * Órdenes activas de cocina (V2 statuses mapeados a PENDING/PREPARING/READY).
  */
 export function useKitchenOrders(localId) {
   const [orders, setOrders] = useState([])
@@ -18,25 +17,23 @@ export function useKitchenOrders(localId) {
   const fetchOrders = useCallback(async () => {
     if (!localId) return
     try {
-      const raw = await apiRequest(`/orders?local_id=${localId}`)
+      const raw = await listOrders(localId)
       if (!mounted.current) return
 
-      const active = (raw || []).filter(o => ACTIVE_STATUSES.includes(o.status))
+      const active = (raw || []).filter((o) => ACTIVE_STATUSES.includes(o.status))
 
-      // Fetch items for each active order in parallel
       const withItems = await Promise.all(
         active.map(async (order) => {
           try {
-            const items = await apiRequest(`/orders/${order.id}/items`)
+            const items = await listOrderItems(order.id, order.created_at)
             return { ...order, items: Array.isArray(items) ? items : [] }
           } catch {
             return { ...order, items: [] }
           }
-        })
+        }),
       )
 
       if (!mounted.current) return
-      // Sort: oldest first so kitchen processes in order
       withItems.sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
       setOrders(withItems)
       setError(null)
@@ -51,22 +48,19 @@ export function useKitchenOrders(localId) {
   }, [localId])
 
   const updateOrderStatus = useCallback(async (orderId, newStatus) => {
-    // Optimistic update: muestra el cambio inmediatamente en la UI
     const ts = new Date().toISOString()
-    setOrders(prev =>
-      prev.map(o =>
-        o.id === orderId ? { ...o, status: newStatus, updated_at: ts } : o
-      )
+    const current = orders.find((o) => o.id === orderId)
+    setOrders((prev) =>
+      prev.map((o) =>
+        o.id === orderId ? { ...o, status: newStatus, updated_at: ts } : o,
+      ),
     )
     try {
-      await apiRequest(`/orders/${orderId}`, {
-        method: 'PATCH',
-        body: { status: newStatus },
-      })
+      await updateOrderStatusV2(orderId, newStatus, current?.created_at)
     } finally {
       await fetchOrders()
     }
-  }, [fetchOrders])
+  }, [fetchOrders, orders])
 
   useEffect(() => {
     mounted.current = true

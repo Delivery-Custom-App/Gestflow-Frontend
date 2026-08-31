@@ -3,7 +3,8 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { useMesaDetail } from '../../hooks/useMesaDetail'
 import { useMenuPOS } from '../../hooks/useMenuPOS'
 import { formatCLP } from '../../lib/formatCLP'
-import { apiRequest } from '../../lib/apiClient'
+import { addOrderItem, createOrder } from '../../lib/salesApi'
+import { useCajaActiva } from '../../hooks/useCajaActiva'
 import ProductList from './ProductList'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -27,6 +28,7 @@ export default function MesaDetail() {
   const { mesaId, localId } = useParams()
   const { detail, loading, error, refresh } = useMesaDetail(mesaId)
   const { data: menuData, fetch: fetchMenu } = useMenuPOS(localId)
+  const { cajaId } = useCajaActiva(localId)
 
   const [agregados, setAgregados] = useState({})
   const [showPicker, setShowPicker] = useState(false)
@@ -73,26 +75,20 @@ export default function MesaDetail() {
       let orderId = pickerOrderId
 
       if (!orderId) {
-        const newOrder = await apiRequest('/orders', {
-          method: 'POST',
-          body: {
-            local_id: localId,
-            mesa_id: mesaId,
-            source: 'dine-in',
-            payment_method: 'CASH',
-            items: [],
-          },
+        const newOrder = await createOrder({
+          local_id: localId,
+          mesa_id: mesaId,
+          caja_id: cajaId || null,
+          source: 'dine_in',
+          items: [],
         })
         orderId = newOrder.id
       }
 
-      await apiRequest(`/orders/${orderId}/items`, {
-        method: 'POST',
-        body: {
-          product_id: product.id,
-          quantity: 1,
-          unit_price: product.price,
-        },
+      await addOrderItem(orderId, {
+        product_id: product.id,
+        quantity: 1,
+        unit_price: product.price,
       })
 
       setShowPicker(false)
@@ -104,7 +100,7 @@ export default function MesaDetail() {
     } finally {
       setAddingProduct(false)
     }
-  }, [pickerOrderId, localId, mesaId, refresh, fetchMenu])
+  }, [pickerOrderId, localId, mesaId, cajaId, refresh, fetchMenu])
 
   const pickerMenu = (menuData?.categories || []).filter((cat) => (cat.products?.length || 0) > 0)
   const handleGoBack = () => navigate(`/local/${localId}/pos`)

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useUsers } from '../hooks/useUsers'
-import { apiRequest, getAuthContext } from '../lib/apiClient'
+import { createUser, getAuthContext } from '../lib/apiClient'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -32,22 +32,16 @@ function CreateUserModal({ isOpen, onClose, onSuccess }) {
     e.preventDefault()
     setError(null)
     if (!form.email.trim()) return setError('El email es requerido')
-    if (form.password.length < 6) return setError('La contraseña debe tener al menos 6 caracteres')
+    if (form.password.length < 8) return setError('La contraseña debe tener al menos 8 caracteres')
     setLoading(true)
     try {
-      const { token, businessId } = await getAuthContext()
-      await apiRequest('/auth/admin/create-user', {
-        method: 'POST',
-        token,
-        body: {
-          email: form.email.trim(),
-          password: form.password,
-          name: form.name.trim() || null,
-          phone: form.phone.trim() || null,
-          role: form.role.toLowerCase(),
-          business_id: businessId,
-          email_confirm: true,
-        },
+      const { businessId } = await getAuthContext()
+      await createUser({
+        email: form.email.trim(),
+        password: form.password,
+        name: form.name.trim() || null,
+        role: form.role,
+        business_id: businessId,
       })
       setForm({ email: '', password: '', name: '', phone: '', role: 'Empleado' })
       onSuccess()

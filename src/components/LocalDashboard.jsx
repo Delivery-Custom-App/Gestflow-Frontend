@@ -17,7 +17,7 @@ import {
 } from 'recharts'
 import {
   Package, CheckCircle, TrendingDown, AlertTriangle, DollarSign,
-  TrendingUp, Wallet, Clock, XCircle, MapPin, CreditCard, X, BarChart2, HelpCircle,
+  TrendingUp, Wallet, Clock, CreditCard, X, BarChart2, HelpCircle,
   LineChart as LineChartIcon, PieChart as PieChartIcon,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -98,25 +98,6 @@ function KpiDetailDrawer({ open, onClose, dashboard, orders, dashLoading }) {
     else       setVisible(false)
   }, [open])
 
-  /* Pedidos por hora HOY (excluye cancelados, solo el día actual) */
-  const hourlyData = useMemo(() => {
-    if (!orders.length) return []
-    const today = new Date(); today.setHours(0, 0, 0, 0)
-    const counts = Array.from({ length: 24 }, (_, h) => ({ hora: h, pedidos: 0 }))
-    for (const o of orders) {
-      if (!o.created_at) continue
-      if (String(o.status || '').toLowerCase() === 'cancelled') continue
-      const d = parseApiDate(o.created_at)
-      if (!d || d < today) continue
-      const chileHour = chileHourFromIso(o.created_at)
-      if (chileHour == null) continue
-      counts[chileHour].pedidos += 1
-    }
-    return counts
-      .filter((d) => d.pedidos > 0)
-      .map((d) => ({ ...d, label: formatHourAMPM(d.hora), isPeak: d.hora === dashboard?.peak_hour }))
-  }, [orders, dashboard?.peak_hour])
-
   /* Ventas por hora HOY */
   const salesByHourToday = useMemo(() => {
     const today = new Date(); today.setHours(0, 0, 0, 0)
@@ -185,8 +166,6 @@ function KpiDetailDrawer({ open, onClose, dashboard, orders, dashLoading }) {
 
   if (!open) return null
 
-  const peakHour = dashboard?.peak_hour
-
   return (
     <div className="fixed inset-0 z-50">
       <div className="absolute inset-0 bg-black/50" onClick={onClose} />
@@ -210,37 +189,6 @@ function KpiDetailDrawer({ open, onClose, dashboard, orders, dashLoading }) {
         <div className="flex-1 px-4 py-4 space-y-4">
           {dashLoading ? <LoadingSpinner message="Cargando..." /> : (
             <>
-              {/* 1. Hora Peak */}
-              <DrawerSection title="Hora Peak">
-                <div className="flex items-center gap-3 mb-3 rounded-lg bg-amber-50 dark:bg-amber-950/20 px-3 py-2">
-                  <Clock size={18} className="text-amber-600 shrink-0" />
-                  <div>
-                    <p className="text-2xl font-extrabold text-amber-600">{formatHourAMPM(peakHour)}</p>
-                    {peakHour != null && <p className="text-[10px] text-[hsl(var(--muted-foreground))]">{peakHour}:00 – {peakHour + 1}:00 · Hora con más actividad</p>}
-                  </div>
-                </div>
-                {hourlyData.length > 0 ? (
-                  <>
-                    <p className="text-[10px] font-semibold text-[hsl(var(--muted-foreground))] uppercase tracking-wider mb-2">Pedidos por hora (AM / PM)</p>
-                    <ResponsiveContainer width="100%" height={175}>
-                      <BarChart data={hourlyData} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
-                        <XAxis dataKey="label" tick={{ fontSize: 9, fill: 'hsl(var(--muted-foreground))' }} tickLine={false} axisLine={false} interval={0} angle={-40} textAnchor="end" height={44} />
-                        <YAxis allowDecimals={false} tick={{ fontSize: 9, fill: 'hsl(var(--muted-foreground))' }} tickLine={false} axisLine={false} />
-                        <Tooltip formatter={(v) => [`${v} pedidos`]} contentStyle={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: 8, fontSize: 11 }} />
-                        <Bar dataKey="pedidos" radius={[3, 3, 0, 0]} maxBarSize={32}>
-                          {hourlyData.map((e, i) => <Cell key={i} fill={e.isPeak ? '#f59e0b' : '#d1d5db'} />)}
-                        </Bar>
-                      </BarChart>
-                    </ResponsiveContainer>
-                    <div className="flex items-center gap-4 justify-center mt-1">
-                      <span className="flex items-center gap-1 text-[10px] text-[hsl(var(--muted-foreground))]"><span className="inline-block w-2.5 h-2.5 rounded-sm bg-amber-400" />Hora peak</span>
-                      <span className="flex items-center gap-1 text-[10px] text-[hsl(var(--muted-foreground))]"><span className="inline-block w-2.5 h-2.5 rounded-sm bg-gray-300" />Otras horas</span>
-                    </div>
-                  </>
-                ) : <p className="text-xs text-[hsl(var(--muted-foreground))] text-center py-3">Sin datos de pedidos.</p>}
-              </DrawerSection>
-
               {/* 2. Ventas hoy por hora */}
               <DrawerSection title="Ventas de hoy por hora">
                 {salesByHourToday.length > 0 ? (
@@ -250,7 +198,7 @@ function KpiDetailDrawer({ open, onClose, dashboard, orders, dashLoading }) {
                       <XAxis dataKey="label" tick={{ fontSize: 9, fill: 'hsl(var(--muted-foreground))' }} tickLine={false} axisLine={false} interval={0} angle={-35} textAnchor="end" height={40} />
                       <YAxis tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} tick={{ fontSize: 9, fill: 'hsl(var(--muted-foreground))' }} tickLine={false} axisLine={false} width={36} />
                       <Tooltip formatter={(v) => [formatMoney(v), 'Ventas']} contentStyle={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: 8, fontSize: 11 }} />
-                      <Bar dataKey="total" fill="#16a34a" radius={[3, 3, 0, 0]} maxBarSize={36} />
+                      <Bar dataKey="total" fill="#16a34a" className="chart-brand-fill" radius={[3, 3, 0, 0]} maxBarSize={36} />
                     </BarChart>
                   </ResponsiveContainer>
                 ) : <p className="text-xs text-[hsl(var(--muted-foreground))] text-center py-3">Sin ventas hoy aún.</p>}
@@ -486,9 +434,6 @@ function LocalDashboard() {
     { icon: DollarSign, label: 'Ventas del Mes',   value: formatMoney(dashboard?.monthly_sales),     iconColor: 'text-[hsl(var(--primary))]', iconBg: 'bg-emerald-50', accentColor: 'border-l-emerald-700' },
     { icon: Wallet,     label: 'Caja Virtual',     value: formatMoney(dashboard?.monthly_cash_flow), iconColor: 'text-blue-600',              iconBg: 'bg-blue-50',    accentColor: 'border-l-blue-500'   },
     { icon: DollarSign, label: 'Ticket Promedio',  value: formatMoney(dashboard?.avg_ticket ?? 0),   iconColor: 'text-violet-600',            iconBg: 'bg-violet-50',  accentColor: 'border-l-violet-500' },
-    { icon: XCircle,    label: 'Cancelaciones',    value: `${Number(dashboard?.cancellation_rate ?? 0).toFixed(1)}%`, iconColor: 'text-red-600', iconBg: 'bg-red-50', accentColor: 'border-l-red-500' },
-    { icon: Clock,      label: 'Hora Peak',        value: formatHourAMPM(dashboard?.peak_hour),      iconColor: 'text-amber-600',             iconBg: 'bg-amber-50',   accentColor: 'border-l-amber-500'  },
-    { icon: MapPin,     label: 'Mesa Más Activa',  value: dashboard?.top_mesa_name ?? '—',           iconColor: 'text-pink-600',              iconBg: 'bg-pink-50',    accentColor: 'border-l-pink-500'   },
   ]
 
   const invCards = [
@@ -937,8 +882,9 @@ function LocalDashboard() {
                               dataKey="efectivo"
                               name="efectivo"
                               stroke="#16a34a"
+                              className="chart-brand-stroke"
                               strokeWidth={2}
-                              dot={{ r: 3, fill: '#16a34a' }}
+                              dot={{ r: 3, className: 'chart-brand-fill', fill: '#16a34a' }}
                               activeDot={{ r: 5 }}
                             />
                             <Line

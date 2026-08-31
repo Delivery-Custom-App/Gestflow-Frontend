@@ -14,7 +14,7 @@ export function GradientTracing({
   return (
     <div className="relative" style={{ width, height }}>
       <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} fill="none">
-        <path d={path} stroke={baseColor} strokeOpacity="0.2" strokeWidth={strokeWidth} />
+        <path d={path} style={{ stroke: baseColor }} strokeOpacity="0.2" strokeWidth={strokeWidth} />
         <path d={path} stroke={`url(#${gradientId})`} strokeLinecap="round" strokeWidth={strokeWidth} />
         <defs>
           <motion.linearGradient
@@ -23,9 +23,9 @@ export function GradientTracing({
             id={gradientId}
             gradientUnits="userSpaceOnUse"
           >
-            <stop stopColor={gradientColors[0]} stopOpacity="0" />
-            <stop stopColor={gradientColors[1]} />
-            <stop offset="1" stopColor={gradientColors[2]} stopOpacity="0" />
+            <stop style={{ stopColor: gradientColors[0] }} stopOpacity="0" />
+            <stop style={{ stopColor: gradientColors[1] }} />
+            <stop offset="1" style={{ stopColor: gradientColors[2] }} stopOpacity="0" />
           </motion.linearGradient>
         </defs>
       </svg>
