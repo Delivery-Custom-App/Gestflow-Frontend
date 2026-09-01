@@ -1,4 +1,12 @@
-import { listCajas, listOrders, createCajaV2, getCajaResumen, getMovimientosCaja } from './salesApi'
+import {
+  listCajas,
+  listOrders,
+  createCajaV2,
+  getCajaResumen,
+  getMovimientosCaja,
+  closeCaja,
+  getResumenDiario,
+} from './salesApi'
 import { apiRequest } from './apiClient'
 import { isV2FeatureEnabled } from './v2Features'
 
@@ -154,7 +162,7 @@ export function createCaja(body) {
   return createCajaV2(body)
 }
 
-export { getCajaResumen, getMovimientosCaja }
+export { getCajaResumen, getMovimientosCaja, closeCaja, getResumenDiario }
 
 export function provisionCajaMp(cajaId) {
   return apiRequest(`/cajas/${cajaId}/mp/provision`, { method: 'POST' })

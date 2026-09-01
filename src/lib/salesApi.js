@@ -113,10 +113,26 @@ export function mapCajaOut(caja) {
   }
 }
 
-/** Caja abierta del local (preferencia: del usuario actual). */
+/** Fecha de hoy en formato YYYY-MM-DD, según el reloj local del dispositivo. */
+export function todayIso() {
+  const d = new Date()
+  const pad = (n) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+}
+
+/**
+ * Caja abierta del local (preferencia: del usuario actual) — SOLO si es la
+ * caja de hoy. Una caja "open" de un día anterior que nadie cerró (no hay
+ * cron que la fuerce) no cuenta como activa: el backend igual rechazaría
+ * ventas contra ella (business_date != hoy), así que filtrar acá evita
+ * mandar al POS a intentar vender contra una caja muerta.
+ */
 export async function getActiveCaja(localId) {
   const rows = await apiRequest(`/cajas?local_id=${encodeURIComponent(String(localId))}`)
-  const open = (Array.isArray(rows) ? rows : []).filter((c) => String(c.status) === 'open')
+  const today = todayIso()
+  const open = (Array.isArray(rows) ? rows : []).filter(
+    (c) => String(c.status) === 'open' && c.business_date === today,
+  )
   if (!open.length) return null
   const { user } = await getOptionalAuthContext()
   const uid = user?.id ? String(user.id) : null
@@ -150,6 +166,21 @@ export async function createCajaV2({ local_id, cashier_user_id, monto_apertura =
 /** Resumen de una caja: monto de apertura, total de ingresos y desglose por método de pago. */
 export async function getCajaResumen(cajaId) {
   return apiRequest(`/cajas/${encodeURIComponent(String(cajaId))}/resumen`)
+}
+
+/** Cierra una caja (arqueo del día ya hecho). No se puede reabrir después. */
+export async function closeCaja(cajaId) {
+  const row = await apiRequest(`/cajas/${encodeURIComponent(String(cajaId))}`, {
+    method: 'PATCH',
+    body: { status: 'closed' },
+  })
+  return mapCajaOut(row)
+}
+
+/** Resumen diario consolidado del local (todas las cajas/cajeros de un día). */
+export async function getResumenDiario(localId, businessDate = todayIso()) {
+  const qs = new URLSearchParams({ local_id: localId, business_date: businessDate })
+  return apiRequest(`/cajas/resumen-diario?${qs.toString()}`)
 }
 
 /** Movimientos (ingresos) registrados en una caja, más recientes primero. */

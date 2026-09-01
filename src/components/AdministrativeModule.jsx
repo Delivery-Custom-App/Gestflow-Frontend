@@ -28,6 +28,8 @@ import {
   createCaja,
   getCajaResumen,
   getMovimientosCaja,
+  closeCaja,
+  getResumenDiario,
 } from '../lib/administrativeApi'
 import { getAuthContext, apiRequest } from '../lib/apiClient'
 import { uploadReceipt } from '../lib/uploadApi'
@@ -37,7 +39,7 @@ import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 import { formatCLPCurrency as formatMoney } from '../lib/formatCLP'
 import { motion, AnimatePresence } from 'framer-motion'
-import { MapPin, TrendingDown, Send, X, Upload, ImageIcon, ChevronDown, ChevronUp, ChevronRight, ShoppingCart, HelpCircle, BarChart2, CreditCard, ArrowLeftRight, Bell, Award, LayoutDashboard } from 'lucide-react'
+import { MapPin, TrendingDown, Send, X, Upload, ImageIcon, ChevronDown, ChevronUp, ChevronRight, ShoppingCart, HelpCircle, BarChart2, CreditCard, ArrowLeftRight, Bell, Award, LayoutDashboard, Lock } from 'lucide-react'
 
 const sections = [
   { id: 'dashboard',   label: 'Dashboard',      subtitle: 'Resumen general del sistema' },
@@ -85,6 +87,16 @@ function formatDateTime(value) {
     timeZone: 'America/Santiago',
     hour12: true,
   })
+}
+
+/** Formatea un business_date ("YYYY-MM-DD") sin pasar por Date/timezone —
+ * es un día calendario plano, no un instante; convertirlo con Date podría
+ * correrlo un día según la zona horaria del navegador. */
+function formatBusinessDate(value) {
+  if (!value || typeof value !== 'string') return 'Sin fecha'
+  const [year, month, day] = value.split('-')
+  if (!year || !month || !day) return value
+  return `${day}/${month}/${year}`
 }
 
 function getOrderAmount(order) {
@@ -915,7 +927,7 @@ const MP_PAIRING_ACTION = {
   paired:           'Ver vinculación',
 }
 
-function FlujoCajaContent({ dashboard, cajas, loading, error, onManagePairing, onViewMovimientos }) {
+function FlujoCajaContent({ dashboard, cajas, resumenDiario, loading, error, onManagePairing, onViewMovimientos }) {
   const cajasList = safeArray(cajas)
   const showMpPairing = typeof onManagePairing === 'function'
   const showMovimientos = typeof onViewMovimientos === 'function'
@@ -925,6 +937,7 @@ function FlujoCajaContent({ dashboard, cajas, loading, error, onManagePairing, o
 
   const headers = [
     'Nombre Caja',
+    'Fecha',
     'Estado',
     ...(showMpPairing ? ['MercadoPago'] : []),
     ...(showActions ? ['Acciones'] : []),
@@ -945,12 +958,34 @@ function FlujoCajaContent({ dashboard, cajas, loading, error, onManagePairing, o
           <ExpenseBreakdown data={dashboard?.expenses_breakdown || []} />
         </Panel>
       </div>
+      {resumenDiario && (
+        <Panel title="Resumen del día" sub={`Consolidado de todas las cajas del local · ${formatBusinessDate(resumenDiario.business_date)}`}>
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
+            <div className="rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--muted))] p-3">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-[hsl(var(--muted-foreground))]">Apertura total</p>
+              <p className="mt-1 text-sm font-bold text-[hsl(var(--foreground))]">{formatMoney(Number(resumenDiario.monto_apertura_total))}</p>
+            </div>
+            <div className="rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--muted))] p-3">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-[hsl(var(--muted-foreground))]">Ingresos de hoy</p>
+              <p className="mt-1 text-sm font-bold text-[hsl(var(--foreground))]">{formatMoney(Number(resumenDiario.total_ingresos))}</p>
+            </div>
+            <div className="rounded-lg border border-[hsl(var(--primary)/0.3)] bg-[hsl(var(--primary)/0.08)] p-3">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-[hsl(var(--muted-foreground))]">Total esperado hoy</p>
+              <p className="mt-1 text-sm font-bold text-[hsl(var(--foreground))]">{formatMoney(Number(resumenDiario.total_esperado))}</p>
+            </div>
+          </div>
+          {resumenDiario.cajas.length === 0 && (
+            <p className="mt-3 text-xs text-[hsl(var(--muted-foreground))]">Todavía no se abrió ninguna caja hoy en este local.</p>
+          )}
+        </Panel>
+      )}
       <Panel title="Cajas del Local" sub="Fuente: endpoint /cajas por local">
         <AmTable
           headers={headers}
           rows={cajasList.map((c) => {
             const row = [
               c.name || 'Caja sin nombre',
+              formatBusinessDate(c.business_date),
               c.is_active ? 'Abierta' : (c.status === 'closed' ? 'Cerrada' : (c.is_active ? 'Activa' : 'Inactiva')),
             ]
             if (showMpPairing) {
@@ -1995,12 +2030,25 @@ const MOVIMIENTO_SOURCE_LABEL = {
   mercadopago_pos: 'Mercado Pago',
 }
 
-function CajaMovimientosModal({ caja, onClose }) {
+// Desglose "por método de pago" (CajaResumenPorMetodo.payment_method) — NO
+// es lo mismo que payment_source/MOVIMIENTO_SOURCE_LABEL de arriba (ese es
+// el canal del pedido: mesa/mostrador/delivery). Este es cómo pagó el
+// cliente: efectivo/tarjeta/adapter POS.
+const PAYMENT_METHOD_LABEL = {
+  cash: 'Efectivo',
+  MERCADOPAGO_POINT: 'Mercado Pago',
+  MERCADOPAGO_POINT_DEBIT: 'Mercado Pago (débito)',
+  MERCADOPAGO_POINT_CREDIT: 'Mercado Pago (crédito)',
+}
+
+function CajaMovimientosModal({ caja, onClose, onClosed }) {
   const [resumen, setResumen] = useState(null)
   const [movimientos, setMovimientos] = useState([])
   const [loading, setLoading] = useState(true)
   const [err, setErr] = useState('')
   const [visible, setVisible] = useState(false)
+  const [closing, setClosing] = useState(false)
+  const isOpen = caja.status === 'open' || caja.is_active
 
   useEffect(() => { requestAnimationFrame(() => setVisible(true)) }, [])
 
@@ -2029,6 +2077,19 @@ function CajaMovimientosModal({ caja, onClose }) {
     setTimeout(onClose, 300)
   }
 
+  const handleCloseCaja = async () => {
+    if (!window.confirm('¿Cerrar esta caja? Es el cierre del arqueo del día — no se puede reabrir después.')) return
+    setClosing(true); setErr('')
+    try {
+      await closeCaja(caja.id)
+      onClosed?.()
+      handleClose()
+    } catch (e) {
+      setErr(e?.message || 'No se pudo cerrar la caja')
+      setClosing(false)
+    }
+  }
+
   return (
     <div className="fixed inset-0 z-50">
       <div className={cn('absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity duration-300', visible ? 'opacity-100' : 'opacity-0')} onClick={handleClose} />
@@ -2042,7 +2103,10 @@ function CajaMovimientosModal({ caja, onClose }) {
             </span>
             <div>
               <h2 className="text-base font-bold text-[hsl(var(--foreground))]">Movimientos de Caja</h2>
-              <p className="text-xs text-[hsl(var(--muted-foreground))]">{caja.name || 'Caja sin nombre'}</p>
+              <p className="text-xs text-[hsl(var(--muted-foreground))]">
+                {caja.name || 'Caja sin nombre'} · {formatBusinessDate(caja.business_date)}
+                {isOpen ? ' · Abierta' : ' · Cerrada'}
+              </p>
             </div>
           </div>
           <button onClick={handleClose}
@@ -2087,8 +2151,8 @@ function CajaMovimientosModal({ caja, onClose }) {
                   <p className="mb-2 text-[11px] text-[hsl(var(--muted-foreground))]">Para arquear, compara el monto de Mercado Pago aquí contra el reporte de la app/sitio de Mercado Pago.</p>
                   <div className="flex flex-col gap-1.5">
                     {resumen.por_metodo.map((row) => (
-                      <div key={row.source} className="flex items-center justify-between rounded-lg border border-[hsl(var(--border))] px-3 py-2 text-sm">
-                        <span className="text-[hsl(var(--foreground))]">{MOVIMIENTO_SOURCE_LABEL[row.source] || row.source}</span>
+                      <div key={row.payment_method} className="flex items-center justify-between rounded-lg border border-[hsl(var(--border))] px-3 py-2 text-sm">
+                        <span className="text-[hsl(var(--foreground))]">{PAYMENT_METHOD_LABEL[row.payment_method] || row.payment_method}</span>
                         <span className="font-semibold text-[hsl(var(--foreground))]">{formatMoney(Number(row.total))}</span>
                       </div>
                     ))}
@@ -2117,6 +2181,21 @@ function CajaMovimientosModal({ caja, onClose }) {
             </>
           )}
         </div>
+
+        {/* Footer */}
+        {!loading && isOpen && (
+          <div className="px-6 py-4 border-t border-[hsl(var(--border))] shrink-0">
+            <button
+              type="button"
+              onClick={handleCloseCaja}
+              disabled={closing}
+              className="flex w-full items-center justify-center gap-2 rounded-lg border border-red-200 dark:border-red-800/50 px-4 py-2 text-sm font-semibold text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors disabled:opacity-50"
+            >
+              <Lock size={14} />
+              {closing ? 'Cerrando…' : 'Cerrar caja (arqueo del día)'}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   )
@@ -2145,7 +2224,7 @@ function renderSectionContent(activeSection, payload) {
     case 'flujo-caja': {
       const flujoDashboard = enrichDashboardWithChartData(payload.dashboard)
       const flujoExpenseData = generateExpenseBreakdownFromData(payload.expenses)
-      return <FlujoCajaContent dashboard={{ ...flujoDashboard, expenses_breakdown: flujoExpenseData }} cajas={payload.cajas} loading={payload.loading} error={payload.error} onManagePairing={payload.onManagePairing} onViewMovimientos={payload.onViewMovimientos} />
+      return <FlujoCajaContent dashboard={{ ...flujoDashboard, expenses_breakdown: flujoExpenseData }} cajas={payload.cajas} resumenDiario={payload.resumenDiario} loading={payload.loading} error={payload.error} onManagePairing={payload.onManagePairing} onViewMovimientos={payload.onViewMovimientos} />
     }
     case 'alertas':
       return <AlertasContent localId={payload.localId} />
@@ -2232,7 +2311,14 @@ function AdministrativeModule() {
           updates.expenses     = safeArray(expenses)
         }
         if (activeSection === 'flujo-caja') {
-          updates.cajas = await getCajasByLocal(localId, token)
+          const [cajasData, resumenDiarioData] = await Promise.all([
+            getCajasByLocal(localId, token),
+            // 403 para EMPLEADO (arqueo consolidado es supervisorio) -- no
+            // debe tumbar el resto de la sección si ocurre.
+            getResumenDiario(localId).catch(() => null),
+          ])
+          updates.cajas = cajasData
+          updates.resumenDiario = resumenDiarioData
         }
         if (!ignore) setSectionData((prev) => ({ ...prev, ...updates }))
       } catch (error) {
@@ -2280,6 +2366,7 @@ function AdministrativeModule() {
         <CajaMovimientosModal
           caja={movimientosCaja}
           onClose={() => setMovimientosCaja(null)}
+          onClosed={() => setRefreshKey(k => k + 1)}
         />
       )}
       <AnimatePresence>
