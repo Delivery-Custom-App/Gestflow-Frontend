@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useParams } from 'react-router-dom'
 import { CreditCard, Printer } from 'lucide-react'
 import { apiRequest } from '../../lib/apiClient'
-import { createOrder, fetchProductsCatalog } from '../../lib/salesApi'
+import { cancelOrder, createOrder, fetchProductsCatalog } from '../../lib/salesApi'
 import { formatCLP } from '../../lib/formatCLP'
 import { useCajaActiva } from '../../hooks/useCajaActiva'
 import { Button } from '@/components/ui/button'
@@ -121,7 +121,7 @@ export default function VentaDirectaView() {
         source: 'mostrador',
         items,
       })
-      setActiveOrder({ id: order.id, total: order.total ?? subtotal })
+      setActiveOrder({ id: order.id, total: order.total ?? subtotal, created_at: order.created_at })
       setShowMPModal(true)
     } catch (err) {
       setError(err?.message || 'Error al crear la orden')
@@ -167,6 +167,16 @@ export default function VentaDirectaView() {
     loadCatalog()
     if (orderId && isV2FeatureEnabled('receiptPrint')) printReceipt(orderId)
   }, [loadCatalog, activeOrder, printReceipt])
+
+  /** Cierra sin pagar: cancela la orden abandonada para que no quede PENDING para siempre. */
+  const handleAbandonCheckout = useCallback(() => {
+    const order = activeOrder
+    setShowMPModal(false)
+    setActiveOrder(null)
+    if (order?.id) {
+      cancelOrder(order.id, order.created_at).catch(() => {})
+    }
+  }, [activeOrder])
 
   return (
     <div className="flex h-full flex-col">
@@ -269,7 +279,7 @@ export default function VentaDirectaView() {
           total={activeOrder.total}
           description="Venta directa"
           onSuccess={handlePaymentSuccess}
-          onClose={() => setShowMPModal(false)}
+          onClose={handleAbandonCheckout}
         />
       )}
 

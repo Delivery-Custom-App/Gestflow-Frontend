@@ -140,9 +140,14 @@ export function getOrdersByLocal(localId, token, status) {
   return listOrders(localId, { status })
 }
 
-export function getCajasByLocal(localId, token) {
+export async function getCajasByLocal(localId, token) {
   void token
-  return listCajas(localId)
+  const [cajas, mpStatuses] = await Promise.all([
+    listCajas(localId),
+    apiRequest(`/locals/${encodeURIComponent(localId)}/mp/cajas-status`).catch(() => []),
+  ])
+  const statusByCaja = new Map((mpStatuses || []).map((s) => [String(s.caja_id), s]))
+  return cajas.map((c) => ({ ...c, mp: statusByCaja.get(String(c.id)) || null }))
 }
 
 export function createCaja(body) {
@@ -151,24 +156,27 @@ export function createCaja(body) {
 
 export { getCajaResumen, getMovimientosCaja }
 
-export async function provisionCajaMp() {
-  throw new Error('Provision MP de caja aún no disponible en Backend V2')
+export function provisionCajaMp(cajaId) {
+  return apiRequest(`/cajas/${cajaId}/mp/provision`, { method: 'POST' })
 }
 
-export async function verifyCajaMpPairing() {
-  throw new Error('Verificación MP de caja aún no disponible en Backend V2')
+export function verifyCajaMpPairing(cajaId) {
+  return apiRequest(`/cajas/${cajaId}/mp/verify-pairing`, { method: 'POST' })
 }
 
-export async function putLocalMpLocation() {
-  throw new Error('Ubicación MP aún no disponible en Backend V2')
+export function putLocalMpLocation(localId, body) {
+  return apiRequest(`/locals/${localId}/mp-location`, { method: 'PUT', body })
 }
 
-export async function getAvailableMpPos() {
-  return []
+export function getAvailableMpPos(localId) {
+  return apiRequest(`/locals/${localId}/mp/available-pos`)
 }
 
-export async function assignExistingMpPos() {
-  throw new Error('Asignación MP POS aún no disponible en Backend V2')
+export function assignExistingMpPos(cajaId, mercadopagoPosId) {
+  return apiRequest(`/cajas/${cajaId}/mp/assign-existing`, {
+    method: 'POST',
+    body: { mercadopago_pos_id: mercadopagoPosId },
+  })
 }
 
 export async function getRendicionesDashboard(localId, token, options = {}) {

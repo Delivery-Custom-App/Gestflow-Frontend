@@ -11,7 +11,7 @@ import {
   DollarSign, FileText, BarChart3, Wallet, Bell, Gift, PlusCircle,
   Table2, ChefHat,
   Package, Truck, ShoppingCart, BookMarked, PackageOpen, UtensilsCrossed,
-  LogOut, Utensils, HelpCircle, Phone, Mail, Moon, Sun, Users, RotateCcw, MapPin, Building2,
+  LogOut, Utensils, HelpCircle, Phone, Mail, Users, RotateCcw, MapPin, Building2, Settings,
 } from 'lucide-react'
 import { ExpandableTabs } from './ui/expandable-tabs'
 import CoachMark from './onboarding/CoachMark'
@@ -102,6 +102,7 @@ const ACCORDIONS = [
 function Sidebar({ collapsed, onToggle, onClose }) {
   const { user, userRole, logout } = useAuth()
   const { restart: restartTour } = useOnboarding()
+  const { palette, setPalette, darkMode, setDarkMode } = useTheme()
   const isSuperAdmin = isSuperAdminRole(userRole)
   const isOwner = isAdminNegocioRole(userRole)
   const isWorker = WORKER_ROLES.includes(userRole)
@@ -123,6 +124,41 @@ function Sidebar({ collapsed, onToggle, onClose }) {
   const [userOpen, setUserOpen] = useState({ administracion: false, pos: false, inventario: false })
   const [userClosed, setUserClosed] = useState({ administracion: false, pos: false, inventario: false })
   const [helpOpen, setHelpOpen] = useState(false)
+  const [settingsOpen, setSettingsOpen] = useState(false)
+
+  const PALETTES = [
+    { key: 'rutek',  label: 'Default', hint: 'Azul · crema',  swatches: ['#2563EB', '#F7F4F0'] },
+    { key: 'legacy', label: 'Legacy',  hint: 'Verde actual',  swatches: ['#10b981', '#0a1410'] },
+  ]
+
+  // La paleta cambia SOLO colores; el modo claro/oscuro es un control aparte.
+  // Escribe directo al DOM + localStorage además de React, para que el swap
+  // CSS ocurra sí o sí en el clic (a prueba de contextos obsoletos/HMR).
+  const applyPalette = (key) => {
+    setPalette(key)
+    try {
+      document.documentElement.setAttribute('data-palette', key)
+      window.localStorage.setItem('palette', key)
+    } catch {}
+  }
+
+  const applyMode = (dark) => {
+    setDarkMode(dark)
+    try {
+      document.documentElement.classList.toggle('dark', dark)
+      window.localStorage.setItem('theme', dark ? 'dark' : 'light')
+    } catch {}
+  }
+
+  const resetAppearance = () => {
+    applyPalette('rutek')
+    applyMode(false)
+  }
+
+  const livePrimary = typeof window !== 'undefined'
+    ? (window.getComputedStyle?.(document.documentElement).getPropertyValue('--primary').trim() || '—')
+    : '—'
+  const liveAttr = typeof window !== 'undefined' ? document.documentElement.getAttribute('data-palette') : null
 
   const isOpen = (key) => {
     if (userClosed[key]) return false
@@ -379,6 +415,116 @@ function Sidebar({ collapsed, onToggle, onClose }) {
 
       {/* Footer */}
       <div className="px-2 pb-4 border-t border-[hsl(var(--border))] pt-3">
+        {/* Ajustes */}
+        <button
+          onClick={() => { if (collapsed) { onToggle(); setSettingsOpen(true) } else setSettingsOpen((v) => !v) }}
+          title={collapsed ? 'Ajustes' : undefined}
+          className={cn(
+            'w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors mb-1 cursor-pointer',
+            settingsOpen
+              ? 'bg-[hsl(var(--accent))] text-[hsl(var(--foreground))]'
+              : 'text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--accent))] hover:text-[hsl(var(--foreground))]',
+            collapsed && 'justify-center px-0',
+          )}
+        >
+          <Settings size={16} className="shrink-0" />
+          <AnimatePresence>
+            {!collapsed && (
+              <motion.span initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex-1 text-left">
+                Ajustes
+              </motion.span>
+            )}
+          </AnimatePresence>
+        </button>
+
+        {/* Panel ajustes */}
+        <AnimatePresence>
+          {settingsOpen && !collapsed && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              transition={{ duration: 0.2 }}
+              className="overflow-hidden mb-2"
+            >
+              <div className="rounded-lg bg-[hsl(var(--muted))] px-3 py-3 space-y-2">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-[hsl(var(--muted-foreground))]">Apariencia</span>
+                <div className="grid grid-cols-2 gap-2">
+                  {PALETTES.map((p) => {
+                    const selected = palette === p.key
+                    return (
+                      <button
+                        key={p.key}
+                        type="button"
+                        onClick={() => applyPalette(p.key)}
+                        aria-pressed={selected}
+                        className={cn(
+                          'flex flex-col items-start gap-1.5 rounded-lg border p-2 text-left transition-colors cursor-pointer',
+                          selected
+                            ? 'border-[hsl(var(--primary))] bg-[hsl(var(--card))]'
+                            : 'border-[hsl(var(--border))] bg-[hsl(var(--card))] hover:border-[hsl(var(--primary)/0.5)]',
+                        )}
+                      >
+                        <span className="flex items-center gap-1">
+                          {p.swatches.map((c) => (
+                            <span key={c} className="h-3.5 w-3.5 rounded-full border border-black/10" style={{ backgroundColor: c }} />
+                          ))}
+                        </span>
+                        <span className="text-xs font-semibold text-[hsl(var(--foreground))]">{p.label}</span>
+                        <span className="text-[10px] text-[hsl(var(--muted-foreground))]">{p.hint}</span>
+                      </button>
+                    )
+                  })}
+                </div>
+
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-[hsl(var(--muted-foreground))]">Modo</span>
+                  <div className="flex gap-1">
+                    <button
+                      type="button"
+                      onClick={() => applyMode(false)}
+                      aria-pressed={!darkMode}
+                      className={cn(
+                        'px-2 py-1 rounded-md text-[11px] font-semibold transition-colors cursor-pointer',
+                        !darkMode
+                          ? 'bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))]'
+                          : 'bg-[hsl(var(--card))] text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]',
+                      )}
+                    >
+                      Claro
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => applyMode(true)}
+                      aria-pressed={darkMode}
+                      className={cn(
+                        'px-2 py-1 rounded-md text-[11px] font-semibold transition-colors cursor-pointer',
+                        darkMode
+                          ? 'bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))]'
+                          : 'bg-[hsl(var(--card))] text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]',
+                      )}
+                    >
+                      Oscuro
+                    </button>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={resetAppearance}
+                  className="w-full text-left text-[10px] text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] transition-colors cursor-pointer"
+                >
+                  Restablecer apariencia (Default, claro)
+                </button>
+
+                <p className="text-[9px] text-[hsl(var(--muted-foreground))] opacity-70">
+                  debug: attr={liveAttr ?? '—'} · primary={livePrimary}
+                </p>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         {/* Ayuda / Soporte */}
         <button
           onClick={() => { if (collapsed) { onToggle(); setHelpOpen(true) } else setHelpOpen((v) => !v) }}
@@ -464,7 +610,7 @@ function Sidebar({ collapsed, onToggle, onClose }) {
 }
 
 /* ── TopBar ─────────────────────────────────────────────────────── */
-function TopBar({ localId, darkMode, toggleDarkMode }) {
+function TopBar({ localId }) {
   const { userRole } = useAuth()
   const { locales } = useLocals()
   const { state: locState } = useLocation()
@@ -484,18 +630,14 @@ function TopBar({ localId, darkMode, toggleDarkMode }) {
   const showBell = Boolean(localId && !isWorkerRole)
   const tabs = [
     ...(showBell ? [{ title: 'Notificaciones', icon: Bell, badge: pendingCount || null }] : []),
-    { title: darkMode ? 'Modo Noche' : 'Modo Día', icon: darkMode ? Moon : Sun },
   ]
 
-  const bellIdx  = showBell ? 0 : -1
-  const themeIdx = showBell ? 1 : 0
+  const bellIdx = showBell ? 0 : -1
 
   const handleTabChange = (index) => {
     if (index === null) return
     if (index === bellIdx) {
       navigate(`/local/${localId}/administrativo/alertas`, { state: navState })
-    } else if (index === themeIdx) {
-      toggleDarkMode()
     }
   }
 
@@ -521,14 +663,16 @@ function TopBar({ localId, darkMode, toggleDarkMode }) {
       </div>
 
       {/* Right: expandable tab controls */}
-      <div className="shrink-0">
-        <ExpandableTabs
-          tabs={tabs}
-          activeColor="text-[hsl(var(--primary))]"
-          onChange={handleTabChange}
-          className="border-[hsl(var(--border))] bg-[hsl(var(--card))]"
-        />
-      </div>
+      {tabs.length > 0 && (
+        <div className="shrink-0">
+          <ExpandableTabs
+            tabs={tabs}
+            activeColor="text-[hsl(var(--primary))]"
+            onChange={handleTabChange}
+            className="border-[hsl(var(--border))] bg-[hsl(var(--card))]"
+          />
+        </div>
+      )}
     </div>
   )
 }
@@ -539,7 +683,6 @@ function AppShell() {
     try { return window.localStorage.getItem('appSidebarCollapsed') === '1' } catch { return false }
   })
   const [mobileOpen, setMobileOpen] = useState(false)
-  const { darkMode, toggleDarkMode } = useTheme()
 
   const { pathname } = useLocation()
   const localIdMatch = pathname.match(/\/local\/([^/]+)/)
@@ -557,7 +700,7 @@ function AppShell() {
   }
 
   return (
-    <div className="flex h-screen bg-gradient-to-br from-[#0a1410] via-[#0d1a14] to-[#091210]">
+    <div className="flex h-screen bg-gradient-to-br from-[#1a1a1a] via-[#121110] to-[#0c0b0a]">
 
       {/* Overlay backdrop (solo móvil) */}
       <AnimatePresence>
@@ -591,7 +734,7 @@ function AppShell() {
 
       {/* Contenido principal */}
       <div className="flex-1 min-w-0 flex flex-col overflow-hidden bg-[hsl(var(--background))]">
-        <TopBar localId={localId} darkMode={darkMode} toggleDarkMode={toggleDarkMode} />
+        <TopBar localId={localId} />
         <Outlet />
       </div>
 
