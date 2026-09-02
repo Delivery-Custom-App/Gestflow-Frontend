@@ -11,7 +11,7 @@ const buttonVariants = cva(
         default:
           'bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))] shadow-sm hover:bg-[hsl(var(--primary)/0.9)] active:scale-[0.97]',
         destructive:
-          'bg-[hsl(var(--destructive))] text-white shadow-sm hover:bg-red-700 active:scale-[0.97]',
+          'bg-[hsl(var(--destructive))] text-[hsl(var(--destructive-foreground))] shadow-sm hover:bg-[hsl(var(--destructive)/0.85)] active:scale-[0.97]',
         outline:
           'border-2 border-[hsl(var(--primary))] bg-transparent text-[hsl(var(--primary))] hover:bg-[hsl(var(--accent))] active:scale-[0.97]',
         secondary:
@@ -21,7 +21,7 @@ const buttonVariants = cva(
         link:
           'text-[hsl(var(--primary))] underline-offset-4 hover:underline',
         danger:
-          'border border-red-300 bg-red-50 text-red-700 hover:bg-red-100 active:scale-[0.97]',
+          'border border-[hsl(var(--destructive)/0.35)] bg-[hsl(var(--destructive)/0.08)] text-[hsl(354,70%,36%)] hover:bg-[hsl(var(--destructive)/0.14)] active:scale-[0.97]',
       },
       size: {
         default: 'h-11 px-4 py-2',

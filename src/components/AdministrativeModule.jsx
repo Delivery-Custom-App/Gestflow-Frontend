@@ -113,41 +113,43 @@ function getOrderAmount(order) {
 
 const KPI_ACCENT = {
   warning: {
-    bar:   'border-l-amber-500',
-    bg:    'bg-amber-500/10 dark:bg-amber-500/15',
-    ring:  'ring-1 ring-amber-400/30',
-    value: 'text-amber-600 dark:text-amber-400',
-    dot:   'bg-amber-500',
+    bar:   'border-l-[hsl(var(--warning))]',
+    bg:    'bg-[hsl(var(--warning)/0.1)] dark:bg-[hsl(var(--warning)/0.15)]',
+    ring:  'ring-1 ring-[hsl(var(--warning)/0.3)]',
+    value: 'text-[hsl(var(--warning-foreground))] dark:text-[hsl(38,90%,70%)]',
+    dot:   'bg-[hsl(var(--warning))]',
   },
   red: {
-    bar:   'border-l-red-500',
-    bg:    'bg-red-500/10 dark:bg-red-500/15',
-    ring:  'ring-1 ring-red-400/30',
-    value: 'text-red-600 dark:text-red-400',
-    dot:   'bg-red-500',
+    bar:   'border-l-[hsl(var(--destructive))]',
+    bg:    'bg-[hsl(var(--destructive)/0.1)] dark:bg-[hsl(var(--destructive)/0.15)]',
+    ring:  'ring-1 ring-[hsl(var(--destructive)/0.3)]',
+    value: 'text-[hsl(354,70%,36%)] dark:text-[hsl(354,75%,72%)]',
+    dot:   'bg-[hsl(var(--destructive))]',
   },
+  // Sin color de marca propio — tratado como neutro/informativo, no como alerta ni dato positivo.
   blue: {
-    bar:   'border-l-blue-500',
-    bg:    'bg-blue-500/10 dark:bg-blue-500/15',
-    ring:  'ring-1 ring-blue-400/30',
-    value: 'text-blue-600 dark:text-blue-400',
-    dot:   'bg-blue-500',
+    bar:   'border-l-[hsl(var(--info-foreground))]',
+    bg:    'bg-[hsl(var(--info))]',
+    ring:  'ring-1 ring-[hsl(var(--info-foreground)/0.2)]',
+    value: 'text-[hsl(var(--info-foreground))]',
+    dot:   'bg-[hsl(var(--info-foreground))]',
   },
   purple: {
-    bar:   'border-l-violet-500',
-    bg:    'bg-violet-500/10 dark:bg-violet-500/15',
-    ring:  'ring-1 ring-violet-400/30',
-    value: 'text-violet-600 dark:text-violet-400',
-    dot:   'bg-violet-500',
+    bar:   'border-l-[hsl(var(--success))]',
+    bg:    'bg-[hsl(var(--success)/0.1)] dark:bg-[hsl(var(--success)/0.15)]',
+    ring:  'ring-1 ring-[hsl(var(--success)/0.3)]',
+    value: 'text-[hsl(149,60%,28%)] dark:text-[hsl(149,50%,68%)]',
+    dot:   'bg-[hsl(var(--success))]',
   },
 }
 
+// Sin accent explícito = sin estado que resaltar → tratamiento neutro (no verde por defecto).
 const KPI_DEFAULT = {
-  bar:   'border-l-emerald-600',
-  bg:    'bg-emerald-500/10 dark:bg-emerald-500/15',
-  ring:  'ring-1 ring-emerald-400/30',
-  value: 'text-emerald-700 dark:text-emerald-400',
-  dot:   'bg-emerald-600',
+  bar:   'border-l-[hsl(var(--info-foreground))]',
+  bg:    'bg-[hsl(var(--info))]',
+  ring:  'ring-1 ring-[hsl(var(--info-foreground)/0.2)]',
+  value: 'text-[hsl(var(--info-foreground))]',
+  dot:   'bg-[hsl(var(--info-foreground))]',
 }
 
 function KpiCard({ label, value, sub, accent }) {
@@ -165,9 +167,9 @@ function KpiCard({ label, value, sub, accent }) {
 }
 
 const PANEL_ACCENT = {
-  blue:    'border-blue-400/40 bg-blue-500/5 dark:bg-blue-500/10',
-  red:     'border-red-400/40  bg-red-500/5  dark:bg-red-500/10',
-  warning: 'border-amber-400/40 bg-amber-500/5 dark:bg-amber-500/10',
+  blue:    'border-[hsl(var(--info-foreground)/0.3)] bg-[hsl(var(--info)/0.4)]',
+  red:     'border-[hsl(var(--destructive)/0.35)] bg-[hsl(var(--destructive)/0.05)] dark:bg-[hsl(var(--destructive)/0.1)]',
+  warning: 'border-[hsl(var(--warning)/0.35)] bg-[hsl(var(--warning)/0.06)] dark:bg-[hsl(var(--warning)/0.12)]',
 }
 
 function Panel({ title, sub, accent, children }) {

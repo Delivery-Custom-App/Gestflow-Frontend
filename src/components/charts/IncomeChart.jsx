@@ -38,12 +38,12 @@ function IncomeChart({ data = [], loading = false, showCashFlow = false }) {
         <AreaChart data={chartData} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
           <defs>
             <linearGradient id="gradIngresos7d" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%"  stopColor="#16a34a" className="chart-brand-stop" stopOpacity={0.35} />
-              <stop offset="95%" stopColor="#16a34a" className="chart-brand-stop" stopOpacity={0.02} />
+              <stop offset="5%"  stopColor="var(--chart-brand)" className="chart-brand-stop" stopOpacity={0.35} />
+              <stop offset="95%" stopColor="var(--chart-brand)" className="chart-brand-stop" stopOpacity={0.02} />
             </linearGradient>
             <linearGradient id="gradFlujo" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%"  stopColor="#8b5cf6" stopOpacity={0.25} />
-              <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0.02} />
+              <stop offset="5%"  stopColor="var(--chart-secondary)" stopOpacity={0.25} />
+              <stop offset="95%" stopColor="var(--chart-secondary)" stopOpacity={0.02} />
             </linearGradient>
           </defs>
 
@@ -85,7 +85,7 @@ function IncomeChart({ data = [], loading = false, showCashFlow = false }) {
           <Area
             type="monotoneX"
             dataKey="flujo_neto"
-            stroke="#8b5cf6"
+            stroke="var(--chart-secondary)"
             strokeWidth={1.5}
             strokeDasharray="5 4"
             fill="url(#gradFlujo)"
@@ -95,11 +95,11 @@ function IncomeChart({ data = [], loading = false, showCashFlow = false }) {
           <Area
             type="monotoneX"
             dataKey="ingresos"
-            stroke="#16a34a" className="chart-brand-stroke"
+            stroke="var(--chart-brand)" className="chart-brand-stroke"
             strokeWidth={2.5}
             fill="url(#gradIngresos7d)"
-            dot={{ className: 'chart-brand-fill', fill: '#16a34a', r: 4, strokeWidth: 2, stroke: '#fff' }}
-            activeDot={{ r: 6, className: 'chart-brand-fill', fill: '#16a34a', stroke: '#fff', strokeWidth: 2 }}
+            dot={{ className: 'chart-brand-fill', fill: 'var(--chart-brand)', r: 4, strokeWidth: 2, stroke: '#fff' }}
+            activeDot={{ r: 6, className: 'chart-brand-fill', fill: 'var(--chart-brand)', stroke: '#fff', strokeWidth: 2 }}
             name="ingresos"
           />
         </AreaChart>
@@ -119,12 +119,12 @@ function IncomeChart({ data = [], loading = false, showCashFlow = false }) {
       <AreaChart data={chartData} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
         <defs>
           <linearGradient id="gradIngresos" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="5%"  stopColor="#16a34a" className="chart-brand-stop" stopOpacity={0.35} />
-            <stop offset="95%" stopColor="#16a34a" className="chart-brand-stop" stopOpacity={0.02} />
+            <stop offset="5%"  stopColor="var(--chart-brand)" className="chart-brand-stop" stopOpacity={0.35} />
+            <stop offset="95%" stopColor="var(--chart-brand)" className="chart-brand-stop" stopOpacity={0.02} />
           </linearGradient>
           <linearGradient id="gradPromedio" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="5%"  stopColor="#3b82f6" stopOpacity={0.18} />
-            <stop offset="95%" stopColor="#3b82f6" stopOpacity={0.01} />
+            <stop offset="5%"  stopColor="var(--chart-secondary)" stopOpacity={0.18} />
+            <stop offset="95%" stopColor="var(--chart-secondary)" stopOpacity={0.01} />
           </linearGradient>
         </defs>
 
@@ -159,7 +159,7 @@ function IncomeChart({ data = [], loading = false, showCashFlow = false }) {
         <Area
           type="monotoneX"
           dataKey="promedio"
-          stroke="#3b82f6"
+          stroke="var(--chart-secondary)"
           strokeWidth={1.5}
           strokeDasharray="5 4"
           fill="url(#gradPromedio)"
@@ -169,11 +169,11 @@ function IncomeChart({ data = [], loading = false, showCashFlow = false }) {
         <Area
           type="monotoneX"
           dataKey="ingresos"
-          stroke="#16a34a" className="chart-brand-stroke"
+          stroke="var(--chart-brand)" className="chart-brand-stroke"
           strokeWidth={2.5}
           fill="url(#gradIngresos)"
-          dot={{ className: 'chart-brand-fill', fill: '#16a34a', r: 4, strokeWidth: 2, stroke: '#fff' }}
-          activeDot={{ r: 6, className: 'chart-brand-fill', fill: '#16a34a', stroke: '#fff', strokeWidth: 2 }}
+          dot={{ className: 'chart-brand-fill', fill: 'var(--chart-brand)', r: 4, strokeWidth: 2, stroke: '#fff' }}
+          activeDot={{ r: 6, className: 'chart-brand-fill', fill: 'var(--chart-brand)', stroke: '#fff', strokeWidth: 2 }}
           name="ingresos"
         />
       </AreaChart>

@@ -26,8 +26,8 @@ import {
   paymentMethodLabel, CHILE_TZ, parseApiDate,
 } from '../utils/chileDateTime'
 
-const PIE_COLORS = ['#16a34a', '#f59e0b', '#ef4444']
-const PAY_CHART_COLORS = ['#16a34a', '#3b82f6', '#8b5cf6', '#f59e0b', '#6b7280']
+const PIE_COLORS = ['#3BBF7A', '#F2A623', '#E8394A']
+const PAY_CHART_COLORS = ['var(--chart-cat-1)', 'var(--chart-cat-2)', 'var(--chart-cat-3)', 'var(--chart-cat-4)', 'var(--chart-cat-5)']
 const RECENT_ORDERS_PAGE_SIZE = 8
 
 const STAGGER = {
@@ -157,7 +157,7 @@ function KpiDetailDrawer({ open, onClose, dashboard, orders, dashLoading }) {
       const s = String(o.status || '').toLowerCase()
       if (s in map) map[s] += 1
     }
-    const COLORS = { pending: '#f59e0b', preparing: '#3b82f6', ready: '#22c55e', completed: '#64748b', cancelled: '#ef4444' }
+    const COLORS = { pending: 'hsl(var(--warning))', preparing: 'hsl(var(--info-foreground))', ready: 'hsl(var(--success))', completed: '#64748b', cancelled: 'hsl(var(--destructive))' }
     const LABELS = { pending: 'Pendiente', preparing: 'Preparando', ready: 'Listo', completed: 'Completado', cancelled: 'Cancelado' }
     return Object.entries(map)
       .filter(([, v]) => v > 0)
@@ -197,8 +197,8 @@ function KpiDetailDrawer({ open, onClose, dashboard, orders, dashLoading }) {
                       <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
                       <XAxis dataKey="label" tick={{ fontSize: 9, fill: 'hsl(var(--muted-foreground))' }} tickLine={false} axisLine={false} interval={0} angle={-35} textAnchor="end" height={40} />
                       <YAxis tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} tick={{ fontSize: 9, fill: 'hsl(var(--muted-foreground))' }} tickLine={false} axisLine={false} width={36} />
-                      <Tooltip formatter={(v) => [formatMoney(v), 'Ventas']} contentStyle={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: 8, fontSize: 11 }} />
-                      <Bar dataKey="total" fill="#16a34a" className="chart-brand-fill" radius={[3, 3, 0, 0]} maxBarSize={36} />
+                      <Tooltip formatter={(v) => [formatMoney(v), 'Ventas']} cursor={{ fill: 'hsl(var(--accent))' }} contentStyle={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: 8, fontSize: 11 }} />
+                      <Bar dataKey="total" fill="var(--chart-brand)" radius={[3, 3, 0, 0]} maxBarSize={36} />
                     </BarChart>
                   </ResponsiveContainer>
                 ) : <p className="text-xs text-[hsl(var(--muted-foreground))] text-center py-3">Sin ventas hoy aún.</p>}
@@ -212,8 +212,8 @@ function KpiDetailDrawer({ open, onClose, dashboard, orders, dashLoading }) {
                       <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
                       <XAxis dataKey="label" tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} tickLine={false} axisLine={false} />
                       <YAxis tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} tick={{ fontSize: 9, fill: 'hsl(var(--muted-foreground))' }} tickLine={false} axisLine={false} width={36} />
-                      <Tooltip formatter={(v) => [formatMoney(v), 'Ventas']} contentStyle={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: 8, fontSize: 11 }} />
-                      <Bar dataKey="total" fill="#3b82f6" radius={[3, 3, 0, 0]} maxBarSize={40} />
+                      <Tooltip formatter={(v) => [formatMoney(v), 'Ventas']} cursor={{ fill: 'hsl(var(--accent))' }} contentStyle={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: 8, fontSize: 11 }} />
+                      <Bar dataKey="total" fill="var(--chart-brand)" radius={[3, 3, 0, 0]} maxBarSize={40} />
                     </BarChart>
                   </ResponsiveContainer>
                 ) : <p className="text-xs text-[hsl(var(--muted-foreground))] text-center py-3">Sin ventas en los últimos 7 días.</p>}
@@ -227,10 +227,10 @@ function KpiDetailDrawer({ open, onClose, dashboard, orders, dashLoading }) {
                       <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="hsl(var(--border))" />
                       <XAxis type="number" allowDecimals={false} tick={{ fontSize: 9, fill: 'hsl(var(--muted-foreground))' }} tickLine={false} axisLine={false} />
                       <YAxis type="category" dataKey="mesa" width={76} tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} tickLine={false} axisLine={false} />
-                      <Tooltip formatter={(v) => [`${v} pedidos`]} contentStyle={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: 8, fontSize: 11 }} />
-                      <Bar dataKey="pedidos" fill="#8b5cf6" radius={[0, 3, 3, 0]} barSize={18}
+                      <Tooltip formatter={(v) => [`${v} pedidos`]} cursor={{ fill: 'hsl(var(--accent))' }} contentStyle={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: 8, fontSize: 11 }} />
+                      <Bar dataKey="pedidos" fill="hsl(var(--primary))" radius={[0, 3, 3, 0]} barSize={18}
                         label={({ x, y, width, height, value }) => (
-                          <text x={x + width + 5} y={y + height / 2} dominantBaseline="middle" fontSize={11} fontWeight={700} fill="#8b5cf6">{value}</text>
+                          <text x={x + width + 5} y={y + height / 2} dominantBaseline="middle" fontSize={11} fontWeight={700} fill="hsl(var(--primary))">{value}</text>
                         )}
                       />
                     </BarChart>
@@ -430,18 +430,18 @@ function LocalDashboard() {
   }, [orders])
 
   const finCards = [
-    { icon: TrendingUp, label: 'Ventas Hoy',      value: formatMoney(dashboard?.daily_sales),        iconColor: 'text-emerald-600',           iconBg: 'bg-emerald-50', accentColor: 'border-l-emerald-500' },
-    { icon: DollarSign, label: 'Ventas del Mes',   value: formatMoney(dashboard?.monthly_sales),     iconColor: 'text-[hsl(var(--primary))]', iconBg: 'bg-emerald-50', accentColor: 'border-l-emerald-700' },
-    { icon: Wallet,     label: 'Caja Virtual',     value: formatMoney(dashboard?.monthly_cash_flow), iconColor: 'text-blue-600',              iconBg: 'bg-blue-50',    accentColor: 'border-l-blue-500'   },
-    { icon: DollarSign, label: 'Ticket Promedio',  value: formatMoney(dashboard?.avg_ticket ?? 0),   iconColor: 'text-violet-600',            iconBg: 'bg-violet-50',  accentColor: 'border-l-violet-500' },
+    { icon: TrendingUp, label: 'Ventas Hoy',      value: formatMoney(dashboard?.daily_sales),        iconColor: 'text-[hsl(var(--success))]', iconBg: 'bg-[hsl(var(--success)/0.12)]', accentColor: 'border-l-[hsl(var(--success))]' },
+    { icon: DollarSign, label: 'Ventas del Mes',   value: formatMoney(dashboard?.monthly_sales),     iconColor: 'text-[hsl(var(--primary))]', iconBg: 'bg-[hsl(var(--primary)/0.12)]', accentColor: 'border-l-[hsl(var(--primary))]' },
+    { icon: Wallet,     label: 'Caja Virtual',     value: formatMoney(dashboard?.monthly_cash_flow), iconColor: 'text-[hsl(var(--info-foreground))]', iconBg: 'bg-[hsl(var(--info))]', accentColor: 'border-l-[hsl(var(--info-foreground))]' },
+    { icon: DollarSign, label: 'Ticket Promedio',  value: formatMoney(dashboard?.avg_ticket ?? 0),   iconColor: 'text-[hsl(var(--info-foreground))]', iconBg: 'bg-[hsl(var(--info))]', accentColor: 'border-l-[hsl(var(--info-foreground))]' },
   ]
 
   const invCards = [
-    { icon: Package,       label: 'Total productos',  value: invKpis?.total_products       ?? '—', iconColor: 'text-[hsl(var(--primary))]', iconBg: 'bg-emerald-50', accentColor: 'border-l-emerald-700' },
-    { icon: CheckCircle,   label: 'Stock óptimo',     value: invKpis?.optimal_stock_count  ?? '—', iconColor: 'text-emerald-600',            iconBg: 'bg-emerald-50', accentColor: 'border-l-emerald-500' },
-    { icon: TrendingDown,  label: 'Stock bajo',       value: invKpis?.low_stock_count      ?? '—', iconColor: 'text-amber-600',              iconBg: 'bg-amber-50',   accentColor: 'border-l-amber-500'   },
-    { icon: AlertTriangle, label: 'Stock crítico',    value: invKpis?.critical_stock_count ?? '—', iconColor: 'text-red-600',                iconBg: 'bg-red-50',     accentColor: 'border-l-red-500'     },
-    { icon: DollarSign,    label: 'Valor total inv.', value: formatMoney(invKpis?.total_value),    iconColor: 'text-[hsl(var(--primary))]', iconBg: 'bg-emerald-50', accentColor: 'border-l-emerald-700' },
+    { icon: Package,       label: 'Total productos',  value: invKpis?.total_products       ?? '—', iconColor: 'text-[hsl(var(--info-foreground))]', iconBg: 'bg-[hsl(var(--info))]', accentColor: 'border-l-[hsl(var(--info-foreground))]' },
+    { icon: CheckCircle,   label: 'Stock óptimo',     value: invKpis?.optimal_stock_count  ?? '—', iconColor: 'text-[hsl(var(--success))]', iconBg: 'bg-[hsl(var(--success)/0.12)]', accentColor: 'border-l-[hsl(var(--success))]' },
+    { icon: TrendingDown,  label: 'Stock bajo',       value: invKpis?.low_stock_count      ?? '—', iconColor: 'text-[hsl(var(--warning-foreground))]', iconBg: 'bg-[hsl(var(--warning)/0.15)]', accentColor: 'border-l-[hsl(var(--warning))]' },
+    { icon: AlertTriangle, label: 'Stock crítico',    value: invKpis?.critical_stock_count ?? '—', iconColor: 'text-[hsl(var(--destructive))]', iconBg: 'bg-[hsl(var(--destructive)/0.1)]', accentColor: 'border-l-[hsl(var(--destructive))]' },
+    { icon: DollarSign,    label: 'Valor total inv.', value: formatMoney(invKpis?.total_value),    iconColor: 'text-[hsl(var(--primary))]', iconBg: 'bg-[hsl(var(--primary)/0.12)]', accentColor: 'border-l-[hsl(var(--primary))]' },
   ]
 
   return (
@@ -646,6 +646,7 @@ function LocalDashboard() {
                       <YAxis fontSize={11} tickLine={false} axisLine={false} allowDecimals={false} tick={{ fill: 'hsl(var(--muted-foreground))' }} width={28} />
                       <Tooltip
                         formatter={(v, n) => [`${v} productos`, n]}
+                        cursor={{ fill: 'hsl(var(--accent))' }}
                         contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: '8px', fontSize: 12 }}
                       />
                       <Bar dataKey="value" radius={[6, 6, 0, 0]}>

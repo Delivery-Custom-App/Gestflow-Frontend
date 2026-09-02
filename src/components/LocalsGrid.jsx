@@ -218,7 +218,7 @@ function LocalsGrid({ locales, onLocalSelect, onCreateLocal, salesCounts = {}, d
             <div>
               <div className="inline-flex items-center gap-2 rounded-full bg-[hsl(var(--primary)/0.1)] px-3 py-1 text-xs font-semibold text-[hsl(var(--primary))] mb-3">
                 <Building2 className="h-3.5 w-3.5" />
-                Gestflow
+                AUNARO
               </div>
               <h1 className="text-3xl font-black text-[hsl(var(--foreground))] tracking-tight">
                 Tus Franquicias

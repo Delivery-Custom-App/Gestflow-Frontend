@@ -54,17 +54,17 @@ function KPICard({ config, value, loading, index }) {
           'animate-fade-in-up',
           staggerClass,
           'relative overflow-hidden rounded-2xl border border-[hsl(var(--primary)/0.35)]',
-          'bg-[hsl(var(--primary))] p-4 text-white shadow-sm',
+          'bg-[hsl(var(--primary))] p-4 text-[hsl(var(--primary-foreground))] shadow-sm',
         )}
       >
         <div className="flex items-start justify-between gap-3">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-white/80">{config.label}</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-[hsl(var(--primary-foreground)/0.75)]">{config.label}</p>
             <p className="mt-2 text-3xl font-bold leading-none tracking-tight">
               {loading ? '—' : value ?? 0}
             </p>
           </div>
-          <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/15">
+          <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-[hsl(var(--primary-foreground)/0.15)]">
             <Icon size={20} />
           </span>
         </div>

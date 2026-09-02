@@ -11,8 +11,9 @@ import {
   DollarSign, FileText, BarChart3, Wallet, Bell, Gift, PlusCircle,
   Table2, ChefHat,
   Package, Truck, ShoppingCart, BookMarked, PackageOpen, UtensilsCrossed,
-  LogOut, Utensils, HelpCircle, Phone, Mail, Users, RotateCcw, MapPin, Building2, Settings,
+  LogOut, HelpCircle, Phone, Mail, Users, RotateCcw, MapPin, Building2, Settings,
 } from 'lucide-react'
+import AunaroSymbol from '@/assets/brand/AunaroSymbol'
 import { ExpandableTabs } from './ui/expandable-tabs'
 import CoachMark from './onboarding/CoachMark'
 import { useOnboarding } from '../context/OnboardingContext'
@@ -76,7 +77,7 @@ const ACCORDIONS = [
   },
   {
     key: 'pos',
-    label: 'POS',
+    label: 'POS Restaurante',
     icon: Table2,
     items: [
       { key: 'pos-mesas',   label: 'Gestión de Mesas', icon: Table2  },
@@ -102,7 +103,7 @@ const ACCORDIONS = [
 function Sidebar({ collapsed, onToggle, onClose }) {
   const { user, userRole, logout } = useAuth()
   const { restart: restartTour } = useOnboarding()
-  const { palette, setPalette, darkMode, setDarkMode } = useTheme()
+  const { darkMode, setDarkMode } = useTheme()
   const isSuperAdmin = isSuperAdminRole(userRole)
   const isOwner = isAdminNegocioRole(userRole)
   const isWorker = WORKER_ROLES.includes(userRole)
@@ -126,22 +127,6 @@ function Sidebar({ collapsed, onToggle, onClose }) {
   const [helpOpen, setHelpOpen] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
 
-  const PALETTES = [
-    { key: 'rutek',  label: 'Default', hint: 'Azul · crema',  swatches: ['#2563EB', '#F7F4F0'] },
-    { key: 'legacy', label: 'Legacy',  hint: 'Verde actual',  swatches: ['#10b981', '#0a1410'] },
-  ]
-
-  // La paleta cambia SOLO colores; el modo claro/oscuro es un control aparte.
-  // Escribe directo al DOM + localStorage además de React, para que el swap
-  // CSS ocurra sí o sí en el clic (a prueba de contextos obsoletos/HMR).
-  const applyPalette = (key) => {
-    setPalette(key)
-    try {
-      document.documentElement.setAttribute('data-palette', key)
-      window.localStorage.setItem('palette', key)
-    } catch {}
-  }
-
   const applyMode = (dark) => {
     setDarkMode(dark)
     try {
@@ -151,14 +136,8 @@ function Sidebar({ collapsed, onToggle, onClose }) {
   }
 
   const resetAppearance = () => {
-    applyPalette('rutek')
     applyMode(false)
   }
-
-  const livePrimary = typeof window !== 'undefined'
-    ? (window.getComputedStyle?.(document.documentElement).getPropertyValue('--primary').trim() || '—')
-    : '—'
-  const liveAttr = typeof window !== 'undefined' ? document.documentElement.getAttribute('data-palette') : null
 
   const isOpen = (key) => {
     if (userClosed[key]) return false
@@ -302,11 +281,13 @@ function Sidebar({ collapsed, onToggle, onClose }) {
       className="shrink-0 flex flex-col bg-[hsl(var(--card))] border-r border-[hsl(var(--border))] h-screen sticky top-0 overflow-hidden z-20"
     >
       {/* Header */}
-      <div className={cn('border-b border-[hsl(var(--border))] flex items-center', collapsed ? 'justify-center px-2 min-h-[56px]' : 'justify-between px-3 min-h-[56px]')}>
-        {!collapsed && (
+      <div className={cn('border-b border-[hsl(var(--border))] flex items-center', collapsed ? 'flex-col justify-center gap-1.5 px-2 py-2.5' : 'justify-between px-3 min-h-[56px]')}>
+        {collapsed ? (
+          <AunaroSymbol size={20} className="shrink-0" />
+        ) : (
           <div className="flex items-center gap-2 px-1">
-            <Utensils size={16} className="shrink-0 text-[hsl(var(--primary))]" />
-            <span className="font-extrabold text-sm tracking-tight text-[hsl(var(--foreground))]">Gestflow</span>
+            <AunaroSymbol size={20} className="shrink-0" />
+            <span className="font-marca text-sm tracking-[0.1em] text-[hsl(var(--foreground))]">AUNARO</span>
           </div>
         )}
         <button
@@ -449,33 +430,6 @@ function Sidebar({ collapsed, onToggle, onClose }) {
             >
               <div className="rounded-lg bg-[hsl(var(--muted))] px-3 py-3 space-y-2">
                 <span className="text-[10px] font-bold uppercase tracking-widest text-[hsl(var(--muted-foreground))]">Apariencia</span>
-                <div className="grid grid-cols-2 gap-2">
-                  {PALETTES.map((p) => {
-                    const selected = palette === p.key
-                    return (
-                      <button
-                        key={p.key}
-                        type="button"
-                        onClick={() => applyPalette(p.key)}
-                        aria-pressed={selected}
-                        className={cn(
-                          'flex flex-col items-start gap-1.5 rounded-lg border p-2 text-left transition-colors cursor-pointer',
-                          selected
-                            ? 'border-[hsl(var(--primary))] bg-[hsl(var(--card))]'
-                            : 'border-[hsl(var(--border))] bg-[hsl(var(--card))] hover:border-[hsl(var(--primary)/0.5)]',
-                        )}
-                      >
-                        <span className="flex items-center gap-1">
-                          {p.swatches.map((c) => (
-                            <span key={c} className="h-3.5 w-3.5 rounded-full border border-black/10" style={{ backgroundColor: c }} />
-                          ))}
-                        </span>
-                        <span className="text-xs font-semibold text-[hsl(var(--foreground))]">{p.label}</span>
-                        <span className="text-[10px] text-[hsl(var(--muted-foreground))]">{p.hint}</span>
-                      </button>
-                    )
-                  })}
-                </div>
 
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-[10px] font-bold uppercase tracking-widest text-[hsl(var(--muted-foreground))]">Modo</span>
@@ -514,12 +468,8 @@ function Sidebar({ collapsed, onToggle, onClose }) {
                   onClick={resetAppearance}
                   className="w-full text-left text-[10px] text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] transition-colors cursor-pointer"
                 >
-                  Restablecer apariencia (Default, claro)
+                  Restablecer apariencia (claro)
                 </button>
-
-                <p className="text-[9px] text-[hsl(var(--muted-foreground))] opacity-70">
-                  debug: attr={liveAttr ?? '—'} · primary={livePrimary}
-                </p>
               </div>
             </motion.div>
           )}
@@ -591,7 +541,7 @@ function Sidebar({ collapsed, onToggle, onClose }) {
           onClick={logout}
           title={collapsed ? 'Cerrar sesión' : undefined}
           className={cn(
-            'w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-[hsl(var(--muted-foreground))] hover:bg-red-100 dark:hover:bg-red-900/20 hover:text-red-600 transition-colors',
+            'w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--destructive)/0.1)] hover:text-[hsl(var(--destructive))] transition-colors',
             collapsed && 'justify-center px-0',
           )}
         >
@@ -658,7 +608,7 @@ function TopBar({ localId }) {
             )}
           </>
         ) : (
-          <span className="text-sm font-semibold text-[hsl(var(--foreground))]">Gestflow</span>
+          <span className="font-marca text-sm tracking-[0.1em] text-[hsl(var(--foreground))]">AUNARO</span>
         )}
       </div>
 
@@ -700,7 +650,7 @@ function AppShell() {
   }
 
   return (
-    <div className="flex h-screen bg-gradient-to-br from-[#1a1a1a] via-[#121110] to-[#0c0b0a]">
+    <div className="flex h-screen bg-gradient-to-br from-[var(--loading-from)] via-[var(--loading-via)] to-[var(--loading-to)]">
 
       {/* Overlay backdrop (solo móvil) */}
       <AnimatePresence>

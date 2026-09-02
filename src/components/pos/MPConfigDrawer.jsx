@@ -606,8 +606,8 @@ export default function MPConfigDrawer({ localId, onClose, open = true }) {
                       </div>
                       <p className="text-xs text-[hsl(var(--muted-foreground))]">
                         {pos.operating_mode === 'PDV'
-                          ? 'Gestflow envía el cobro directamente a la terminal.'
-                          : 'Ingresa el monto manualmente en el lector. Gestflow detecta el pago aprobado por monto y ventana de tiempo.'}
+                          ? 'AUNARO envía el cobro directamente a la terminal.'
+                          : 'Ingresa el monto manualmente en el lector. AUNARO detecta el pago aprobado por monto y ventana de tiempo.'}
                       </p>
                       <Button
                         size="sm"

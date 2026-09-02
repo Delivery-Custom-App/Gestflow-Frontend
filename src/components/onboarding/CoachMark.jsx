@@ -57,7 +57,7 @@ function Tooltip({ rect, title, desc, step, total, onNext, onSkip }) {
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 14px 0' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <div style={{
-              background: '#4f46e5', color: '#fff',
+              background: 'hsl(var(--primary))', color: 'hsl(var(--primary-foreground))',
               borderRadius: 6, fontSize: 10, fontWeight: 700,
               padding: '2px 7px', letterSpacing: '0.05em',
             }}>
@@ -93,8 +93,8 @@ function Tooltip({ rect, title, desc, step, total, onNext, onSkip }) {
             onClick={onNext}
             style={{
               display: 'flex', alignItems: 'center', gap: 4,
-              fontSize: 12, fontWeight: 600, color: '#fff',
-              background: '#4f46e5', border: 'none', cursor: 'pointer',
+              fontSize: 12, fontWeight: 600, color: 'hsl(var(--primary-foreground))',
+              background: 'hsl(var(--primary))', border: 'none', cursor: 'pointer',
               padding: '6px 12px', borderRadius: 8,
             }}
           >
@@ -122,7 +122,7 @@ function Tooltip({ rect, title, desc, step, total, onNext, onSkip }) {
           <div key={i} style={{
             width: i === step ? 16 : 5, height: 5,
             borderRadius: 3,
-            background: i === step ? '#4f46e5' : 'rgba(255,255,255,0.55)',
+            background: i === step ? 'hsl(var(--primary))' : 'rgba(255,255,255,0.55)',
             transition: 'all 0.25s',
           }} />
         ))}
@@ -221,7 +221,7 @@ export default function CoachMark() {
             width: rect.width + PAD * 2,
             height: rect.height + PAD * 2,
             borderRadius: 10,
-            border: '2px solid rgba(99,102,241,0.85)',
+            border: '2px solid hsl(var(--primary) / 0.85)',
             pointerEvents: 'none',
             boxSizing: 'border-box',
           }} />

@@ -58,7 +58,7 @@ function FranchisesMap({ locales }) {
             center={[local.lat, local.lng]}
             radius={12}
             pathOptions={{
-              fillColor: '#065f46',
+              fillColor: '#F2A623',
               color: '#ffffff',
               weight: 2.5,
               fillOpacity: 0.9,

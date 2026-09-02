@@ -1,21 +1,18 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import { ThemeProvider, useTheme } from './ThemeContext'
 
 function Probe() {
-  const { palette, setPalette, darkMode, toggleDarkMode } = useTheme()
+  const { darkMode, toggleDarkMode } = useTheme()
   return (
     <div>
-      <span data-testid="palette">{palette}</span>
       <span data-testid="dark">{String(darkMode)}</span>
-      <button onClick={() => setPalette('legacy')}>legacy-btn</button>
-      <button onClick={() => setPalette('rutek')}>rutek-btn</button>
       <button onClick={toggleDarkMode}>dark-btn</button>
     </div>
   )
 }
 
-describe('ThemeContext palette switching', () => {
+describe('ThemeContext dark mode', () => {
   beforeEach(() => {
     const store = new Map()
     vi.stubGlobal('localStorage', {
@@ -23,7 +20,6 @@ describe('ThemeContext palette switching', () => {
       setItem: (k, v) => store.set(k, String(v)),
       removeItem: (k) => store.delete(k),
     })
-    document.documentElement.removeAttribute('data-palette')
     document.documentElement.classList.remove('dark')
   })
 
@@ -31,37 +27,24 @@ describe('ThemeContext palette switching', () => {
     vi.unstubAllGlobals()
   })
 
-  it('defaults to rutek light and applies data-palette attr', () => {
+  it('defaults to light mode', () => {
     render(<ThemeProvider><Probe /></ThemeProvider>)
-    expect(screen.getByTestId('palette').textContent).toBe('rutek')
     expect(screen.getByTestId('dark').textContent).toBe('false')
-    expect(document.documentElement.getAttribute('data-palette')).toBe('rutek')
+    expect(document.documentElement.classList.contains('dark')).toBe(false)
   })
 
-  it('switches to legacy and back, persisting and applying attr', () => {
-    render(<ThemeProvider><Probe /></ThemeProvider>)
-    fireEvent.click(screen.getByText('legacy-btn'))
-    expect(screen.getByTestId('palette').textContent).toBe('legacy')
-    expect(document.documentElement.getAttribute('data-palette')).toBe('legacy')
-    expect(window.localStorage.getItem('palette')).toBe('legacy')
-
-    fireEvent.click(screen.getByText('rutek-btn'))
-    expect(screen.getByTestId('palette').textContent).toBe('rutek')
-    expect(document.documentElement.getAttribute('data-palette')).toBe('rutek')
-    expect(window.localStorage.getItem('palette')).toBe('rutek')
-  })
-
-  it('rehydrates stored legacy palette on mount', () => {
-    window.localStorage.setItem('palette', 'legacy')
-    render(<ThemeProvider><Probe /></ThemeProvider>)
-    expect(screen.getByTestId('palette').textContent).toBe('legacy')
-    expect(document.documentElement.getAttribute('data-palette')).toBe('legacy')
-  })
-
-  it('dark toggle still works alongside palette', () => {
+  it('toggles dark mode, persisting and applying the class', () => {
     render(<ThemeProvider><Probe /></ThemeProvider>)
     fireEvent.click(screen.getByText('dark-btn'))
-    expect(document.documentElement.classList.contains('dark')).toBe(true)
     expect(screen.getByTestId('dark').textContent).toBe('true')
+    expect(document.documentElement.classList.contains('dark')).toBe(true)
+    expect(window.localStorage.getItem('theme')).toBe('dark')
+  })
+
+  it('rehydrates stored dark theme on mount', () => {
+    window.localStorage.setItem('theme', 'dark')
+    render(<ThemeProvider><Probe /></ThemeProvider>)
+    expect(screen.getByTestId('dark').textContent).toBe('true')
+    expect(document.documentElement.classList.contains('dark')).toBe(true)
   })
 })

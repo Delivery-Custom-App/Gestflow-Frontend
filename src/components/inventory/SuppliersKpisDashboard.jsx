@@ -33,12 +33,12 @@ const MONTH_NAMES = [
 const CURRENT_YEAR = new Date().getFullYear()
 
 const AVATAR_COLORS = [
-  'bg-emerald-100 text-emerald-700',
-  'bg-blue-100 text-blue-700',
-  'bg-violet-100 text-violet-700',
-  'bg-amber-100 text-amber-700',
-  'bg-rose-100 text-rose-700',
-  'bg-cyan-100 text-cyan-700',
+  'bg-[hsl(var(--chart-cat-1)/0.15)] text-[hsl(149,60%,28%)]',
+  'bg-[hsl(var(--chart-cat-2)/0.15)] text-[hsl(190,70%,26%)]',
+  'bg-[hsl(var(--chart-cat-4)/0.15)] text-[hsl(240,45%,38%)]',
+  'bg-[hsl(var(--chart-cat-5)/0.15)] text-[hsl(38,80%,28%)]',
+  'bg-[hsl(var(--chart-cat-6)/0.15)] text-[hsl(330,55%,32%)]',
+  'bg-[hsl(var(--chart-cat-7)/0.15)] text-[hsl(65,55%,24%)]',
 ]
 
 const STAGGER = { hidden: {}, visible: { transition: { staggerChildren: 0.08 } } }

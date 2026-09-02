@@ -8,10 +8,10 @@ const DELAY_THRESHOLD_MIN = 20   // barra cambia a rojo + estado DELAYED
 const READY_DISMISS_SECS  = 120
 
 const STATUS_CFG = {
-  PENDING:   { label: 'Nueva Orden', headerBg: 'bg-[#3d4a5c]',   pillBg: 'bg-[#3d4a5c]'   },
-  PREPARING: { label: 'En Cocina',   headerBg: 'bg-orange-500',   pillBg: 'bg-orange-500'   },
-  DELAYED:   { label: 'Demorada',    headerBg: 'bg-red-500',      pillBg: 'bg-red-500'      },
-  READY:     { label: 'Lista',       headerBg: 'bg-green-600',    pillBg: 'bg-green-600'    },
+  PENDING:   { label: 'Nueva Orden', bg: 'bg-[#0D0D1F]', fg: 'text-white' },
+  PREPARING: { label: 'En Cocina',   bg: 'bg-[hsl(var(--warning))]',         fg: 'text-[hsl(var(--warning-foreground))]' },
+  DELAYED:   { label: 'Demorada',    bg: 'bg-[hsl(var(--destructive))]',     fg: 'text-white' },
+  READY:     { label: 'Lista',       bg: 'bg-[hsl(var(--success))]',         fg: 'text-[hsl(var(--success-foreground))]' },
 }
 
 const SOURCE_LABEL = { 'dine-in': 'Dine In', takeout: 'Take Away', delivery: 'Delivery' }
@@ -66,9 +66,9 @@ function useSecondTick() {
 }
 
 // ── StatusPill ────────────────────────────────────────────────────
-function StatusPill({ label, count, pillBg }) {
+function StatusPill({ label, count, bg, fg }) {
   return (
-    <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-white text-xs font-semibold ${pillBg}`}>
+    <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold ${bg} ${fg}`}>
       <span>{label}</span>
       <span className="bg-[hsl(var(--card))]/25 rounded-full w-5 h-5 flex items-center justify-center text-[11px] font-bold leading-none">
         {String(count).padStart(2, '0')}
@@ -122,17 +122,17 @@ function OrderCard({ order, mesaMap, onUpdateStatus, tokenIndex }) {
     <div className="bg-[hsl(var(--card))] rounded-xl border border-[hsl(var(--border))] shadow-sm overflow-hidden flex flex-col">
 
       {/* Colored header */}
-      <div className={`${cfg.headerBg} px-4 py-3 flex items-center gap-3`}>
-        <div className="w-9 h-9 rounded-full bg-[hsl(var(--card))]/20 border border-white/30 flex items-center justify-center shrink-0">
-          <UtensilsCrossed className="w-4 h-4 text-white" />
+      <div className={`${cfg.bg} ${cfg.fg} px-4 py-3 flex items-center gap-3`}>
+        <div className="w-9 h-9 rounded-full bg-[hsl(var(--card))]/20 border border-current/30 flex items-center justify-center shrink-0">
+          <UtensilsCrossed className="w-4 h-4" />
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-bold text-white truncate leading-tight">{mesaName}</p>
-          <span className="inline-block mt-0.5 text-[10px] font-semibold bg-[hsl(var(--card))]/20 text-white px-2 py-0.5 rounded-full">
+          <p className="text-sm font-bold truncate leading-tight">{mesaName}</p>
+          <span className="inline-block mt-0.5 text-[10px] font-semibold bg-[hsl(var(--card))]/20 px-2 py-0.5 rounded-full">
             {sourceLabel}
           </span>
         </div>
-        <span className="text-sm font-extrabold text-white/90 tracking-wide shrink-0">
+        <span className="text-sm font-extrabold opacity-90 tracking-wide shrink-0">
           {shortOrderId(order.id)}
         </span>
       </div>
@@ -298,10 +298,10 @@ export default function KitchenDisplay({ localId, mesas = [] }) {
           <h2 className="text-lg font-extrabold text-[hsl(var(--foreground))] tracking-tight">Cocina</h2>
         </div>
 
-        <StatusPill label="Nueva Orden"  count={counts.pending}   pillBg={STATUS_CFG.PENDING.pillBg}   />
-        <StatusPill label="En Cocina"    count={counts.preparing} pillBg={STATUS_CFG.PREPARING.pillBg} />
-        <StatusPill label="Demorada"     count={counts.delayed}   pillBg={STATUS_CFG.DELAYED.pillBg}   />
-        <StatusPill label="Lista"        count={counts.ready}     pillBg={STATUS_CFG.READY.pillBg}     />
+        <StatusPill label="Nueva Orden"  count={counts.pending}   bg={STATUS_CFG.PENDING.bg}   fg={STATUS_CFG.PENDING.fg}   />
+        <StatusPill label="En Cocina"    count={counts.preparing} bg={STATUS_CFG.PREPARING.bg} fg={STATUS_CFG.PREPARING.fg} />
+        <StatusPill label="Demorada"     count={counts.delayed}   bg={STATUS_CFG.DELAYED.bg}   fg={STATUS_CFG.DELAYED.fg}   />
+        <StatusPill label="Lista"        count={counts.ready}     bg={STATUS_CFG.READY.bg}     fg={STATUS_CFG.READY.fg}     />
 
         <div className="relative">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[hsl(var(--muted-foreground))]" />

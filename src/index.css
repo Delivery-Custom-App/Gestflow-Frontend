@@ -12,36 +12,9 @@
 }
 
 @theme {
-  /* Paleta blue brand (rutek) — primary-600 #2563EB */
-  --color-primary-50:  #eff6ff;
-  --color-primary-100: #dbeafe;
-  --color-primary-200: #bfdbfe;
-  --color-primary-300: #93c5fd;
-  --color-primary-400: #60a5fa;
-  --color-primary-500: #3b82f6;
-  --color-primary-600: #2563eb;
-  --color-primary-700: #1d4ed8;
-  --color-primary-800: #1e40af;
-  --color-primary-900: #1e3a8a;
-
-  /* Superficies rutek */
-  --color-canvas:         #F7F4F0;
-  --color-canvas-subtle:  #FDFCFA;
-  --color-surface:        #FFFFFF;
-  --color-surface-muted:  #F5F2ED;
-  --color-surface-hover:  #F0EDE8;
-
-  /* Stone recalentado (tonos cálidos) */
-  --color-stone-300: #D4CFC7;
-  --color-stone-600: #5C5854;
-  --color-stone-900: #1A1A1A;
-  --color-stone-950: #121110;
-
-  /* CTA naranja — uso moderado */
-  --color-cta: #F97316;
-
-  /* Fuente base */
-  --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
+  /* Fuentes de marca AUNARO */
+  --font-sans:  'DM Sans', ui-sans-serif, system-ui, sans-serif;
+  --font-marca: 'Playfair Display', ui-serif, Georgia, serif;
 
   /* Radios */
   --radius-sm:    0.375rem;
@@ -52,13 +25,13 @@
   --radius-2.5xl: 1.25rem;
   --radius-3xl:   1.5rem;
 
-  /* Sombras suaves rutek */
-  --shadow-soft:      0 1px 2px rgb(18 17 16 / 0.04), 0 2px 8px rgb(18 17 16 / 0.05);
-  --shadow-soft-lg:   0 4px 16px rgb(18 17 16 / 0.07), 0 8px 32px rgb(18 17 16 / 0.06);
-  --shadow-card:      0 1px 3px rgb(18 17 16 / 0.05), 0 4px 16px rgb(18 17 16 / 0.06);
-  --shadow-sidebar:   4px 0 24px rgb(18 17 16 / 0.06);
+  /* Sombras suaves */
+  --shadow-soft:      0 1px 2px rgb(13 13 31 / 0.04), 0 2px 8px rgb(13 13 31 / 0.05);
+  --shadow-soft-lg:   0 4px 16px rgb(13 13 31 / 0.07), 0 8px 32px rgb(13 13 31 / 0.06);
+  --shadow-card:      0 1px 3px rgb(13 13 31 / 0.05), 0 4px 16px rgb(13 13 31 / 0.06);
+  --shadow-sidebar:   4px 0 24px rgb(13 13 31 / 0.06);
 
-  /* Animaciones rutek */
+  /* Animaciones */
   --animate-page-enter:          page-enter 0.4s cubic-bezier(0.4, 0, 0.2, 1) both;
   --animate-route-panel-enter:   route-panel-enter 0.3s cubic-bezier(0.4, 0, 0.2, 1) both;
   --animate-modal-in:            modal-in 0.22s cubic-bezier(0.4, 0, 0.2, 1) both;
@@ -67,193 +40,111 @@
 }
 
 @layer base {
-  /* ── PALETA RUTEK (default) — light ───────────────────────── */
+  /* ── AUNARO — light ────────────────────────────────────────── */
   :root {
-    --background:        34 30% 95%;   /* canvas #F7F4F0 */
-    --foreground:        0 0% 10%;     /* stone-900 #1A1A1A */
+    --background:        43 30% 95%;   /* hueso #F7F5F0 */
+    --foreground:        240 41% 9%;   /* azul noche #0D0D1F */
 
-    --card:              0 0% 100%;    /* surface #FFFFFF */
-    --card-foreground:   0 0% 10%;
-
-    --popover:           0 0% 100%;
-    --popover-foreground: 0 0% 10%;
-
-    --primary:           221 83% 53%;  /* blue-600 #2563EB */
-    --primary-foreground: 0 0% 100%;
-
-    --secondary:         38 29% 95%;   /* surface-muted #F5F2ED */
-    --secondary-foreground: 0 0% 10%;
-
-    --muted:             38 29% 95%;
-    --muted-foreground:  30 3% 35%;    /* stone-600 #5C5854 */
-
-    --accent:            38 21% 93%;   /* surface-hover #F0EDE8 */
-    --accent-foreground: 0 0% 10%;
-
-    --destructive:       0 72% 51%;
-    --destructive-foreground: 0 0% 98%;
-
-    --border:            37 13% 81%;   /* stone-300 #D4CFC7 */
-    --input:             37 13% 81%;
-    --ring:              221 83% 53%;
-
-    --primary-tint:      214 95% 85%;  /* tono claro de la marca (sobre fondos oscuros) */
-
-    /* Fondo del LoadingPage (stone cálido) */
-    --loading-from:      #1A1A1A;
-    --loading-via:       #121110;
-    --loading-to:        #0C0B0A;
-
-    /* Semánticos extra */
-    --warning:           25 95% 53%;   /* CTA naranja #F97316 */
-    --warning-foreground: 25 100% 15%;
-    --info:              217 91% 60%;
-    --info-foreground:   217 100% 15%;
-
-    /* Estados de mesas */
-    --mesa-libre:     142 76% 36%;
-    --mesa-ocupada:   0 84% 60%;
-    --mesa-cobro:     38 92% 50%;
-    --mesa-inactiva:  37 13% 81%;
-
-    --radius: 0.625rem;
-  }
-
-  /* ── PALETA RUTEK — dark (stone cálido) ───────────────────── */
-  .dark {
-    --background:        30 2% 7%;     /* stone-950 #121110 */
-    --foreground:        38 20% 93%;
-
-    --card:              30 3% 10%;    /* stone-900 #1A1A1A */
-    --card-foreground:   38 20% 93%;
-
-    --popover:           30 3% 10%;
-    --popover-foreground: 38 20% 93%;
-
-    --primary:           217 91% 60%;  /* blue-500 #3B82F6 */
-    --primary-foreground: 0 0% 100%;
-
-    --secondary:         30 4% 14%;
-    --secondary-foreground: 38 20% 93%;
-
-    --muted:             30 4% 14%;
-    --muted-foreground:  35 10% 65%;
-
-    --accent:            30 5% 17%;
-    --accent-foreground: 38 20% 93%;
-
-    --destructive:       0 62% 45%;
-    --destructive-foreground: 0 0% 98%;
-
-    --border:            30 4% 18%;
-    --input:             30 4% 18%;
-    --ring:              217 91% 60%;
-
-    --primary-tint:      214 95% 85%;
-
-    --loading-from:      #1A1A1A;
-    --loading-via:       #121110;
-    --loading-to:        #0C0B0A;
-
-    /* Semánticos extra */
-    --warning:           25 95% 53%;
-    --warning-foreground: 25 100% 90%;
-    --info:              217 91% 60%;
-    --info-foreground:   217 100% 90%;
-
-    /* Estados de mesas */
-    --mesa-libre:     142 70% 45%;
-    --mesa-ocupada:   0 70% 55%;
-    --mesa-cobro:     38 90% 55%;
-    --mesa-inactiva:  35 8% 35%;
-  }
-
-  /* ── PALETA LEGACY (verde original) — light ───────────────── */
-  :root[data-palette='legacy'] {
-    --background:        36 25% 95%;
-    --foreground:        220 13% 13%;
-
-    --card:              36 20% 98%;
-    --card-foreground:   220 13% 13%;
+    --card:              0 0% 100%;
+    --card-foreground:   240 41% 9%;
 
     --popover:           0 0% 100%;
-    --popover-foreground: 220 13% 13%;
+    --popover-foreground: 240 41% 9%;
 
-    --primary:           160 84% 39%;   /* emerald-500 #10b981 */
-    --primary-foreground: 0 0% 100%;
+    --primary:           38 89% 54%;   /* ámbar dorado #F2A623 */
+    --primary-foreground: 240 41% 9%;  /* azul noche — blanco sobre ámbar no cumple contraste WCAG */
 
-    --secondary:         150 30% 96%;
-    --secondary-foreground: 160 84% 39%;
+    --secondary:         43 20% 93%;
+    --secondary-foreground: 240 41% 9%;
 
-    --muted:             150 20% 96%;
-    --muted-foreground:  220 9% 44%;
+    --muted:             43 20% 93%;
+    --muted-foreground:  240 12% 38%;
 
-    --accent:            150 60% 95%;
-    --accent-foreground: 160 84% 39%;
+    --accent:            43 22% 91%;
+    --accent-foreground: 240 41% 9%;
 
-    --destructive:       0 72% 51%;
-    --destructive-foreground: 0 0% 98%;
+    --destructive:       354 79% 57%;  /* rojo coral #E8394A */
+    --destructive-foreground: 0 0% 100%;
 
-    --border:            214 32% 91%;
-    --input:             214 32% 91%;
-    --ring:              160 84% 39%;
+    --success:           149 53% 49%;  /* verde esmeralda #3BBF7A */
+    --success-foreground: 240 41% 9%;  /* mismo motivo que primary-foreground */
 
-    --primary-tint:      141 84% 80%;  /* emerald-200 */
+    --border:            40 14% 84%;
+    --input:             40 14% 84%;
+    --ring:              38 89% 54%;
 
-    --loading-from:      #022C1A;
-    --loading-via:       #010F09;
-    --loading-to:        #022C1A;
+    --primary-tint:      38 85% 75%;   /* ámbar suave sobre fondos oscuros (hero, login) */
+
+    /* Fondo del LoadingPage / hero oscuro */
+    --loading-from:      #14142e;
+    --loading-via:       #0D0D1F;
+    --loading-to:        #06060f;
 
     /* Semánticos extra */
-    --warning:           38 92% 50%;
+    --warning:           38 89% 54%;   /* mismo matiz que primary: el manual no define un 4º color de marca */
     --warning-foreground: 38 100% 15%;
-    --info:              217 91% 60%;
-    --info-foreground:   217 100% 15%;
+    --info:              240 15% 88%;  /* neutro — info es procedural, no un dato/alerta de marca */
+    --info-foreground:   240 30% 25%;
 
     /* Estados de mesas */
-    --mesa-libre:     160 84% 39%;
-    --mesa-ocupada:   0 84% 60%;
-    --mesa-cobro:     38 92% 50%;
-    --mesa-inactiva:  214 20% 69%;
+    --mesa-libre:     149 53% 49%;   /* esmeralda */
+    --mesa-ocupada:   354 79% 57%;   /* coral */
+    --mesa-cobro:     38 89% 54%;    /* ámbar */
+    --mesa-inactiva:  240 8% 75%;
 
     --radius: 0.625rem;
   }
 
-  /* ── PALETA LEGACY (verde original) — dark ────────────────── */
-  .dark[data-palette='legacy'] {
-    --background:        160 18% 8%;
-    --foreground:        150 20% 94%;
+  /* ── AUNARO — dark ─────────────────────────────────────────── */
+  .dark {
+    --background:        240 41% 9%;   /* azul noche #0D0D1F */
+    --foreground:        43 25% 94%;
 
-    --card:              160 16% 12%;
-    --card-foreground:   150 20% 94%;
+    --card:              240 30% 14%;
+    --card-foreground:   43 25% 94%;
 
-    --popover:           160 16% 12%;
-    --popover-foreground: 150 20% 94%;
+    --popover:           240 30% 14%;
+    --popover-foreground: 43 25% 94%;
 
-    --primary:           160 84% 42%;
-    --primary-foreground: 0 0% 100%;
+    --primary:           38 92% 60%;
+    --primary-foreground: 240 41% 9%;
 
-    --secondary:         160 14% 17%;
-    --secondary-foreground: 150 20% 94%;
+    --secondary:         240 20% 17%;
+    --secondary-foreground: 43 25% 94%;
 
-    --muted:             160 14% 17%;
-    --muted-foreground:  160 10% 58%;
+    --muted:             240 20% 17%;
+    --muted-foreground:  240 10% 65%;
 
-    --accent:            160 14% 20%;
-    --accent-foreground: 150 20% 94%;
+    --accent:            240 18% 20%;
+    --accent-foreground: 43 25% 94%;
 
-    --destructive:       0 62% 45%;
+    --destructive:       354 70% 50%;
     --destructive-foreground: 0 0% 98%;
 
-    --border:            160 12% 22%;
-    --input:             160 12% 22%;
-    --ring:              160 84% 42%;
+    --success:           149 50% 55%;
+    --success-foreground: 240 41% 9%;
 
-    --primary-tint:      141 84% 80%;
+    --border:            240 16% 20%;
+    --input:             240 16% 20%;
+    --ring:              38 92% 60%;
 
-    --loading-from:      #022C1A;
-    --loading-via:       #010F09;
-    --loading-to:        #022C1A;
+    --primary-tint:      38 85% 75%;
+
+    --loading-from:      #14142e;
+    --loading-via:       #0D0D1F;
+    --loading-to:        #06060f;
+
+    /* Semánticos extra */
+    --warning:           38 89% 54%;
+    --warning-foreground: 38 100% 90%;
+    --info:              240 20% 20%;
+    --info-foreground:   240 40% 88%;
+
+    /* Estados de mesas */
+    --mesa-libre:     149 55% 58%;
+    --mesa-ocupada:   354 70% 62%;
+    --mesa-cobro:     38 90% 60%;
+    --mesa-inactiva:  240 8% 40%;
   }
 
   * {
@@ -261,11 +152,24 @@
     outline-color: hsl(var(--ring) / 0.5);
   }
 
-  /* Acento brand en gráficos — sigue la paleta activa */
-  :root                  { --chart-brand: #2563EB; --chart-brand-soft: rgb(37 99 235 / 0.35); }
-  .dark                  { --chart-brand: #3B82F6; --chart-brand-soft: rgb(59 130 246 / 0.35); }
-  :root[data-palette='legacy'] { --chart-brand: #16A34A; --chart-brand-soft: rgb(22 163 74 / 0.35); }
-  .dark[data-palette='legacy'] { --chart-brand: #10B981; --chart-brand-soft: rgb(16 185 129 / 0.35); }
+  /* Acento brand en gráficos — verde esmeralda: "tecnología/crecimiento/dato positivo" */
+  :root { --chart-brand: #3BBF7A; --chart-brand-soft: rgb(59 191 122 / 0.35); --chart-secondary: #8890a8; }
+  .dark { --chart-brand: #4ecf8d; --chart-brand-soft: rgb(78 207 141 / 0.35); --chart-secondary: #8890a8; }
+
+  /* Rampa categórica de 7 colores (gráficos de torta/desglose) — validada con la
+     skill dataviz (bandas de luminosidad, piso de croma, separación CVD y de
+     visión normal, contraste vs. superficie) contra fondo blanco (light) y
+     hsl(240 30% 14%) (dark). No reemplazar valores sin re-validar. */
+  :root {
+    --chart-cat-1: #3BBF7A; --chart-cat-2: #0E93A0; --chart-cat-3: #E8394A;
+    --chart-cat-4: #4F4FBF; --chart-cat-5: #C17E0D; --chart-cat-6: #C0447E;
+    --chart-cat-7: #7C8A1E;
+  }
+  .dark {
+    --chart-cat-1: #33A855; --chart-cat-2: #1583B0; --chart-cat-3: #E8394A;
+    --chart-cat-4: #6666D6; --chart-cat-5: #C17E0D; --chart-cat-6: #C0447E;
+    --chart-cat-7: #7C8A1E;
+  }
 
   .chart-brand-fill      { fill: var(--chart-brand); }
   .chart-brand-stroke    { stroke: var(--chart-brand); }
@@ -341,7 +245,7 @@ input[type='number'] {
   100% { opacity: 1; transform: scale(1); }
 }
 
-/* ── Animaciones rutek ──────────────────────────────────────── */
+/* ── Animaciones de página ─────────────────────────────────── */
 @keyframes page-enter {
   from { opacity: 0; transform: translateY(12px); }
   to   { opacity: 1; transform: translateY(0); }
@@ -449,13 +353,12 @@ input[type='number'] {
 /* Text */
 .dark .text-yellow-700   { color: rgb(253 224 71) !important; }
 
-/* Login keeps a deliberately light layout even when the app theme is dark. */
+/* Login keeps a deliberately light layout even when the app theme is dark.
+   Only `bg-white` needs a counter-rule here — it's the one class LoginPage
+   uses that the global dark-mode patch block above also rewrites. The other
+   login classes are literal hex/opacity utilities (`text-[#0D0D1F]/70`, etc.)
+   that no global rule touches, so they already stay put in dark mode. */
 .dark .login-light .bg-white { background-color: #fff !important; }
-.dark .login-light .bg-\[\#fbf7f0\] { background-color: #fbf7f0 !important; }
-.dark .login-light .text-stone-950 { color: #0c0a09 !important; }
-.dark .login-light .text-stone-700 { color: #44403c !important; }
-.dark .login-light .text-stone-600 { color: #57534e !important; }
-.dark .login-light .text-stone-500 { color: #78716c !important; }
 .dark .login-light input:-webkit-autofill,
 .dark .login-light input:-webkit-autofill:hover,
 .dark .login-light input:-webkit-autofill:focus {

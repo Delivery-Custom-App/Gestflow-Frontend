@@ -1,5 +1,6 @@
 import { motion } from 'framer-motion'
 import { GradientTracing } from '@/components/ui/gradient-tracing'
+import AunaroSymbol from '@/assets/brand/AunaroSymbol'
 
 const CIRCLE_SIZE = 280
 const CX = CIRCLE_SIZE / 2
@@ -24,8 +25,8 @@ export default function LoadingPage() {
           width={CIRCLE_SIZE}
           height={CIRCLE_SIZE}
           path={CIRCLE_PATH}
-          baseColor="var(--chart-brand)"
-          gradientColors={['var(--chart-brand)', 'var(--chart-brand)', 'var(--chart-brand)']}
+          baseColor="hsl(var(--primary))"
+          gradientColors={['hsl(var(--primary))', 'hsl(var(--primary))', 'hsl(var(--primary))']}
           strokeWidth={1.5}
           animationDuration={2.5}
         />
@@ -35,8 +36,8 @@ export default function LoadingPage() {
             width={CIRCLE_SIZE - 30}
             height={CIRCLE_SIZE - 30}
             path={`M${(CIRCLE_SIZE-30)/2},${(CIRCLE_SIZE-30)/2} m0,-${R-22} a${R-22},${R-22} 0 1,1 -0.1,0 z`}
-            baseColor="var(--chart-brand-soft)"
-            gradientColors={['var(--chart-brand-soft)', 'var(--chart-brand-soft)', 'var(--chart-brand-soft)']}
+            baseColor="hsl(var(--primary-tint))"
+            gradientColors={['hsl(var(--primary-tint))', 'hsl(var(--primary-tint))', 'hsl(var(--primary-tint))']}
             strokeWidth={1}
             animationDuration={1.8}
           />
@@ -44,15 +45,17 @@ export default function LoadingPage() {
 
         {/* Brand centered */}
         <motion.div
-          className="absolute flex flex-col items-center gap-2"
+          className="absolute flex flex-col items-center gap-2.5"
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ delay: 0.4, duration: 0.5 }}
         >
-          <span className="text-2xl font-extrabold tracking-tight text-white drop-shadow-lg">
-            Gestflow
+          <AunaroSymbol size={40} className="drop-shadow-lg" />
+          <span className="font-marca text-2xl tracking-[0.14em] text-white drop-shadow-lg">
+            AUNARO
           </span>
-          <div className="flex gap-1.5">
+          <span className="font-marca italic text-xs text-white/70">Inteligencia de negocios en tus manos</span>
+          <div className="mt-1 flex gap-1.5">
             {[0, 1, 2].map((i) => (
               <motion.span
                 key={i}

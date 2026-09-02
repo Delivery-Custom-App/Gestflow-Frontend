@@ -133,9 +133,9 @@ function InventoryHub() {
   const stockDistData = useMemo(() => {
     if (!kpis) return []
     return [
-      { name: 'Óptimo',     cantidad: kpis.optimal_stock_count  ?? 0, fill: '#16a34a' },
-      { name: 'Stock bajo', cantidad: kpis.low_stock_count      ?? 0, fill: '#f59e0b' },
-      { name: 'Crítico',    cantidad: kpis.critical_stock_count ?? 0, fill: '#ef4444' },
+      { name: 'Óptimo',     cantidad: kpis.optimal_stock_count  ?? 0, fill: 'hsl(var(--success))' },
+      { name: 'Stock bajo', cantidad: kpis.low_stock_count      ?? 0, fill: 'hsl(var(--warning))' },
+      { name: 'Crítico',    cantidad: kpis.critical_stock_count ?? 0, fill: 'hsl(var(--destructive))' },
     ].filter((d) => d.cantidad > 0)
   }, [kpis])
 
@@ -277,6 +277,7 @@ function InventoryHub() {
                         <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} tickLine={false} axisLine={false} />
                         <Tooltip
                           formatter={(v) => [`${v} productos`]}
+                          cursor={{ fill: 'hsl(var(--accent))' }}
                           contentStyle={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: 8, fontSize: 12 }}
                         />
                         <Bar dataKey="cantidad" radius={[4, 4, 0, 0]} maxBarSize={56} label={{ position: 'top', fontSize: 12, fontWeight: 700, fill: 'hsl(var(--foreground))' }}>
@@ -309,16 +310,17 @@ function InventoryHub() {
                         <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} tickLine={false} axisLine={false} />
                         <YAxis type="category" dataKey="name" width={95} tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} tickLine={false} axisLine={false} />
                         <Tooltip
+                          cursor={{ fill: 'hsl(var(--accent))' }}
                           contentStyle={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: 8, fontSize: 12 }}
                         />
-                        <Bar dataKey="Stock" fill="#ef4444" radius={[0, 3, 3, 0]} barSize={18} minPointSize={0}
+                        <Bar dataKey="Stock" fill="hsl(var(--destructive))" radius={[0, 3, 3, 0]} barSize={18} minPointSize={0}
                           label={({ x, y, width, height, value }) => (
-                            <text x={x + width + 6} y={y + height / 2} dominantBaseline="middle" fontSize={11} fontWeight={700} fill="#ef4444">
+                            <text x={x + width + 6} y={y + height / 2} dominantBaseline="middle" fontSize={11} fontWeight={700} fill="hsl(var(--destructive))">
                               {value}
                             </text>
                           )}
                         />
-                        <Bar dataKey="Mínimo" fill="#64748b" radius={[0, 3, 3, 0]} barSize={18} minPointSize={0} />
+                        <Bar dataKey="Mínimo" fill="var(--chart-secondary)" radius={[0, 3, 3, 0]} barSize={18} minPointSize={0} />
                       </BarChart>
                     </ResponsiveContainer>
                   )}

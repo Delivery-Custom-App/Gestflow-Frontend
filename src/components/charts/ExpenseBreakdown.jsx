@@ -1,7 +1,10 @@
 import { PieChart, Pie, Cell, Legend, Tooltip, ResponsiveContainer } from 'recharts'
 import ChartSkeleton from '../ui/ChartSkeleton'
 
-const COLORS = ['#e74c3c', '#e67e22', '#f39c12', '#f1c40f', '#3498db', '#9b59b6', '#1abc9c']
+const COLORS = [
+  'var(--chart-cat-1)', 'var(--chart-cat-2)', 'var(--chart-cat-3)',
+  'var(--chart-cat-4)', 'var(--chart-cat-5)', 'var(--chart-cat-6)', 'var(--chart-cat-7)',
+]
 
 function ExpenseBreakdown({ data = [], loading = false }) {
   if (loading) return <ChartSkeleton className="h-[300px]" />
@@ -46,7 +49,7 @@ function ExpenseBreakdown({ data = [], loading = false }) {
             return `${name}: ${percent}%`
           }}
           outerRadius={80}
-          fill="#8884d8"
+          fill="var(--chart-cat-1)"
           dataKey="value"
         >
           {validData.map((entry, index) => (
@@ -62,9 +65,9 @@ function ExpenseBreakdown({ data = [], loading = false }) {
             }).format(value)
           }
           contentStyle={{
-            backgroundColor: '#fff',
-            border: '1px solid #ccc',
-            borderRadius: '4px',
+            backgroundColor: 'hsl(var(--card))',
+            border: '1px solid hsl(var(--border))',
+            borderRadius: '8px',
           }}
         />
         <Legend
