@@ -3,7 +3,7 @@
 Sistema de gestión para restaurantes. Frontend React.
 
 **Backend canónico (integración en curso):** [Gestflow-Backend-V2](../Gestflow-Backend-V2)  
-Guía: [`INTEGRATION_BACKEND_V2.md`](INTEGRATION_BACKEND_V2.md) · rama `integration/backend-v2`
+Guía: [`docs/referencia/INTEGRATION_BACKEND_V2.md`](docs/referencia/INTEGRATION_BACKEND_V2.md) · rama `integration/backend-v2`
 
 **Legacy (demo):** [API FastAPI INGSW2](../Delivery-Custom-App-INGSW2)
 
@@ -21,17 +21,19 @@ Guía: [`INTEGRATION_BACKEND_V2.md`](INTEGRATION_BACKEND_V2.md) · rama `integra
 
 | Módulo | Ruta | Roles |
 |--------|------|-------|
-| POS | `/local/:id/pos` | Cajero, Empleado, Admin, Superadmin |
-| Inventario | `/local/:id/inventario` | Admin, Superadmin |
-| Administrativo | `/local/:id/administrativo` | Admin, Superadmin |
-| Gestión de Locales | `/admin` | Admin, Superadmin |
+| POS | `/local/:id/pos` | Cajero, Empleado, Admin, Admin Negocio, Superadmin |
+| Inventario | `/local/:id/inventario` | Admin, Admin Negocio, Superadmin |
+| Administrativo | `/local/:id/administrativo` | Admin, Admin Negocio, Superadmin (subset para workers) |
+| RRHH | `/local/:id/rrhh` | Todos — pero solo Admin Negocio/Superadmin gestionan fichas/turnos; Admin y workers solo piden permisos (ver `docs/manuales/MANUAL_RRHH.md`) |
+| Tus Locales | `/admin` | Admin Negocio (dueño de franquicia) |
+| Gestor de Negocios | `/gestor/*` | Superadmin (ver `docs/manuales/MANUAL_GESTOR_NEGOCIOS.md`) |
 
 ## Roles
 
-- **Superadmin** — acceso total, gestión de negocios y locales
-- **Admin Negocio** — gestión de su business
-- **Admin** — gestión de su local
-- **Empleado** — POS / operaciones de local
+- **Superadmin** — plataforma completa, gestiona todos los negocios (`/gestor/*`)
+- **Admin Negocio** (Owner) — dueño de una franquicia, gestiona sus locales y usuarios (`/admin`, `/usuarios`)
+- **Admin** — gestiona un solo local asignado
+- **Cajero** / **Empleado** — operan el POS y RRHH de su local asignado
 
 ## Desarrollo local (Backend V2)
 
@@ -145,4 +147,8 @@ src/
 
 ## Seed data para pruebas
 
-Ver [docs/SEED_DATA.md](./docs/SEED_DATA.md) para instrucciones de carga de datos de prueba.
+Ver `docs/SEED_DATA.md` para instrucciones de carga de datos de prueba — **archivo pendiente, no existe todavía en el repo**.
+
+## Documentación
+
+Toda la documentación funcional y técnica vive en [`docs/`](docs/) — ver [docs/README.md](docs/README.md) para el índice completo (proceso de venta BPMN, manuales por módulo, guía de integración con Backend V2).
