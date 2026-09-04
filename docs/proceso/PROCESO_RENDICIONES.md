@@ -64,10 +64,10 @@ flowchart TD
     Gw -->|Gasto| G1
     Gw -->|Transferencia| T1
 
-    G2 --> Decide{Admin/Owner/
-    Superadmin revisa}
-    T2 --> Decide2{Admin/Owner/
-    Superadmin revisa}
+    G2 --> Decide{"Admin/Owner/
+    Superadmin revisa"}
+    T2 --> Decide2{"Admin/Owner/
+    Superadmin revisa"}
 
     Decide -->|Aprobar| GA(("approved"))
     Decide -->|Rechazar| GR(("rejected"))

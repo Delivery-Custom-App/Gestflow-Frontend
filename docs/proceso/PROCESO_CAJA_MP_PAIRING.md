@@ -48,8 +48,8 @@ flowchart TD
 
     Gw -->|Usar POS existente| Load["Buscando POS
     registrados en MP"]
-    Load --> List{Hay POS
-    disponibles?}
+    Load --> List{"Hay POS
+    disponibles?"}
     List -->|Sí| Choose[Elegir uno de la lista]
     List -->|No| NoneMsg["Mensaje: conectá la cuenta
     o creá una Caja nueva"]

@@ -52,8 +52,8 @@ Esto es una decisión del código (`canManageHr = Superadmin o Owner`, `src/comp
 
 ```mermaid
 flowchart LR
-    A([Empleado o Admin/Owner]) --> B[Completa formulario:
-    tipo, desde, hasta, nota]
+    A([Empleado o Admin/Owner]) --> B["Completa formulario:
+    tipo, desde, hasta, nota"]
     B --> C["POST /leave-requests
     queda en estado pending"]
     C --> D{Superadmin u Owner revisa}
