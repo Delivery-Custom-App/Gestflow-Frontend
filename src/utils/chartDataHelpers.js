@@ -1,14 +1,3 @@
-export function enrichDashboardWithChartData(dashboard) {
-  if (!dashboard) {
-    return { daily_income_trend: [], expenses_breakdown: [] }
-  }
-  return {
-    ...dashboard,
-    daily_income_trend: dashboard.daily_income_trend || [],
-    expenses_breakdown: dashboard.expenses_breakdown || [],
-  }
-}
-
 const RANGE_CONFIG = {
   '1h':  { windowMin: 60,    bucketMin: 5   },
   '4h':  { windowMin: 240,   bucketMin: 20  },
@@ -70,19 +59,4 @@ export function generateIncomeTrendFromOrders(orders = [], range = '7d') {
   const avg = Math.round(total / bucketCount)
 
   return buckets.map((b) => ({ date: b.label, ingresos: b.ingresos, promedio: avg }))
-}
-
-export function generateExpenseBreakdownFromData(expenses = []) {
-  if (!Array.isArray(expenses) || expenses.length === 0) return []
-
-  const categoryMap = {}
-  expenses.forEach((expense) => {
-    const category = expense.category || expense.type || 'Otro'
-    const amount = Number(expense.amount) || Number(expense.total) || 0
-    categoryMap[category] = (categoryMap[category] || 0) + amount
-  })
-
-  return Object.entries(categoryMap)
-    .map(([category, amount]) => ({ category, amount }))
-    .sort((a, b) => b.amount - a.amount)
 }
