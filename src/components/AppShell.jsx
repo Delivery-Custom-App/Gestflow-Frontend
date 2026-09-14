@@ -4,12 +4,11 @@ import { useAuth } from '../context/AuthContext'
 import { useLocals } from '../hooks/useLocals'
 import { useCurrentBusiness } from '../hooks/useCurrentBusiness'
 import { useTheme } from '../context/ThemeContext'
-import { useAlerts } from '../hooks/useAlerts'
 import { motion, AnimatePresence } from 'framer-motion'
 import { cn } from '@/lib/utils'
 import {
   LayoutDashboard, Store, ChevronDown, ChevronLeft, ChevronRight,
-  DollarSign, FileText, BarChart3, Wallet, Bell, Gift,
+  DollarSign, FileText, BarChart3, Wallet,
   Table2, ChefHat, Moon, Sun, UserCircle2,
   Package, Truck, ShoppingCart, BookMarked, PackageOpen, UtensilsCrossed,
   LogOut, Users, RotateCcw, MapPin, Building2, Settings,
@@ -25,7 +24,6 @@ const ROLE_BADGE_LABEL = {
 }
 
 const PLAN_BADGE_LABEL = { enterprise: 'Enterprise', professional: 'Professional', starter: 'Standard', basic: 'Standard' }
-import { ExpandableTabs } from './ui/expandable-tabs'
 import CoachMark from './onboarding/CoachMark'
 import { useOnboarding } from '../context/OnboardingContext'
 import { isSuperAdminRole, isAdminNegocioRole, normalizeRoleKey } from '../auth/roleLabel'
@@ -36,7 +34,7 @@ import { isV2FeatureEnabled } from '../lib/v2Features'
 import { isAlPasoLocal } from '../lib/salesModel'
 
 /* ── key sets for accordion auto-open ──────────────────────────── */
-const ADMIN_KEYS = new Set(['administracion', 'ventas', 'rendiciones', 'reportes', 'flujo-caja', 'alertas', 'bonos'])
+const ADMIN_KEYS = new Set(['administracion', 'ventas', 'flujo-caja'])
 const POS_KEYS   = new Set(['pos', 'pos-mesas', 'pos-kitchen', 'pos-venta-directa'])
 const INV_KEYS   = new Set(['inv-hub', 'inv-prov', 'inv-stock', 'inv-stock-ctrl', 'inv-compras', 'inv-recetas'])
 
@@ -52,11 +50,7 @@ function deriveActiveKey(pathname) {
   if (pathname.includes('/pos/cocina'))                   return 'pos-kitchen'
   if (pathname.includes('/pos'))                          return 'pos-mesas'
   if (pathname.includes('/administrativo/ventas'))        return 'ventas'
-  if (pathname.includes('/administrativo/rendiciones'))   return 'rendiciones'
-  if (pathname.includes('/administrativo/reportes'))      return 'reportes'
   if (pathname.includes('/administrativo/flujo-caja'))    return 'flujo-caja'
-  if (pathname.includes('/administrativo/alertas'))       return 'alertas'
-  if (pathname.includes('/administrativo/bonos'))         return 'bonos'
   if (pathname.includes('/administrativo'))               return 'administracion'
   if (pathname.includes('/rrhh'))                         return 'hr-hub'
   if (pathname.includes('/usuarios'))                    return 'usuarios'
@@ -78,11 +72,7 @@ const ACCORDIONS = [
     icon: Wallet,
     items: [
       { key: 'ventas',      label: 'Ventas',        icon: DollarSign },
-      { key: 'rendiciones', label: 'Rendiciones',   icon: FileText   },
-      { key: 'reportes',    label: 'Reportes',      icon: BarChart3  },
       { key: 'flujo-caja',  label: 'Caja Virtual',  icon: Wallet     },
-      { key: 'alertas',     label: 'Alertas',       icon: Bell       },
-      { key: 'bonos',       label: 'Bonos',         icon: Gift       },
     ],
   },
   {
@@ -209,7 +199,7 @@ function Sidebar({ collapsed, onToggle, onClose }) {
   const AL_PASO_POS_ITEMS = [
     { key: 'pos-venta-directa', label: 'Venta directa', icon: DollarSign },
   ]
-  const WORKER_FINANCE_ITEM_KEYS = new Set(['ventas', 'rendiciones'])
+  const WORKER_FINANCE_ITEM_KEYS = new Set(['ventas'])
   const visibleAccordions = isWorker
     ? (isAlPaso
         ? ACCORDIONS
@@ -482,14 +472,10 @@ function Sidebar({ collapsed, onToggle, onClose }) {
 
 /* ── TopBar ─────────────────────────────────────────────────────── */
 function TopBar({ localId }) {
-  const { userRole } = useAuth()
   const { locales } = useLocals()
   const { business } = useCurrentBusiness()
   const { darkMode, setDarkMode } = useTheme()
   const { state: locState } = useLocation()
-  const navigate = useNavigate()
-  const isWorkerRole = WORKER_ROLES.includes(userRole)
-  const { pendingCount } = useAlerts(localId)
 
   const toggleDarkMode = () => {
     const next = !darkMode
@@ -505,23 +491,6 @@ function TopBar({ localId }) {
     if (locState?.local?.name) return locState.local
     return locales.find((l) => String(l.id) === String(localId)) ?? null
   }, [localId, locState, locales])
-
-  const navState = locState?.local ? { local: locState.local } : localId ? { local: { id: localId } } : {}
-
-  // Build tabs — only show bell when there's a local and user isn't worker
-  const showBell = Boolean(localId && !isWorkerRole)
-  const tabs = [
-    ...(showBell ? [{ title: 'Notificaciones', icon: Bell, badge: pendingCount || null }] : []),
-  ]
-
-  const bellIdx = showBell ? 0 : -1
-
-  const handleTabChange = (index) => {
-    if (index === null) return
-    if (index === bellIdx) {
-      navigate(`/local/${localId}/administrativo/alertas`, { state: navState })
-    }
-  }
 
   return (
     <div className="shrink-0 flex items-center justify-between px-4 sm:px-6 h-14 border-b border-[hsl(var(--border))] bg-[hsl(var(--card))] shadow-sm z-10">
@@ -546,7 +515,7 @@ function TopBar({ localId }) {
         )}
       </div>
 
-      {/* Right: dark mode toggle + expandable tab controls */}
+      {/* Right: dark mode toggle */}
       <div className="shrink-0 flex items-center gap-2">
         <button
           type="button"
@@ -557,14 +526,6 @@ function TopBar({ localId }) {
         >
           {darkMode ? <Moon size={17} /> : <Sun size={17} />}
         </button>
-        {tabs.length > 0 && (
-          <ExpandableTabs
-            tabs={tabs}
-            activeColor="text-[hsl(var(--primary))]"
-            onChange={handleTabChange}
-            className="border-[hsl(var(--border))] bg-[hsl(var(--card))]"
-          />
-        )}
       </div>
     </div>
   )
