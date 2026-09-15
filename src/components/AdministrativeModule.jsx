@@ -525,6 +525,8 @@ function FlujoCajaContent({ dashboard, cajas, resumenDiario, loading, error, onM
     ...(showActions ? ['Acciones'] : []),
   ]
   const openCajasCount = cajasList.filter((c) => c.is_active).length
+  const cajasHoyCount = (resumenDiario?.por_caja_fisica || [])
+    .reduce((sum, fisica) => sum + safeArray(fisica.cajas).length, 0)
 
   return (
     <div className="space-y-5">
@@ -548,7 +550,7 @@ function FlujoCajaContent({ dashboard, cajas, resumenDiario, loading, error, onM
               <p className="mt-1 text-sm font-bold text-[hsl(var(--foreground))]">{formatMoney(Number(resumenDiario.total_esperado))}</p>
             </div>
           </div>
-          {resumenDiario.cajas.length === 0 && (
+          {cajasHoyCount === 0 && (
             <p className="mt-3 text-xs text-[hsl(var(--muted-foreground))]">Todavía no se abrió ninguna caja hoy en este local.</p>
           )}
         </Panel>

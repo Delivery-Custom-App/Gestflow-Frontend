@@ -145,17 +145,35 @@ export async function listCajas(localId) {
   return (Array.isArray(rows) ? rows : []).map(mapCajaOut)
 }
 
-export async function createCajaV2({ local_id, cashier_user_id, monto_apertura = 0, name: _name }) {
+/** Crea la "caja física" (nodo organizacional del local) que agrupa las cajas virtuales. */
+export async function createCajaFisica({ local_id, nombre }) {
+  return apiRequest('/cajas-fisicas', {
+    method: 'POST',
+    body: { local_id, nombre },
+  })
+}
+
+export async function createCajaV2({ local_id, cashier_user_id, monto_apertura = 0, name, caja_fisica_id }) {
   let cashierId = cashier_user_id
   if (!cashierId) {
     const { user } = await getOptionalAuthContext()
     cashierId = user?.id
   }
   if (!cashierId) throw new Error('cashier_user_id requerido para abrir caja')
+
+  // Toda caja virtual cuelga de una caja física. Si no se pasa una existente,
+  // se crea una con el nombre que el usuario ingresó en el formulario.
+  let cajaFisicaId = caja_fisica_id
+  if (!cajaFisicaId) {
+    const nombre = String(name || '').trim() || 'Caja'
+    const fisica = await createCajaFisica({ local_id, nombre })
+    cajaFisicaId = fisica.id
+  }
+
   const row = await apiRequest('/cajas', {
     method: 'POST',
     body: {
-      local_id,
+      caja_fisica_id: cajaFisicaId,
       cashier_user_id: cashierId,
       monto_apertura: Number(monto_apertura) || 0,
     },

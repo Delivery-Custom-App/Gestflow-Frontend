@@ -1,11 +1,36 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion'
 import { Search, UtensilsCrossed, Clock } from 'lucide-react'
 import { useKitchenOrders } from '../../hooks/useKitchenOrders'
+import { useTheme } from '../../context/ThemeContext'
+import {
+  URGENCY_STOPS_MIN,
+  DELAY_THRESHOLD_MIN,
+  READY_DISMISS_SECS,
+  elapsedMinutesSinceCreated,
+  elapsedSecondsSinceCreated,
+  getUrgencyColor,
+  getUrgencyLevel,
+  getReadableTextClass,
+} from '../../lib/orderUrgency'
 
 // ── Constants ─────────────────────────────────────────────────────
-const WARN_THRESHOLD_MIN  = 13   // barra cambia a amarillo
-const DELAY_THRESHOLD_MIN = 20   // barra cambia a rojo + estado DELAYED
-const READY_DISMISS_SECS  = 120
+// Efecto visual de pila: la comanda más antigua queda más desplazada/opaca "al fondo".
+const STACK_OFFSET_Y = 14
+const STACK_OFFSET_X = 6
+const STACK_SCALE_STEP = 0.02
+const STACK_MAX_VISIBLE_DEPTH = 6
+
+function stackTransform(indexFromTop) {
+  const depth = Math.min(indexFromTop, STACK_MAX_VISIBLE_DEPTH)
+  return {
+    y: depth * STACK_OFFSET_Y,
+    x: depth * STACK_OFFSET_X,
+    scale: 1 - depth * STACK_SCALE_STEP,
+    opacity: Math.max(0.55, 1 - depth * 0.06),
+    zIndex: 1000 - indexFromTop,
+  }
+}
 
 const STATUS_CFG = {
   PENDING:   { label: 'Nueva Orden', bg: 'bg-[#0D0D1F]', fg: 'text-white' },
@@ -17,22 +42,14 @@ const STATUS_CFG = {
 const SOURCE_LABEL = { 'dine-in': 'Dine In', takeout: 'Take Away', delivery: 'Delivery' }
 
 // ── Helpers ───────────────────────────────────────────────────────
-// Usa updated_at como inicio del timer de cocción (cuando se pasó a PREPARING)
-function cookingStart(order) {
-  return new Date(order.updated_at || order.created_at).getTime()
-}
-
+// La urgencia corre desde created_at para PENDING y PREPARING por igual: una comanda
+// que nunca se inicia también debe ir quedando "al fondo" de la pila y poniéndose roja.
 function resolveDisplayStatus(order, now) {
-  if (order.status === 'PREPARING') {
-    const elapsed = (now - cookingStart(order)) / 60000
-    if (elapsed > DELAY_THRESHOLD_MIN) return 'DELAYED'
+  if (order.status === 'PENDING' || order.status === 'PREPARING') {
+    const elapsedMin = elapsedMinutesSinceCreated(order, now)
+    if (elapsedMin > DELAY_THRESHOLD_MIN) return 'DELAYED'
   }
   return order.status
-}
-
-function elapsedSeconds(order, now) {
-  if (order.status === 'PENDING') return 0
-  return Math.max(0, Math.floor((now - cookingStart(order)) / 1000))
 }
 
 function formatTimer(secs) {
@@ -77,27 +94,94 @@ function StatusPill({ label, count, bg, fg }) {
   )
 }
 
+// ── UrgencyLegend — documenta visualmente el gradiente de color por tiempo ──
+const LEGEND_STEPS = [
+  { label: `< ${URGENCY_STOPS_MIN.WARN}m`, minutes: URGENCY_STOPS_MIN.WARN / 2 },
+  { label: `${URGENCY_STOPS_MIN.WARN}-${URGENCY_STOPS_MIN.HIGH}m`, minutes: (URGENCY_STOPS_MIN.WARN + URGENCY_STOPS_MIN.HIGH) / 2 },
+  { label: `${URGENCY_STOPS_MIN.HIGH}-${URGENCY_STOPS_MIN.CRITICAL}m`, minutes: (URGENCY_STOPS_MIN.HIGH + URGENCY_STOPS_MIN.CRITICAL) / 2 },
+  { label: `${URGENCY_STOPS_MIN.CRITICAL}m+`, minutes: URGENCY_STOPS_MIN.CRITICAL + 5 },
+]
+
+function UrgencyLegend({ darkMode }) {
+  return (
+    <div className="flex flex-wrap items-center gap-3 pb-3 text-[11px] text-[hsl(var(--muted-foreground))]">
+      {LEGEND_STEPS.map(step => {
+        const color = getUrgencyColor(step.minutes, darkMode ? 'dark' : 'light')
+        return (
+          <span key={step.label} className="flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: color.css }} />
+            {step.label}
+          </span>
+        )
+      })}
+    </div>
+  )
+}
+
+// ── ActiveMesasBar — resumen fijo de todas las mesas/comandas activas ──────
+function ActiveMesasBar({ orders, mesaMap, darkMode, now }) {
+  const sorted = useMemo(
+    () => [...orders].sort((a, b) => elapsedMinutesSinceCreated(b, now) - elapsedMinutesSinceCreated(a, now)),
+    [orders, now],
+  )
+
+  if (sorted.length === 0) return null
+
+  return (
+    <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pt-2 mt-2 border-t border-[hsl(var(--border))] shrink-0">
+      <span className="text-[11px] font-semibold text-[hsl(var(--muted-foreground))] shrink-0">
+        ACTIVAS
+      </span>
+      {sorted.map(order => {
+        const elapsedMin = elapsedMinutesSinceCreated(order, now)
+        const color = getUrgencyColor(elapsedMin, darkMode ? 'dark' : 'light')
+        const mesa = mesaMap[order.mesa_id]
+        const mesaName = mesa?.name || (order.mesa_id ? `Mesa ${String(order.mesa_id).slice(0, 4)}` : 'Sin Mesa')
+        return (
+          <span
+            key={order.id}
+            className="flex items-center gap-1.5 shrink-0 text-xs font-medium text-[hsl(var(--foreground))] bg-[hsl(var(--accent))] px-2.5 py-1 rounded-full"
+          >
+            <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: color.css }} />
+            {shortOrderId(order.id)} {mesaName} {Math.floor(elapsedMin)}m
+          </span>
+        )
+      })}
+    </div>
+  )
+}
+
 // ── OrderCard ─────────────────────────────────────────────────────
 function OrderCard({ order, mesaMap, onUpdateStatus, tokenIndex }) {
   const [updating, setUpdating] = useState(false)
   const [now, setNow] = useState(Date.now)
+  const { darkMode } = useTheme()
 
   const isPending = order.status === 'PENDING'
 
-  // Tick propio: solo corre cuando la comanda está en cocina
+  // El reloj de urgencia corre desde created_at para toda comanda activa, así que el
+  // tick corre siempre (antes solo corría a partir de PREPARING).
   useEffect(() => {
-    if (isPending) return
     const id = setInterval(() => setNow(Date.now()), 1000)
     return () => clearInterval(id)
-  }, [isPending])
+  }, [])
 
   const displayStatus = resolveDisplayStatus(order, now)
-  const cfg = STATUS_CFG[displayStatus] || STATUS_CFG.PENDING
-  const secs = elapsedSeconds(order, now)
-  const timer = formatTimer(secs)
-  const progress = Math.min(secs / (DELAY_THRESHOLD_MIN * 60), 1)
   const isDelayed = displayStatus === 'DELAYED'
   const isReady = displayStatus === 'READY'
+
+  const elapsedMin = elapsedMinutesSinceCreated(order, now)
+  const secs = elapsedSecondsSinceCreated(order, now)
+  const urgencyLevel = getUrgencyLevel(elapsedMin)
+  // Lista: se mantiene el color fijo de éxito (ya no hay más urgencia que comunicar).
+  const urgencyColor = isReady ? null : getUrgencyColor(elapsedMin, darkMode ? 'dark' : 'light')
+  const cfg = STATUS_CFG[displayStatus] || STATUS_CFG.PENDING
+  const headerBg = isReady ? cfg.bg : ''
+  const headerStyle = isReady ? undefined : { backgroundColor: urgencyColor.css }
+  const headerFg = isReady ? cfg.fg : getReadableTextClass(urgencyColor.hsl)
+
+  const timer = formatTimer(secs)
+  const progress = Math.min(secs / (DELAY_THRESHOLD_MIN * 60), 1)
 
   const mesa = mesaMap[order.mesa_id]
   const mesaName = mesa?.name || (order.mesa_id ? `Mesa ${String(order.mesa_id).slice(0, 4)}` : 'Sin Mesa')
@@ -121,15 +205,20 @@ function OrderCard({ order, mesaMap, onUpdateStatus, tokenIndex }) {
   return (
     <div className="bg-[hsl(var(--card))] rounded-xl border border-[hsl(var(--border))] shadow-sm overflow-hidden flex flex-col">
 
-      {/* Colored header */}
-      <div className={`${cfg.bg} ${cfg.fg} px-4 py-3 flex items-center gap-3`}>
+      {/* Colored header — fondo continuo según urgencia (salvo Lista, color fijo) */}
+      <div className={`${headerBg} ${headerFg} px-4 py-3 flex items-center gap-3`} style={headerStyle}>
         <div className="w-9 h-9 rounded-full bg-[hsl(var(--card))]/20 border border-current/30 flex items-center justify-center shrink-0">
           <UtensilsCrossed className="w-4 h-4" />
         </div>
         <div className="flex-1 min-w-0">
           <p className="text-sm font-bold truncate leading-tight">{mesaName}</p>
-          <span className="inline-block mt-0.5 text-[10px] font-semibold bg-[hsl(var(--card))]/20 px-2 py-0.5 rounded-full">
-            {sourceLabel}
+          <span className="inline-flex items-center gap-1 mt-0.5">
+            <span className="text-[10px] font-semibold bg-[hsl(var(--card))]/20 px-2 py-0.5 rounded-full">
+              {sourceLabel}
+            </span>
+            <span className="text-[10px] font-semibold bg-white/20 px-2 py-0.5 rounded-full">
+              {cfg.label}
+            </span>
           </span>
         </div>
         <span className="text-sm font-extrabold opacity-90 tracking-wide shrink-0">
@@ -181,17 +270,16 @@ function OrderCard({ order, mesaMap, onUpdateStatus, tokenIndex }) {
         )}
       </div>
 
-      {/* Progress bar + timer */}
-      {!isPending && (() => {
-        const mins = secs / 60
-        const barColor = isDelayed
+      {/* Progress bar + timer — corre desde created_at para toda comanda activa */}
+      {!isReady && (() => {
+        const barColor = urgencyLevel === 'critical'
           ? 'bg-red-500'
-          : mins >= WARN_THRESHOLD_MIN
+          : urgencyLevel === 'high' || urgencyLevel === 'warning'
             ? 'bg-amber-400'
             : 'bg-green-500'
-        const timerColor = isDelayed
+        const timerColor = urgencyLevel === 'critical'
           ? 'text-red-500 font-bold'
-          : mins >= WARN_THRESHOLD_MIN
+          : urgencyLevel === 'high' || urgencyLevel === 'warning'
             ? 'text-amber-500 font-bold'
             : 'text-[hsl(var(--muted-foreground))]'
         return (
@@ -251,6 +339,8 @@ export default function KitchenDisplay({ localId, mesas = [] }) {
   const { orders, loading, error, updateOrderStatus } = useKitchenOrders(localId)
   const [search, setSearch] = useState('')
   const now = useSecondTick()
+  const reduceMotion = useReducedMotion()
+  const { darkMode } = useTheme()
 
   const mesaMap = useMemo(() => {
     const m = {}
@@ -315,6 +405,8 @@ export default function KitchenDisplay({ localId, mesas = [] }) {
         </div>
       </div>
 
+      <UrgencyLegend darkMode={darkMode} />
+
       {/* ── Content ── */}
       {loading ? (
         <div className="flex-1 flex items-center justify-center">
@@ -335,18 +427,38 @@ export default function KitchenDisplay({ localId, mesas = [] }) {
           )}
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 overflow-y-auto no-scrollbar pb-2">
-          {filteredOrders.map((order, i) => (
-            <OrderCard
-              key={order.id}
-              order={order}
-              mesaMap={mesaMap}
-              onUpdateStatus={updateOrderStatus}
-              tokenIndex={i}
-            />
-          ))}
+        <div className="flex-1 overflow-y-auto overflow-x-hidden no-scrollbar pb-2 pt-1">
+          <div className="flex flex-col max-w-xl mx-auto">
+            <AnimatePresence initial={false}>
+              {filteredOrders.map((order, i) => {
+                const indexFromTop = filteredOrders.length - 1 - i
+                const transform = stackTransform(indexFromTop)
+                return (
+                  <motion.div
+                    key={order.id}
+                    layout
+                    initial={reduceMotion ? false : { opacity: 0, y: transform.y - 24, scale: transform.scale }}
+                    animate={{ x: transform.x, y: transform.y, scale: transform.scale, opacity: transform.opacity }}
+                    exit={reduceMotion ? { opacity: 0 } : { opacity: 0, scale: 0.9, y: transform.y + 20 }}
+                    transition={reduceMotion ? { duration: 0 } : { type: 'spring', stiffness: 300, damping: 30 }}
+                    style={{ zIndex: transform.zIndex, position: 'relative' }}
+                    className={i > 0 ? '-mt-3' : ''}
+                  >
+                    <OrderCard
+                      order={order}
+                      mesaMap={mesaMap}
+                      onUpdateStatus={updateOrderStatus}
+                      tokenIndex={i}
+                    />
+                  </motion.div>
+                )
+              })}
+            </AnimatePresence>
+          </div>
         </div>
       )}
+
+      <ActiveMesasBar orders={enrichedOrders} mesaMap={mesaMap} darkMode={darkMode} now={now} />
     </div>
   )
 }
