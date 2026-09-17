@@ -5,11 +5,10 @@ import {
   ChevronDown, ChevronUp, Wifi,
   CheckCircle2, Link2, Settings2,
 } from 'lucide-react'
-import { apiRequest, getAuthContext, setPointDeviceMode } from '../../lib/apiClient'
+import { apiRequest, setPointDeviceMode } from '../../lib/apiClient'
 import { isV2FeatureEnabled } from '../../lib/v2Features'
 import { toast } from 'sonner'
 
-const API_BASE = import.meta.env.VITE_API_URL || ''
 const EMPTY_MANUAL = { mp_pos_id: '', name: '' }
 const MP_POS_WEBHOOKS = isV2FeatureEnabled('mpPosWebhooks')
 const FEATURE_SOON_MSG = 'Todavía no está disponible. Probá de nuevo más tarde.'
@@ -90,15 +89,22 @@ export default function MPConfigDrawer({ localId, onClose, open = true }) {
     }
     cancelOAuthListeners()
 
-    let token = ''
+    let authorizationUrl = ''
     try {
-      token = (await getAuthContext()).token
-    } catch {
-      toast.error('Tu sesión expiró. Volvé a iniciar sesión para conectar MercadoPago.')
+      const { authorization_url } = await apiRequest('/mp-oauth/exchange', {
+        method: 'POST',
+        body: { local_id: localId },
+      })
+      authorizationUrl = authorization_url
+    } catch (err) {
+      if (err.status === 401) {
+        toast.error('Tu sesión expiró. Volvé a iniciar sesión para conectar MercadoPago.')
+      } else {
+        toast.error('No se pudo iniciar la conexión con MercadoPago: ' + err.message)
+      }
       return
     }
-    const url = `${API_BASE}/api/mp-oauth/start?local_id=${encodeURIComponent(localId)}&auth_token=${encodeURIComponent(token)}`
-    const popup = window.open(url, 'mp_oauth', 'width=660,height=730,left=200,top=80,toolbar=no,menubar=no,scrollbars=yes')
+    const popup = window.open(authorizationUrl, 'mp_oauth', 'width=660,height=730,left=200,top=80,toolbar=no,menubar=no,scrollbars=yes')
 
     if (!popup) {
       toast.error('No se pudo abrir la ventana. Permití ventanas emergentes para este sitio.')
