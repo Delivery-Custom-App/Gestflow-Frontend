@@ -35,3 +35,6 @@ CAMBIOS_SESION.md
 
 # npm config local — contiene rutas absolutas del dev, no commitear
 .npmrc
+
+# Graphify — se genera automáticamente, no commitear
+graphify-out/
