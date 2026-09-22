@@ -49,15 +49,17 @@ if (refresh_token) window.localStorage.setItem(REFRESH_TOKEN_KEY, refresh_token)
 
 ---
 
-## [Seguridad] react-router / react-router-dom — vulnerabilidad moderate, requiere salto de versión mayor
+## [Seguridad] react-router / react-router-dom — vulnerabilidad moderate, requiere salto de versión mayor — ✅ RESUELTO 2026-09-22
 
 **Problema:** `react-router`/`react-router-dom` 6.0.0–7.17.0 (Moderate) — open redirect vía backslash en `<Link>`/`useNavigate` (bypass de CVE-2025-68470) + constructor injection en `deserializeErrors()` (SSR hydration).
 
 **Corrección sobre el hallazgo original:** el reporte del 09-16 decía "sin salto de versión mayor" — es incorrecto. Se confirmó con `npm ls` que el proyecto ya está en `6.30.6` (la última de la serie 6.x) y sigue vulnerable: el parche real solo existe en `react-router-dom@7.18.4`. `npm audit fix` (sin `--force`) no lo toca; requiere `--force` (salto 6→7, breaking change de rutas/API).
 
-**Por qué NO es urgente:** el ataque (open redirect) requiere que la víctima siga un link manipulado con backslash servido por esta misma app — no es explotable remotamente sin interacción, y no hay evidencia de que se esté usando `<Link>`/`useNavigate` con destinos controlados por el usuario en este repo.
-
-**Qué hacer:** evaluar la migración 6→7 de `react-router-dom` como tarea aparte (no es un `npm audit fix` de un comando) — requiere revisar breaking changes de la v7 (data routers, loaders) y correr toda la suite + smoke test manual de navegación antes de mergear.
+**Resuelto (rama `feature/react-router-v7`):**
+- Bump `react-router-dom` 6.30.6 → `react-router@7.18.4` directo en `package.json`. El código ya usaba la API v7 (`element`, `Navigate`, future flags) → sin cambios de rutas.
+- Migrados los 30 imports de `react-router-dom` → `react-router` (en v7 es re-export; en v8 desaparece). `react-router-dom` eliminado del `package.json`.
+- Eliminadas las future flags `v7_startTransition`/`v7_relativeSplatPath` (ya son default en v7).
+- Verificación: suite 132/132 OK, `npm run build` OK, node v25 ≥ 20 y react 19 ≥ 18 (requisitos v7).
 
 ---
 
