@@ -46,7 +46,9 @@ function getFlowTrend(currentCount, delta, thresholds) {
 }
 
 
-function LocalsGrid({ locales, onLocalSelect, onCreateLocal, salesCounts = {}, deltaCounts = {}, isSuperAdmin = false, onRefresh }) {
+const NO_COUNTS = {}
+
+function LocalsGrid({ locales, onLocalSelect, onCreateLocal, salesCounts = NO_COUNTS, deltaCounts = NO_COUNTS, isSuperAdmin = false, onRefresh }) {
   const [thresholds,   setThresholds]   = useState(loadThresholds)
   const [showOpciones, setShowOpciones] = useState(false)
   const [search,       setSearch]       = useState('')
@@ -362,8 +364,8 @@ function LocalsGrid({ locales, onLocalSelect, onCreateLocal, salesCounts = {}, d
           )}
 
           {/* Map — collapsible */}
-          {locales.length > 0 && (
-            <div className="pb-6">
+          <div className={locales.length > 0 ? 'pb-6' : undefined}>
+            {locales.length > 0 && (
               <button
                 type="button"
                 onClick={() => setMapOpen((v) => !v)}
@@ -381,8 +383,9 @@ function LocalsGrid({ locales, onLocalSelect, onCreateLocal, salesCounts = {}, d
                   className={`h-4 w-4 text-[hsl(var(--muted-foreground))] transition-transform duration-200 shrink-0 ${mapOpen ? 'rotate-0' : '-rotate-90'}`}
                 />
               </button>
-              <AnimatePresence initial={false}>
-                {mapOpen && (
+            )}
+            <AnimatePresence initial={false}>
+                {locales.length > 0 && mapOpen && (
                   <m.div
                     key="map"
                     initial={{ opacity: 0, y: -8 }}
@@ -395,8 +398,7 @@ function LocalsGrid({ locales, onLocalSelect, onCreateLocal, salesCounts = {}, d
                   </m.div>
                 )}
               </AnimatePresence>
-            </div>
-          )}
+          </div>
         </div>
       </div>
 

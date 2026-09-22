@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { m } from 'framer-motion'
+import { formatCLPCurrency } from '../lib/formatCLP'
 import {
   ArrowLeft, Building2, Store, Users, ShoppingCart, DollarSign, TrendingUp,
   Loader2, Shield, History, Power, UtensilsCrossed, Table2,
@@ -38,9 +39,7 @@ const ACTION_LABEL = {
   'user.reactivate': 'Reactivación de usuario',
 }
 
-function formatCurrency(value) {
-  return new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(value || 0)
-}
+const formatCurrency = formatCLPCurrency
 
 function formatDate(value) {
   if (!value) return '—'

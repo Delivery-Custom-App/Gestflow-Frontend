@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Link } from 'react-router-dom'
 import { m } from 'framer-motion'
+import { formatCLPCurrency } from '../lib/formatCLP'
 import {
   Building2, Users, Store, ShoppingCart, DollarSign, TrendingUp,
   Loader2, ChevronRight, Activity,
@@ -27,9 +28,7 @@ const STATUS_LABEL = {
   cancelled: 'Cancelada',
 }
 
-function formatCurrency(value) {
-  return new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(value || 0)
-}
+const formatCurrency = formatCLPCurrency
 
 function formatDate(value) {
   if (!value) return '—'

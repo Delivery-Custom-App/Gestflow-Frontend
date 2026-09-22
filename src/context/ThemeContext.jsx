@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 
 const ThemeContext = createContext(null)
 
@@ -21,18 +21,21 @@ export function ThemeProvider({ children }) {
     }
     try {
       window.localStorage.setItem('theme', darkMode ? 'dark' : 'light')
-    } catch {}
+    } catch { /* storage no disponible */ }
   }, [darkMode])
 
-  const toggleDarkMode = () => setDarkMode((v) => !v)
+  const toggleDarkMode = useCallback(() => setDarkMode((v) => !v), [])
+  const value = useMemo(() => ({ darkMode, setDarkMode, toggleDarkMode }), [darkMode, toggleDarkMode])
 
   return (
-    <ThemeContext.Provider value={{ darkMode, setDarkMode, toggleDarkMode }}>
+    <ThemeContext.Provider value={value}>
       {children}
     </ThemeContext.Provider>
   )
 }
 
+// Patrón estándar de contexto: el hook vive junto a su Provider.
+// eslint-disable-next-line react-refresh/only-export-components
 export function useTheme() {
   const ctx = useContext(ThemeContext)
   if (!ctx) throw new Error('useTheme debe usarse dentro de ThemeProvider')

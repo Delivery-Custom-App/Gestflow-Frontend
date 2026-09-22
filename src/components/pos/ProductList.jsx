@@ -23,7 +23,9 @@ function validateProduct(product) {
 }
 
 /** Lista de productos de la orden con edición de cantidad/precio y detalle. */
-function ProductList({ products = [], orderId = null, onProductsChanged = null, className = '' }) {
+const NO_PRODUCTS = []
+
+function ProductList({ products = NO_PRODUCTS, orderId = null, onProductsChanged = null, className = '' }) {
   const { updateItem, deleteItem, loading, error } = useOrderItems(orderId)
   const [editingId, setEditingId] = useState(null)
   const [editQuantity, setEditQuantity] = useState('')

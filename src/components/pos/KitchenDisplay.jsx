@@ -247,7 +247,9 @@ function OrderCard({ order, mesaMap, onUpdateStatus, tokenIndex }) {
 }
 
 // ── KitchenDisplay ────────────────────────────────────────────────
-export default function KitchenDisplay({ localId, mesas = [] }) {
+const NO_MESAS = []
+
+export default function KitchenDisplay({ localId, mesas = NO_MESAS }) {
   const { orders, loading, error, updateOrderStatus } = useKitchenOrders(localId)
   const [search, setSearch] = useState('')
   const now = useSecondTick()

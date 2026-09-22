@@ -23,6 +23,15 @@ const labelCls = 'text-[10px] font-semibold uppercase tracking-widest text-[hsl(
 const valCls   = 'text-sm font-medium text-[hsl(var(--foreground))]'
 
 /* ─── sección datos del proveedor ─────────────────────────── */
+function InfoRow({ label, value }) {
+  return (
+    <div className={fieldCls}>
+      <span className={labelCls}>{label}</span>
+      <span className={valCls}>{value}</span>
+    </div>
+  )
+}
+
 function InfoSection({ detail, supplierId, businessId, onUpdated }) {
   const [editing, setEditing] = useState(false)
   const [saving,  setSaving]  = useState(false)
@@ -65,12 +74,6 @@ function InfoSection({ detail, supplierId, businessId, onUpdated }) {
     finally { setSaving(false) }
   }
 
-  const ROW = ({ label, value }) => (
-    <div className={fieldCls}>
-      <span className={labelCls}>{label}</span>
-      <span className={valCls}>{value}</span>
-    </div>
-  )
 
   if (!editing) return (
     <div className="rounded-xl border border-[hsl(var(--border))] p-5 flex flex-col gap-4">
@@ -86,15 +89,15 @@ function InfoSection({ detail, supplierId, businessId, onUpdated }) {
         </button>
       </div>
       <div className="grid grid-cols-2 gap-x-8 gap-y-4">
-        <ROW label="Nombre"             value={str(detail.name)} />
-        <ROW label="RUT"                value={str(detail.rut)} />
-        <ROW label="Teléfono"          value={str(detail.phone)} />
-        <ROW label="Correo electrónico" value={str(detail.email)} />
-        <ROW label="Contacto"           value={str(detail.contact_name)} />
-        <ROW label="Categoría"          value={str(detail.category)} />
-        <ROW label="Dirección"          value={str(detail.address)} />
-        <ROW label="Inicio servicios"   value={date(detail.start_date)} />
-        <ROW label="Fecha ingreso"      value={date(detail.created_at)} />
+        <InfoRow label="Nombre"             value={str(detail.name)} />
+        <InfoRow label="RUT"                value={str(detail.rut)} />
+        <InfoRow label="Teléfono"          value={str(detail.phone)} />
+        <InfoRow label="Correo electrónico" value={str(detail.email)} />
+        <InfoRow label="Contacto"           value={str(detail.contact_name)} />
+        <InfoRow label="Categoría"          value={str(detail.category)} />
+        <InfoRow label="Dirección"          value={str(detail.address)} />
+        <InfoRow label="Inicio servicios"   value={date(detail.start_date)} />
+        <InfoRow label="Fecha ingreso"      value={date(detail.created_at)} />
       </div>
     </div>
   )
@@ -207,7 +210,7 @@ function SupplierDetailModal({ open, supplierId, businessId, row, onClose, onTog
 
   const load = useCallback(async () => {
     if (!supplierId || !businessId) return
-    setError(''); setLoading(true); setDetail(null)
+    setError(''); setLoading(true); setDetail(null); setConfirmingDelete(false)
     try {
       const data = await getSupplierDetailForBusiness(supplierId, businessId)
       setDetail(data && typeof data === 'object' ? data : null)
@@ -217,11 +220,16 @@ function SupplierDetailModal({ open, supplierId, businessId, row, onClose, onTog
   }, [supplierId, businessId])
 
   useEffect(() => {
-    if (!open || !supplierId || !businessId) { setDetail(null); setError(''); setConfirmingDelete(false); return }
+    if (!open || !supplierId || !businessId) return
     load()
   }, [open, supplierId, businessId, load])
 
-  const handleClose = () => { setConfirmingDelete(false); onClose() }
+  const handleClose = () => {
+    setConfirmingDelete(false)
+    setDetail(null)
+    setError('')
+    onClose()
+  }
 
   const isBusy    = rowActionId === String(supplierId)
   const isInactive = (detail?.is_active ?? row?.is_active) === false

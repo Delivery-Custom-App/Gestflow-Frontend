@@ -47,18 +47,6 @@ function NuevoProductoModal({ open, localId, onClose, onSuccess }) {
   const [categories,       setCategories]       = useState([])
   const [catsLoading,      setCatsLoading]      = useState(false)
 
-  useEffect(() => {
-    if (!open) return
-    setError('')
-    setSubmitting(false)
-    setProductName('')
-    setCategoryName('')
-    setUnit('unidad')
-    setCurrentStock('0')
-    setMinStock('0')
-    setMaxStock('0')
-    setUnitCost('')
-  }, [open])
 
   useEffect(() => {
     if (!open || !localId) { setCategories([]); return }
@@ -92,6 +80,7 @@ function NuevoProductoModal({ open, localId, onClose, onSuccess }) {
         unitCost:     Math.round(cost),
       })
       onSuccess?.()
+      resetForm()
       onClose?.()
     } catch (err) {
       setError(err?.message || 'No se pudo crear el producto.')
@@ -100,7 +89,23 @@ function NuevoProductoModal({ open, localId, onClose, onSuccess }) {
     }
   }
 
-  const handleClose = () => { if (!submitting) onClose?.() }
+  /** Deja el formulario vacío para la próxima apertura (todos los cierres pasan por aquí). */
+  const resetForm = () => {
+    setError('')
+    setProductName('')
+    setCategoryName('')
+    setUnit('unidad')
+    setCurrentStock('0')
+    setMinStock('0')
+    setMaxStock('0')
+    setUnitCost('')
+  }
+
+  const handleClose = () => {
+    if (submitting) return
+    resetForm()
+    onClose?.()
+  }
 
   return (
     <>

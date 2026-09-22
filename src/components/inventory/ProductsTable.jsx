@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo } from 'react'
 import { m, AnimatePresence } from 'framer-motion'
 import { Pencil, ChevronRight, ChevronDown } from 'lucide-react'
 import StockStatusBadge from './StockStatusBadge'
@@ -74,7 +74,12 @@ function ProductsTable({
     return Array.from(map.values())
   }, [items])
 
-  useEffect(() => { setExpandedGroups(new Set()) }, [items])
+  // Nuevos items => grupos colapsados (ajuste durante el render, sin efecto).
+  const [prevItems, setPrevItems] = useState(items)
+  if (items !== prevItems) {
+    setPrevItems(items)
+    setExpandedGroups(new Set())
+  }
 
   const toggleGroup = (key) => {
     setExpandedGroups((prev) => {

@@ -28,6 +28,7 @@ async function geocodeAddress(address) {
     try {
       const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&limit=1&countrycodes=cl`
       const res = await fetch(url, { headers: { 'User-Agent': 'Gestflow/1.0' } })
+      if (!res.ok) continue
       const data = await res.json()
       if (data.length > 0) return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) }
     } catch { /* continue */ }
@@ -45,7 +46,7 @@ function CreateLocalDrawer({ isOpen, onClose, onSuccess }) {
   const [suggestions, setSuggestions]           = useState([])
   const [showSuggestions, setShowSuggestions]   = useState(false)
   const [loadingSuggestions, setLoadingSuggestions] = useState(false)
-  const [selectedCoords, setSelectedCoords]     = useState(null)
+  const selectedCoordsRef = useRef(null) // solo se lee al enviar; no se muestra
   const debounceTimer = useRef(null)
 
   const handleChange = (e) => {
@@ -56,7 +57,7 @@ function CreateLocalDrawer({ isOpen, onClose, onSuccess }) {
   const handleAddressChange = (e) => {
     const value = e.target.value
     setFormData((prev) => ({ ...prev, address: value }))
-    setSelectedCoords(null)
+    selectedCoordsRef.current = null
     setGeocodeOk(null)
 
     clearTimeout(debounceTimer.current)
@@ -73,6 +74,7 @@ function CreateLocalDrawer({ isOpen, onClose, onSuccess }) {
         const normalized = normalizeChileanAddress(value)
         const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(normalized + ', Chile')}&format=json&limit=6&countrycodes=cl`
         const res = await fetch(url, { headers: { 'User-Agent': 'Gestflow/1.0' } })
+        if (!res.ok) throw new Error(`Nominatim respondió ${res.status}`)
         const data = await res.json()
         setSuggestions(data)
         setShowSuggestions(data.length > 0)
@@ -87,7 +89,7 @@ function CreateLocalDrawer({ isOpen, onClose, onSuccess }) {
 
   const handleSelectSuggestion = (suggestion) => {
     setFormData((prev) => ({ ...prev, address: suggestion.display_name }))
-    setSelectedCoords({ lat: parseFloat(suggestion.lat), lng: parseFloat(suggestion.lon) })
+    selectedCoordsRef.current = { lat: parseFloat(suggestion.lat), lng: parseFloat(suggestion.lon) }
     setGeocodeOk(true)
     setSuggestions([])
     setShowSuggestions(false)
@@ -106,7 +108,7 @@ function CreateLocalDrawer({ isOpen, onClose, onSuccess }) {
       if (!businessId) throw new Error('No se encontró business_id en el token')
 
       // Use already-resolved coords from autocomplete; fall back to geocoding
-      let coords = selectedCoords
+      let coords = selectedCoordsRef.current
       if (!coords) {
         setGeocoding(true)
         coords = await geocodeAddress(formData.address.trim())
@@ -129,7 +131,7 @@ function CreateLocalDrawer({ isOpen, onClose, onSuccess }) {
       await apiRequest('/locals', { method: 'POST', token, body })
 
       setFormData({ name: '', address: '', phone: '', sales_model: 'RESTAURANT' })
-      setSelectedCoords(null)
+      selectedCoordsRef.current = null
       setGeocodeOk(null)
       onSuccess()
       onClose()
@@ -145,7 +147,7 @@ function CreateLocalDrawer({ isOpen, onClose, onSuccess }) {
     if (!loading) {
       setError(null)
       setGeocodeOk(null)
-      setSelectedCoords(null)
+      selectedCoordsRef.current = null
       setSuggestions([])
       setShowSuggestions(false)
       onClose()

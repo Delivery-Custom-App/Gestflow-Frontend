@@ -81,7 +81,8 @@ function LegacyComprasDetailRedirect() {
 }
 
 /** Rutas compartidas de local (inventario, POS, admin, dashboard) */
-function LocalRoutes() {
+/** Devuelve los <Route> de local (React Router exige <Route> como hijos directos: no es un componente). */
+function localRoutes() {
   return (
     <>
       <Route path="/local/:localId/inventario/stock" element={<MenuBuilderPage />} />
@@ -135,7 +136,7 @@ function OwnerRoutes() {
         <Route path="/usuarios" element={<UsersListPage />} />
         <Route path="/usuarios/crear" element={<UserManagementPage />} />
         <Route path="/configuracion" element={<ConfiguracionPage />} />
-        {LocalRoutes()}
+        {localRoutes()}
         <Route path="*" element={<Navigate to="/admin" replace />} />
       </Route>
     </Routes>
@@ -159,7 +160,7 @@ function AdminRoutes({ assignedLocalId }) {
         <Route path="/usuarios" element={<Navigate to={home} replace />} />
         <Route path="/usuarios/crear" element={<Navigate to={home} replace />} />
         <Route path="/configuracion" element={<ConfiguracionPage />} />
-        {LocalRoutes()}
+        {localRoutes()}
         <Route path="*" element={<Navigate to={home} replace />} />
       </Route>
     </Routes>

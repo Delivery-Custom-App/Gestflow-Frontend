@@ -59,7 +59,11 @@ function BusinessDrawer({ isOpen, onClose, onSuccess, editing }) {
   const [loading, setLoading] = useState(false)
   const [err, setErr] = useState('')
 
-  useEffect(() => {
+  // Al abrirse (o cambiar la franquicia en edición) se carga el form en el mismo render (patrón de React docs).
+  const openedFor = isOpen ? editing ?? 'new' : null
+  const [prevOpenedFor, setPrevOpenedFor] = useState(openedFor)
+  if (openedFor !== prevOpenedFor) {
+    setPrevOpenedFor(openedFor)
     if (isOpen) {
       setErr('')
       setForm(
@@ -68,7 +72,7 @@ function BusinessDrawer({ isOpen, onClose, onSuccess, editing }) {
           : { name: '', rut: '', plan: 'starter', is_active: true }
       )
     }
-  }, [isOpen, editing])
+  }
 
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }))
 

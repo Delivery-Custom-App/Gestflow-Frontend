@@ -44,6 +44,7 @@ export function AppAuthProvider({ children }) {
   }, [])
 
   useEffect(() => {
+    let cancelled = false
     const checkSession = async () => {
       const session = getStoredSession()
       if (!session?.access_token) {
@@ -52,6 +53,7 @@ export function AppAuthProvider({ children }) {
 
       try {
         const refreshedSession = await refreshSession()
+        if (cancelled) return
         const activeSession = refreshedSession || session
         const accessToken = activeSession.access_token
 
@@ -61,6 +63,7 @@ export function AppAuthProvider({ children }) {
         }
 
         const sessionUser = await fetchCurrentUser(accessToken)
+        if (cancelled) return
         if (!sessionUser) {
           await clearPreviousSession()
           return
@@ -71,12 +74,11 @@ export function AppAuthProvider({ children }) {
         setUser(sessionUser)
         setUserRole(formatRoleLabel(roleFromDb))
       } catch {
-        await clearPreviousSession()
+        if (!cancelled) await clearPreviousSession()
       }
     }
 
     // El loader se mantiene 600ms extra para evitar un parpadeo al arrancar.
-    let cancelled = false
     let loadingTimer
     checkSession().finally(() => {
       if (!cancelled) loadingTimer = setTimeout(() => setAppLoading(false), 600)

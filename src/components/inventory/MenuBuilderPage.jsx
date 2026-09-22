@@ -118,6 +118,7 @@ function MenuBuilderPage() {
   }, [products])
 
   const previewCategories = useMemo(() => {
+    const categoryNameById = new Map(categories.map((c) => [c.id, c.name]))
     const map = new Map()
     for (const p of products) {
       if (!p.is_active) continue
@@ -125,7 +126,7 @@ function MenuBuilderPage() {
       if (!map.has(key)) {
         map.set(key, {
           id: key,
-          name: p.category_name || categories.find((c) => c.id === key)?.name || 'Sin categoría',
+          name: p.category_name || categoryNameById.get(key) || 'Sin categoría',
           products: [],
         })
       }

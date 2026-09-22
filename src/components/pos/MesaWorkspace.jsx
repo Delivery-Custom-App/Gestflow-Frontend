@@ -154,6 +154,8 @@ export default function MesaWorkspace({ mesa, localId, cajaId, onBack, onTableUp
       })
       if (firstOrder) {
         for (const item of items) {
+          // Secuencial a propósito: conserva el orden de los ítems/comanda y evita escrituras concurrentes sobre la misma orden/mesa.
+          // oxlint-disable-next-line react-doctor/async-await-in-loop
           await addOrderItem(firstOrder.id, item, firstOrder.created_at)
         }
       } else {
@@ -180,6 +182,8 @@ export default function MesaWorkspace({ mesa, localId, cajaId, onBack, onTableUp
     setErrorMsg('')
     try {
       for (const order of detail.active_orders) {
+        // Secuencial a propósito: conserva el orden de los ítems/comanda y evita escrituras concurrentes sobre la misma orden/mesa.
+        // oxlint-disable-next-line react-doctor/async-await-in-loop
         await updateOrderStatus(order.id, 'CANCELLED')
       }
       onTableUpdated?.()

@@ -25,6 +25,8 @@ export default function RecipeCustomizer({ variant, item, qty, customization, on
   function hasIngredient(matchKeyword) {
     if (!matchKeyword) return true
     const n = norm(matchKeyword)
+    // String#includes (coincidencia parcial de texto), no pertenencia a una lista: un Set no aplica.
+    // oxlint-disable-next-line react-doctor/js-set-map-lookups
     return availableProducts.some(p => norm(p.name).includes(n) || n.includes(norm(p.name)))
   }
 

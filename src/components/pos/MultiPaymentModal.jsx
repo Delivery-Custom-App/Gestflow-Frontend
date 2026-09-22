@@ -97,14 +97,17 @@ export default function MultiPaymentModal({ order, orderTotal, onClose, onFullyP
   // ── Polling del cobro Point (consulta nuestra BD vía backend) ─────────────
   useEffect(() => {
     if (!pointIntent) return
+    let cancelled = false
 
     const pollOnce = async () => {
       try {
         const status = await getPointOrderStatus(order.id)
+        if (cancelled) return
 
         if (status.order_status === 'COMPLETED') {
           stopPolling()
           await loadSummary()
+          if (cancelled) return
           setLastApprovedOrderId(order.id)
           setPointIntent(null)
         } else if (status.order_status === 'CANCELLED') {
@@ -123,7 +126,10 @@ export default function MultiPaymentModal({ order, orderTotal, onClose, onFullyP
     pollOnce()
     pollRef.current = setInterval(pollOnce, 3000)
 
-    return () => stopPolling()
+    return () => {
+      cancelled = true
+      stopPolling()
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pointIntent])
 
@@ -258,7 +264,7 @@ export default function MultiPaymentModal({ order, orderTotal, onClose, onFullyP
           </div>
           <div className="w-full h-2 bg-[hsl(var(--accent))] rounded-full overflow-hidden">
             <div
-              className="h-full bg-green-500 transition-all duration-300"
+              className="h-full bg-green-500 transition-[width] duration-300"
               style={{ width: `${Math.min(100, orderTotal > 0 ? (approved / orderTotal) * 100 : 0)}%` }}
             />
           </div>

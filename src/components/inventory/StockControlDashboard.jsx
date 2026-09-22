@@ -153,9 +153,12 @@ function StockControlDashboard() {
     loadCategoriesCatalog()
   }, [loadCategoriesCatalog])
 
-  useEffect(() => {
+  // Filtros nuevos => vuelve a la página 1 en el mismo render (sin efecto encadenado).
+  const [prevFilters, setPrevFilters] = useState({ categoryFilter, debouncedSearch, statusFilters })
+  if (prevFilters.categoryFilter !== categoryFilter || prevFilters.debouncedSearch !== debouncedSearch || prevFilters.statusFilters !== statusFilters) {
+    setPrevFilters({ categoryFilter, debouncedSearch, statusFilters })
     setCurrentPage(1)
-  }, [categoryFilter, debouncedSearch, statusFilters])
+  }
 
   useEffect(() => {
     if (!localId) return

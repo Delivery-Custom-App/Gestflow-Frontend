@@ -81,7 +81,7 @@ function createPlane(planeSize, speed) {
           vec3 lastPosition = updatePosition + vec3(0.0,
             noise1 * sin1 * 8.0 + noise2 * sin1 * 8.0
             + noise3 * (abs(sin1) * 2.0 + 0.5)
-            + pow(sin1, 2.0) * 40.0, 0.0);
+            + sin1 * sin1 * 40.0, 0.0);
           vPosition = lastPosition;
           gl_Position = projectionMatrix * modelViewMatrix * vec4(lastPosition, 1.0);
         }
@@ -127,12 +127,9 @@ export function GLSLHills({ cameraZ = 125, planeSize = 256, speed = 0.5 }) {
     camera.lookAt(new THREE.Vector3(0, 28, 0))
     scene.add(plane.mesh)
 
-    let rafId
-
     const renderLoop = () => {
       plane.render(clock.getDelta())
       renderer.render(scene, camera)
-      rafId = requestAnimationFrame(renderLoop)
     }
 
     const resize = () => {
@@ -145,11 +142,11 @@ export function GLSLHills({ cameraZ = 125, planeSize = 256, speed = 0.5 }) {
 
     window.addEventListener('resize', resize)
     resize()
-    renderLoop()
+    renderer.setAnimationLoop(renderLoop)
 
     return () => {
       window.removeEventListener('resize', resize)
-      cancelAnimationFrame(rafId)
+      renderer.setAnimationLoop(null)
       plane.mesh.geometry.dispose()
       plane.mesh.material.dispose()
       renderer.dispose()

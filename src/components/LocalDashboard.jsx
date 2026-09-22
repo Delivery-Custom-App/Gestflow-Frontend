@@ -257,7 +257,7 @@ function KpiDetailDrawer({ open, onClose, orders, dashLoading }) {
                         <div key={s.name} className="flex items-center gap-2">
                           <span className="text-xs w-20 shrink-0 text-[hsl(var(--foreground))]">{s.name}</span>
                           <div className="flex-1 h-2.5 rounded-full bg-[hsl(var(--muted))] overflow-hidden">
-                            <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, backgroundColor: s.fill }} />
+                            <div className="h-full rounded-full transition-[width]" style={{ width: `${pct}%`, backgroundColor: s.fill }} />
                           </div>
                           <span className="text-xs font-bold w-8 text-right" style={{ color: s.fill }}>{s.value}</span>
                         </div>

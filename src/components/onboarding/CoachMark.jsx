@@ -123,7 +123,7 @@ function Tooltip({ rect, title, desc, step, total, onNext, onSkip }) {
             width: i === step ? 16 : 5, height: 5,
             borderRadius: 3,
             background: i === step ? 'hsl(var(--primary))' : 'rgba(255,255,255,0.55)',
-            transition: 'all 0.25s',
+            transition: 'width 0.25s, background 0.25s',
           }} />
         ))}
       </div>

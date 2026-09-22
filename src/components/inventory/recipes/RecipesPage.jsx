@@ -28,17 +28,19 @@ function RecipesPage() {
   const [guideOpen, setGuideOpen] = useState(false)
 
   useEffect(() => {
+    let cancelled = false
     const loadCategories = async () => {
       try {
         // SEC-04: el endpoint /recipes/categories no existe en el backend monolito.
         // Se usa /categories (mismo que CreateRecipeModal para asignar la categoría).
         const data = await getCategoriesForLocal(localId)
-        setCategories(Array.isArray(data) ? data : [])
+        if (!cancelled) setCategories(Array.isArray(data) ? data : [])
       } catch {
-        setCategories([])
+        if (!cancelled) setCategories([])
       }
     }
     if (localId) loadCategories()
+    return () => { cancelled = true }
   }, [localId])
 
   useEffect(() => {

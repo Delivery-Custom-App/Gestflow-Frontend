@@ -315,20 +315,16 @@ function Sidebar({ collapsed, onToggle, onClose }) {
       <nav className="flex-1 overflow-y-auto py-3 px-2 no-scrollbar">
         {/* DESCUBRIR */}
         <div className="mb-3">
-          {discoverItems.length > 0 && (
-            <>
-              <AnimatePresence>
-                {!collapsed && (
-                  <m.p
-                    initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                    className="px-3 pb-1.5 text-xs text-[hsl(var(--muted-foreground))]"
-                  >
-                    Descubrir
-                  </m.p>
-                )}
-              </AnimatePresence>
-            </>
-          )}
+          <AnimatePresence>
+            {discoverItems.length > 0 && !collapsed && (
+              <m.p
+                initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                className="px-3 pb-1.5 text-xs text-[hsl(var(--muted-foreground))]"
+              >
+                Descubrir
+              </m.p>
+            )}
+          </AnimatePresence>
 
           <div className={cn('rounded-xl border border-[hsl(var(--border))] flex flex-col gap-0.5', collapsed ? 'p-1' : 'p-1.5')}>
             {discoverItems.map((item) => navBtn(item, false, true))}

@@ -40,14 +40,7 @@ function RegisterSupplierModal({ open, onClose, onSuccess, businessId, localId }
   const [catsLoading, setCatsLoading] = useState(false)
 
   useEffect(() => {
-    if (!open) return
-    setFormState(INITIAL)
-    setRutType('comercial')
-    setError('')
-    setFieldErrors({})
-    setSubmitting(false)
-
-    if (!localId) return
+    if (!open || !localId) return
     setCatsLoading(true)
     apiRequest(`/categories?local_id=${localId}`)
       .then((data) => setCategories(Array.isArray(data) ? data : []))
@@ -144,6 +137,7 @@ function RegisterSupplierModal({ open, onClose, onSuccess, businessId, localId }
         }
       }
       onSuccess?.()
+      resetForm()
       onClose?.()
     } catch (err) {
       setError(err?.message || 'No se pudo registrar el proveedor.')
@@ -152,7 +146,19 @@ function RegisterSupplierModal({ open, onClose, onSuccess, businessId, localId }
     }
   }
 
-  const handleClose = () => { if (!submitting) onClose?.() }
+  /** Deja el formulario vacío para la próxima apertura (todos los cierres pasan por aquí). */
+  const resetForm = () => {
+    setFormState(INITIAL)
+    setRutType('comercial')
+    setError('')
+    setFieldErrors({})
+  }
+
+  const handleClose = () => {
+    if (submitting) return
+    resetForm()
+    onClose?.()
+  }
 
   const fe = (key) => fieldErrors[key]
   const inputCls = (key) =>

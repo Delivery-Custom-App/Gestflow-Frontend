@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useMesaDetail } from '../../hooks/useMesaDetail'
 import { useMenuPOS } from '../../hooks/useMenuPOS'
@@ -32,7 +32,7 @@ export default function MesaDetail() {
 
   const [agregados, setAgregados] = useState({})
   const [showPicker, setShowPicker] = useState(false)
-  const [pickerOrderId, setPickerOrderId] = useState(null)
+  const pickerOrderIdRef = useRef(null) // orden destino del picker; solo se lee al agregar
   const [pickerSearch, setPickerSearch] = useState('')
   const [addingProduct, setAddingProduct] = useState(false)
   const [addError, setAddError] = useState(null)
@@ -61,7 +61,7 @@ export default function MesaDetail() {
   const limpiarExtras = () => setAgregados({})
 
   const handleOpenPicker = (orderId = null) => {
-    setPickerOrderId(orderId)
+    pickerOrderIdRef.current = orderId
     setAddError(null)
     setPickerSearch('')
     fetchMenu()
@@ -72,7 +72,7 @@ export default function MesaDetail() {
     setAddingProduct(true)
     setAddError(null)
     try {
-      let orderId = pickerOrderId
+      let orderId = pickerOrderIdRef.current
 
       if (!orderId) {
         const newOrder = await createOrder({
@@ -100,7 +100,7 @@ export default function MesaDetail() {
     } finally {
       setAddingProduct(false)
     }
-  }, [pickerOrderId, localId, mesaId, cajaId, refresh, fetchMenu])
+  }, [localId, mesaId, cajaId, refresh, fetchMenu])
 
   const pickerMenu = (menuData?.categories || []).filter((cat) => (cat.products?.length || 0) > 0)
   const handleGoBack = () => navigate(`/local/${localId}/pos`)
