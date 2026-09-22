@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useMemo } from 'react'
 import { Outlet, useNavigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { useLocals } from '../hooks/useLocals'
@@ -25,7 +25,6 @@ const ROLE_BADGE_LABEL = {
 
 const PLAN_BADGE_LABEL = { enterprise: 'Enterprise', professional: 'Professional', starter: 'Standard', basic: 'Standard' }
 import CoachMark from './onboarding/CoachMark'
-import { useOnboarding } from '../context/OnboardingContext'
 import { isSuperAdminRole, isAdminNegocioRole, normalizeRoleKey } from '../auth/roleLabel'
 import { WORKER_ROLES } from '../constants/roles'
 import { isDirectSaleDemoUser } from '../constants/demoMode'
@@ -102,7 +101,6 @@ const ACCORDIONS = [
 /* ── Sidebar ────────────────────────────────────────────────────── */
 function Sidebar({ collapsed, onToggle, onClose }) {
   const { user, userRole, logout } = useAuth()
-  const { restart: restartTour } = useOnboarding()
   const { business } = useCurrentBusiness()
   const isSuperAdmin = isSuperAdminRole(userRole)
   const isOwner = isAdminNegocioRole(userRole)
@@ -261,7 +259,8 @@ function Sidebar({ collapsed, onToggle, onClose }) {
 
   return (
     <motion.aside
-      animate={{ width: collapsed ? 90 : 240 }}
+      layout
+      style={{ width: collapsed ? 90 : 240 }}
       transition={{ type: 'spring', stiffness: 320, damping: 30 }}
       className="shrink-0 flex flex-col bg-[hsl(var(--card))] border-r border-[hsl(var(--border))] h-screen sticky top-0 overflow-hidden z-20"
     >
@@ -417,9 +416,9 @@ function Sidebar({ collapsed, onToggle, onClose }) {
               <AnimatePresence initial={false}>
                 {open && !collapsed && (
                   <motion.div
-                    initial={{ height: 0, opacity: 0 }}
-                    animate={{ height: 'auto', opacity: 1 }}
-                    exit={{ height: 0, opacity: 0 }}
+                    initial={{ y: -6, opacity: 0 }}
+                    animate={{ y: 0, opacity: 1 }}
+                    exit={{ y: -6, opacity: 0 }}
                     transition={{ duration: 0.22, ease: 'easeInOut' }}
                     className="overflow-hidden"
                   >
@@ -483,7 +482,7 @@ function TopBar({ localId }) {
     try {
       document.documentElement.classList.toggle('dark', next)
       window.localStorage.setItem('theme', next ? 'dark' : 'light')
-    } catch {}
+    } catch { /* storage no disponible */ }
   }
 
   const selectedLocal = useMemo(() => {
@@ -536,21 +535,19 @@ function AppShell() {
   const [collapsed, setCollapsed] = useState(() => {
     try { return window.localStorage.getItem('appSidebarCollapsed') === '1' } catch { return false }
   })
-  const [mobileOpen, setMobileOpen] = useState(false)
 
   const { pathname } = useLocation()
   const localIdMatch = pathname.match(/\/local\/([^/]+)/)
   const localId = localIdMatch ? localIdMatch[1] : null
 
-  /* Cierra el drawer móvil al cambiar de ruta */
-  useEffect(() => { setMobileOpen(false) }, [pathname])
-
+  /* El drawer móvil queda abierto solo en la ruta donde se abrió: al navegar se cierra. */
+  const [mobileOpenPath, setMobileOpenPath] = useState(null)
+  const mobileOpen = mobileOpenPath === pathname
+  const closeMobile = () => setMobileOpenPath(null)
   const handleToggle = () => {
-    setCollapsed((v) => {
-      const next = !v
-      try { window.localStorage.setItem('appSidebarCollapsed', next ? '1' : '0') } catch {}
-      return next
-    })
+    const next = !collapsed
+    setCollapsed(next)
+    try { window.localStorage.setItem('appSidebarCollapsed', next ? '1' : '0') } catch { /* storage no disponible */ }
   }
 
   return (
@@ -566,7 +563,7 @@ function AppShell() {
             exit={{ opacity: 0 }}
             transition={{ duration: 0.2 }}
             className="fixed inset-0 bg-black/50 z-30 md:hidden"
-            onClick={() => setMobileOpen(false)}
+            onClick={() => closeMobile()}
           />
         )}
       </AnimatePresence>
@@ -582,7 +579,7 @@ function AppShell() {
         <Sidebar
           collapsed={mobileOpen ? false : collapsed}
           onToggle={handleToggle}
-          onClose={() => setMobileOpen(false)}
+          onClose={() => closeMobile()}
         />
       </div>
 

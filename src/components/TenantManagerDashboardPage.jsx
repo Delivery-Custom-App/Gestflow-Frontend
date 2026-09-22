@@ -71,10 +71,11 @@ function StatusBar({ data }) {
           </div>
           <div className="h-1.5 rounded-full bg-[hsl(var(--muted))] overflow-hidden">
             <motion.div
-              initial={{ width: 0 }}
-              animate={{ width: `${(value / total) * 100}%` }}
+              initial={{ scaleX: 0 }}
+              animate={{ scaleX: value / total }}
               transition={{ duration: 0.6 }}
-              className="h-full rounded-full bg-[hsl(var(--primary))]"
+              style={{ originX: 0 }}
+              className="h-full w-full rounded-full bg-[hsl(var(--primary))]"
             />
           </div>
         </div>
@@ -97,10 +98,11 @@ function DistributionList({ data, color }) {
           </div>
           <div className="h-1.5 rounded-full bg-[hsl(var(--muted))] overflow-hidden">
             <motion.div
-              initial={{ width: 0 }}
-              animate={{ width: `${(value / total) * 100}%` }}
+              initial={{ scaleX: 0 }}
+              animate={{ scaleX: value / total }}
               transition={{ duration: 0.6 }}
-              className={`h-full rounded-full ${color || 'bg-[hsl(var(--primary))]'}`}
+              style={{ originX: 0 }}
+              className={`h-full w-full rounded-full ${color || 'bg-[hsl(var(--primary))]'}`}
             />
           </div>
         </div>

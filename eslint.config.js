@@ -23,7 +23,10 @@ export default defineConfig([
       },
     },
     rules: {
-      'no-unused-vars': ['error', { varsIgnorePattern: '^[A-Z_]' }],
+      // El core de ESLint no rastrea usos en JSX: se ignoran componentes
+      // (Mayúscula), `motion`/`m` de framer-motion (<motion.div>, <m.div>) y
+      // props renombradas a componente ({ icon: Icon }).
+      'no-unused-vars': ['error', { varsIgnorePattern: '^(?:[A-Z_]|m$|motion$)', argsIgnorePattern: '^[A-Z_]' }],
     },
   },
   {

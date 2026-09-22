@@ -47,7 +47,6 @@ export function AppAuthProvider({ children }) {
     const checkSession = async () => {
       const session = getStoredSession()
       if (!session?.access_token) {
-        setTimeout(() => setAppLoading(false), 600)
         return
       }
 
@@ -58,14 +57,12 @@ export function AppAuthProvider({ children }) {
 
         if (!accessToken) {
           await clearPreviousSession()
-          setTimeout(() => setAppLoading(false), 600)
           return
         }
 
         const sessionUser = await fetchCurrentUser(accessToken)
         if (!sessionUser) {
           await clearPreviousSession()
-          setTimeout(() => setAppLoading(false), 600)
           return
         }
 
@@ -73,14 +70,21 @@ export function AppAuthProvider({ children }) {
 
         setUser(sessionUser)
         setUserRole(formatRoleLabel(roleFromDb))
-        setTimeout(() => setAppLoading(false), 600)
       } catch {
         await clearPreviousSession()
-        setTimeout(() => setAppLoading(false), 600)
       }
     }
 
-    checkSession()
+    // El loader se mantiene 600ms extra para evitar un parpadeo al arrancar.
+    let cancelled = false
+    let loadingTimer
+    checkSession().finally(() => {
+      if (!cancelled) loadingTimer = setTimeout(() => setAppLoading(false), 600)
+    })
+    return () => {
+      cancelled = true
+      clearTimeout(loadingTimer)
+    }
   }, [clearPreviousSession])
 
   useEffect(() => {
@@ -201,6 +205,8 @@ export function AppAuthProvider({ children }) {
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }
 
+// Patrón estándar de contexto: el hook vive junto a su Provider (se importa en 17 archivos).
+// eslint-disable-next-line react-refresh/only-export-components
 export function useAuth() {
   const ctx = useContext(AuthContext)
   if (!ctx) {
@@ -211,25 +217,27 @@ export function useAuth() {
 
 /** Tests / montajes aislados: contexto estático sin backend de auth. */
 export function AuthProvider({ user, userRole, logout, children }) {
-  const role = userRole ?? null
-  const value = useMemo(() => ({
-    user: user ?? null,
-    userRole: role,
-    logout,
-    isWorker: role != null && WORKER_ROLES.includes(role),
-    isInventoryAdmin: isInventoryAdminRole(role),
-    appLoading: false,
-    login: {
-      email: '',
-      setEmail: () => {},
-      password: '',
-      setPassword: () => {},
-      isLoading: false,
-      errorMessage: '',
-      successMessage: '',
-      handleSubmit: (event) => event?.preventDefault?.(),
-    },
-  }), [user, userRole, logout])
+  const value = useMemo(() => {
+    const role = userRole ?? null
+    return {
+      user: user ?? null,
+      userRole: role,
+      logout,
+      isWorker: role != null && WORKER_ROLES.includes(role),
+      isInventoryAdmin: isInventoryAdminRole(role),
+      appLoading: false,
+      login: {
+        email: '',
+        setEmail: () => {},
+        password: '',
+        setPassword: () => {},
+        isLoading: false,
+        errorMessage: '',
+        successMessage: '',
+        handleSubmit: (event) => event?.preventDefault?.(),
+      },
+    }
+  }, [user, userRole, logout])
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }

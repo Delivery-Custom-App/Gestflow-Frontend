@@ -234,10 +234,11 @@ export default function ObservabilityPage() {
                         </div>
                         <div className="mt-2 h-1.5 rounded-full bg-[hsl(var(--muted))] overflow-hidden">
                           <motion.div
-                            initial={{ width: 0 }}
-                            animate={{ width: `${maxAvg ? (e.avg_ms / maxAvg) * 100 : 0}%` }}
+                            initial={{ scaleX: 0 }}
+                            animate={{ scaleX: maxAvg ? e.avg_ms / maxAvg : 0 }}
                             transition={{ duration: 0.5 }}
-                            className={`h-full rounded-full ${latencyColor(e.avg_ms)}`}
+                            style={{ originX: 0 }}
+                            className={`h-full w-full rounded-full ${latencyColor(e.avg_ms)}`}
                           />
                         </div>
                       </motion.div>

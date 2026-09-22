@@ -22,11 +22,12 @@ export function useMesasKPIs(localId) {
   }, [localId])
 
   useEffect(() => {
+    if (!localId) return
     setLoading(true)
     fetchKpis()
     intervalRef.current = setInterval(fetchKpis, POLL_INTERVAL_MS)
     return () => clearInterval(intervalRef.current)
-  }, [fetchKpis])
+  }, [localId, fetchKpis])
 
   return { kpis, loading, error, refresh: fetchKpis }
 }
