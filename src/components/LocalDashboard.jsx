@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
-import { useParams } from 'react-router-dom'
+import { useParams } from 'react-router'
 import { motion, AnimatePresence } from 'framer-motion'
 import { formatCLPDisplay as formatMoney } from '../lib/formatCLP'
 import { getInventoryKpisByLocal } from '../lib/inventoryApi'

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
-import { useParams } from 'react-router-dom'
+import { useParams } from 'react-router'
 import { CreditCard, Printer } from 'lucide-react'
 import { apiRequest } from '../../lib/apiClient'
 import { cancelOrder, createOrder, fetchProductsCatalog } from '../../lib/salesApi'

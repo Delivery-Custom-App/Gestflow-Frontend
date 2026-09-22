@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { useParams } from 'react-router'
 import { useSelectedLocal } from '../../hooks/useSelectedLocal'
 import { motion, AnimatePresence } from 'framer-motion'
 import { getAuthContext } from '../../lib/apiClient'

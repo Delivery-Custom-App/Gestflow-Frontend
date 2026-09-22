@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { formatShortAddress } from '../lib/formatAddress'
-import { Navigate, useLocation, useNavigate, useParams } from 'react-router-dom'
+import { Navigate, useLocation, useNavigate, useParams } from 'react-router'
 import { useSelectedLocal } from '../hooks/useSelectedLocal'
 import { parseApiDate } from '../utils/chileDateTime'
 import { getLocalById } from '../lib/inventoryApi'

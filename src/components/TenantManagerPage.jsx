@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Link } from 'react-router-dom'
+import { Link } from 'react-router'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Building2, Plus, Pencil, Trash2, X, Loader2, Search, History, Power, ShieldAlert, HelpCircle, ExternalLink } from 'lucide-react'
 import { getAuthContext } from '../lib/apiClient'

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { useNavigate, useLocation } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router'
 import { useLocals } from '../hooks/useLocals'
 import { useAuth } from '../context/AuthContext'
 import CreateLocalDrawer from './CreateLocalDrawer'

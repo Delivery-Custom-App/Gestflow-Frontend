@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router'
 import { useSelectedLocal } from '../../hooks/useSelectedLocal'
 import {
   Cell, BarChart, Bar, XAxis, YAxis, Tooltip,
