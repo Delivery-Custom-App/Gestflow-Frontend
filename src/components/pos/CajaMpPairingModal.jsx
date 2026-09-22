@@ -130,7 +130,7 @@ export default function CajaMpPairingModal({ caja, localId, onClose, onUpdated }
             <h2 className="font-semibold text-[hsl(var(--foreground))] text-sm">Vincular MercadoPago</h2>
             <p className="text-xs text-[hsl(var(--muted-foreground))]">Caja: <span className="font-bold text-[hsl(var(--foreground))]">{caja?.name}</span></p>
           </div>
-          <button
+          <button type="button" aria-label="Cerrar"
             onClick={onClose}
             className="text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] text-xl leading-none disabled:opacity-30"
             disabled={step === 'provisioning' || step === 'verifying' || assigning}
@@ -227,27 +227,27 @@ export default function CajaMpPairingModal({ caja, localId, onClose, onUpdated }
               </p>
               {error && <p className="text-xs text-red-600">{error}</p>}
               <div className="flex flex-col gap-1.5">
-                <label className={labelCls}>Calle</label>
-                <input required className={inputCls} value={location.street_name} onChange={e => setLocation(l => ({ ...l, street_name: e.target.value }))} placeholder="Ej: Veinte Norte" />
+                <label htmlFor="caja-mp-pairing-modal-calle" className={labelCls}>Calle</label>
+                <input id="caja-mp-pairing-modal-calle" required className={inputCls} value={location.street_name} onChange={e => setLocation(l => ({ ...l, street_name: e.target.value }))} placeholder="Ej: Veinte Norte" />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="flex flex-col gap-1.5">
-                  <label className={labelCls}>Comuna</label>
-                  <input required className={inputCls} value={location.city_name} onChange={e => setLocation(l => ({ ...l, city_name: e.target.value }))} placeholder="Ej: Viña Del Mar" />
+                  <label htmlFor="caja-mp-pairing-modal-comuna" className={labelCls}>Comuna</label>
+                  <input id="caja-mp-pairing-modal-comuna" required className={inputCls} value={location.city_name} onChange={e => setLocation(l => ({ ...l, city_name: e.target.value }))} placeholder="Ej: Viña Del Mar" />
                 </div>
                 <div className="flex flex-col gap-1.5">
-                  <label className={labelCls}>Región</label>
-                  <input required className={inputCls} value={location.state_name} onChange={e => setLocation(l => ({ ...l, state_name: e.target.value }))} placeholder="Ej: Valparaíso" />
+                  <label htmlFor="caja-mp-pairing-modal-region" className={labelCls}>Región</label>
+                  <input id="caja-mp-pairing-modal-region" required className={inputCls} value={location.state_name} onChange={e => setLocation(l => ({ ...l, state_name: e.target.value }))} placeholder="Ej: Valparaíso" />
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="flex flex-col gap-1.5">
-                  <label className={labelCls}>Latitud</label>
-                  <input required type="number" step="any" className={inputCls} value={location.latitude} onChange={e => setLocation(l => ({ ...l, latitude: e.target.value }))} placeholder="-33.0125" />
+                  <label htmlFor="caja-mp-pairing-modal-latitud" className={labelCls}>Latitud</label>
+                  <input id="caja-mp-pairing-modal-latitud" required type="number" step="any" className={inputCls} value={location.latitude} onChange={e => setLocation(l => ({ ...l, latitude: e.target.value }))} placeholder="-33.0125" />
                 </div>
                 <div className="flex flex-col gap-1.5">
-                  <label className={labelCls}>Longitud</label>
-                  <input required type="number" step="any" className={inputCls} value={location.longitude} onChange={e => setLocation(l => ({ ...l, longitude: e.target.value }))} placeholder="-71.5422" />
+                  <label htmlFor="caja-mp-pairing-modal-longitud" className={labelCls}>Longitud</label>
+                  <input id="caja-mp-pairing-modal-longitud" required type="number" step="any" className={inputCls} value={location.longitude} onChange={e => setLocation(l => ({ ...l, longitude: e.target.value }))} placeholder="-71.5422" />
                 </div>
               </div>
               <button type="submit" disabled={savingLocation} className="w-full py-2.5 rounded-xl bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))] text-sm font-semibold hover:opacity-90 disabled:opacity-50 transition-opacity">

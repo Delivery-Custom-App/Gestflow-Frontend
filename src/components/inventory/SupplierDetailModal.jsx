@@ -259,7 +259,7 @@ function SupplierDetailModal({ open, supplierId, businessId, row, onClose, onTog
               </Badge>
             )}
           </div>
-          <button
+          <button aria-label="Cerrar"
             type="button"
             onClick={handleClose}
             className="rounded-lg p-2 hover:bg-[hsl(var(--muted))] transition-colors"

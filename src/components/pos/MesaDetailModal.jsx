@@ -201,7 +201,7 @@ export default function MesaDetailModal({ mesa, localId, cajaId, onClose, onTabl
 
         {error && (
           <div className="mx-5 mt-3 px-3 py-2 rounded-lg bg-red-50 border border-red-200 text-sm text-red-600">
-            {error}<button className="ml-2 underline text-xs" onClick={() => setError('')}>✕</button>
+            {error}<button type="button" aria-label="Cerrar mensaje de error" className="ml-2 underline text-xs" onClick={() => setError('')}>✕</button>
           </div>
         )}
 

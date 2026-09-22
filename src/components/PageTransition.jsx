@@ -1,4 +1,4 @@
-import { motion } from 'framer-motion'
+import { m } from 'framer-motion'
 
 const variants = {
   initial: { opacity: 0, y: 16 },
@@ -16,7 +16,7 @@ const variants = {
 
 function PageTransition({ children, className = '' }) {
   return (
-    <motion.div
+    <m.div
       className={className}
       variants={variants}
       initial="initial"
@@ -24,7 +24,7 @@ function PageTransition({ children, className = '' }) {
       exit="exit"
     >
       {children}
-    </motion.div>
+    </m.div>
   )
 }
 

@@ -181,7 +181,7 @@ function CreateLocalDrawer({ isOpen, onClose, onSuccess }) {
               <p className="text-xs text-[hsl(var(--muted-foreground))]">Completa los datos del nuevo local</p>
             </div>
           </div>
-          <button
+          <button aria-label="Cerrar"
             type="button"
             onClick={handleClose}
             disabled={isBusy}

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import {
   CreditCard, Trash2, RefreshCw, X,
@@ -26,7 +26,7 @@ function displayMachineId(device) {
 
 export default function MPConfigDrawer({ localId, onClose, open = true }) {
   // ── Credentials ──────────────────────────────────────────────────────────
-  const [mpStatus, setMpStatus]           = useState(null)
+  const [mpStatus, setMpStatus]           = useState(undefined) // undefined = cargando
   const [tokenInput, setTokenInput]       = useState('')
   const [savingCred, setSavingCred]       = useState(false)
 
@@ -38,7 +38,6 @@ export default function MPConfigDrawer({ localId, onClose, open = true }) {
   // ── Devices ───────────────────────────────────────────────────────────────
   const [registered, setRegistered]   = useState([])
   const [discovered, setDiscovered]   = useState(null)
-  const [loading, setLoading]         = useState(true)
   const [discovering, setDiscovering] = useState(false)
   const [linking, setLinking]         = useState(null)
 
@@ -48,38 +47,46 @@ export default function MPConfigDrawer({ localId, onClose, open = true }) {
   const [saving, setSaving]           = useState(false)
   const [togglingMode, setTogglingMode] = useState(null)
 
-  useEffect(() => {
-    if (open) fetchAll()
-    return () => cancelOAuthListeners()
-  }, [localId, open])
+  const loading = mpStatus === undefined
 
-  async function fetchAll() {
-    setLoading(true)
+  /** `isStale` permite descartar la respuesta si el efecto que la pidió ya se limpió. */
+  const fetchAll = useCallback(async (isStale = () => false) => {
     try {
       const status = await apiRequest(`/locals/${localId}/mp-settings`)
+      if (isStale()) return
       setMpStatus(status)
 
       if (MP_POS_WEBHOOKS) {
         const posData = await apiRequest(`/webhooks/mercadopago-pos?local_id=${localId}`).catch(() => [])
+        if (isStale()) return
         setRegistered(posData || [])
       } else {
         setRegistered([])
       }
     } catch (err) {
+      if (isStale()) return
       setMpStatus(null)
       toast.error('No se pudo cargar la configuración: ' + err.message)
-    } finally {
-      setLoading(false)
     }
-  }
+  }, [localId])
 
-  // ── OAuth handlers ────────────────────────────────────────────────────────
-  function cancelOAuthListeners() {
+  const cancelOAuthListeners = useCallback(() => {
     if (oauthCleanupRef.current) {
       oauthCleanupRef.current()
       oauthCleanupRef.current = null
     }
-  }
+  }, [])
+
+  useEffect(() => {
+    let stale = false
+    if (open) fetchAll(() => stale)
+    return () => {
+      stale = true
+      cancelOAuthListeners()
+    }
+  }, [open, fetchAll, cancelOAuthListeners])
+
+  // ── OAuth handlers ────────────────────────────────────────────────────────
 
   async function handleOAuthConnect() {
     if (!localId || oauthConnecting) return
@@ -329,7 +336,7 @@ export default function MPConfigDrawer({ localId, onClose, open = true }) {
               <p className="text-xs text-[hsl(var(--muted-foreground))]">MercadoPago Point</p>
             </div>
           </div>
-          <button onClick={onClose} className="rounded-lg p-2 hover:bg-[hsl(var(--muted))] transition-colors">
+          <button type="button" aria-label="Cerrar" onClick={onClose} className="rounded-lg p-2 hover:bg-[hsl(var(--muted))] transition-colors">
             <X className="h-4 w-4 text-[hsl(var(--muted-foreground))]" />
           </button>
         </div>

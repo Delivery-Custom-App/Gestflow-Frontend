@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext'
 import { useLocals } from '../hooks/useLocals'
 import { useCurrentBusiness } from '../hooks/useCurrentBusiness'
 import { useTheme } from '../context/ThemeContext'
-import { motion, AnimatePresence } from 'framer-motion'
+import { m, AnimatePresence } from 'framer-motion'
 import { cn } from '@/lib/utils'
 import {
   LayoutDashboard, Store, ChevronDown, ChevronLeft, ChevronRight,
@@ -244,13 +244,13 @@ function Sidebar({ collapsed, onToggle, onClose }) {
         {(!hideIcon || collapsed) && <Icon size={small ? 14 : 16} className="shrink-0" />}
         <AnimatePresence>
           {!collapsed && (
-            <motion.span
+            <m.span
               initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
               className="truncate flex items-center gap-1.5"
             >
               {item.label}
               {isDisabled && <span className="text-[9px] font-semibold uppercase tracking-wide opacity-70">pronto</span>}
-            </motion.span>
+            </m.span>
           )}
         </AnimatePresence>
       </button>
@@ -258,7 +258,7 @@ function Sidebar({ collapsed, onToggle, onClose }) {
   }
 
   return (
-    <motion.aside
+    <m.aside
       layout
       style={{ width: collapsed ? 90 : 240 }}
       transition={{ type: 'spring', stiffness: 320, damping: 30 }}
@@ -319,12 +319,12 @@ function Sidebar({ collapsed, onToggle, onClose }) {
             <>
               <AnimatePresence>
                 {!collapsed && (
-                  <motion.p
+                  <m.p
                     initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
                     className="px-3 pb-1.5 text-xs text-[hsl(var(--muted-foreground))]"
                   >
                     Descubrir
-                  </motion.p>
+                  </m.p>
                 )}
               </AnimatePresence>
             </>
@@ -348,9 +348,9 @@ function Sidebar({ collapsed, onToggle, onClose }) {
               {collapsed && <Settings size={16} className="shrink-0" />}
               <AnimatePresence>
                 {!collapsed && (
-                  <motion.span initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex-1 text-left">
+                  <m.span initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex-1 text-left">
                     Configuración
-                  </motion.span>
+                  </m.span>
                 )}
               </AnimatePresence>
             </button>
@@ -383,17 +383,17 @@ function Sidebar({ collapsed, onToggle, onClose }) {
                   <Icon size={16} className="shrink-0" />
                   <AnimatePresence>
                     {!collapsed && (
-                      <motion.span
+                      <m.span
                         initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
                         className="flex-1 truncate text-left"
                       >
                         {section.label}
-                      </motion.span>
+                      </m.span>
                     )}
                   </AnimatePresence>
                 </button>
                 {!collapsed && (
-                  <button
+                  <button type="button" aria-label={`${open ? 'Contraer' : 'Expandir'} ${section.label}`} aria-expanded={open}
                     onClick={() => toggleAccordion(section.key)}
                     className={cn(
                       'flex items-center justify-center w-8 h-8 shrink-0 rounded-r-lg transition-colors',
@@ -402,20 +402,20 @@ function Sidebar({ collapsed, onToggle, onClose }) {
                         : 'text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--accent))] hover:text-[hsl(var(--foreground))]',
                     )}
                   >
-                    <motion.span
+                    <m.span
                       animate={{ rotate: open ? 180 : 0 }}
                       transition={{ duration: 0.2 }}
                       className="flex items-center justify-center"
                     >
                       <ChevronDown size={14} />
-                    </motion.span>
+                    </m.span>
                   </button>
                 )}
               </div>
 
               <AnimatePresence initial={false}>
                 {open && !collapsed && (
-                  <motion.div
+                  <m.div
                     initial={{ y: -6, opacity: 0 }}
                     animate={{ y: 0, opacity: 1 }}
                     exit={{ y: -6, opacity: 0 }}
@@ -425,7 +425,7 @@ function Sidebar({ collapsed, onToggle, onClose }) {
                     <div className="pl-3 py-1 flex flex-col gap-0.5">
                       {section.items.map((item) => navBtn(item, true))}
                     </div>
-                  </motion.div>
+                  </m.div>
                 )}
               </AnimatePresence>
             </div>
@@ -446,9 +446,9 @@ function Sidebar({ collapsed, onToggle, onClose }) {
           {collapsed && <LogOut size={16} className="shrink-0" />}
           <AnimatePresence>
             {!collapsed && (
-              <motion.span initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+              <m.span initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
                 Cerrar sesión
-              </motion.span>
+              </m.span>
             )}
           </AnimatePresence>
         </button>
@@ -465,7 +465,7 @@ function Sidebar({ collapsed, onToggle, onClose }) {
           </div>
         )}
       </div>
-    </motion.aside>
+    </m.aside>
   )
 }
 
@@ -556,7 +556,7 @@ function AppShell() {
       {/* Overlay backdrop (solo móvil) */}
       <AnimatePresence>
         {mobileOpen && (
-          <motion.div
+          <m.div
             key="mobile-backdrop"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
-import { motion } from 'framer-motion'
+import { m } from 'framer-motion'
 import {
   ArrowLeft, Building2, Store, Users, ShoppingCart, DollarSign, TrendingUp,
   Loader2, Shield, History, Power, UtensilsCrossed, Table2,
@@ -85,7 +85,7 @@ function StatusBar({ data }) {
             <span className="font-semibold text-[hsl(var(--foreground))]">{value}</span>
           </div>
           <div className="h-1.5 rounded-full bg-[hsl(var(--muted))] overflow-hidden">
-            <motion.div
+            <m.div
               initial={{ scaleX: 0 }}
               animate={{ scaleX: value / total }}
               transition={{ duration: 0.6 }}
@@ -334,7 +334,7 @@ export default function TenantDetailPage() {
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
-                        <select
+                        <select aria-label={`Modelo de venta de ${local.name}`}
                           value={alPaso ? SALES_MODEL.AL_PASO : SALES_MODEL.RESTAURANT}
                           disabled={saving}
                           onChange={(e) => handleSalesModelChange(local, e.target.value)}

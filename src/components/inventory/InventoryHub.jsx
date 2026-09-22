@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useSelectedLocal } from '../../hooks/useSelectedLocal'
+// recharts ya se carga bajo demanda: este modulo solo se importa desde paginas con React.lazy
+// (AuthenticatedRoutes) y el build lo deja en un chunk aparte, fuera del bundle inicial.
+// oxlint-disable-next-line react-doctor/prefer-dynamic-import
 import {
   Cell, BarChart, Bar, XAxis, YAxis, Tooltip,
   ResponsiveContainer, CartesianGrid,
@@ -15,7 +18,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
-import { motion, AnimatePresence } from 'framer-motion'
+import { m, AnimatePresence } from 'framer-motion'
 import { formatCLPDisplay as formatMoney } from '../../lib/formatCLP'
 import {
   Package, CheckCircle, TrendingDown, AlertTriangle, DollarSign,
@@ -169,10 +172,10 @@ function InventoryHub() {
     <>
       <AnimatePresence>
         {guideOpen && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+          <m.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4"
             onClick={() => setGuideOpen(false)}>
-            <motion.div initial={{ opacity: 0, scale: 0.95, y: 12 }} animate={{ opacity: 1, scale: 1, y: 0 }}
+            <m.div initial={{ opacity: 0, scale: 0.95, y: 12 }} animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.96, y: 8 }} transition={{ duration: 0.2 }}
               onClick={(e) => e.stopPropagation()}
               className="bg-[hsl(var(--card))] border border-[hsl(var(--border))] rounded-2xl shadow-2xl w-full max-w-lg max-h-[88vh] overflow-y-auto no-scrollbar">
@@ -181,7 +184,7 @@ function InventoryHub() {
                   <HelpCircle size={16} className="text-[hsl(var(--primary))]" />
                   <h3 className="text-sm font-bold text-[hsl(var(--foreground))]">Guía — Inventario</h3>
                 </div>
-                <button onClick={() => setGuideOpen(false)}
+                <button type="button" aria-label="Cerrar guía" onClick={() => setGuideOpen(false)}
                   className="flex items-center justify-center w-7 h-7 rounded-lg text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))] transition-colors">
                   <X size={14} />
                 </button>
@@ -203,8 +206,8 @@ function InventoryHub() {
                   </div>
                 ))}
               </div>
-            </motion.div>
-          </motion.div>
+            </m.div>
+          </m.div>
         )}
       </AnimatePresence>
       <InventoryShell>
@@ -233,12 +236,12 @@ function InventoryHub() {
         ) : (
           <>
             {/* KPI cards */}
-            <motion.div
+            <m.div
               className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3"
               variants={STAGGER} initial="hidden" animate="visible"
             >
               {KPI_CARDS.map((k) => (
-                <motion.div key={k.label} variants={ITEM}>
+                <m.div key={k.label} variants={ITEM}>
                   <Card className={`border-l-4 ${k.accent} h-full`}>
                     <CardContent className="flex items-center gap-4 p-5">
                       <span className={`flex items-center justify-center w-12 h-12 rounded-full shrink-0 ${k.bg} ${k.iconColor}`}>
@@ -253,9 +256,9 @@ function InventoryHub() {
                       </div>
                     </CardContent>
                   </Card>
-                </motion.div>
+                </m.div>
               ))}
-            </motion.div>
+            </m.div>
 
             {/* Charts row */}
             <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">

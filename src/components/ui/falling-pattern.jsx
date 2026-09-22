@@ -1,4 +1,4 @@
-import { motion } from 'framer-motion'
+import { m } from 'framer-motion'
 import { cn } from '@/lib/utils'
 
 const BACKGROUND_SIZES = [
@@ -46,13 +46,13 @@ export function FallingPattern({
 }) {
   return (
     <div className={cn('relative h-full w-full p-1', className)} {...props}>
-      <motion.div
+      <m.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ duration: 0.2 }}
         className="size-full"
       >
-        <motion.div
+        <m.div
           className="relative size-full z-0"
           style={{
             backgroundColor,
@@ -69,7 +69,7 @@ export function FallingPattern({
           initial="initial"
           animate="animate"
         />
-      </motion.div>
+      </m.div>
       <div
         className="absolute inset-0 z-1"
         style={{

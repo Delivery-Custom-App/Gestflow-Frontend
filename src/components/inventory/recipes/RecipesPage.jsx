@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react'
 import { useParams } from 'react-router-dom'
-import { useSelectedLocal } from '../../../hooks/useSelectedLocal'
 import InventoryShell from '../InventoryShell'
 import RecipesList from './RecipesList'
 import RecipeDetail from './RecipeDetail'
@@ -8,13 +7,12 @@ import CreateRecipeModal from './CreateRecipeModal'
 import { useRecipes } from '../../../hooks/useRecipes'
 import { getCategoriesForLocal } from '../../../lib/inventoryApi'
 import { Button } from '@/components/ui/button'
-import { motion, AnimatePresence } from 'framer-motion'
+import { m, AnimatePresence } from 'framer-motion'
 import { BookOpen, HelpCircle, X, DollarSign, Search, Tag, ToggleLeft } from 'lucide-react'
 import { formatCLPOrDash as formatCLP } from '../../../lib/formatCLP'
 
 function RecipesPage() {
   const { localId } = useParams()
-  const selectedLocal = useSelectedLocal(localId)
 
   const { recipes, kpis, loading, error, fetchRecipes, getRecipe, createRecipe, updateRecipe, toggleRecipeStatus, deleteRecipe, fetchKpis } = useRecipes(localId)
 
@@ -115,10 +113,10 @@ function RecipesPage() {
     <>
       <AnimatePresence>
         {guideOpen && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+          <m.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4"
             onClick={() => setGuideOpen(false)}>
-            <motion.div initial={{ opacity: 0, scale: 0.95, y: 12 }} animate={{ opacity: 1, scale: 1, y: 0 }}
+            <m.div initial={{ opacity: 0, scale: 0.95, y: 12 }} animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.96, y: 8 }} transition={{ duration: 0.2 }}
               onClick={(e) => e.stopPropagation()}
               className="bg-[hsl(var(--card))] border border-[hsl(var(--border))] rounded-2xl shadow-2xl w-full max-w-lg max-h-[88vh] overflow-y-auto no-scrollbar">
@@ -127,7 +125,7 @@ function RecipesPage() {
                   <HelpCircle size={16} className="text-[hsl(var(--primary))]" />
                   <h3 className="text-sm font-bold text-[hsl(var(--foreground))]">Guía — Recetas</h3>
                 </div>
-                <button onClick={() => setGuideOpen(false)}
+                <button type="button" aria-label="Cerrar guía" onClick={() => setGuideOpen(false)}
                   className="flex items-center justify-center w-7 h-7 rounded-lg text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))] transition-colors">
                   <X size={14} />
                 </button>
@@ -150,8 +148,8 @@ function RecipesPage() {
                   </div>
                 ))}
               </div>
-            </motion.div>
-          </motion.div>
+            </m.div>
+          </m.div>
         )}
       </AnimatePresence>
       <InventoryShell>
@@ -213,7 +211,7 @@ function RecipesPage() {
             onChange={(e) => setSearchTerm(e.target.value)}
             className={`${selectClass} min-w-[180px]`}
           />
-          <select
+          <select aria-label="Filtrar por categoría"
             className={selectClass}
             value={categoryFilter || ''}
             onChange={(e) => setCategoryFilter(e.target.value || null)}
@@ -223,7 +221,7 @@ function RecipesPage() {
               <option key={cat.id} value={cat.id}>{cat.name}</option>
             ))}
           </select>
-          <select
+          <select aria-label="Filtrar por estado"
             className={selectClass}
             value={statusFilter || ''}
             onChange={(e) => setStatusFilter(e.target.value || null)}

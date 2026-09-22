@@ -324,7 +324,7 @@ function MenuBuilderPage() {
                             onSubmit={handleRenameCategory}
                             className="flex items-center gap-1 rounded-xl border border-[hsl(var(--primary)/0.35)] bg-[hsl(var(--primary)/0.08)] px-2 py-1.5"
                           >
-                            <input
+                            <input aria-label="Nombre de la categoría"
                               value={editingCategoryName}
                               onChange={(e) => setEditingCategoryName(e.target.value)}
                               className="h-8 min-w-0 flex-1 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-2 text-sm"
@@ -353,7 +353,7 @@ function MenuBuilderPage() {
                             <span className={cn('text-[10px] tabular-nums', active ? 'opacity-80' : 'text-[hsl(var(--muted-foreground))]')}>
                               {count}
                             </span>
-                            <span
+                            <span aria-label={`Opciones de ${cat.name}`}
                               role="button"
                               tabIndex={0}
                               onClick={(e) => {

@@ -189,7 +189,7 @@ function RegisterSupplierModal({ open, onClose, onSuccess, businessId, localId }
               <p className="text-xs text-[hsl(var(--muted-foreground))]">Ingrese los datos del Proveedor</p>
             </div>
           </div>
-          <button
+          <button aria-label="Cerrar"
             type="button"
             onClick={handleClose}
             disabled={submitting}

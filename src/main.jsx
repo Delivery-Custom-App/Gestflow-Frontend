@@ -1,6 +1,6 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
-import { MotionConfig } from 'framer-motion'
+import { LazyMotion, MotionConfig, domMax } from 'framer-motion'
 import './index.css'
 import App from './App.jsx'
 
@@ -25,8 +25,11 @@ clearStalePwaState().catch(() => {
 createRoot(document.getElementById('root')).render(
   <StrictMode>
     {/* Respeta "reducir movimiento" del sistema operativo (WCAG 2.3.3). */}
-    <MotionConfig reducedMotion="user">
-      <App />
-    </MotionConfig>
+    {/* LazyMotion + <m.*>: las features de animación se cargan una sola vez (domMax incluye `layout`). */}
+    <LazyMotion features={domMax}>
+      <MotionConfig reducedMotion="user">
+        <App />
+      </MotionConfig>
+    </LazyMotion>
   </StrictMode>,
 )

@@ -283,14 +283,14 @@ export default function MesaDetail() {
                   <div key={nombre} className="flex items-center justify-between p-2 rounded-lg bg-[hsl(var(--accent))]">
                     <span className="text-sm text-[hsl(var(--foreground))]">{nombre}</span>
                     <div className="flex items-center gap-1">
-                      <button
+                      <button type="button" aria-label={`Quitar ${nombre}`}
                         className="w-6 h-6 flex items-center justify-center rounded-full border border-[hsl(var(--border))] text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--destructive))] text-sm"
                         onClick={() => quitarExtra(nombre)}
                       >
                         −
                       </button>
                       <span className="text-xs font-medium w-8 text-center">x{cantidad}</span>
-                      <button
+                      <button type="button" aria-label={`Agregar ${nombre}`}
                         className="w-6 h-6 flex items-center justify-center rounded-full border border-[hsl(var(--border))] text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--primary))] text-sm"
                         onClick={() => agregarExtra(nombre)}
                       >

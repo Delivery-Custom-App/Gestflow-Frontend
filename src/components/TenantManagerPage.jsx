@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Link } from 'react-router-dom'
-import { motion, AnimatePresence } from 'framer-motion'
+import { m, AnimatePresence } from 'framer-motion'
 import { Building2, Plus, Pencil, Trash2, X, Loader2, Search, History, Power, ShieldAlert, HelpCircle, ExternalLink } from 'lucide-react'
 import { getAuthContext } from '../lib/apiClient'
 import {
@@ -135,7 +135,7 @@ function BusinessDrawer({ isOpen, onClose, onSuccess, editing }) {
               <p className="text-xs text-[hsl(var(--muted-foreground))]">{editing ? 'Actualiza los datos del negocio' : 'Registra un nuevo negocio'}</p>
             </div>
           </div>
-          <button type="button" onClick={handleClose} disabled={loading} className="rounded-lg p-2 hover:bg-[hsl(var(--muted))] transition-colors disabled:opacity-50">
+          <button aria-label="Cerrar" type="button" onClick={handleClose} disabled={loading} className="rounded-lg p-2 hover:bg-[hsl(var(--muted))] transition-colors disabled:opacity-50">
             <X className="h-4 w-4 text-[hsl(var(--muted-foreground))]" />
           </button>
         </div>
@@ -195,7 +195,7 @@ function BusinessDrawer({ isOpen, onClose, onSuccess, editing }) {
 function ConfirmDeleteModal({ business, onCancel, onConfirm, loading }) {
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[600] p-4" onClick={onCancel}>
-      <motion.div
+      <m.div
         initial={{ opacity: 0, scale: 0.95, y: 12 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.96, y: 8 }}
@@ -219,7 +219,7 @@ function ConfirmDeleteModal({ business, onCancel, onConfirm, loading }) {
             {loading ? <span className="flex items-center gap-2"><Loader2 className="h-3.5 w-3.5 animate-spin" />Eliminando…</span> : 'Eliminar'}
           </Button>
         </div>
-      </motion.div>
+      </m.div>
     </div>
   )
 }
@@ -228,7 +228,7 @@ function ConfirmSuspendModal({ business, onCancel, onConfirm, loading }) {
   const suspending = business?.is_active !== false
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[600] p-4" onClick={onCancel}>
-      <motion.div
+      <m.div
         initial={{ opacity: 0, scale: 0.95, y: 12 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.96, y: 8 }}
@@ -269,7 +269,7 @@ function ConfirmSuspendModal({ business, onCancel, onConfirm, loading }) {
             ) : suspending ? 'Suspender' : 'Reactivar'}
           </Button>
         </div>
-      </motion.div>
+      </m.div>
     </div>
   )
 }
@@ -282,8 +282,6 @@ function AuditModal({ business, onClose }) {
   useEffect(() => {
     if (!business) return
     let cancelled = false
-    setEntries(null)
-    setErr('')
     ;(async () => {
       try {
         const ctx = await getAuthContext()
@@ -298,7 +296,7 @@ function AuditModal({ business, onClose }) {
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[600] p-4" onClick={onClose}>
-      <motion.div
+      <m.div
         initial={{ opacity: 0, scale: 0.95, y: 12 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.96, y: 8 }}
@@ -311,7 +309,7 @@ function AuditModal({ business, onClose }) {
             <History size={16} className="text-[hsl(var(--primary))]" />
             <h3 className="text-sm font-bold text-[hsl(var(--foreground))]">Auditoría — {business.name}</h3>
           </div>
-          <button onClick={onClose} className="flex items-center justify-center w-7 h-7 rounded-lg text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))] transition-colors">
+          <button type="button" aria-label="Cerrar" onClick={onClose} className="flex items-center justify-center w-7 h-7 rounded-lg text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))] transition-colors">
             <X size={14} />
           </button>
         </div>
@@ -342,7 +340,7 @@ function AuditModal({ business, onClose }) {
             </div>
           )}
         </div>
-      </motion.div>
+      </m.div>
     </div>
   )
 }
@@ -421,7 +419,7 @@ export default function TenantManagerPage() {
       <AnimatePresence>
         {guideOpen && (
           <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={() => setGuideOpen(false)}>
-            <motion.div
+            <m.div
               initial={{ opacity: 0, scale: 0.95, y: 12 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.96, y: 8 }}
@@ -434,7 +432,7 @@ export default function TenantManagerPage() {
                   <HelpCircle size={16} className="text-[hsl(var(--primary))]" />
                   <h3 className="text-sm font-bold text-[hsl(var(--foreground))]">Guía — Gestor de Negocios</h3>
                 </div>
-                <button onClick={() => setGuideOpen(false)} className="flex items-center justify-center w-7 h-7 rounded-lg text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))] transition-colors">
+                <button type="button" aria-label="Cerrar guía" onClick={() => setGuideOpen(false)} className="flex items-center justify-center w-7 h-7 rounded-lg text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))] transition-colors">
                   <X size={14} />
                 </button>
               </div>
@@ -454,7 +452,7 @@ export default function TenantManagerPage() {
                   </div>
                 ))}
               </div>
-            </motion.div>
+            </m.div>
           </div>
         )}
       </AnimatePresence>
@@ -589,7 +587,7 @@ export default function TenantManagerPage() {
       </AnimatePresence>
 
       <AnimatePresence>
-        {auditTarget && <AuditModal business={auditTarget} onClose={() => setAuditTarget(null)} />}
+        {auditTarget && <AuditModal key={auditTarget.id} business={auditTarget} onClose={() => setAuditTarget(null)} />}
       </AnimatePresence>
     </>
   )

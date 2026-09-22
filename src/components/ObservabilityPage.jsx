@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { motion } from 'framer-motion'
+import { m } from 'framer-motion'
 import { Gauge, Loader2, RefreshCw } from 'lucide-react'
 import { getAuthContext, formatApiErrorDetail } from '../lib/apiClient'
 import { getObservability, listBusinesses } from '../lib/superAdminApi'
@@ -101,7 +101,7 @@ export default function ObservabilityPage() {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <select
+            <select aria-label="Filtrar por negocio"
               value={businessId}
               onChange={(e) => setBusinessId(e.target.value)}
               className="w-full sm:w-64 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3 py-2 text-sm text-[hsl(var(--foreground))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary))]/40"
@@ -209,7 +209,7 @@ export default function ObservabilityPage() {
                 ) : (
                   <div className="flex flex-col divide-y divide-[hsl(var(--border))]">
                     {endpoints.map((e, i) => (
-                      <motion.div
+                      <m.div
                         key={`${e.method}-${e.path}`}
                         initial={{ opacity: 0, y: 6 }}
                         animate={{ opacity: 1, y: 0 }}
@@ -233,7 +233,7 @@ export default function ObservabilityPage() {
                           </div>
                         </div>
                         <div className="mt-2 h-1.5 rounded-full bg-[hsl(var(--muted))] overflow-hidden">
-                          <motion.div
+                          <m.div
                             initial={{ scaleX: 0 }}
                             animate={{ scaleX: maxAvg ? e.avg_ms / maxAvg : 0 }}
                             transition={{ duration: 0.5 }}
@@ -241,7 +241,7 @@ export default function ObservabilityPage() {
                             className={`h-full w-full rounded-full ${latencyColor(e.avg_ms)}`}
                           />
                         </div>
-                      </motion.div>
+                      </m.div>
                     ))}
                   </div>
                 )}

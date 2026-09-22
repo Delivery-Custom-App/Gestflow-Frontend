@@ -25,7 +25,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 import { formatCLPCurrency as formatMoney } from '../lib/formatCLP'
-import { motion, AnimatePresence } from 'framer-motion'
+import { m, AnimatePresence } from 'framer-motion'
 import { MapPin, X, ChevronUp, ChevronRight, ShoppingCart, HelpCircle, CreditCard, ArrowLeftRight, Lock } from 'lucide-react'
 
 const sections = [
@@ -186,7 +186,8 @@ function RowCard({ title, sub, meta, pill, receiptUrl }) {
   )
 }
 
-function AmTable({ headers, rows, emptyMessage }) {
+/** rowKeys: ids estables por fila (mismo orden que rows). */
+function AmTable({ headers, rows, rowKeys, emptyMessage }) {
   return (
     <div className="overflow-x-auto rounded-lg border border-[hsl(var(--border))]">
       <table className="w-full text-sm">
@@ -208,9 +209,9 @@ function AmTable({ headers, rows, emptyMessage }) {
             </tr>
           ) : (
             rows.map((row, i) => (
-              <tr key={i} className="border-t border-[hsl(var(--border))] hover:bg-[hsl(var(--muted))/50]">
+              <tr key={rowKeys[i]} className="border-t border-[hsl(var(--border))] hover:bg-[hsl(var(--muted))/50]">
                 {row.map((cell, j) => (
-                  <td key={j} className="px-4 py-3 text-sm text-[hsl(var(--foreground))]">{cell}</td>
+                  <td key={headers[j]} className="px-4 py-3 text-sm text-[hsl(var(--foreground))]">{cell}</td>
                 ))}
               </tr>
             ))
@@ -289,12 +290,12 @@ function periodMeta(ymd, granularity) {
 }
 
 function VentasContent({ orders, loading, error }) {
-  const all = safeArray(orders)
+  const all = useMemo(() => safeArray(orders), [orders])
   const [granularity, setGranularity] = useState('month')
   const [expandedKey, setExpandedKey] = useState(null)
 
   // Últimas 24 horas (ventana rodante)
-  const cutoff24h = useMemo(() => new Date(Date.now() - 24 * 60 * 60 * 1000), [])
+  const [cutoff24h] = useState(() => new Date(Date.now() - 24 * 60 * 60 * 1000))
   const last24h = all.filter((o) => {
     if (!o.created_at) return false
     if (_normalizeOrderStatus(o.status) === 'cancelled') return false
@@ -375,6 +376,7 @@ function VentasContent({ orders, loading, error }) {
         <Panel title="Top Productos" sub="Por ingresos, sobre órdenes completadas">
           <AmTable
             headers={['Producto', 'Unidades', 'Ingresos']}
+            rowKeys={topProducts.slice(0, 8).map((p) => p.product_id ?? p.product_name)}
             rows={topProducts.slice(0, 8).map((p) => [p.product_name || 'Producto sin nombre', toNumber(p.units_sold), formatMoney(p.revenue)])}
             emptyMessage="No hay productos para mostrar."
           />
@@ -556,6 +558,7 @@ function FlujoCajaContent({ dashboard, cajas, resumenDiario, loading, error, onM
       <Panel title="Cajas del Local" sub="Fuente: endpoint /cajas por local">
         <AmTable
           headers={headers}
+          rowKeys={cajasList.map((c) => c.id)}
           rows={cajasList.map((c) => {
             const row = [
               c.name || 'Caja sin nombre',
@@ -694,8 +697,9 @@ function ConfiguracionContent({ localId }) {
 
         <form onSubmit={handleAdd} className="flex gap-2 flex-wrap items-end">
           <div className="flex flex-col gap-1 flex-1 min-w-35">
-            <label className="text-xs text-muted-foreground">ID del POS *</label>
+            <label htmlFor="pos-mp-id" className="text-xs text-muted-foreground">ID del POS *</label>
             <input
+              id="pos-mp-id"
               type="text"
               placeholder="ej: PAX_A920_001"
               value={form.mp_pos_id}
@@ -704,8 +708,9 @@ function ConfiguracionContent({ localId }) {
             />
           </div>
           <div className="flex flex-col gap-1 flex-1 min-w-35">
-            <label className="text-xs text-muted-foreground">Nombre (opcional)</label>
+            <label htmlFor="pos-mp-nombre" className="text-xs text-muted-foreground">Nombre (opcional)</label>
             <input
+              id="pos-mp-nombre"
               type="text"
               placeholder="ej: Caja 1"
               value={form.name}
@@ -756,7 +761,7 @@ function NuevaCajaModal({ localId, onClose, onSaved }) {
 
   return (
     <div className="fixed inset-0 z-50">
-      <div className={cn('absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity duration-300', visible ? 'opacity-100' : 'opacity-0')} onClick={handleClose} />
+      <div className={cn('absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity duration-300', visible ? 'opacity-100' : 'opacity-0')} role="presentation" onClick={handleClose} />
       <div className={cn('absolute inset-y-0 right-0 w-full max-w-md flex flex-col shadow-2xl overflow-y-auto no-scrollbar bg-[hsl(var(--card))] border-l border-[hsl(var(--border))] transition-transform duration-300 ease-out', visible ? 'translate-x-0' : 'translate-x-full')}>
 
         {/* Header */}
@@ -770,7 +775,7 @@ function NuevaCajaModal({ localId, onClose, onSaved }) {
               <p className="text-xs text-[hsl(var(--muted-foreground))]">Crear una caja para este local</p>
             </div>
           </div>
-          <button onClick={handleClose} disabled={saving}
+          <button type="button" aria-label="Cerrar" onClick={handleClose} disabled={saving}
             className="flex h-7 w-7 items-center justify-center rounded-lg hover:bg-[hsl(var(--muted))] text-[hsl(var(--muted-foreground))] transition-colors disabled:opacity-40">
             <X size={14} />
           </button>
@@ -787,8 +792,10 @@ function NuevaCajaModal({ localId, onClose, onSaved }) {
 
           <form onSubmit={handleSubmit} className="flex flex-col gap-4">
             <div className="flex flex-col gap-1.5">
-              <label className={labelCls}>Nombre</label>
-              <input type="text" value={name} onChange={e => setName(e.target.value)} placeholder="Ej: Caja 1" className={inputCls} required autoFocus />
+              <label htmlFor="caja-nombre" className={labelCls}>Nombre</label>
+              {/* Foco al abrir el drawer: patrón de diálogo accesible (WAI-ARIA APG). */}
+              {/* oxlint-disable-next-line react-doctor/no-autofocus */}
+              <input id="caja-nombre" type="text" value={name} onChange={e => setName(e.target.value)} placeholder="Ej: Caja 1" className={inputCls} required autoFocus />
             </div>
 
             <div className="flex gap-2 justify-end pt-1">
@@ -852,6 +859,8 @@ function CajaMovimientosModal({ caja, onClose, onClosed }) {
       } catch (e) {
         if (!ignore) setErr(e?.message || 'No se pudo cargar el movimiento de la caja')
       } finally {
+        // Sí se resetea en finally; la guarda evita que una respuesta obsoleta apague el loader de una carga más nueva.
+        // oxlint-disable-next-line react-doctor/no-loading-flag-reset-outside-finally
         if (!ignore) setLoading(false)
       }
     }
@@ -879,7 +888,7 @@ function CajaMovimientosModal({ caja, onClose, onClosed }) {
 
   return (
     <div className="fixed inset-0 z-50">
-      <div className={cn('absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity duration-300', visible ? 'opacity-100' : 'opacity-0')} onClick={handleClose} />
+      <div className={cn('absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity duration-300', visible ? 'opacity-100' : 'opacity-0')} role="presentation" onClick={handleClose} />
       <div className={cn('absolute inset-y-0 right-0 w-full max-w-md flex flex-col shadow-2xl overflow-y-auto no-scrollbar bg-[hsl(var(--card))] border-l border-[hsl(var(--border))] transition-transform duration-300 ease-out', visible ? 'translate-x-0' : 'translate-x-full')}>
 
         {/* Header */}
@@ -896,7 +905,7 @@ function CajaMovimientosModal({ caja, onClose, onClosed }) {
               </p>
             </div>
           </div>
-          <button onClick={handleClose}
+          <button type="button" aria-label="Cerrar" onClick={handleClose}
             className="flex h-7 w-7 items-center justify-center rounded-lg hover:bg-[hsl(var(--muted))] text-[hsl(var(--muted-foreground))] transition-colors">
             <X size={14} />
           </button>
@@ -1061,6 +1070,8 @@ function AdministrativeModule() {
       } catch (error) {
         if (!ignore) setSectionError(error.message || 'No se pudo cargar la información del módulo')
       } finally {
+        // Sí se resetea en finally; la guarda evita que una respuesta obsoleta apague el loader de una carga más nueva.
+        // oxlint-disable-next-line react-doctor/no-loading-flag-reset-outside-finally
         if (!ignore) setLoading(false)
       }
     }
@@ -1098,10 +1109,10 @@ function AdministrativeModule() {
       )}
       <AnimatePresence>
         {guideOpen && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+          <m.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4"
             onClick={() => setGuideOpen(false)}>
-            <motion.div initial={{ opacity: 0, scale: 0.95, y: 12 }} animate={{ opacity: 1, scale: 1, y: 0 }}
+            <m.div initial={{ opacity: 0, scale: 0.95, y: 12 }} animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.96, y: 8 }} transition={{ duration: 0.2 }}
               onClick={(e) => e.stopPropagation()}
               className="bg-[hsl(var(--card))] border border-[hsl(var(--border))] rounded-2xl shadow-2xl w-full max-w-lg max-h-[88vh] overflow-y-auto no-scrollbar">
@@ -1110,7 +1121,7 @@ function AdministrativeModule() {
                   <HelpCircle size={16} className="text-[hsl(var(--primary))]" />
                   <h3 className="text-sm font-bold text-[hsl(var(--foreground))]">Guía — Módulo Administrativo</h3>
                 </div>
-                <button onClick={() => setGuideOpen(false)}
+                <button type="button" aria-label="Cerrar guía" onClick={() => setGuideOpen(false)}
                   className="flex items-center justify-center w-7 h-7 rounded-lg text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))] transition-colors">
                   <X size={14} />
                 </button>
@@ -1129,8 +1140,8 @@ function AdministrativeModule() {
                   </div>
                 ))}
               </div>
-            </motion.div>
-          </motion.div>
+            </m.div>
+          </m.div>
         )}
       </AnimatePresence>
       <main className="flex-1 overflow-y-auto no-scrollbar px-5 py-6">

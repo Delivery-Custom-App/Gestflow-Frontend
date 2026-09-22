@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { motion } from 'framer-motion'
+import { m } from 'framer-motion'
 import { Eye, EyeOff, ArrowRight, CheckCircle2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -16,14 +16,13 @@ export default function LoginPage({ onShowRegister }) {
     setPassword,
     isLoading,
     errorMessage,
-    successMessage,
     handleSubmit,
   } = login
 
   const [showPassword, setShowPassword] = useState(false)
 
   return (
-    <motion.main
+    <m.main
       className="login-light min-h-screen bg-[#F7F5F0] text-[#0D0D1F]"
       initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
       transition={{ duration: 0.3 }}
@@ -148,6 +147,6 @@ export default function LoginPage({ onShowRegister }) {
           </div>
         </section>
       </div>
-    </motion.main>
+    </m.main>
   )
 }

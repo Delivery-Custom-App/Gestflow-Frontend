@@ -131,7 +131,7 @@ function NuevoProductoModal({ open, localId, onClose, onSuccess }) {
               <p className="text-xs text-[hsl(var(--muted-foreground))]">Ingrese los datos del producto</p>
             </div>
           </div>
-          <button
+          <button aria-label="Cerrar"
             type="button"
             onClick={handleClose}
             disabled={submitting}

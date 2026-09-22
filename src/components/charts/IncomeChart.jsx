@@ -1,3 +1,6 @@
+// recharts ya se carga bajo demanda: este modulo solo se importa desde paginas con React.lazy
+// (AuthenticatedRoutes) y el build lo deja en un chunk aparte, fuera del bundle inicial.
+// oxlint-disable-next-line react-doctor/prefer-dynamic-import
 import {
   AreaChart,
   Area,

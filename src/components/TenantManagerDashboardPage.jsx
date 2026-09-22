@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Link } from 'react-router-dom'
-import { motion } from 'framer-motion'
+import { m } from 'framer-motion'
 import {
   Building2, Users, Store, ShoppingCart, DollarSign, TrendingUp,
   Loader2, ChevronRight, Activity,
@@ -70,7 +70,7 @@ function StatusBar({ data }) {
             <span className="font-semibold text-[hsl(var(--foreground))]">{value}</span>
           </div>
           <div className="h-1.5 rounded-full bg-[hsl(var(--muted))] overflow-hidden">
-            <motion.div
+            <m.div
               initial={{ scaleX: 0 }}
               animate={{ scaleX: value / total }}
               transition={{ duration: 0.6 }}
@@ -97,7 +97,7 @@ function DistributionList({ data, color }) {
             <span className="font-semibold text-[hsl(var(--foreground))]">{value}</span>
           </div>
           <div className="h-1.5 rounded-full bg-[hsl(var(--muted))] overflow-hidden">
-            <motion.div
+            <m.div
               initial={{ scaleX: 0 }}
               animate={{ scaleX: value / total }}
               transition={{ duration: 0.6 }}

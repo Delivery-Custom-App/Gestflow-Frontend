@@ -242,7 +242,7 @@ export default function MultiPaymentModal({ order, orderTotal, onClose, onFullyP
               Total de la orden: <span className="font-bold">${fmt(orderTotal)}</span>
             </p>
           </div>
-          <button
+          <button type="button" aria-label="Cerrar"
             onClick={onClose}
             className="text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] text-xl leading-none"
           >
@@ -446,7 +446,7 @@ export default function MultiPaymentModal({ order, orderTotal, onClose, onFullyP
                 max={remaining}
                 className="flex-1 min-w-0 text-sm px-3 py-2 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--background))] text-[hsl(var(--foreground))] focus:outline-none focus:ring-1 focus:ring-[hsl(var(--primary))]"
               />
-              <select
+              <select aria-label="Método de pago"
                 value={newMethod}
                 onChange={e => setNewMethod(e.target.value)}
                 className="text-sm px-3 py-2 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--background))] text-[hsl(var(--foreground))] focus:outline-none focus:ring-1 focus:ring-[hsl(var(--primary))]"

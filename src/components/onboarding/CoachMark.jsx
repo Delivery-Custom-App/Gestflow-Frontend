@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { ChevronRight, X } from 'lucide-react'
-import { motion, AnimatePresence } from 'framer-motion'
+import { m, AnimatePresence } from 'framer-motion'
 import { useOnboarding } from '../../context/OnboardingContext'
 
 const PAD = 10
@@ -64,7 +64,7 @@ function Tooltip({ rect, title, desc, step, total, onNext, onSkip }) {
               {step + 1}/{total}
             </div>
           </div>
-          <button
+          <button type="button" aria-label="Omitir tour"
             onClick={onSkip}
             style={{ color: '#9ca3af', padding: 2, borderRadius: 4, lineHeight: 1, background: 'none', border: 'none', cursor: 'pointer' }}
           >
@@ -137,10 +137,11 @@ export default function CoachMark() {
   const [tick, setTick] = useState(0)
 
   const currentStep = steps?.[step]
+  const target = currentStep?.target
 
   // Espera que el DOM se estabilice tras navegación, luego busca el elemento
   useEffect(() => {
-    if (!active || !currentStep) { setRect(null); return }
+    if (!active || !target) { setRect(null); return }
 
     setRect(null) // limpia para evitar que se muestre en posición vieja
 
@@ -151,7 +152,7 @@ export default function CoachMark() {
     const startDelay = setTimeout(() => {
       const try_ = () => {
         if (cancelled) return
-        const r = getRect(currentStep.target)
+        const r = getRect(target)
         if (r) { setRect(r); return }
         if (attempts++ < 30) setTimeout(try_, 150)
       }
@@ -167,7 +168,7 @@ export default function CoachMark() {
       window.removeEventListener('resize', onResize)
       window.removeEventListener('scroll', onResize, true)
     }
-  }, [active, step]) // solo step, no currentStep (evita re-trigger por referencia)
+  }, [active, step, target]) // el selector (string), no el objeto currentStep (evita re-trigger por referencia)
 
   // Re-lee posición al hacer resize/scroll
   useEffect(() => {
@@ -181,7 +182,7 @@ export default function CoachMark() {
   return createPortal(
     <AnimatePresence mode="wait">
       {rect && (
-        <motion.div
+        <m.div
           key={step}
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -196,7 +197,7 @@ export default function CoachMark() {
           />
 
           {/* Spotlight cutout via box-shadow */}
-          <motion.div
+          <m.div
             key={`spot-${step}`}
             initial={{ opacity: 0, scale: 0.97 }}
             animate={{ opacity: 1, scale: 1 }}
@@ -235,7 +236,7 @@ export default function CoachMark() {
             onNext={next}
             onSkip={skip}
           />
-        </motion.div>
+        </m.div>
       )}
     </AnimatePresence>,
     document.body
