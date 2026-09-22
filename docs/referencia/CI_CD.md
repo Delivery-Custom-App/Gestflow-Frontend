@@ -66,6 +66,17 @@ Configurada a nivel de repo (GitHub → Settings → Branches), no en el workflo
 
 ## Guía de uso para desarrollo
 
+### Si vas a tocar `package.json`/`package-lock.json` (agregar o actualizar una dependencia)
+
+Usá **npm 10.9.2** localmente antes de commitear el lockfile — es la versión fijada en el workflow (steps "Fijar versión de npm"), que corresponde a la que trae Node 20 en el runner de GitHub Actions. `npm ci` es estricto entre versiones de npm para paquetes opcionales por plataforma (ej. `@emnapi/*`, usados por lightningcss/Tailwind): un lockfile escrito con una versión de npm distinta puede fallar en CI con `Missing: X from lock file` aunque el lockfile sea perfectamente válido y funcione en tu máquina. Esto ya pasó una vez (2026-09-22, ver PR #50) al generar el lockfile con npm 11.
+
+Para verificar antes de subir:
+```bash
+npm install -g npm@10.9.2   # una vez, o usá nvm/corepack para alternar
+rm -rf node_modules
+npm ci                      # debe terminar sin errores, igual que en CI
+```
+
 ### Si tu PR falla en el check `test`
 
 1. **Falla el step "Lint de archivos modificados"**: corré `npx eslint <archivo>` localmente sobre los archivos que tocaste y corregí los errores. No podés mergear con este check en rojo.
