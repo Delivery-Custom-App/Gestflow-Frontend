@@ -23,6 +23,14 @@ jobs:
           node-version: 20
           cache: npm
 
+      # Fija la versión de npm que generó package-lock.json. "npm ci" es
+      # estricto entre versiones de npm para paquetes opcionales por
+      # plataforma (ej. @emnapi/* de lightningcss) — un lockfile escrito
+      # con una versión distinta de npm puede fallar con "Missing: X from
+      # lock file" aunque el lockfile sea válido.
+      - name: Fijar versión de npm
+        run: npm install -g npm@10.9.2
+
       - name: Install dependencies
         run: npm ci
 
@@ -77,6 +85,9 @@ jobs:
         with:
           node-version: 20
           cache: npm
+
+      - name: Fijar versión de npm
+        run: npm install -g npm@10.9.2
 
       - name: Install dependencies
         run: npm ci
