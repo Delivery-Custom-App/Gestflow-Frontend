@@ -1,9 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
-import { formatShortAddress } from '../lib/formatAddress'
-import { Navigate, useLocation, useNavigate, useParams } from 'react-router-dom'
-import { useSelectedLocal } from '../hooks/useSelectedLocal'
+import { Navigate, useLocation, useParams } from 'react-router-dom'
 import { parseApiDate } from '../utils/chileDateTime'
-import { getLocalById } from '../lib/inventoryApi'
 import LoadingSpinner from './LoadingSpinner'
 import IncomeChart from './charts/IncomeChart'
 import CajaMpPairingModal from './pos/CajaMpPairingModal'
@@ -1012,7 +1009,6 @@ function renderSectionContent(activeSection, payload) {
 // ── Main component ─────────────────────────────────────────────
 
 function AdministrativeModule() {
-  const navigate = useNavigate()
   const location = useLocation()
   const { localId, sectionId } = useParams()
   const [sectionData, setSectionData] = useState({ dashboard: null, orders: [], cajas: [] })
@@ -1024,17 +1020,6 @@ function AdministrativeModule() {
   const [refreshKey, setRefreshKey] = useState(0)
   const [guideOpen,  setGuideOpen]  = useState(false)
 
-  const selectedLocalFromHook = useSelectedLocal(localId, 'state-then-locales')
-  const [fetchedLocal, setFetchedLocal] = useState(null)
-
-  useEffect(() => {
-    if (!localId) return
-    getLocalById(localId)
-      .then((data) => { if (data?.id) setFetchedLocal(data) })
-      .catch(() => {})
-  }, [localId])
-
-  const selectedLocal = selectedLocalFromHook ?? fetchedLocal
 
   // Sin sección o con una que ya no existe (rendiciones, reportes, alertas, bonos, dashboard) → Ventas.
   const isKnownSection = sections.some((s) => s.id === sectionId)
