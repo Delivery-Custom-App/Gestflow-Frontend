@@ -12,7 +12,7 @@ Guía: [`docs/referencia/INTEGRATION_BACKEND_V2.md`](docs/referencia/INTEGRATION
 | | |
 |---|---|
 | Framework | React 19 + Vite 8 |
-| Router | React Router 6 |
+| Router | React Router 7 |
 | Auth | JWT emitido por Backend V2 (o legacy) |
 | Charts | Recharts |
 | Tests | Vitest + Testing Library |
