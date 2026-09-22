@@ -204,7 +204,8 @@ function RecipesPage() {
 
         {/* Filters */}
         <section className="flex flex-wrap gap-2" aria-label="Filtros de recetas">
-          <input
+          <label htmlFor="recipes-buscar" className="sr-only">Buscar recetas</label>
+          <input id="recipes-buscar"
             type="text"
             placeholder="Buscar recetas..."
             value={searchTerm}

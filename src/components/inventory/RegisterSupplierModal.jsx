@@ -163,7 +163,7 @@ function RegisterSupplierModal({ open, onClose, onSuccess, businessId, localId }
   return (
     <>
       {/* Overlay */}
-      <div
+      <div role="presentation"
         className={`fixed inset-0 bg-black/60 transition-opacity duration-300 ${
           open ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
         }`}
@@ -267,11 +267,12 @@ function RegisterSupplierModal({ open, onClose, onSuccess, businessId, localId }
 
           {/* Categoría */}
           <div className="flex flex-col gap-1.5">
-            <Label>Categorías <span className="text-red-500">*</span></Label>
+            <Label htmlFor="rs-category">Categorías <span className="text-red-500">*</span></Label>
             {catsLoading ? (
               <p className="text-xs text-[hsl(var(--muted-foreground))] py-2">Cargando categorías…</p>
             ) : (
               <CategoryTypeaheadField
+                id="rs-category"
                 categories={categories}
                 value={form.category}
                 onConfirm={async (name) => {

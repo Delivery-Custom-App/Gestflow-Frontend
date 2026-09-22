@@ -428,7 +428,8 @@ export default function MultiPaymentModal({ order, orderTotal, onClose, onFullyP
           <div className="px-6 py-4 border-t border-[hsl(var(--border))] space-y-3">
             <p className="text-xs font-medium text-[hsl(var(--muted-foreground))]">Agregar comensal</p>
             <div className="flex gap-2">
-              <input
+              <label htmlFor="multi-payment-nombre" className="sr-only">Nombre del pagador (opcional)</label>
+              <input id="multi-payment-nombre"
                 type="text"
                 placeholder="Nombre (opcional)"
                 value={newLabel}

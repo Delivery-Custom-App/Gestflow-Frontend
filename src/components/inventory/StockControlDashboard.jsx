@@ -496,7 +496,8 @@ function StockControlDashboard() {
                 <p className="text-xs text-[hsl(var(--muted-foreground))] mt-1">Crea y renombra las familias que ordenan tus productos.</p>
               </div>
               <form onSubmit={handleCreateCategory} className="flex gap-2 w-full sm:w-auto">
-                <input
+                <label htmlFor="stock-control-nueva-categoria" className="sr-only">Nombre de la nueva categoría</label>
+                <input id="stock-control-nueva-categoria"
                   value={newCategoryName}
                   onChange={(e) => setNewCategoryName(e.target.value)}
                   placeholder="Nueva categoría"
@@ -578,7 +579,7 @@ function StockControlDashboard() {
               </div>
             ) : null}
 
-            <div className="flex flex-wrap gap-3 items-center" role="search" aria-label="Filtrar inventario">
+            <search className="flex flex-wrap gap-3 items-center" aria-label="Filtrar inventario">
               <div className="relative flex-1 min-w-[200px]">
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[hsl(var(--muted-foreground))]" aria-hidden="true">
                   <Search size={16} />
@@ -594,7 +595,7 @@ function StockControlDashboard() {
                 />
               </div>
               <CategoryFilterSelect value={categoryFilter} onChange={setCategoryFilter} options={categoriesCatalog} />
-            </div>
+            </search>
 
             <ProductsTable
               items={items}

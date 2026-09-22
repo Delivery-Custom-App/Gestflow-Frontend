@@ -284,8 +284,8 @@ function InventoryHub() {
                           contentStyle={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: 8, fontSize: 12 }}
                         />
                         <Bar dataKey="cantidad" radius={[4, 4, 0, 0]} maxBarSize={56} label={{ position: 'top', fontSize: 12, fontWeight: 700, fill: 'hsl(var(--foreground))' }}>
-                          {stockDistData.map((entry, i) => (
-                            <Cell key={i} fill={entry.fill} />
+                          {stockDistData.map((entry) => (
+                            <Cell key={entry.name} fill={entry.fill} />
                           ))}
                         </Bar>
                       </BarChart>

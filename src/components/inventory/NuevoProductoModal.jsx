@@ -105,7 +105,7 @@ function NuevoProductoModal({ open, localId, onClose, onSuccess }) {
   return (
     <>
       {/* Overlay */}
-      <div
+      <div role="presentation"
         className={`fixed inset-0 bg-black/60 transition-opacity duration-300 ${
           open ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
         }`}
@@ -168,6 +168,7 @@ function NuevoProductoModal({ open, localId, onClose, onSuccess }) {
                 <p className="text-xs text-[hsl(var(--muted-foreground))] py-2">Cargando categorías…</p>
               ) : (
                 <CategoryTypeaheadField
+                  id="np-category"
                   categories={categories}
                   value={categoryName}
                   onConfirm={async (name) => {

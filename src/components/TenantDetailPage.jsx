@@ -364,8 +364,8 @@ export default function TenantDetailPage() {
               <p className="text-xs text-[hsl(var(--muted-foreground))]">Sin eventos registrados.</p>
             ) : (
               <div className="flex flex-col divide-y divide-[hsl(var(--border))]">
-                {(data.audit || []).map((e, i) => (
-                  <div key={e.id || i} className="py-2.5">
+                {(data.audit || []).map((e) => (
+                  <div key={e.id} className="py-2.5">
                     <div className="flex items-center justify-between gap-3">
                       <span className="text-sm font-semibold text-[hsl(var(--foreground))]">
                         {ACTION_LABEL[e.action] || e.action}

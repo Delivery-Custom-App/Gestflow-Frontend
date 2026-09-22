@@ -116,7 +116,7 @@ function BusinessDrawer({ isOpen, onClose, onSuccess, editing }) {
 
   return (
     <>
-      <div
+      <div role="presentation"
         className={`fixed inset-0 bg-black/60 transition-opacity duration-300 ${isOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}
         style={{ zIndex: 500 }}
         onClick={handleClose}
@@ -194,7 +194,7 @@ function BusinessDrawer({ isOpen, onClose, onSuccess, editing }) {
 // ── Modal confirmar eliminación ──────────────────────────────────────────────
 function ConfirmDeleteModal({ business, onCancel, onConfirm, loading }) {
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[600] p-4" onClick={onCancel}>
+    <div role="presentation" className="fixed inset-0 bg-black/50 flex items-center justify-center z-[600] p-4" onClick={onCancel}>
       <m.div
         initial={{ opacity: 0, scale: 0.95, y: 12 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -227,7 +227,7 @@ function ConfirmDeleteModal({ business, onCancel, onConfirm, loading }) {
 function ConfirmSuspendModal({ business, onCancel, onConfirm, loading }) {
   const suspending = business?.is_active !== false
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[600] p-4" onClick={onCancel}>
+    <div role="presentation" className="fixed inset-0 bg-black/50 flex items-center justify-center z-[600] p-4" onClick={onCancel}>
       <m.div
         initial={{ opacity: 0, scale: 0.95, y: 12 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -323,8 +323,8 @@ function AuditModal({ business, onClose }) {
             <p className="text-sm text-[hsl(var(--muted-foreground))]">Sin eventos registrados.</p>
           ) : (
             <div className="flex flex-col divide-y divide-[hsl(var(--border))]">
-              {entries.map((e, i) => (
-                <div key={e.id || i} className="py-3">
+              {entries.map((e) => (
+                <div key={e.id} className="py-3">
                   <div className="flex items-center justify-between gap-3">
                     <span className="text-sm font-semibold text-[hsl(var(--foreground))]">
                       {ACTION_LABEL[e.action] || e.action}

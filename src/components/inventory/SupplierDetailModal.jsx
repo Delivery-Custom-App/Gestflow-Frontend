@@ -115,25 +115,25 @@ function InfoSection({ detail, supplierId, businessId, onUpdated }) {
 
       <div className="grid grid-cols-2 gap-4">
         <div className={fieldCls}>
-          <Label className={labelCls}>Nombre *</Label>
-          <input className={inputCls} value={name}    onChange={e => setName(e.target.value)}    placeholder="Nombre comercial" />
+          <Label htmlFor="supplier-detail-modal-nombre" className={labelCls}>Nombre *</Label>
+          <input id="supplier-detail-modal-nombre" className={inputCls} value={name}    onChange={e => setName(e.target.value)}    placeholder="Nombre comercial" />
         </div>
         <div className={fieldCls}>
-          <Label className={labelCls}>Teléfono</Label>
-          <input className={inputCls} value={phone}   onChange={e => setPhone(e.target.value)}   placeholder="+56 9 XXXXXXXX" />
+          <Label htmlFor="supplier-detail-modal-telefono" className={labelCls}>Teléfono</Label>
+          <input id="supplier-detail-modal-telefono" className={inputCls} value={phone}   onChange={e => setPhone(e.target.value)}   placeholder="+56 9 XXXXXXXX" />
         </div>
         <div className={fieldCls}>
-          <Label className={labelCls}>Correo electrónico</Label>
-          <input className={inputCls} type="email" value={email}   onChange={e => setEmail(e.target.value)}   placeholder="correo@proveedor.cl" />
+          <Label htmlFor="supplier-detail-modal-correo-electronico" className={labelCls}>Correo electrónico</Label>
+          <input id="supplier-detail-modal-correo-electronico" className={inputCls} type="email" value={email}   onChange={e => setEmail(e.target.value)}   placeholder="correo@proveedor.cl" />
         </div>
         <div className={fieldCls}>
-          <Label className={labelCls}>Contacto</Label>
-          <input className={inputCls} value={contact} onChange={e => setContact(e.target.value)} placeholder="Nombre del contacto" />
+          <Label htmlFor="supplier-detail-modal-contacto" className={labelCls}>Contacto</Label>
+          <input id="supplier-detail-modal-contacto" className={inputCls} value={contact} onChange={e => setContact(e.target.value)} placeholder="Nombre del contacto" />
         </div>
       </div>
       <div className={fieldCls}>
-        <Label className={labelCls}>Dirección</Label>
-        <input className={inputCls} value={address} onChange={e => setAddress(e.target.value)} placeholder="Dirección completa" />
+        <Label htmlFor="supplier-detail-modal-direccion" className={labelCls}>Dirección</Label>
+        <input id="supplier-detail-modal-direccion" className={inputCls} value={address} onChange={e => setAddress(e.target.value)} placeholder="Dirección completa" />
       </div>
 
       <div className="flex gap-2 pt-1">
@@ -178,17 +178,17 @@ function CommercialSection({ supplierId, businessId, detail, onUpdated }) {
       {ok  && <p className="text-xs text-emerald-600">✓ Guardado correctamente</p>}
       <div className="grid grid-cols-2 gap-4">
         <div className={fieldCls}>
-          <Label className={labelCls}>Plazo de pago (días)</Label>
-          <input className={inputCls} type="number" min="0" value={terms} onChange={e=>setTerms(e.target.value)} placeholder="Ej. 30" />
+          <Label htmlFor="supplier-detail-modal-plazo-de-pago-dias" className={labelCls}>Plazo de pago (días)</Label>
+          <input id="supplier-detail-modal-plazo-de-pago-dias" className={inputCls} type="number" min="0" value={terms} onChange={e=>setTerms(e.target.value)} placeholder="Ej. 30" />
         </div>
         <div className={fieldCls}>
-          <Label className={labelCls}>Plazo de entrega (días)</Label>
-          <input className={inputCls} type="number" min="0" value={lead} onChange={e=>setLead(e.target.value)} placeholder="Ej. 3" />
+          <Label htmlFor="supplier-detail-modal-plazo-de-entrega-dias" className={labelCls}>Plazo de entrega (días)</Label>
+          <input id="supplier-detail-modal-plazo-de-entrega-dias" className={inputCls} type="number" min="0" value={lead} onChange={e=>setLead(e.target.value)} placeholder="Ej. 3" />
         </div>
       </div>
       <div className={fieldCls}>
-        <Label className={labelCls}>Observaciones</Label>
-        <textarea value={notes} onChange={e=>setNotes(e.target.value)} rows={3} placeholder="Notas o condiciones"
+        <Label htmlFor="supplier-detail-modal-observaciones" className={labelCls}>Observaciones</Label>
+        <textarea id="supplier-detail-modal-observaciones" value={notes} onChange={e=>setNotes(e.target.value)} rows={3} placeholder="Notas o condiciones"
           className="w-full rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3 py-2 text-sm shadow-sm resize-none focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary)/0.3)]" />
       </div>
       <Button type="submit" size="sm" disabled={saving} className="self-start">
@@ -232,7 +232,7 @@ function SupplierDetailModal({ open, supplierId, businessId, row, onClose, onTog
   return (
     <>
       {/* Overlay */}
-      <div
+      <div role="presentation"
         className={`fixed inset-0 bg-black/60 transition-opacity duration-300 ${
           open ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
         }`}

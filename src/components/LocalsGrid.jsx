@@ -240,7 +240,8 @@ function LocalsGrid({ locales, onLocalSelect, onCreateLocal, salesCounts = {}, d
               <div className="flex flex-wrap items-center gap-3 px-5 py-4 border-b border-[hsl(var(--border))] bg-[hsl(var(--muted)/0.3)]">
                 <div className="relative flex-1 min-w-[180px] max-w-xs">
                   <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[hsl(var(--muted-foreground))]" />
-                  <input
+                  <label htmlFor="locals-grid-buscar" className="sr-only">Buscar local</label>
+                  <input id="locals-grid-buscar"
                     type="text"
                     placeholder="Buscar local…"
                     value={search}

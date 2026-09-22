@@ -252,7 +252,7 @@ function CreateRecipeModal({ isOpen, recipe, onSave, onCancel, localId, external
   return (
     <>
       {/* Overlay */}
-      <div
+      <div role="presentation"
         className={`fixed inset-0 bg-black/60 transition-opacity duration-300 ${
           isOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
         }`}
@@ -451,7 +451,9 @@ function CreateRecipeModal({ isOpen, recipe, onSave, onCancel, localId, external
                                 <p className="text-xs text-amber-600 font-medium">Salsa — datos heredados</p>
                               )}
                             </div>
+                            <label htmlFor={`receta-cantidad-${ing.product_id}`} className="sr-only">{`Cantidad de ${ing.product_name}`}</label>
                             <input
+                              id={`receta-cantidad-${ing.product_id}`}
                               type="text"
                               inputMode="decimal"
                               value={ing.quantity_required}

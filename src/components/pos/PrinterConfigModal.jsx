@@ -138,7 +138,7 @@ export default function PrinterConfigModal({ localId, onClose, open = true }) {
   return (
     <>
       {/* Overlay */}
-      <div
+      <div role="presentation"
         className={`fixed inset-0 bg-black/60 transition-opacity duration-300 ${
           open ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
         }`}
@@ -177,10 +177,11 @@ export default function PrinterConfigModal({ localId, onClose, open = true }) {
             </h3>
 
             <div>
-              <label className="block text-sm font-medium text-[hsl(var(--foreground))] mb-1">Tipo de conexión</label>
-              <div className="grid grid-cols-2 gap-2">
+              <p id="printer-tipo-conexion" className="block text-sm font-medium text-[hsl(var(--foreground))] mb-1">Tipo de conexión</p>
+              <div className="grid grid-cols-2 gap-2" role="group" aria-labelledby="printer-tipo-conexion">
                 <button
                   type="button"
+                  aria-pressed={form.connection_type === 'network'}
                   onClick={() => setForm(f => ({ ...f, connection_type: 'network' }))}
                   className={`h-9 rounded-md border text-sm font-medium transition-colors ${
                     form.connection_type === 'network'
@@ -192,6 +193,7 @@ export default function PrinterConfigModal({ localId, onClose, open = true }) {
                 </button>
                 <button
                   type="button"
+                  aria-pressed={form.connection_type === 'bluetooth'}
                   onClick={() => setForm(f => ({ ...f, connection_type: 'bluetooth' }))}
                   className={`h-9 rounded-md border text-sm font-medium transition-colors ${
                     form.connection_type === 'bluetooth'

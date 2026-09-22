@@ -136,10 +136,11 @@ export default function UserManagementPage() {
 
                 {/* Contraseña con generador */}
                 <div className="sm:col-span-2">
-                  <label className={labelCls}>Contraseña</label>
+                  <label htmlFor="user-management-page-contrasena" className={labelCls}>Contraseña</label>
                   <div className="flex gap-2">
                     <div className="relative flex-1">
                       <input
+                        id="user-management-page-contrasena"
                         className={inputCls + ' pr-10'}
                         type={showPassword ? 'text' : 'password'}
                         value={form.password}

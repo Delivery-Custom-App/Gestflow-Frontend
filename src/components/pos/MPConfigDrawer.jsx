@@ -310,7 +310,7 @@ export default function MPConfigDrawer({ localId, onClose, open = true }) {
   return (
     <>
       {/* Overlay */}
-      <div
+      <div role="presentation"
         className={`fixed inset-0 bg-black/60 transition-opacity duration-300 ${
           open ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
         }`}
@@ -525,7 +525,8 @@ export default function MPConfigDrawer({ localId, onClose, open = true }) {
                 {!connected && (
                   <form onSubmit={handleSaveToken} className="space-y-2">
                     <p className="text-xs font-medium text-[hsl(var(--foreground))]">Conectar con un token</p>
-                    <input
+                    <label htmlFor="mp-config-token" className="sr-only">Token de acceso de MercadoPago</label>
+                    <input id="mp-config-token"
                       type="password"
                       value={tokenInput}
                       onChange={e => setTokenInput(e.target.value)}
@@ -544,7 +545,8 @@ export default function MPConfigDrawer({ localId, onClose, open = true }) {
                 {connected && (
                   <form onSubmit={handleManualAdd} className="space-y-2">
                     <p className="text-xs font-medium text-[hsl(var(--foreground))]">Agregar lector por ID</p>
-                    <input
+                    <label htmlFor="mp-config-lector-id" className="sr-only">ID del lector</label>
+                    <input id="mp-config-lector-id"
                       type="text"
                       value={manualForm.mp_pos_id}
                       onChange={e => setManualForm(f => ({ ...f, mp_pos_id: e.target.value }))}
@@ -552,7 +554,8 @@ export default function MPConfigDrawer({ localId, onClose, open = true }) {
                       className="w-full h-9 border border-[hsl(var(--border))] rounded-md px-3 text-sm bg-[hsl(var(--card))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary)/0.3)]"
                       required
                     />
-                    <input
+                    <label htmlFor="mp-config-lector-nombre" className="sr-only">Nombre del lector (opcional)</label>
+                    <input id="mp-config-lector-nombre"
                       type="text"
                       value={manualForm.name}
                       onChange={e => setManualForm(f => ({ ...f, name: e.target.value }))}

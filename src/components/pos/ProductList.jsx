@@ -98,7 +98,7 @@ function ProductList({ products = [], orderId = null, onProductsChanged = null, 
 
           return (
             <li
-              key={product.id || index}
+              key={product.id}
               className={cn(
                 'grid grid-cols-[1fr_auto_auto_auto_auto] gap-2 items-center px-2 py-1.5 rounded-lg text-sm',
                 !validation.isValid && 'bg-orange-50 border border-orange-200',

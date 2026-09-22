@@ -57,7 +57,7 @@ export function ExpandableTabs({
     >
       {tabs.map((tab, index) => {
         if (tab.type === "separator") {
-          return <Separator key={`separator-${index}`} />;
+          return <Separator key={`separator-after-${tabs[index - 1]?.title ?? "inicio"}`} />;
         }
 
         const Icon = tab.icon;

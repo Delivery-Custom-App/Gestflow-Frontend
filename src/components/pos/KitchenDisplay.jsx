@@ -152,8 +152,8 @@ function OrderCard({ order, mesaMap, onUpdateStatus, tokenIndex }) {
         {!order.items || order.items.length === 0 ? (
           <p className="text-xs text-[hsl(var(--muted-foreground))] italic text-center py-2">Sin productos cargados</p>
         ) : (
-          order.items.map((item, i) => (
-            <div key={item.id || i}>
+          order.items.map((item) => (
+            <div key={item.id}>
               <div className="flex items-start justify-between gap-2">
                 <div className="flex items-center gap-2 min-w-0">
                   <span className="w-4 h-4 rounded bg-green-500 flex items-center justify-center shrink-0 mt-0.5">
@@ -305,7 +305,8 @@ export default function KitchenDisplay({ localId, mesas = [] }) {
 
         <div className="relative">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[hsl(var(--muted-foreground))]" />
-          <input
+          <label htmlFor="kitchen-buscar" className="sr-only">Buscar mesa u orden</label>
+          <input id="kitchen-buscar"
             type="text"
             placeholder="Buscar mesa u orden..."
             value={search}

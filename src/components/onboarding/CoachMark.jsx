@@ -191,7 +191,7 @@ export default function CoachMark() {
           style={{ position: 'fixed', inset: 0, zIndex: 10000 }}
         >
           {/* Click-through backdrop (clicking advances tour) */}
-          <div
+          <div role="presentation"
             style={{ position: 'absolute', inset: 0, cursor: 'default' }}
             onClick={next}
           />

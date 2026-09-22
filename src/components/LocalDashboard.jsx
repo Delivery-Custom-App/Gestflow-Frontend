@@ -176,7 +176,7 @@ function KpiDetailDrawer({ open, onClose, orders, dashLoading }) {
 
   return (
     <div className="fixed inset-0 z-50">
-      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+      <div role="presentation" className="absolute inset-0 bg-black/50" onClick={onClose} />
       <div
         className={cn(
           'absolute inset-y-0 right-0 w-full max-w-md flex flex-col shadow-2xl bg-[hsl(var(--card))] border-l border-[hsl(var(--border))] transition-transform duration-300 ease-out overflow-y-auto no-scrollbar',
@@ -658,7 +658,7 @@ function LocalDashboard() {
                         contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: '8px', fontSize: 12 }}
                       />
                       <Bar dataKey="value" radius={[6, 6, 0, 0]}>
-                        {pieData.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
+                        {pieData.map((entry, i) => <Cell key={entry.name} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
                         <LabelList
                           dataKey="value"
                           position="top"
@@ -917,8 +917,8 @@ function LocalDashboard() {
                               paddingAngle={3}
                               dataKey="ventas"
                             >
-                              {payCountData.map((entry, i) => (
-                                <Cell key={i} fill={entry.color} />
+                              {payCountData.map((entry) => (
+                                <Cell key={entry.name} fill={entry.color} />
                               ))}
                             </Pie>
                             <Tooltip

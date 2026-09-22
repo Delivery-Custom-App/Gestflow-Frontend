@@ -391,7 +391,7 @@ function ProductsTable({
       </div>
 
       {/* Edit drawer */}
-      <div
+      <div role="presentation"
         className={`fixed inset-0 bg-black/60 transition-opacity duration-300 ${
           editingRow ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
         }`}

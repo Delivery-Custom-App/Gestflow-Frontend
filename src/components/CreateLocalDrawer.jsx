@@ -156,7 +156,7 @@ function CreateLocalDrawer({ isOpen, onClose, onSuccess }) {
 
   return (
     <>
-      <div
+      <div role="presentation"
         className={`fixed inset-0 bg-black/60 transition-opacity duration-300 ${
           isOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
         }`}
@@ -232,9 +232,9 @@ function CreateLocalDrawer({ isOpen, onClose, onSuccess }) {
 
               {showSuggestions && (
                 <div className="absolute top-full left-0 right-0 z-50 mt-1 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] shadow-xl overflow-hidden max-h-80 overflow-y-auto">
-                  {suggestions.map((s, i) => (
+                  {suggestions.map((s) => (
                     <button
-                      key={i}
+                      key={s.place_id}
                       type="button"
                       onMouseDown={(e) => { e.preventDefault(); handleSelectSuggestion(s) }}
                       className="w-full text-left px-4 py-3 text-sm hover:bg-[hsl(var(--muted))] border-b border-[hsl(var(--border))] last:border-b-0 transition-colors flex items-start gap-2"

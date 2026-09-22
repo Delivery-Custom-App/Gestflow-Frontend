@@ -90,7 +90,7 @@ function CreateUserDrawer({ isOpen, onClose, onSuccess, locales, localesLoading,
 
   return (
     <>
-      <div
+      <div role="presentation"
         className={`fixed inset-0 bg-black/60 transition-opacity duration-300 ${isOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}
         style={{ zIndex: 500 }}
         onClick={handleClose}

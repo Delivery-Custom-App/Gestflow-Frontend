@@ -135,7 +135,7 @@ export default function GlobalAuditPage() {
               <div className="flex flex-col divide-y divide-[hsl(var(--border))]">
                 {filtered.map((e, i) => (
                   <m.div
-                    key={e.id || i}
+                    key={e.id}
                     initial={{ opacity: 0, y: 6 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.2, delay: Math.min(i * 0.02, 0.3) }}
