@@ -26,4 +26,18 @@ export default defineConfig([
       'no-unused-vars': ['error', { varsIgnorePattern: '^[A-Z_]' }],
     },
   },
+  {
+    // Node runtime (config de build/test), no del browser: process, __dirname, etc.
+    files: ['*.config.js'],
+    languageOptions: {
+      globals: globals.node,
+    },
+  },
+  {
+    // jsdom (window/document) + Node (Buffer, global) para specs y setup de vitest.
+    files: ['**/*.test.{js,jsx}', 'vitest.setup.js'],
+    languageOptions: {
+      globals: { ...globals.browser, ...globals.node },
+    },
+  },
 ])

@@ -34,5 +34,6 @@ Pendiente (fuera de este pase, ya tienen cobertura razonable en `referencia/`): 
 - **[referencia/FUNCIONALIDADES.md](referencia/FUNCIONALIDADES.md)** — listado de los módulos principales del sistema, a nivel de feature.
 - **[referencia/FUNCIONALIDADES_SISTEMA.md](referencia/FUNCIONALIDADES_SISTEMA.md)** — descripción más detallada por módulo (Administración, Inventario, onboarding, etc.). Nota: atribuye la pantalla `/usuarios` al rol Superadmin — en el código real esa ruta es del Owner (`ADMIN_NEGOCIO`); la pantalla Superadmin equivalente es `/gestor/usuarios`, documentada en `manuales/MANUAL_GESTOR_NEGOCIOS.md`.
 - **[referencia/INTEGRATION_BACKEND_V2.md](referencia/INTEGRATION_BACKEND_V2.md)** — notas de la migración del frontend hacia Backend V2 (adaptadores, endpoints, estado de la integración).
+- **[referencia/CI_CD.md](referencia/CI_CD.md)** — pipeline de GitHub Actions: qué corre en cada etapa, branch protection en `main`, decisiones tomadas (por qué el lint solo bloquea archivos modificados, umbral de cobertura, etc.) y guía de uso para desarrollo.
 
 > El README raíz también enlaza a `docs/SEED_DATA.md` — ese archivo no existe todavía en el repo (link pendiente, no creado en este pase).
