@@ -11,6 +11,12 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],
+      // Piso levemente bajo la base real (~45%/~38%) para no romper el
+      // pipeline hoy, pero evitar que la cobertura empeore con código nuevo.
+      thresholds: {
+        lines: 40,
+        branches: 35,
+      },
     },
   },
   resolve: {

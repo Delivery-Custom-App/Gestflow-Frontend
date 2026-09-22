@@ -13,6 +13,10 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Necesario para poder diffear contra el commit/base anterior en el
+          # paso de "archivos modificados" de más abajo.
+          fetch-depth: 0
 
       - uses: actions/setup-node@v4
         with:
@@ -22,14 +26,36 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      # No bloqueante: hay deuda de lint preexistente no relacionada con
-      # este pipeline (mismo criterio que ruff en el backend).
-      - name: Lint (eslint)
+      # Detecta los .js/.jsx tocados por este PR/push. Hay deuda de lint
+      # preexistente en el resto del repo (ver step "Lint completo" abajo),
+      # así que el gate bloqueante solo aplica a lo que se está modificando.
+      - name: Determinar archivos modificados
+        id: changed
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            BASE_SHA="${{ github.event.pull_request.base.sha }}"
+          else
+            BASE_SHA="${{ github.event.before }}"
+          fi
+          if [ -z "$BASE_SHA" ] || ! git cat-file -e "$BASE_SHA" 2>/dev/null; then
+            BASE_SHA=$(git rev-parse HEAD~1 2>/dev/null || git rev-parse HEAD)
+          fi
+          FILES=$(git diff --name-only --diff-filter=ACMR "$BASE_SHA" "${{ github.sha }}" -- '*.js' '*.jsx' | tr '\n' ' ')
+          echo "files=$FILES" >> "$GITHUB_OUTPUT"
+
+      - name: Lint de archivos modificados (bloqueante)
+        if: steps.changed.outputs.files != ''
+        run: npx eslint ${{ steps.changed.outputs.files }}
+
+      # No bloqueante: deuda de lint preexistente en archivos no tocados por
+      # este cambio (mismo criterio que ruff en el backend). Sirve como
+      # radar de la deuda total sin frenar PRs que no la tocan.
+      - name: Lint completo (informativo)
         run: npm run lint
         continue-on-error: true
 
-      - name: Run tests
-        run: npx vitest run
+      - name: Run tests (con cobertura)
+        run: npx vitest run --coverage
 
       - name: Build
         run: npm run build
