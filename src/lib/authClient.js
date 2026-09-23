@@ -1,6 +1,10 @@
 const TOKEN_KEY = 'gestflow-auth-token'
-const REFRESH_TOKEN_KEY = 'gestflow-refresh-token'
 const USER_KEY = 'gestflow-auth-user'
+
+// SEC: refresh_token vive solo en memoria (no localStorage) para acotar el
+// radio de daño de un eventual XSS — se pierde en un full reload, trade-off
+// aceptado. Ver docs/seguridad/TAREAS_SECURITY_2026-09-16.md.
+let inMemoryRefreshToken = null
 
 const apiBaseUrl = import.meta.env.VITE_API_URL || ''
 
@@ -24,15 +28,16 @@ function writeSession({ access_token, refresh_token, user }) {
   if (typeof window === 'undefined') return
 
   if (access_token) window.localStorage.setItem(TOKEN_KEY, access_token)
-  if (refresh_token) window.localStorage.setItem(REFRESH_TOKEN_KEY, refresh_token)
+  if (refresh_token) inMemoryRefreshToken = refresh_token
   if (user) window.localStorage.setItem(USER_KEY, JSON.stringify(user))
 }
 
 export function clearStoredSession() {
+  inMemoryRefreshToken = null
+
   if (typeof window === 'undefined') return
 
   window.localStorage.removeItem(TOKEN_KEY)
-  window.localStorage.removeItem(REFRESH_TOKEN_KEY)
   window.localStorage.removeItem(USER_KEY)
 }
 
@@ -44,7 +49,7 @@ export function getStoredSession() {
 
   return {
     access_token: accessToken,
-    refresh_token: window.localStorage.getItem(REFRESH_TOKEN_KEY),
+    refresh_token: inMemoryRefreshToken,
     user: readJson(USER_KEY),
   }
 }
