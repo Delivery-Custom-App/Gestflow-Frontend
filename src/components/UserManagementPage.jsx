@@ -31,7 +31,8 @@ const labelCls = 'block text-sm font-medium text-[hsl(var(--foreground))] mb-1'
 
 function generatePassword() {
   const chars = 'abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789!@#$%'
-  return Array.from({ length: 12 }, () => chars[Math.floor(Math.random() * chars.length)]).join('')
+  const randomValues = crypto.getRandomValues(new Uint32Array(12))
+  return Array.from(randomValues, (v) => chars[v % chars.length]).join('')
 }
 
 export default function UserManagementPage() {
