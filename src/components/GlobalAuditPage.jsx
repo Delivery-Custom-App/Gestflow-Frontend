@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { motion } from 'framer-motion'
+import { m } from 'framer-motion'
 import { History, Loader2, Search } from 'lucide-react'
 import { getAuthContext, formatApiErrorDetail } from '../lib/apiClient'
 import { getAuditLog, listBusinesses } from '../lib/superAdminApi'
@@ -103,7 +103,7 @@ export default function GlobalAuditPage() {
               className="pl-9"
             />
           </div>
-          <select
+          <select aria-label="Filtrar por negocio"
             value={businessId}
             onChange={(e) => { setBusinessId(e.target.value); setPage(0) }}
             className="w-full sm:w-64 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3 py-2 text-sm text-[hsl(var(--foreground))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary))]/40"
@@ -134,8 +134,8 @@ export default function GlobalAuditPage() {
             <CardContent className="p-5">
               <div className="flex flex-col divide-y divide-[hsl(var(--border))]">
                 {filtered.map((e, i) => (
-                  <motion.div
-                    key={e.id || i}
+                  <m.div
+                    key={e.id}
                     initial={{ opacity: 0, y: 6 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.2, delay: Math.min(i * 0.02, 0.3) }}
@@ -152,7 +152,7 @@ export default function GlobalAuditPage() {
                       {e.target_label ? ` · ${e.target_label}` : ''}
                       {e.details ? ` · ${JSON.stringify(e.details)}` : ''}
                     </p>
-                  </motion.div>
+                  </m.div>
                 ))}
               </div>
 

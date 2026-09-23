@@ -1,7 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
-import { useSelectedLocal } from '../../hooks/useSelectedLocal'
-import { motion, AnimatePresence } from 'framer-motion'
+import { m, AnimatePresence } from 'framer-motion'
 import { getAuthContext } from '../../lib/apiClient'
 import {
   deleteSupplier,
@@ -54,10 +53,9 @@ function SuppliersKpisDashboard() {
   const { isInventoryAdmin: canAccess, userRole } = useAuth()
   const canEdit = isInventoryAdminRole(userRole)
   const { localId } = useParams()
-  const selectedLocal = useSelectedLocal(localId)
 
-  const [year,  setYear]  = useState(CURRENT_YEAR)
-  const [month, setMonth] = useState(() => new Date().getMonth() + 1)
+  const [year]  = useState(CURRENT_YEAR)
+  const [month] = useState(() => new Date().getMonth() + 1)
 
   const [data,    setData]    = useState(null)
   const [loading, setLoading] = useState(true)
@@ -153,18 +151,6 @@ function SuppliersKpisDashboard() {
     }
   }, [resolvedBusinessId, rowActionId, load])
 
-  const availableYears = useMemo(() => {
-    let minYear = CURRENT_YEAR
-    for (const row of suppliersRows) {
-      const raw = row.start_date || row.created_at
-      if (!raw) continue
-      const y = new Date(raw).getFullYear()
-      if (Number.isFinite(y) && y > 1900 && y < minYear) minYear = y
-    }
-    const years = []
-    for (let y = minYear; y <= CURRENT_YEAR; y++) years.push(y)
-    return years
-  }, [suppliersRows])
 
   useEffect(() => { load() },             [load])
   useEffect(() => { loadSuppliersList() }, [loadSuppliersList])
@@ -179,10 +165,10 @@ function SuppliersKpisDashboard() {
     <>
       <AnimatePresence>
         {guideOpen && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+          <m.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4"
             onClick={() => setGuideOpen(false)}>
-            <motion.div initial={{ opacity: 0, scale: 0.95, y: 12 }} animate={{ opacity: 1, scale: 1, y: 0 }}
+            <m.div initial={{ opacity: 0, scale: 0.95, y: 12 }} animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.96, y: 8 }} transition={{ duration: 0.2 }}
               onClick={(e) => e.stopPropagation()}
               className="bg-[hsl(var(--card))] border border-[hsl(var(--border))] rounded-2xl shadow-2xl w-full max-w-lg max-h-[88vh] overflow-y-auto no-scrollbar">
@@ -191,7 +177,7 @@ function SuppliersKpisDashboard() {
                   <HelpCircle size={16} className="text-[hsl(var(--primary))]" />
                   <h3 className="text-sm font-bold text-[hsl(var(--foreground))]">Guía — Proveedores</h3>
                 </div>
-                <button onClick={() => setGuideOpen(false)}
+                <button type="button" aria-label="Cerrar guía" onClick={() => setGuideOpen(false)}
                   className="flex items-center justify-center w-7 h-7 rounded-lg text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))] transition-colors">
                   <X size={14} />
                 </button>
@@ -213,8 +199,8 @@ function SuppliersKpisDashboard() {
                   </div>
                 ))}
               </div>
-            </motion.div>
-          </motion.div>
+            </m.div>
+          </m.div>
         )}
       </AnimatePresence>
       <InventoryShell>
@@ -273,12 +259,12 @@ function SuppliersKpisDashboard() {
 
         {/* ── KPI cards ── */}
         {canAccess && (
-          <motion.div
+          <m.div
             className="grid grid-cols-1 sm:grid-cols-3 gap-4"
             variants={STAGGER} initial="hidden" animate="visible"
           >
             {kpiCards.map((k) => (
-              <motion.div key={k.label} variants={ITEM}>
+              <m.div key={k.label} variants={ITEM}>
                 <Card className={`border-l-4 ${k.accent} h-full`}>
                   <CardContent className="flex items-center gap-4 p-5">
                     <span className={`flex items-center justify-center w-12 h-12 rounded-full shrink-0 ${k.iconBg} ${k.iconColor}`}>
@@ -293,9 +279,9 @@ function SuppliersKpisDashboard() {
                     </div>
                   </CardContent>
                 </Card>
-              </motion.div>
+              </m.div>
             ))}
-          </motion.div>
+          </m.div>
         )}
 
         {/* ── Suppliers table ── */}

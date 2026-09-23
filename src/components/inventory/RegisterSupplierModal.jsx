@@ -40,14 +40,7 @@ function RegisterSupplierModal({ open, onClose, onSuccess, businessId, localId }
   const [catsLoading, setCatsLoading] = useState(false)
 
   useEffect(() => {
-    if (!open) return
-    setFormState(INITIAL)
-    setRutType('comercial')
-    setError('')
-    setFieldErrors({})
-    setSubmitting(false)
-
-    if (!localId) return
+    if (!open || !localId) return
     setCatsLoading(true)
     apiRequest(`/categories?local_id=${localId}`)
       .then((data) => setCategories(Array.isArray(data) ? data : []))
@@ -144,6 +137,7 @@ function RegisterSupplierModal({ open, onClose, onSuccess, businessId, localId }
         }
       }
       onSuccess?.()
+      resetForm()
       onClose?.()
     } catch (err) {
       setError(err?.message || 'No se pudo registrar el proveedor.')
@@ -152,7 +146,19 @@ function RegisterSupplierModal({ open, onClose, onSuccess, businessId, localId }
     }
   }
 
-  const handleClose = () => { if (!submitting) onClose?.() }
+  /** Deja el formulario vacío para la próxima apertura (todos los cierres pasan por aquí). */
+  const resetForm = () => {
+    setFormState(INITIAL)
+    setRutType('comercial')
+    setError('')
+    setFieldErrors({})
+  }
+
+  const handleClose = () => {
+    if (submitting) return
+    resetForm()
+    onClose?.()
+  }
 
   const fe = (key) => fieldErrors[key]
   const inputCls = (key) =>
@@ -163,7 +169,7 @@ function RegisterSupplierModal({ open, onClose, onSuccess, businessId, localId }
   return (
     <>
       {/* Overlay */}
-      <div
+      <div role="presentation"
         className={`fixed inset-0 bg-black/60 transition-opacity duration-300 ${
           open ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
         }`}
@@ -189,7 +195,7 @@ function RegisterSupplierModal({ open, onClose, onSuccess, businessId, localId }
               <p className="text-xs text-[hsl(var(--muted-foreground))]">Ingrese los datos del Proveedor</p>
             </div>
           </div>
-          <button
+          <button aria-label="Cerrar"
             type="button"
             onClick={handleClose}
             disabled={submitting}
@@ -267,11 +273,12 @@ function RegisterSupplierModal({ open, onClose, onSuccess, businessId, localId }
 
           {/* Categoría */}
           <div className="flex flex-col gap-1.5">
-            <Label>Categorías <span className="text-red-500">*</span></Label>
+            <Label htmlFor="rs-category">Categorías <span className="text-red-500">*</span></Label>
             {catsLoading ? (
               <p className="text-xs text-[hsl(var(--muted-foreground))] py-2">Cargando categorías…</p>
             ) : (
               <CategoryTypeaheadField
+                id="rs-category"
                 categories={categories}
                 value={form.category}
                 onConfirm={async (name) => {

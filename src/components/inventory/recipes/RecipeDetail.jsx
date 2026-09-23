@@ -73,8 +73,8 @@ function RecipeDetail({ recipe, onClose, onEdit, onDelete }) {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {recipe.ingredients.map((ing, idx) => (
-                      <TableRow key={idx}>
+                    {recipe.ingredients.map((ing) => (
+                      <TableRow key={ing.product_id}>
                         <TableCell className="font-medium">{ing.product_name}</TableCell>
                         <TableCell>{ing.quantity_required} {ing.unit}</TableCell>
                         <TableCell>${formatCLP(ing.unit_cost_clp)}</TableCell>

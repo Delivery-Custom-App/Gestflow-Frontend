@@ -91,12 +91,12 @@ export async function fetchBusinessSalesSummary(locales) {
     return { start, end, label: MONTH_LABELS[start.getMonth()] }
   })
 
-  const monthTotals = []
-  for (const range of monthRanges) {
+  // Lecturas independientes por mes: en paralelo (Promise.all conserva el orden).
+  const monthTotals = await Promise.all(monthRanges.map(async (range) => {
     const orders = await sumOrdersInRange(locales, token, range.start, range.end)
     const total = orders.filter(isCompleted).reduce((sum, o) => sum + Number(o.total || 0), 0)
-    monthTotals.push({ label: range.label, total })
-  }
+    return { label: range.label, total }
+  }))
 
   const months = monthTotals.map((m, i) => {
     if (i === 0) return { ...m, momPercent: null }

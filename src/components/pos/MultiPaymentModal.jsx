@@ -97,14 +97,17 @@ export default function MultiPaymentModal({ order, orderTotal, onClose, onFullyP
   // ── Polling del cobro Point (consulta nuestra BD vía backend) ─────────────
   useEffect(() => {
     if (!pointIntent) return
+    let cancelled = false
 
     const pollOnce = async () => {
       try {
         const status = await getPointOrderStatus(order.id)
+        if (cancelled) return
 
         if (status.order_status === 'COMPLETED') {
           stopPolling()
           await loadSummary()
+          if (cancelled) return
           setLastApprovedOrderId(order.id)
           setPointIntent(null)
         } else if (status.order_status === 'CANCELLED') {
@@ -123,7 +126,10 @@ export default function MultiPaymentModal({ order, orderTotal, onClose, onFullyP
     pollOnce()
     pollRef.current = setInterval(pollOnce, 3000)
 
-    return () => stopPolling()
+    return () => {
+      cancelled = true
+      stopPolling()
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pointIntent])
 
@@ -242,7 +248,7 @@ export default function MultiPaymentModal({ order, orderTotal, onClose, onFullyP
               Total de la orden: <span className="font-bold">${fmt(orderTotal)}</span>
             </p>
           </div>
-          <button
+          <button type="button" aria-label="Cerrar"
             onClick={onClose}
             className="text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] text-xl leading-none"
           >
@@ -258,7 +264,7 @@ export default function MultiPaymentModal({ order, orderTotal, onClose, onFullyP
           </div>
           <div className="w-full h-2 bg-[hsl(var(--accent))] rounded-full overflow-hidden">
             <div
-              className="h-full bg-green-500 transition-all duration-300"
+              className="h-full bg-green-500 transition-[width] duration-300"
               style={{ width: `${Math.min(100, orderTotal > 0 ? (approved / orderTotal) * 100 : 0)}%` }}
             />
           </div>
@@ -428,7 +434,8 @@ export default function MultiPaymentModal({ order, orderTotal, onClose, onFullyP
           <div className="px-6 py-4 border-t border-[hsl(var(--border))] space-y-3">
             <p className="text-xs font-medium text-[hsl(var(--muted-foreground))]">Agregar comensal</p>
             <div className="flex gap-2">
-              <input
+              <label htmlFor="multi-payment-nombre" className="sr-only">Nombre del pagador (opcional)</label>
+              <input id="multi-payment-nombre"
                 type="text"
                 placeholder="Nombre (opcional)"
                 value={newLabel}
@@ -446,7 +453,7 @@ export default function MultiPaymentModal({ order, orderTotal, onClose, onFullyP
                 max={remaining}
                 className="flex-1 min-w-0 text-sm px-3 py-2 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--background))] text-[hsl(var(--foreground))] focus:outline-none focus:ring-1 focus:ring-[hsl(var(--primary))]"
               />
-              <select
+              <select aria-label="Método de pago"
                 value={newMethod}
                 onChange={e => setNewMethod(e.target.value)}
                 className="text-sm px-3 py-2 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--background))] text-[hsl(var(--foreground))] focus:outline-none focus:ring-1 focus:ring-[hsl(var(--primary))]"

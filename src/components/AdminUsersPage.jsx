@@ -115,7 +115,7 @@ export default function AdminUsersPage() {
                 SUPERADMIN
               </Badge>
             ) : (
-              <select
+              <select aria-label="Rol del usuario"
                 value={String(u.role || 'EMPLEADO').toUpperCase()}
                 disabled={busy}
                 onChange={(e) => patchUser(u.id, { role: e.target.value })}
@@ -178,7 +178,7 @@ export default function AdminUsersPage() {
               className="pl-9"
             />
           </div>
-          <select
+          <select aria-label="Filtrar por negocio"
             value={businessId}
             onChange={(e) => setBusinessId(e.target.value)}
             className="w-full sm:w-60 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3 py-2 text-sm text-[hsl(var(--foreground))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary))]/40"
@@ -188,7 +188,7 @@ export default function AdminUsersPage() {
               <option key={b.id} value={b.id}>{b.name}</option>
             ))}
           </select>
-          <select
+          <select aria-label="Filtrar por rol"
             value={role}
             onChange={(e) => setRole(e.target.value)}
             className="w-full sm:w-48 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3 py-2 text-sm text-[hsl(var(--foreground))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary))]/40"

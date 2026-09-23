@@ -3,7 +3,7 @@ import { useParams, useNavigate, useLocation } from 'react-router-dom'
 import { useReportesPOS } from '../../hooks/useReportesPOS'
 import { formatCLP } from '../../lib/formatCLP'
 import { Button } from '@/components/ui/button'
-import { motion, AnimatePresence } from 'framer-motion'
+import { m, AnimatePresence } from 'framer-motion'
 import { HelpCircle, X, TrendingUp, BarChart2 } from 'lucide-react'
 
 export default function ReportesPage() {
@@ -21,10 +21,10 @@ export default function ReportesPage() {
     <>
       <AnimatePresence>
         {guideOpen && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+          <m.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4"
             onClick={() => setGuideOpen(false)}>
-            <motion.div initial={{ opacity: 0, scale: 0.95, y: 12 }} animate={{ opacity: 1, scale: 1, y: 0 }}
+            <m.div initial={{ opacity: 0, scale: 0.95, y: 12 }} animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.96, y: 8 }} transition={{ duration: 0.2 }}
               onClick={(e) => e.stopPropagation()}
               className="bg-[hsl(var(--card))] border border-[hsl(var(--border))] rounded-2xl shadow-2xl w-full max-w-lg max-h-[88vh] overflow-y-auto no-scrollbar">
@@ -33,7 +33,7 @@ export default function ReportesPage() {
                   <HelpCircle size={16} className="text-[hsl(var(--primary))]" />
                   <h3 className="text-sm font-bold text-[hsl(var(--foreground))]">Guía — Reportes POS</h3>
                 </div>
-                <button onClick={() => setGuideOpen(false)}
+                <button type="button" aria-label="Cerrar guía" onClick={() => setGuideOpen(false)}
                   className="flex items-center justify-center w-7 h-7 rounded-lg text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))] transition-colors">
                   <X size={14} />
                 </button>
@@ -53,8 +53,8 @@ export default function ReportesPage() {
                   </div>
                 ))}
               </div>
-            </motion.div>
-          </motion.div>
+            </m.div>
+          </m.div>
         )}
       </AnimatePresence>
       <header className="flex items-center justify-between px-6 h-14 shrink-0 border-b border-[hsl(var(--border))] bg-[hsl(var(--card))]">
@@ -189,7 +189,7 @@ function Top5Item({ item, rank, maxUnits = 1 }) {
         </div>
         <div className="h-1.5 bg-[hsl(var(--accent))] rounded-full overflow-hidden">
           <div
-            className="h-full bg-[hsl(var(--primary))] rounded-full transition-all"
+            className="h-full bg-[hsl(var(--primary))] rounded-full transition-[width]"
             style={{ width: `${barWidth}%` }}
           />
         </div>

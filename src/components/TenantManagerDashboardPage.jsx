@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Link } from 'react-router-dom'
-import { motion } from 'framer-motion'
+import { m } from 'framer-motion'
+import { formatCLPCurrency } from '../lib/formatCLP'
 import {
   Building2, Users, Store, ShoppingCart, DollarSign, TrendingUp,
   Loader2, ChevronRight, Activity,
@@ -27,9 +28,7 @@ const STATUS_LABEL = {
   cancelled: 'Cancelada',
 }
 
-function formatCurrency(value) {
-  return new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(value || 0)
-}
+const formatCurrency = formatCLPCurrency
 
 function formatDate(value) {
   if (!value) return '—'
@@ -70,11 +69,12 @@ function StatusBar({ data }) {
             <span className="font-semibold text-[hsl(var(--foreground))]">{value}</span>
           </div>
           <div className="h-1.5 rounded-full bg-[hsl(var(--muted))] overflow-hidden">
-            <motion.div
-              initial={{ width: 0 }}
-              animate={{ width: `${(value / total) * 100}%` }}
+            <m.div
+              initial={{ scaleX: 0 }}
+              animate={{ scaleX: value / total }}
               transition={{ duration: 0.6 }}
-              className="h-full rounded-full bg-[hsl(var(--primary))]"
+              style={{ originX: 0 }}
+              className="h-full w-full rounded-full bg-[hsl(var(--primary))]"
             />
           </div>
         </div>
@@ -96,11 +96,12 @@ function DistributionList({ data, color }) {
             <span className="font-semibold text-[hsl(var(--foreground))]">{value}</span>
           </div>
           <div className="h-1.5 rounded-full bg-[hsl(var(--muted))] overflow-hidden">
-            <motion.div
-              initial={{ width: 0 }}
-              animate={{ width: `${(value / total) * 100}%` }}
+            <m.div
+              initial={{ scaleX: 0 }}
+              animate={{ scaleX: value / total }}
               transition={{ duration: 0.6 }}
-              className={`h-full rounded-full ${color || 'bg-[hsl(var(--primary))]'}`}
+              style={{ originX: 0 }}
+              className={`h-full w-full rounded-full ${color || 'bg-[hsl(var(--primary))]'}`}
             />
           </div>
         </div>

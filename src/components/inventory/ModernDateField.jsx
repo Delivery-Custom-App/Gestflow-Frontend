@@ -5,11 +5,14 @@ import { Calendar, ChevronLeft, ChevronRight } from 'lucide-react'
 
 const WEEKDAYS = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
 
+const MONTH_LONG_FORMAT = new Intl.DateTimeFormat('es-CL', { month: 'long' })
+const DISPLAY_FORMAT = new Intl.DateTimeFormat('es-CL', { day: '2-digit', month: 'short', year: 'numeric' })
+
 const MONTH_OPTIONS = Array.from({ length: 12 }, (_, i) => {
   const mo = i + 1
   let label = String(mo)
   try {
-    label = new Intl.DateTimeFormat('es-CL', { month: 'long' }).format(new Date(2000, mo - 1, 15))
+    label = MONTH_LONG_FORMAT.format(new Date(2000, mo - 1, 15))
     label = label.charAt(0).toUpperCase() + label.slice(1)
   } catch { /* keep */ }
   return { value: mo, label }
@@ -44,17 +47,10 @@ function formatDisplay(iso) {
   const p = parseIsoToParts(iso)
   if (!p) return ''
   try {
-    return new Intl.DateTimeFormat('es-CL', { day: '2-digit', month: 'short', year: 'numeric' }).format(
-      new Date(p.y, p.mo - 1, p.d),
-    )
+    return DISPLAY_FORMAT.format(new Date(p.y, p.mo - 1, p.d))
   } catch { return iso }
 }
 
-function monthTitle(y, mo) {
-  try {
-    return new Intl.DateTimeFormat('es-CL', { month: 'long', year: 'numeric' }).format(new Date(y, mo - 1, 1))
-  } catch { return `${mo}/${y}` }
-}
 
 /**
  * Selector de fecha con calendario propio (sin input[type=date] nativo).
@@ -79,12 +75,14 @@ function ModernDateField({ id, label, value, onChange, disabled, 'aria-label': a
   }))
   const { y: viewY, mo: viewMo } = view
 
-  /* Sync view with value whenever panel opens */
-  useEffect(() => {
-    if (!open) return
-    const p = parseIsoToParts(value)
-    if (p) setView({ y: p.y, mo: p.mo })
-  }, [open, value])
+  /* Al abrir, la vista salta al mes del valor seleccionado */
+  const togglePanel = () => {
+    if (!open) {
+      const p = parseIsoToParts(value)
+      if (p) setView({ y: p.y, mo: p.mo })
+    }
+    setOpen((o) => !o)
+  }
 
   /* Day grid */
   const cells = useMemo(() => {
@@ -101,7 +99,7 @@ function ModernDateField({ id, label, value, onChange, disabled, 'aria-label': a
 
   /* Position panel below trigger */
   useLayoutEffect(() => {
-    if (!open) { setPanelBox(null); return }
+    if (!open) return
     const EST_H = 360
     const place = () => {
       const anchor = controlRef.current || btnRef.current
@@ -127,7 +125,12 @@ function ModernDateField({ id, label, value, onChange, disabled, 'aria-label': a
     let r1 = requestAnimationFrame(() => { place(); requestAnimationFrame(place) })
     window.addEventListener('resize', place)
     window.addEventListener('scroll', place, true)
-    return () => { cancelAnimationFrame(r1); window.removeEventListener('resize', place); window.removeEventListener('scroll', place, true) }
+    return () => {
+      cancelAnimationFrame(r1)
+      window.removeEventListener('resize', place)
+      window.removeEventListener('scroll', place, true)
+      setPanelBox(null)
+    }
   }, [open])
 
   /* Close on outside click — use target.closest() because composedPath() may be
@@ -210,7 +213,7 @@ function ModernDateField({ id, label, value, onChange, disabled, 'aria-label': a
           aria-haspopup="dialog"
           aria-labelledby={label ? `${fieldId}-lbl` : undefined}
           aria-label={!label ? (ariaLabel || 'Fecha') : undefined}
-          onClick={() => setOpen((o) => !o)}
+          onClick={togglePanel}
           className="inline-flex items-center gap-2 h-10 px-3 rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--card))] text-sm shadow-sm hover:bg-[hsl(var(--accent))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary)/0.3)] disabled:opacity-50 min-w-[180px]"
         >
           <Calendar size={16} className="text-[hsl(var(--muted-foreground))] shrink-0" />
@@ -219,16 +222,16 @@ function ModernDateField({ id, label, value, onChange, disabled, 'aria-label': a
       </div>
 
       {open && panelBox && createPortal(
-        <div
+        <dialog
+          open
           ref={panelRef}
           id={`${fieldId}-panel`}
-          role="dialog"
           aria-label="Calendario"
           data-calendar-panel="true"
           style={panelBox}
           onMouseDown={(e) => { e.stopPropagation(); e.nativeEvent?.stopImmediatePropagation() }}
           onPointerDown={(e) => { e.stopPropagation(); e.nativeEvent?.stopImmediatePropagation() }}
-          className="bg-[hsl(var(--card))] rounded-xl border border-[hsl(var(--border))] shadow-2xl p-4 flex flex-col gap-3"
+          className="m-0 bg-[hsl(var(--card))] text-[hsl(var(--foreground))] rounded-xl border border-[hsl(var(--border))] shadow-2xl p-4 flex flex-col gap-3"
         >
           {/* Month / year navigation */}
           <div className="flex items-center gap-2">
@@ -308,7 +311,7 @@ function ModernDateField({ id, label, value, onChange, disabled, 'aria-label': a
               ),
             )}
           </div>
-        </div>,
+        </dialog>,
         document.body,
       )}
     </div>

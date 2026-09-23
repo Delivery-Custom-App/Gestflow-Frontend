@@ -1,4 +1,4 @@
-import { motion } from 'framer-motion'
+import { m } from 'framer-motion'
 import { GradientTracing } from '@/components/ui/gradient-tracing'
 import AunaroSymbol from '@/assets/brand/AunaroSymbol'
 
@@ -9,7 +9,7 @@ const CIRCLE_PATH = `M${CX},${CX} m0,-${R} a${R},${R} 0 1,1 -0.1,0 z`
 
 export default function LoadingPage() {
   return (
-    <motion.div
+    <m.div
       className="fixed inset-0 flex flex-col items-center justify-center bg-gradient-to-br from-[var(--loading-from)] via-[var(--loading-via)] to-[var(--loading-to)] z-50"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
@@ -44,7 +44,7 @@ export default function LoadingPage() {
         </div>
 
         {/* Brand centered */}
-        <motion.div
+        <m.div
           className="absolute flex flex-col items-center gap-2.5"
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
@@ -57,7 +57,7 @@ export default function LoadingPage() {
           <span className="font-marca italic text-xs text-white/70">Inteligencia de negocios en tus manos</span>
           <div className="mt-1 flex gap-1.5">
             {[0, 1, 2].map((i) => (
-              <motion.span
+              <m.span
                 key={i}
                 className="w-1.5 h-1.5 rounded-full bg-[hsl(var(--primary))]"
                 animate={{ opacity: [0.3, 1, 0.3] }}
@@ -65,8 +65,8 @@ export default function LoadingPage() {
               />
             ))}
           </div>
-        </motion.div>
+        </m.div>
       </div>
-    </motion.div>
+    </m.div>
   )
 }

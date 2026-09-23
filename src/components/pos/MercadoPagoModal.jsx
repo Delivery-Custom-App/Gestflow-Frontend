@@ -179,7 +179,7 @@ export default function MercadoPagoModal({ open, orderId, total, description, on
               Total: <span className="font-bold text-[hsl(var(--foreground))]">{fmt(total)}</span>
             </p>
           </div>
-          <button
+          <button type="button" aria-label="Cerrar"
             onClick={handleClose}
             className="text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] text-xl leading-none disabled:opacity-30"
             disabled={step === 'point_waiting' || step === 'point_success'}
@@ -218,8 +218,8 @@ export default function MercadoPagoModal({ open, orderId, total, description, on
           {step === 'cash_amount' && (
             <div className="space-y-3">
               <div>
-                <label className="mb-1.5 block text-xs font-semibold text-[hsl(var(--muted-foreground))]">Monto recibido</label>
-                <input
+                <label htmlFor="mercado-pago-modal-monto-recibido" className="mb-1.5 block text-xs font-semibold text-[hsl(var(--muted-foreground))]">Monto recibido</label>
+                <input id="mercado-pago-modal-monto-recibido"
                   type="number"
                   min={total}
                   autoFocus

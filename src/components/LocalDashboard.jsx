@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useParams } from 'react-router-dom'
-import { motion, AnimatePresence } from 'framer-motion'
+import { m, AnimatePresence } from 'framer-motion'
 import { formatCLPDisplay as formatMoney } from '../lib/formatCLP'
 import { getInventoryKpisByLocal } from '../lib/inventoryApi'
 import { getLocalDashboard, getOrdersByLocal, getIncomeTrend } from '../lib/administrativeApi'
@@ -11,6 +11,9 @@ import PageTransition from './PageTransition'
 import LoadingSpinner from './LoadingSpinner'
 import ChartSkeleton from './ui/ChartSkeleton'
 import IncomeChart from './charts/IncomeChart'
+// recharts ya se carga bajo demanda: este modulo solo se importa desde paginas con React.lazy
+// (AuthenticatedRoutes) y el build lo deja en un chunk aparte, fuera del bundle inicial.
+// oxlint-disable-next-line react-doctor/prefer-dynamic-import
 import {
   BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Tooltip,
   PieChart, Pie, LabelList, LineChart, Line, Legend,
@@ -90,12 +93,17 @@ function DrawerSection({ title, children }) {
 }
 
 /* ── Drawer lateral derecho con detalle real por KPI ─────────── */
-function KpiDetailDrawer({ open, onClose, dashboard, orders, dashLoading }) {
+function KpiDetailDrawer({ open, onClose, orders, dashLoading }) {
   const [visible, setVisible] = useState(false)
 
+  // Monta cerrado y activa la transición en el siguiente frame; al cerrar se revierte.
   useEffect(() => {
-    if (open) requestAnimationFrame(() => setVisible(true))
-    else       setVisible(false)
+    if (!open) return
+    const frame = requestAnimationFrame(() => setVisible(true))
+    return () => {
+      cancelAnimationFrame(frame)
+      setVisible(false)
+    }
   }, [open])
 
   /* Ventas por hora HOY */
@@ -168,7 +176,7 @@ function KpiDetailDrawer({ open, onClose, dashboard, orders, dashLoading }) {
 
   return (
     <div className="fixed inset-0 z-50">
-      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+      <div role="presentation" className="absolute inset-0 bg-black/50" onClick={onClose} />
       <div
         className={cn(
           'absolute inset-y-0 right-0 w-full max-w-md flex flex-col shadow-2xl bg-[hsl(var(--card))] border-l border-[hsl(var(--border))] transition-transform duration-300 ease-out overflow-y-auto no-scrollbar',
@@ -181,7 +189,7 @@ function KpiDetailDrawer({ open, onClose, dashboard, orders, dashLoading }) {
             <BarChart2 size={18} className="text-[hsl(var(--primary))]" />
             <h2 className="text-base font-bold text-[hsl(var(--foreground))]">Ver detalles</h2>
           </div>
-          <button onClick={onClose} className="flex items-center justify-center w-8 h-8 rounded-lg hover:bg-[hsl(var(--muted))] transition-colors text-[hsl(var(--muted-foreground))]">
+          <button type="button" aria-label="Cerrar" onClick={onClose} className="flex items-center justify-center w-8 h-8 rounded-lg hover:bg-[hsl(var(--muted))] transition-colors text-[hsl(var(--muted-foreground))]">
             <X size={16} />
           </button>
         </div>
@@ -249,7 +257,7 @@ function KpiDetailDrawer({ open, onClose, dashboard, orders, dashLoading }) {
                         <div key={s.name} className="flex items-center gap-2">
                           <span className="text-xs w-20 shrink-0 text-[hsl(var(--foreground))]">{s.name}</span>
                           <div className="flex-1 h-2.5 rounded-full bg-[hsl(var(--muted))] overflow-hidden">
-                            <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, backgroundColor: s.fill }} />
+                            <div className="h-full rounded-full transition-[width]" style={{ width: `${pct}%`, backgroundColor: s.fill }} />
                           </div>
                           <span className="text-xs font-bold w-8 text-right" style={{ color: s.fill }}>{s.value}</span>
                         </div>
@@ -471,14 +479,14 @@ function LocalDashboard() {
           {/* Panel guía del dashboard */}
           <AnimatePresence>
             {guideOpen && (
-              <motion.div
+              <m.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
                 className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4"
                 onClick={() => setGuideOpen(false)}
               >
-                <motion.div
+                <m.div
                   initial={{ opacity: 0, scale: 0.95, y: 12 }}
                   animate={{ opacity: 1, scale: 1, y: 0 }}
                   exit={{ opacity: 0, scale: 0.96, y: 8 }}
@@ -491,7 +499,7 @@ function LocalDashboard() {
                       <HelpCircle size={16} className="text-[hsl(var(--primary))]" />
                       <h3 className="text-sm font-bold text-[hsl(var(--foreground))]">Guía del Dashboard</h3>
                     </div>
-                    <button
+                    <button type="button" aria-label="Cerrar guía"
                       onClick={() => setGuideOpen(false)}
                       className="flex items-center justify-center w-7 h-7 rounded-lg text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))] transition-colors"
                     >
@@ -563,8 +571,8 @@ function LocalDashboard() {
                       </div>
                     ))}
                   </div>
-                </motion.div>
-              </motion.div>
+                </m.div>
+              </m.div>
             )}
           </AnimatePresence>
 
@@ -583,16 +591,16 @@ function LocalDashboard() {
                 Ver detalles
               </button>
             </div>
-            <motion.div
+            <m.div
               className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3"
               variants={STAGGER} initial="hidden" animate="visible"
             >
               {finCards.map((k, idx) => (
-                <motion.div key={k.label} variants={ITEM} data-onboarding={idx === 0 ? 'dashboard-ventas-card' : undefined}>
+                <m.div key={k.label} variants={ITEM} data-onboarding={idx === 0 ? 'dashboard-ventas-card' : undefined}>
                   <KpiCard {...k} loading={dashLoading} />
-                </motion.div>
+                </m.div>
               ))}
-            </motion.div>
+            </m.div>
           </section>
 
           {/* Charts row */}
@@ -650,7 +658,7 @@ function LocalDashboard() {
                         contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: '8px', fontSize: 12 }}
                       />
                       <Bar dataKey="value" radius={[6, 6, 0, 0]}>
-                        {pieData.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
+                        {pieData.map((entry, i) => <Cell key={entry.name} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
                         <LabelList
                           dataKey="value"
                           position="top"
@@ -909,8 +917,8 @@ function LocalDashboard() {
                               paddingAngle={3}
                               dataKey="ventas"
                             >
-                              {payCountData.map((entry, i) => (
-                                <Cell key={i} fill={entry.color} />
+                              {payCountData.map((entry) => (
+                                <Cell key={entry.name} fill={entry.color} />
                               ))}
                             </Pie>
                             <Tooltip
@@ -966,16 +974,16 @@ function LocalDashboard() {
             {invLoading && !invKpis ? (
               <LoadingSpinner message="Cargando inventario..." />
             ) : (
-              <motion.div
+              <m.div
                 className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3"
                 variants={STAGGER} initial="hidden" animate="visible"
               >
                 {invCards.map((k) => (
-                  <motion.div key={k.label} variants={ITEM}>
+                  <m.div key={k.label} variants={ITEM}>
                     <KpiCard {...k} loading={invLoading} />
-                  </motion.div>
+                  </m.div>
                 ))}
-              </motion.div>
+              </m.div>
             )}
           </section>
 

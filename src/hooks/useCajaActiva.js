@@ -5,32 +5,22 @@ import { getActiveCaja } from '../lib/salesApi'
  * Resuelve la caja abierta del local (V2: lista /cajas + status=open).
  */
 export function useCajaActiva(localId) {
-  const [cajaId, setCajaId] = useState(null)
   const [caja, setCaja] = useState(null)
-  const [loading, setLoading] = useState(false)
+  const [resolvedFor, setResolvedFor] = useState(null) // localId ya consultado
 
   useEffect(() => {
     if (!localId) return
     let cancelled = false
-
-    const fetchCaja = async () => {
-      setLoading(true)
-      try {
-        const active = await getActiveCaja(localId)
-        if (!cancelled && active?.id) {
-          setCajaId(active.id)
-          setCaja(active)
-        }
-      } catch {
-        // sin caja abierta
-      } finally {
-        if (!cancelled) setLoading(false)
-      }
-    }
-
-    fetchCaja()
+    getActiveCaja(localId)
+      .catch(() => null) // sin caja abierta
+      .then((active) => {
+        if (cancelled) return
+        // Si el local no tiene caja abierta se limpia (antes quedaba la del local anterior).
+        setCaja(active?.id ? active : null)
+        setResolvedFor(localId)
+      })
     return () => { cancelled = true }
   }, [localId])
 
-  return { cajaId, caja, loading }
+  return { cajaId: caja?.id ?? null, caja, loading: Boolean(localId) && resolvedFor !== localId }
 }

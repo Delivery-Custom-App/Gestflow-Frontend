@@ -19,10 +19,6 @@ const UNITS = [
 // Únicamente estas 2 categorías disponibles para el menú
 const MENU_CATEGORIES = ['Completos', 'Sandwich']
 
-function titleCase(str) {
-  if (!str) return ''
-  return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase()
-}
 
 /** Selector de categoría — solo clic, despliega Completos / Sandwich. */
 function MenuCategoryInput({ localId, selectedName, onResolve, disabled, error }) {
@@ -253,15 +249,10 @@ function CreateRecipeModal({ isOpen, recipe, onSave, onCancel, localId, external
       errors[key] ? 'border-red-400' : 'border-[hsl(var(--border))]'
     }`
 
-  const selectCls = (key) =>
-    `h-9 w-full rounded-md border px-3 text-sm shadow-sm bg-[hsl(var(--card))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary)/0.3)] ${
-      errors[key] ? 'border-red-400' : 'border-[hsl(var(--border))]'
-    }`
-
   return (
     <>
       {/* Overlay */}
-      <div
+      <div role="presentation"
         className={`fixed inset-0 bg-black/60 transition-opacity duration-300 ${
           isOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
         }`}
@@ -289,7 +280,7 @@ function CreateRecipeModal({ isOpen, recipe, onSave, onCancel, localId, external
               </p>
             </div>
           </div>
-          <button
+          <button aria-label="Cerrar"
             type="button"
             onClick={() => { if (!savingLoading) onCancel() }}
             disabled={savingLoading}
@@ -460,7 +451,9 @@ function CreateRecipeModal({ isOpen, recipe, onSave, onCancel, localId, external
                                 <p className="text-xs text-amber-600 font-medium">Salsa — datos heredados</p>
                               )}
                             </div>
+                            <label htmlFor={`receta-cantidad-${ing.product_id}`} className="sr-only">{`Cantidad de ${ing.product_name}`}</label>
                             <input
+                              id={`receta-cantidad-${ing.product_id}`}
                               type="text"
                               inputMode="decimal"
                               value={ing.quantity_required}
@@ -473,7 +466,7 @@ function CreateRecipeModal({ isOpen, recipe, onSave, onCancel, localId, external
                                   : 'border-[hsl(var(--border))] bg-[hsl(var(--card))]'
                               }`}
                             />
-                            <select
+                            <select aria-label={`Unidad de ${ing.product_name}`}
                               value={ing.unit}
                               onChange={(e) => updateIngredient(ing.product_id, 'unit', e.target.value)}
                               disabled={ing.is_sauce}
@@ -490,7 +483,7 @@ function CreateRecipeModal({ isOpen, recipe, onSave, onCancel, localId, external
                             <span className="text-xs text-right font-semibold text-[hsl(var(--foreground))]">
                               {fmt(subtotal)}
                             </span>
-                            <button
+                            <button aria-label={`Quitar ${ing.product_name}`}
                               type="button"
                               onClick={() => removeIngredient(ing.product_id)}
                               className="flex items-center justify-center w-7 h-7 rounded-md text-[hsl(var(--muted-foreground))] hover:text-red-600 hover:bg-red-50 transition-colors"

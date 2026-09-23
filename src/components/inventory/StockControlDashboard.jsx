@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useParams } from 'react-router-dom'
-import { useSelectedLocal } from '../../hooks/useSelectedLocal'
 import {
   deleteInventoryItem,
   getInventoryKpisByLocal,
@@ -18,7 +17,7 @@ import LoadingSpinner from '../LoadingSpinner'
 import NuevoProductoModal from './NuevoProductoModal'
 import ProductsTable from './ProductsTable'
 import CategoryFilterSelect from './CategoryFilterSelect'
-import { motion, AnimatePresence } from 'framer-motion'
+import { m, AnimatePresence } from 'framer-motion'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Search, Package, CheckCircle, TrendingDown, AlertTriangle, DollarSign, HelpCircle, X, Plus, Pencil } from 'lucide-react'
@@ -43,7 +42,6 @@ const sectionVariants = {
 
 function StockControlDashboard() {
   const { localId } = useParams()
-  const selectedLocal = useSelectedLocal(localId)
 
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -155,9 +153,12 @@ function StockControlDashboard() {
     loadCategoriesCatalog()
   }, [loadCategoriesCatalog])
 
-  useEffect(() => {
+  // Filtros nuevos => vuelve a la página 1 en el mismo render (sin efecto encadenado).
+  const [prevFilters, setPrevFilters] = useState({ categoryFilter, debouncedSearch, statusFilters })
+  if (prevFilters.categoryFilter !== categoryFilter || prevFilters.debouncedSearch !== debouncedSearch || prevFilters.statusFilters !== statusFilters) {
+    setPrevFilters({ categoryFilter, debouncedSearch, statusFilters })
     setCurrentPage(1)
-  }, [categoryFilter, debouncedSearch, statusFilters])
+  }
 
   useEffect(() => {
     if (!localId) return
@@ -380,10 +381,10 @@ function StockControlDashboard() {
     <>
       <AnimatePresence>
         {guideOpen && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+          <m.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4"
             onClick={() => setGuideOpen(false)}>
-            <motion.div initial={{ opacity: 0, scale: 0.95, y: 12 }} animate={{ opacity: 1, scale: 1, y: 0 }}
+            <m.div initial={{ opacity: 0, scale: 0.95, y: 12 }} animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.96, y: 8 }} transition={{ duration: 0.2 }}
               onClick={(e) => e.stopPropagation()}
               className="bg-[hsl(var(--card))] border border-[hsl(var(--border))] rounded-2xl shadow-2xl w-full max-w-lg max-h-[88vh] overflow-y-auto no-scrollbar">
@@ -392,7 +393,7 @@ function StockControlDashboard() {
                   <HelpCircle size={16} className="text-[hsl(var(--primary))]" />
                   <h3 className="text-sm font-bold text-[hsl(var(--foreground))]">Guía — Stock de Productos</h3>
                 </div>
-                <button onClick={() => setGuideOpen(false)}
+                <button type="button" aria-label="Cerrar guía" onClick={() => setGuideOpen(false)}
                   className="flex items-center justify-center w-7 h-7 rounded-lg text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))] transition-colors">
                   <X size={14} />
                 </button>
@@ -414,8 +415,8 @@ function StockControlDashboard() {
                   </div>
                 ))}
               </div>
-            </motion.div>
-          </motion.div>
+            </m.div>
+          </m.div>
         )}
       </AnimatePresence>
       <InventoryShell>
@@ -449,7 +450,7 @@ function StockControlDashboard() {
         {!error && loading && !data ? <LoadingSpinner message="Cargando indicadores..." /> : null}
 
         {data ? (
-          <motion.section
+          <m.section
             className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3"
             aria-label="KPIs de inventario"
             variants={kpiContainerVariants}
@@ -460,7 +461,7 @@ function StockControlDashboard() {
               const isActive = kpi.filterValue && statusFilters.includes(kpi.filterValue)
               const isClickable = !kpi.noClick
               return (
-                <motion.div
+                <m.div
                   key={kpi.label}
                   variants={kpiItemVariants}
                   whileHover={isClickable ? { scale: 1.04, y: -4, transition: { type: 'spring', stiffness: 380, damping: 22 } } : undefined}
@@ -483,13 +484,13 @@ function StockControlDashboard() {
                       </div>
                     </CardContent>
                   </Card>
-                </motion.div>
+                </m.div>
               )
             })}
-          </motion.section>
+          </m.section>
         ) : null}
 
-        <motion.div variants={sectionVariants} initial="hidden" animate="visible">
+        <m.div variants={sectionVariants} initial="hidden" animate="visible">
         <Card>
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between gap-3 flex-wrap">
@@ -498,7 +499,8 @@ function StockControlDashboard() {
                 <p className="text-xs text-[hsl(var(--muted-foreground))] mt-1">Crea y renombra las familias que ordenan tus productos.</p>
               </div>
               <form onSubmit={handleCreateCategory} className="flex gap-2 w-full sm:w-auto">
-                <input
+                <label htmlFor="stock-control-nueva-categoria" className="sr-only">Nombre de la nueva categoría</label>
+                <input id="stock-control-nueva-categoria"
                   value={newCategoryName}
                   onChange={(e) => setNewCategoryName(e.target.value)}
                   placeholder="Nueva categoría"
@@ -518,7 +520,7 @@ function StockControlDashboard() {
               ) : categoriesCatalog.map((category) => (
                 editingCategoryId === category.id ? (
                   <form key={category.id} onSubmit={handleRenameCategory} className="flex items-center gap-2 rounded-full border border-[hsl(var(--primary))]/30 bg-[hsl(var(--primary))]/10 px-2 py-1">
-                    <input
+                    <input aria-label="Nombre de la categoría"
                       value={editingCategoryName}
                       onChange={(e) => setEditingCategoryName(e.target.value)}
                       className="h-8 w-40 rounded-full border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3 text-sm focus:outline-none"
@@ -561,9 +563,9 @@ function StockControlDashboard() {
             </div>
           </CardContent>
         </Card>
-        </motion.div>
+        </m.div>
 
-        <motion.div variants={sectionVariants} initial="hidden" animate="visible">
+        <m.div variants={sectionVariants} initial="hidden" animate="visible">
         <Card aria-labelledby="scd-inventory-heading">
           <CardHeader className="pb-4">
             <div className="flex items-center justify-between gap-3 flex-wrap">
@@ -580,7 +582,7 @@ function StockControlDashboard() {
               </div>
             ) : null}
 
-            <div className="flex flex-wrap gap-3 items-center" role="search" aria-label="Filtrar inventario">
+            <search className="flex flex-wrap gap-3 items-center" aria-label="Filtrar inventario">
               <div className="relative flex-1 min-w-[200px]">
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[hsl(var(--muted-foreground))]" aria-hidden="true">
                   <Search size={16} />
@@ -596,7 +598,7 @@ function StockControlDashboard() {
                 />
               </div>
               <CategoryFilterSelect value={categoryFilter} onChange={setCategoryFilter} options={categoriesCatalog} />
-            </div>
+            </search>
 
             <ProductsTable
               items={items}
@@ -618,7 +620,7 @@ function StockControlDashboard() {
             />
           </CardContent>
         </Card>
-        </motion.div>
+        </m.div>
 
         <NuevoProductoModal
           open={modalOpen}
