@@ -22,7 +22,7 @@ const url = `${API_BASE}/api/mp-oauth/start?local_id=${encodeURIComponent(localI
 
 ---
 
-## [Seguridad] Tokens de sesión en localStorage (access_token + refresh_token)
+## [Seguridad] Tokens de sesión en localStorage (access_token + refresh_token) — 🟡 MITIGADO 2026-09-23
 
 **Problema:** `access_token`/`refresh_token` se guardan en `localStorage` en vez de una cookie `HttpOnly`.
 
@@ -36,6 +36,10 @@ if (refresh_token) window.localStorage.setItem(REFRESH_TOKEN_KEY, refresh_token)
 **Por qué NO es urgente (pero sí importa):** hoy no hay un XSS conocido explotable en el repo (verificado: sin `dangerouslySetInnerHTML`/`eval`/`innerHTML=`), así que no es una fuga activa — es defensa en profundidad. Pero si algún día entra un XSS (propio o de una dependencia), el radio de daño es máximo: roba access **y** refresh token, sesión completa, no solo la ventana activa.
 
 **Qué hacer:** Pablo define el fix correcto — migrar a cookies `HttpOnly`+`Secure`+`SameSite` es la solución de fondo, pero cruza backend (`Set-Cookie`, CORS) + frontend (`credentials:'include'`) + CSRF, así que amerita un ADR antes de tocar código. Mitigación intermedia sin ADR: sacar al menos el `refresh_token` de `localStorage`.
+
+**Mitigado (sin ADR, fix de fondo con cookies sigue pendiente):** `refresh_token` ya no se persiste en `localStorage` — vive en una variable de módulo en memoria (`inMemoryRefreshToken`, `authClient.js`). `access_token`/`user` siguen en `localStorage` sin cambios (ese es el trade-off aceptado: XSS ya no roba refresh_token, pero sigue robando access_token de la ventana activa). Trade-off documentado: el refresh_token ya no sobrevive a un full reload ni se comparte entre pestañas (no había `storage`/`BroadcastChannel` sync previo, así que no es una regresión de una feature existente) — impacto acotado porque Backend V2 (activo) todavía no expone `/auth/refresh`. Cobertura nueva: `src/lib/authClient.test.js` (3 tests, afirman que `gestflow-refresh-token` nunca aparece en `localStorage`). Suite completa 135/135 + build OK. Pendiente real: el ADR de cookies `HttpOnly` sigue abierto, decisión de Pablo.
+
+**Segunda capa (2026-09-23), CSP compensatoria:** agregada `Content-Security-Policy` vía `<meta>`, inyectada solo en build de producción (`vite.config.js`, plugin `csp-meta-tag`, `apply: 'build'` — el dev server de Vite inyecta sus propios `<script>` inline para HMR/Fast Refresh que esta CSP bloquearía, por eso queda fuera de dev). Política: `script-src 'self' '<hash del script inline de tema>'` (nada de script externo/inyectado sin ese hash exacto — cualquier XSS vía `<script src=...>` ajeno queda cortado), `style-src 'unsafe-inline'` (React/Tailwind/framer-motion escriben `style` inline en runtime, no hay forma barata de evitarlo sin refactor grande — el riesgo real está en `script-src`, no acá), `img-src`/`font-src`/`connect-src` acotados a los orígenes reales usados (Google Fonts, tiles de OpenStreetMap del mapa de sucursales, `data:` para avatares, backend `gestflow.mardev.cl`), `object-src 'none'`. Limitación conocida: `<meta>` no soporta `frame-ancestors`/`report-uri`/`sandbox` — eso sigue pendiente del hallazgo de headers de seguridad a nivel server (fuera de este repo). Verificado build+dev por separado (CSP solo en `dist/index.html`, dev server intacto) y suite 135/135.
 
 ---
 
