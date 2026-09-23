@@ -53,7 +53,7 @@ export default function NetworkErrorModal() {
               </p>
             </div>
           </div>
-          <button
+          <button type="button" aria-label="Cerrar aviso"
             onClick={() => setError(null)}
             className="text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] transition-colors"
           >

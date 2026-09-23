@@ -146,7 +146,7 @@ export default function MesaDetailModal({ mesa, localId, cajaId, onClose, onTabl
   /* ─── un solo return para ambos pasos — bottom sheet mobile, drawer desktop ─── */
   return (
     <div className="fixed inset-0 z-50">
-      <div
+      <div role="presentation"
         className={cn('absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity duration-300', visible ? 'opacity-100' : 'opacity-0')}
         onClick={handleClose}
       />
@@ -201,7 +201,7 @@ export default function MesaDetailModal({ mesa, localId, cajaId, onClose, onTabl
 
         {error && (
           <div className="mx-5 mt-3 px-3 py-2 rounded-lg bg-red-50 border border-red-200 text-sm text-red-600">
-            {error}<button className="ml-2 underline text-xs" onClick={() => setError('')}>✕</button>
+            {error}<button type="button" aria-label="Cerrar mensaje de error" className="ml-2 underline text-xs" onClick={() => setError('')}>✕</button>
           </div>
         )}
 

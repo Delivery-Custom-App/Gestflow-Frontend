@@ -1,26 +1,12 @@
-import { useState, useCallback, useMemo, useEffect } from 'react'
+import { useMemo } from 'react'
 import { Search, X } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
 
-function applyFilters(mesas, filters) {
-  return mesas.filter((mesa) => {
-    if (filters.nombre.trim()) {
-      const nombre = `${mesa.name || ''}`.toLowerCase()
-      const numero = `${mesa.numero || ''}`.toLowerCase()
-      const searchTerm = filters.nombre.toLowerCase()
-      if (!nombre.includes(searchTerm) && !numero.includes(searchTerm)) return false
-    }
-    if (filters.estado) {
-      const mesaState = !mesa.is_active ? 'inactiva' : (mesa.state || 'libre')
-      if (mesaState !== filters.estado) return false
-    }
-    if (filters.zona) {
-      if (mesa.zona !== filters.zona) return false
-    }
-    return true
-  })
-}
+import { EMPTY_MESA_FILTERS } from './filterMesas'
+
+const ESTADO_OPTIONS = ['libre', 'ocupada', 'en_cobro']
+const NO_MESAS = []
 
 const selectCls = cn(
   'h-10 min-w-[140px] rounded-xl border border-[hsl(var(--border))]',
@@ -28,26 +14,15 @@ const selectCls = cn(
   'focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary))]/30',
 )
 
-export default function MesasFilters({ mesas = [], onFilteredMesasChange = null }) {
-  const [filters, setFilters] = useState({ nombre: '', estado: '', zona: '' })
-
-  const estadoOptions = useMemo(() => ['libre', 'ocupada', 'en_cobro'], [])
+/** Filtros de mesas (controlado): el padre guarda `filters` y calcula `filteredCount`. */
+export default function MesasFilters({ mesas = NO_MESAS, filters, onFiltersChange, filteredCount }) {
   const zonaOptions = useMemo(() => {
     const zonas = new Set(mesas.map((m) => m.zona).filter(Boolean))
     return Array.from(zonas).sort()
   }, [mesas])
 
-  const filteredMesas = useMemo(() => applyFilters(mesas, filters), [mesas, filters])
-
-  useEffect(() => {
-    onFilteredMesasChange?.(filteredMesas, filters)
-  }, [filteredMesas, filters, onFilteredMesasChange])
-
-  const handleFiltersChange = useCallback((newFilters) => {
-    setFilters(newFilters)
-  }, [])
-
-  const handleLimpiarFiltros = () => handleFiltersChange({ nombre: '', estado: '', zona: '' })
+  const handleFiltersChange = onFiltersChange
+  const handleLimpiarFiltros = () => handleFiltersChange(EMPTY_MESA_FILTERS)
   const activeCount = [filters.nombre.trim(), filters.estado, filters.zona].filter(Boolean).length
 
   return (
@@ -84,7 +59,7 @@ export default function MesasFilters({ mesas = [], onFilteredMesasChange = null 
           aria-label="Filtrar por estado"
         >
           <option value="">Todos los estados</option>
-          {estadoOptions.map((estado) => (
+          {ESTADO_OPTIONS.map((estado) => (
             <option key={estado} value={estado}>
               {estado === 'libre' && 'Disponible'}
               {estado === 'ocupada' && 'Ocupada'}
@@ -112,7 +87,7 @@ export default function MesasFilters({ mesas = [], onFilteredMesasChange = null 
             onClick={handleLimpiarFiltros}
             className="h-10 rounded-xl px-3 text-xs font-medium text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))] hover:text-[hsl(var(--foreground))]"
           >
-            Limpiar · {filteredMesas.length}/{mesas.length}
+            Limpiar · {filteredCount}/{mesas.length}
           </button>
         )}
       </div>

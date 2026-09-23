@@ -1,8 +1,10 @@
-import { useState, useRef, useCallback } from 'react'
+import { useState, useCallback, useMemo } from 'react'
 import { useParams, useLocation } from 'react-router'
 import { useMesasConEstado } from '../../hooks/useMesasConEstado'
+import { useMesasKPIs } from '../../hooks/useMesasKPIs'
 import MesasKPICards from './MesasKPICards'
 import MesasFilters from './MesasFilters'
+import { applyFilters, EMPTY_MESA_FILTERS } from './filterMesas'
 import MesasVisualization from './MesasVisualization'
 import KitchenDisplay from './KitchenDisplay'
 import CreateMesaModal from './CreateMesaModal'
@@ -23,8 +25,10 @@ export default function POSModule() {
   const { cajaId } = useCajaActiva(localId)
   const { mesas, loading: mesasLoading, error: mesasError, createMesa, updateMesa, deleteMesa, refresh: refreshMesas } = useMesasConEstado(localId)
   const activeView = pathname.endsWith('/cocina') ? 'cocina' : 'mesas'
+  const { kpis, loading: kpisLoading, error: kpisError, refresh: refreshKpis } = useMesasKPIs(activeView === 'mesas' ? localId : null)
   const [showModal, setShowModal] = useState(false)
-  const [filteredMesas, setFilteredMesas] = useState(null)
+  const [mesaFilters, setMesaFilters] = useState(EMPTY_MESA_FILTERS)
+  const filteredMesas = useMemo(() => applyFilters(mesas, mesaFilters), [mesas, mesaFilters])
   const [editingMesa, setEditingMesa] = useState(null)
   const [showEditModal, setShowEditModal] = useState(false)
   const [deletingMesa, setDeletingMesa] = useState(null)
@@ -34,11 +38,10 @@ export default function POSModule() {
   const [selectedMesa, setSelectedMesa] = useState(null)
   const [showPrinterConfig, setShowPrinterConfig] = useState(false)
   const [showMPConfig, setShowMPConfig] = useState(false)
-  const kpiRefreshRef = useRef(null)
 
   const handleSubmitMesa = async (formData) => {
     await createMesa(formData)
-    if (kpiRefreshRef.current) kpiRefreshRef.current()
+    refreshKpis()
   }
 
   // Handlers memoizados (useCallback): mantienen referencia estable entre renders
@@ -51,17 +54,14 @@ export default function POSModule() {
   const handleWorkspaceBack = useCallback(() => {
     setSelectedMesa(null)
     refreshMesas()
-    if (kpiRefreshRef.current) kpiRefreshRef.current()
-  }, [refreshMesas])
+    refreshKpis()
+  }, [refreshMesas, refreshKpis])
 
   const handleTableUpdated = useCallback(() => {
     refreshMesas()
-    if (kpiRefreshRef.current) kpiRefreshRef.current()
-  }, [refreshMesas])
+    refreshKpis()
+  }, [refreshMesas, refreshKpis])
 
-  const handleFilteredMesasChange = useCallback((filtered) => {
-    setFilteredMesas(filtered)
-  }, [])
 
   const handleEditMesa = useCallback((mesa) => {
     setEditingMesa(mesa)
@@ -79,7 +79,7 @@ export default function POSModule() {
       })
       setShowEditModal(false)
       setEditingMesa(null)
-      if (kpiRefreshRef.current) kpiRefreshRef.current()
+      refreshKpis()
     } catch (error) {
       console.error('Error updating mesa:', error)
     }
@@ -99,7 +99,7 @@ export default function POSModule() {
       await deleteMesa(deletingMesa.id)
       setShowDeleteModal(false)
       setDeletingMesa(null)
-      if (kpiRefreshRef.current) kpiRefreshRef.current()
+      refreshKpis()
     } catch (error) {
       console.error('Error deleting mesa:', error)
       let errorMsg = 'Error al eliminar la mesa'
@@ -165,7 +165,7 @@ export default function POSModule() {
           />
         ) : activeView === 'mesas' ? (
           <div className="space-y-5">
-            <MesasKPICards localId={localId} onRefreshReady={(fn) => { kpiRefreshRef.current = fn }} />
+            <MesasKPICards kpis={kpis} loading={kpisLoading} error={kpisError} />
             {mesasError ? (
               <div className="rounded-xl border-2 border-red-200 bg-red-50 p-8 text-red-700 dark:border-red-800/40 dark:bg-red-950/20 dark:text-red-400">
                 <div className="flex flex-col gap-3">
@@ -195,9 +195,9 @@ export default function POSModule() {
               </div>
             ) : (
               <section className="space-y-4" data-onboarding="pos-mesas-grid">
-                <MesasFilters mesas={mesas} onFilteredMesasChange={handleFilteredMesasChange} />
+                <MesasFilters mesas={mesas} filters={mesaFilters} onFiltersChange={setMesaFilters} filteredCount={filteredMesas.length} />
                 <MesasVisualization
-                  mesas={filteredMesas ?? mesas}
+                  mesas={filteredMesas}
                   loading={mesasLoading}
                   onMesaSelect={handleMesaSelect}
                   onEditMesa={isWorker ? null : handleEditMesa}

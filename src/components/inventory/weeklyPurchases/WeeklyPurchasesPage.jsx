@@ -27,27 +27,24 @@ import {
   TableHead,
   TableCell,
 } from '@/components/ui/table'
-import { motion, AnimatePresence } from 'framer-motion'
+import { m, AnimatePresence } from 'framer-motion'
 import { CalendarDays, RefreshCw, AlertTriangle, Plus, Minus, X, Search, BarChart2, HelpCircle } from 'lucide-react'
 
 const SUPPLIER_SEARCH_DEBOUNCE_MS = 350
+
+const WEEK_LONG_FORMAT = new Intl.DateTimeFormat('es-CL', {
+  weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
+})
 
 function formatWeekLong(iso) {
   if (!iso || typeof iso !== 'string' || iso.length < 10) return '—'
   const d = new Date(`${iso.slice(0, 10)}T12:00:00`)
   if (Number.isNaN(d.getTime())) return iso
   try {
-    return new Intl.DateTimeFormat('es-CL', {
-      weekday: 'long', day: 'numeric', month: 'long', year: 'numeric',
-    }).format(d)
+    return WEEK_LONG_FORMAT.format(d)
   } catch { return iso }
 }
 
-function formatReceivedCell(order) {
-  const t = Number(order?.total_received_clp)
-  if (Number.isFinite(t) && t > 0) return formatMoneyClp(t)
-  return '—'
-}
 
 function linesFromSupplierDetail(detail) {
   const products = Array.isArray(detail?.purchased_products) ? detail.purchased_products : []
@@ -130,25 +127,26 @@ function NewWeeklyOrderModal({ open, businessId, localId, onClose, onCreated }) 
       } catch (e) {
         if (!cancelled) setError(e?.message || 'No se pudieron cargar proveedores.')
       } finally {
+        // Sí se resetea en finally; la guarda evita tocar estado de una carga cancelada.
+        // oxlint-disable-next-line react-doctor/no-loading-flag-reset-outside-finally
         if (!cancelled) setLoadingSup(false)
       }
     })()
     return () => { cancelled = true }
   }, [open, businessId])
 
-  /* ── Reset al cerrar ── */
-  useEffect(() => {
-    if (!open) {
-      setStep('select')
-      setSupplierId('')
-      setDeliveryDate(new Date().toISOString().slice(0, 10))
-      setAvailableProducts([])
-      setPickerSelected(new Set())
-      setPickerSearch('')
-      setLines([])
-      setError('')
-    }
-  }, [open])
+  /* ── Reset al cerrar: todos los cierres pasan por handleClose ── */
+  const handleClose = () => {
+    setStep('select')
+    setSupplierId('')
+    setDeliveryDate(new Date().toISOString().slice(0, 10))
+    setAvailableProducts([])
+    setPickerSelected(new Set())
+    setPickerSearch('')
+    setLines([])
+    setError('')
+    onClose()
+  }
 
   /* ── Cargar productos al seleccionar proveedor ── */
   useEffect(() => {
@@ -257,7 +255,7 @@ function NewWeeklyOrderModal({ open, businessId, localId, onClose, onCreated }) 
       }
       const created = await postWeeklyPurchaseOrder(body)
       onCreated(created)
-      onClose()
+      handleClose()
     } catch (e) {
       setError(e?.message || 'No se pudo crear la orden.')
     } finally {
@@ -276,7 +274,8 @@ function NewWeeklyOrderModal({ open, businessId, localId, onClose, onCreated }) 
           open ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
         }`}
         style={{ zIndex: 500 }}
-        onClick={onClose}
+        role="presentation"
+        onClick={handleClose}
       />
 
       {/* Drawer panel */}
@@ -303,7 +302,8 @@ function NewWeeklyOrderModal({ open, businessId, localId, onClose, onCreated }) 
           </div>
           <button
             type="button"
-            onClick={onClose}
+            onClick={handleClose}
+            aria-label="Cerrar"
             className="rounded-lg p-2 hover:bg-[hsl(var(--muted))] transition-colors"
           >
             <X className="h-4 w-4 text-[hsl(var(--muted-foreground))]" />
@@ -378,8 +378,10 @@ function NewWeeklyOrderModal({ open, businessId, localId, onClose, onCreated }) 
                       {/* Buscador */}
                       <div className="px-3 py-2.5 border-b border-[hsl(var(--border))] bg-[hsl(var(--muted)/0.3)]">
                         <div className="relative">
+                          <label htmlFor="orden-buscar-producto" className="sr-only">Buscar producto</label>
                           <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[hsl(var(--muted-foreground))]" />
                           <input
+                            id="orden-buscar-producto"
                             type="search"
                             placeholder="Buscar producto…"
                             value={pickerSearch}
@@ -493,6 +495,7 @@ function NewWeeklyOrderModal({ open, businessId, localId, onClose, onCreated }) 
                           type="button"
                           onClick={() => changeQty(idx, -1)}
                           disabled={Number(line.quantity_ordered) <= 1}
+                          aria-label={`Disminuir cantidad de ${line.product_name}`}
                           className="w-7 h-7 flex items-center justify-center rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--card))] hover:bg-[hsl(var(--accent))] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                         >
                           <Minus size={12} />
@@ -502,11 +505,13 @@ function NewWeeklyOrderModal({ open, businessId, localId, onClose, onCreated }) 
                           inputMode="numeric"
                           value={line.quantity_ordered}
                           onChange={(ev) => setQtyDirect(idx, ev.target.value)}
+                          aria-label={`Cantidad de ${line.product_name}`}
                           className="w-12 h-7 text-center rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--card))] text-sm font-medium focus:outline-none focus:ring-1 focus:ring-[hsl(var(--primary)/0.5)]"
                         />
                         <button
                           type="button"
                           onClick={() => changeQty(idx, 1)}
+                          aria-label={`Aumentar cantidad de ${line.product_name}`}
                           className="w-7 h-7 flex items-center justify-center rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--card))] hover:bg-[hsl(var(--accent))] transition-colors"
                         >
                           <Plus size={12} />
@@ -522,6 +527,7 @@ function NewWeeklyOrderModal({ open, businessId, localId, onClose, onCreated }) 
                       <button
                         type="button"
                         onClick={() => removeLine(idx)}
+                        aria-label={`Quitar ${line.product_name}`}
                         className="flex items-center justify-center w-7 h-7 rounded-md text-[hsl(var(--muted-foreground))] hover:text-red-600 hover:bg-red-50 transition-colors"
                       >
                         <X size={14} />
@@ -548,7 +554,7 @@ function NewWeeklyOrderModal({ open, businessId, localId, onClose, onCreated }) 
         <div className="shrink-0 border-t border-[hsl(var(--border))] px-6 py-4 flex gap-2 justify-end">
           {step === 'select' ? (
             <>
-              <Button type="button" variant="outline" onClick={onClose}>Cancelar</Button>
+              <Button type="button" variant="outline" onClick={handleClose}>Cancelar</Button>
               <Button
                 type="button"
                 onClick={handleContinue}
@@ -739,10 +745,10 @@ function WeeklyPurchasesPage() {
     <>
       <AnimatePresence>
         {guideOpen && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+          <m.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4"
             onClick={() => setGuideOpen(false)}>
-            <motion.div initial={{ opacity: 0, scale: 0.95, y: 12 }} animate={{ opacity: 1, scale: 1, y: 0 }}
+            <m.div initial={{ opacity: 0, scale: 0.95, y: 12 }} animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.96, y: 8 }} transition={{ duration: 0.2 }}
               onClick={(e) => e.stopPropagation()}
               className="bg-[hsl(var(--card))] border border-[hsl(var(--border))] rounded-2xl shadow-2xl w-full max-w-lg max-h-[88vh] overflow-y-auto no-scrollbar">
@@ -751,7 +757,7 @@ function WeeklyPurchasesPage() {
                   <HelpCircle size={16} className="text-[hsl(var(--primary))]" />
                   <h3 className="text-sm font-bold text-[hsl(var(--foreground))]">Guía — Órdenes de Compra</h3>
                 </div>
-                <button onClick={() => setGuideOpen(false)}
+                <button type="button" aria-label="Cerrar guía" onClick={() => setGuideOpen(false)}
                   className="flex items-center justify-center w-7 h-7 rounded-lg text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))] transition-colors">
                   <X size={14} />
                 </button>
@@ -773,8 +779,8 @@ function WeeklyPurchasesPage() {
                   </div>
                 ))}
               </div>
-            </motion.div>
-          </motion.div>
+            </m.div>
+          </m.div>
         )}
       </AnimatePresence>
       <InventoryShell>
@@ -829,10 +835,11 @@ function WeeklyPurchasesPage() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4 items-end">
                   {/* Buscar proveedor */}
                   <div className="flex flex-col gap-1.5">
-                    <label className="text-sm font-medium text-[hsl(var(--foreground))]">Buscar proveedor</label>
+                    <label htmlFor="filtro-buscar-proveedor" className="text-sm font-medium text-[hsl(var(--foreground))]">Buscar proveedor</label>
                     <div className="relative">
                       <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[hsl(var(--muted-foreground))]" />
                       <input
+                        id="filtro-buscar-proveedor"
                         type="search"
                         value={supplierSearchInput}
                         onChange={(ev) => setSupplierSearchInput(ev.target.value)}
@@ -855,8 +862,8 @@ function WeeklyPurchasesPage() {
 
                   {/* Proveedor de la orden */}
                   <div className="flex flex-col gap-1.5">
-                    <label className="text-sm font-medium text-[hsl(var(--foreground))]">Proveedor</label>
-                    <select value={filterSupplier} onChange={(ev) => setFilterSupplier(ev.target.value)} className={selectCls}>
+                    <label htmlFor="filtro-proveedor" className="text-sm font-medium text-[hsl(var(--foreground))]">Proveedor</label>
+                    <select id="filtro-proveedor" value={filterSupplier} onChange={(ev) => setFilterSupplier(ev.target.value)} className={selectCls}>
                       <option value="">Todos</option>
                       {suppliers.map((s) => <option key={String(s.id)} value={String(s.id)}>{s.name || s.id}</option>)}
                     </select>
@@ -864,8 +871,8 @@ function WeeklyPurchasesPage() {
 
                   {/* Estado */}
                   <div className="flex flex-col gap-1.5">
-                    <label className="text-sm font-medium text-[hsl(var(--foreground))]">Estado</label>
-                    <select value={filterStatus} onChange={(ev) => setFilterStatus(ev.target.value)} className={selectCls}>
+                    <label htmlFor="filtro-estado" className="text-sm font-medium text-[hsl(var(--foreground))]">Estado</label>
+                    <select id="filtro-estado" value={filterStatus} onChange={(ev) => setFilterStatus(ev.target.value)} className={selectCls}>
                       <option value="">Todos</option>
                       {Object.entries(STATUS_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
                     </select>
@@ -873,8 +880,8 @@ function WeeklyPurchasesPage() {
 
                   {/* Categoría */}
                   <div className="flex flex-col gap-1.5">
-                    <label className="text-sm font-medium text-[hsl(var(--foreground))]">Categoría</label>
-                    <select value={supplierCategoryFilter} onChange={(ev) => setSupplierCategoryFilter(ev.target.value)} className={selectCls}>
+                    <label htmlFor="filtro-categoria" className="text-sm font-medium text-[hsl(var(--foreground))]">Categoría</label>
+                    <select id="filtro-categoria" value={supplierCategoryFilter} onChange={(ev) => setSupplierCategoryFilter(ev.target.value)} className={selectCls}>
                       <option value="">Todas</option>
                       {supplierCategoryOptions.map((c) => <option key={c} value={c}>{c}</option>)}
                     </select>

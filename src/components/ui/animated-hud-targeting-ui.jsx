@@ -1,5 +1,4 @@
-import { motion } from 'framer-motion'
-import { cn } from '@/lib/utils'
+import { m } from 'framer-motion'
 
 export function TargetingUI({ className, pathColor = 'white' }) {
   return (
@@ -12,7 +11,7 @@ export function TargetingUI({ className, pathColor = 'white' }) {
       className={className}
     >
       {/* TOP ROUNDED PATTERN */}
-      <motion.g
+      <m.g
         transform="translate(90, 50)"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
@@ -40,47 +39,47 @@ export function TargetingUI({ className, pathColor = 'white' }) {
           { d: "M50.197 6.65775L49.2969 8.29688L49.516 8.41721L50.4161 6.77808L50.197 6.65775Z", delay: 0.96 },
           { d: "M52.7203 8.13959L51.7188 9.71875L51.9299 9.85265L52.9315 8.27349L52.7203 8.13959Z", delay: 0.98 },
           { d: "M54.2421 11.4324L54.0391 11.2864L55.1371 9.77344L55.3401 9.91944L54.2421 11.4324Z", delay: 1.0 },
-        ].map(({ d, delay }, i) => (
-          <motion.path key={i} d={d} fill={pathColor} opacity="0.3"
+        ].map(({ d, delay }) => (
+          <m.path key={d} d={d} fill={pathColor} opacity="0.3"
             initial={{ opacity: 0 }} animate={{ opacity: 0.3 }}
             transition={{ delay, duration: 0.1 }}
           />
         ))}
-      </motion.g>
+      </m.g>
 
       {/* LEFT DIAGONAL */}
-      <motion.line x1="0.176777" y1="0.823223" x2="74.1768" y2="74.8232"
+      <m.line x1="0.176777" y1="0.823223" x2="74.1768" y2="74.8232"
         stroke={pathColor} strokeWidth="0.5"
         initial={{ pathLength: 0 }} animate={{ pathLength: 1 }}
         transition={{ duration: 0.8, ease: 'easeOut', delay: 0.2 }}
       />
       {/* MIDDLE HORIZONTAL */}
-      <motion.line x1="74" y1="74.75" x2="164" y2="74.75"
+      <m.line x1="74" y1="74.75" x2="164" y2="74.75"
         stroke={pathColor} strokeWidth="0.5"
         initial={{ pathLength: 0, pathOffset: 0.5 }} animate={{ pathLength: 1, pathOffset: 0 }}
         transition={{ duration: 0.6, ease: 'easeOut' }}
       />
       {/* RIGHT DIAGONAL */}
-      <motion.line x1="236.822" y1="0.82443" x2="163.822" y2="74.8244"
+      <m.line x1="236.822" y1="0.82443" x2="163.822" y2="74.8244"
         stroke={pathColor} strokeWidth="0.5"
         initial={{ pathLength: 0 }} animate={{ pathLength: 1 }}
         transition={{ duration: 0.8, ease: 'easeOut', delay: 0.2 }}
       />
 
       {/* TOP L-DOTS LEFT */}
-      {[{ cx: 78, cy: 66, delay: 1.2 }, { cx: 78, cy: 70, delay: 1.3 }, { cx: 82, cy: 70, delay: 1.4 }].map((p, i) => (
-        <motion.circle key={i} cx={p.cx} cy={p.cy} r=".75" fill={pathColor}
+      {[{ cx: 78, cy: 66, delay: 1.2 }, { cx: 78, cy: 70, delay: 1.3 }, { cx: 82, cy: 70, delay: 1.4 }].map((p) => (
+        <m.circle key={`${p.cx}-${p.cy}`} cx={p.cx} cy={p.cy} r=".75" fill={pathColor}
           initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: p.delay, duration: 0.3 }} />
       ))}
       {/* TOP L-DOTS RIGHT */}
-      {[{ cx: 159, cy: 66, delay: 1.2 }, { cx: 155, cy: 70, delay: 1.3 }, { cx: 159, cy: 70, delay: 1.4 }].map((p, i) => (
-        <motion.circle key={i} cx={p.cx} cy={p.cy} r=".75" fill={pathColor}
+      {[{ cx: 159, cy: 66, delay: 1.2 }, { cx: 155, cy: 70, delay: 1.3 }, { cx: 159, cy: 70, delay: 1.4 }].map((p) => (
+        <m.circle key={`${p.cx}-${p.cy}`} cx={p.cx} cy={p.cy} r=".75" fill={pathColor}
           initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: p.delay, duration: 0.3 }} />
       ))}
 
       {/* OUTER CIRCLE GROUP */}
       <g transform="translate(29, 22)">
-        <motion.path
+        <m.path
           d="M89.455 175.334C69.3083 175.288 49.7881 168.326 34.1599 155.612C18.5318 142.898 7.74354 125.203 3.6 105.486L0 101.886V73.5335L3.578 69.9575C7.65877 50.1962 18.4297 32.4468 34.0743 19.7028C49.7188 6.95881 69.2797 0 89.458 0C109.636 0 129.197 6.95881 144.842 19.7028C160.486 32.4468 171.257 50.1962 175.338 69.9575L178.914 73.5335V101.884L175.314 105.484C171.171 125.202 160.383 142.898 144.753 155.613C129.124 168.328 109.603 175.29 89.455 175.334ZM0.747999 101.574L4.289 105.116L4.312 105.225C8.35779 124.817 19.0363 142.414 34.5465 155.048C50.0567 167.683 69.4496 174.582 89.4545 174.582C109.459 174.582 128.852 167.683 144.363 155.048C159.873 142.414 170.551 124.817 174.597 105.225L174.62 105.116L178.161 101.574V73.8445L174.646 70.3275L174.623 70.2165C170.598 50.6003 159.926 32.9746 144.408 20.3176C128.891 7.66049 109.48 0.747999 89.455 0.747999C69.4302 0.747999 50.0192 7.66049 34.5017 20.3176C18.9842 32.9746 8.31157 50.6003 4.287 70.2165L4.264 70.3275L0.747999 73.8445V101.574Z"
           fill="#ffffff80"
           style={{ transformOrigin: '89.5px 87.5px' }}
@@ -89,27 +88,27 @@ export function TargetingUI({ className, pathColor = 'white' }) {
         />
 
         {/* LEFT CHAMBER */}
-        <motion.g transform="translate(3, 82)" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 1.6, duration: 0.4 }}>
-          {['M1.25362 0.601562H0.640625V1.21456H1.25362V0.601562Z','M1.25362 2.82812H0.640625V2.97112H1.25362V2.82812Z','M1.25362 3.14844H0.640625V3.29144H1.25362V3.14844Z','M1.25362 6.67969H0.640625V9.15668H1.25362V6.67969Z','M1.25362 3.95312H0.640625V4.09612H1.25362V3.95312Z','M1.25362 4.8125H0.640625V4.9555H1.25362V4.8125Z','M1.25362 5.09375H0.640625V5.23675H1.25362V5.09375Z','M1.25362 5.375H0.640625V5.51801H1.25362V5.375Z','M1.25362 5.65625H0.640625V5.79925H1.25362V5.65625Z','M1.25362 10.0312H0.640625V10.1742H1.25362V10.0312Z','M1.25362 10.5312H0.640625V10.6742H1.25362V10.5312Z'].map((d, i) => (
-            <motion.path key={i} d={d} fill={pathColor} />
+        <m.g transform="translate(3, 82)" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 1.6, duration: 0.4 }}>
+          {['M1.25362 0.601562H0.640625V1.21456H1.25362V0.601562Z','M1.25362 2.82812H0.640625V2.97112H1.25362V2.82812Z','M1.25362 3.14844H0.640625V3.29144H1.25362V3.14844Z','M1.25362 6.67969H0.640625V9.15668H1.25362V6.67969Z','M1.25362 3.95312H0.640625V4.09612H1.25362V3.95312Z','M1.25362 4.8125H0.640625V4.9555H1.25362V4.8125Z','M1.25362 5.09375H0.640625V5.23675H1.25362V5.09375Z','M1.25362 5.375H0.640625V5.51801H1.25362V5.375Z','M1.25362 5.65625H0.640625V5.79925H1.25362V5.65625Z','M1.25362 10.0312H0.640625V10.1742H1.25362V10.0312Z','M1.25362 10.5312H0.640625V10.6742H1.25362V10.5312Z'].map((d) => (
+            <m.path key={d} d={d} fill={pathColor} />
           ))}
-        </motion.g>
+        </m.g>
 
         {/* RIGHT CHAMBER */}
-        <motion.g transform="translate(174, 82)" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 1.6, duration: 0.4 }}>
-          {['M1.25362 0.601562H0.640625V1.21456H1.25362V0.601562Z','M1.25362 2.82812H0.640625V2.97112H1.25362V2.82812Z','M1.25362 3.14844H0.640625V3.29144H1.25362V3.14844Z','M1.25362 6.67969H0.640625V9.15668H1.25362V6.67969Z','M1.25362 3.95312H0.640625V4.09612H1.25362V3.95312Z','M1.25362 4.8125H0.640625V4.9555H1.25362V4.8125Z','M1.25362 5.09375H0.640625V5.23675H1.25362V5.09375Z','M1.25362 5.375H0.640625V5.51801H1.25362V5.375Z','M1.25362 5.65625H0.640625V5.79925H1.25362V5.65625Z','M1.25362 10.0312H0.640625V10.1742H1.25362V10.0312Z','M1.25362 10.5312H0.640625V10.6742H1.25362V10.5312Z'].map((d, i) => (
-            <motion.path key={i} d={d} fill={pathColor} />
+        <m.g transform="translate(174, 82)" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 1.6, duration: 0.4 }}>
+          {['M1.25362 0.601562H0.640625V1.21456H1.25362V0.601562Z','M1.25362 2.82812H0.640625V2.97112H1.25362V2.82812Z','M1.25362 3.14844H0.640625V3.29144H1.25362V3.14844Z','M1.25362 6.67969H0.640625V9.15668H1.25362V6.67969Z','M1.25362 3.95312H0.640625V4.09612H1.25362V3.95312Z','M1.25362 4.8125H0.640625V4.9555H1.25362V4.8125Z','M1.25362 5.09375H0.640625V5.23675H1.25362V5.09375Z','M1.25362 5.375H0.640625V5.51801H1.25362V5.375Z','M1.25362 5.65625H0.640625V5.79925H1.25362V5.65625Z','M1.25362 10.0312H0.640625V10.1742H1.25362V10.0312Z','M1.25362 10.5312H0.640625V10.6742H1.25362V10.5312Z'].map((d) => (
+            <m.path key={d} d={d} fill={pathColor} />
           ))}
-        </motion.g>
+        </m.g>
 
         {/* INNER CIRCLE 1 */}
-        <motion.circle cx="89.5" cy="87.5" r="80" fill="none" stroke={pathColor} strokeWidth="0.5" strokeLinecap="round"
+        <m.circle cx="89.5" cy="87.5" r="80" fill="none" stroke={pathColor} strokeWidth="0.5" strokeLinecap="round"
           style={{ transformOrigin: '89.5px 87.5px' }}
           initial={{ pathLength: 0, rotate: 0 }} animate={{ pathLength: 1.1, rotate: 0 }}
           transition={{ duration: 1.2, ease: 'easeOut', delay: 0.2 }}
         />
         {/* INNER CIRCLE 2 */}
-        <motion.circle cx="89.5" cy="87.5" r="72" fill="none" stroke={pathColor} strokeWidth="0.5" strokeLinecap="round"
+        <m.circle cx="89.5" cy="87.5" r="72" fill="none" stroke={pathColor} strokeWidth="0.5" strokeLinecap="round"
           style={{ transformOrigin: '89.5px 87.5px' }}
           initial={{ pathLength: 0, rotate: 180 }} animate={{ pathLength: 1.1, rotate: 180 }}
           transition={{ duration: 1.2, ease: 'easeOut', delay: 0.2 }}
@@ -126,7 +125,7 @@ export function TargetingUI({ className, pathColor = 'white' }) {
             { d: "M12.9358 4.98056L12.7578 4.80356L16.8358 0.726562H22.5038V0.976562H16.9398L12.9358 4.98056Z", delay: 2.0 },
             { d: "M76.8102 4.98056L72.8072 0.976562H67.2422V0.726562H72.9112L72.9482 0.763557L76.9882 4.80356L76.8102 4.98056Z", delay: 2.0 },
           ].map(({ d, delay }, i) => (
-            <motion.path key={i} d={d} fill="none" stroke={pathColor} strokeWidth="0.5"
+            <m.path key={d} d={d} fill="none" stroke={pathColor} strokeWidth="0.5"
               initial={{ pathLength: 0 }} animate={{ pathLength: 1 }}
               transition={{ duration: i === 2 ? 0.8 : 0.6, ease: 'easeOut', delay }}
             />
@@ -135,18 +134,18 @@ export function TargetingUI({ className, pathColor = 'white' }) {
       </g>
 
       {/* LEFT 2x2 GRID */}
-      {[{ cx:15,cy:107,d:1.2},{ cx:20,cy:107,d:1.3},{ cx:15,cy:112,d:1.4},{ cx:20,cy:112,d:1.5}].map((p,i)=>(
-        <motion.circle key={i} cx={p.cx} cy={p.cy} r=".75" fill={pathColor}
+      {[{ cx:15,cy:107,d:1.2},{ cx:20,cy:107,d:1.3},{ cx:15,cy:112,d:1.4},{ cx:20,cy:112,d:1.5}].map((p) => (
+        <m.circle key={`${p.cx}-${p.cy}`} cx={p.cx} cy={p.cy} r=".75" fill={pathColor}
           initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: p.d, duration: 0.3 }} />
       ))}
       {/* RIGHT 2x2 GRID */}
-      {[{ cx:217,cy:107,d:1.2},{ cx:222,cy:107,d:1.3},{ cx:217,cy:112,d:1.4},{ cx:222,cy:112,d:1.5}].map((p,i)=>(
-        <motion.circle key={i} cx={p.cx} cy={p.cy} r=".75" fill={pathColor}
+      {[{ cx:217,cy:107,d:1.2},{ cx:222,cy:107,d:1.3},{ cx:217,cy:112,d:1.4},{ cx:222,cy:112,d:1.5}].map((p) => (
+        <m.circle key={`${p.cx}-${p.cy}`} cx={p.cx} cy={p.cy} r=".75" fill={pathColor}
           initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: p.d, duration: 0.3 }} />
       ))}
 
       {/* BOTTOM ROUNDED PATTERN (FLIPPED) */}
-      <motion.g transform="translate(90.5, 173) scale(1, -1)" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.8, duration: 0.2 }}>
+      <m.g transform="translate(90.5, 173) scale(1, -1)" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.8, duration: 0.2 }}>
         {[
           { d: "M28 0.953125H27.75V2.82313H28V0.953125Z", delay: 0.8 },
           { d: "M25.0776 1.03902L24.8281 1.05469L24.9453 2.92101L25.1948 2.90534L25.0776 1.03902Z", delay: 0.82 },
@@ -169,41 +168,41 @@ export function TargetingUI({ className, pathColor = 'white' }) {
           { d: "M50.197 6.65775L49.2969 8.29688L49.516 8.41721L50.4161 6.77808L50.197 6.65775Z", delay: 0.96 },
           { d: "M52.7203 8.13959L51.7188 9.71875L51.9299 9.85265L52.9315 8.27349L52.7203 8.13959Z", delay: 0.98 },
           { d: "M54.2421 11.4324L54.0391 11.2864L55.1371 9.77344L55.3401 9.91944L54.2421 11.4324Z", delay: 1.0 },
-        ].map(({ d, delay }, i) => (
-          <motion.path key={i} d={d} fill={pathColor} opacity="0.3"
+        ].map(({ d, delay }) => (
+          <m.path key={d} d={d} fill={pathColor} opacity="0.3"
             initial={{ opacity: 0 }} animate={{ opacity: 0.3 }}
             transition={{ delay, duration: 0.1 }}
           />
         ))}
-      </motion.g>
+      </m.g>
 
       {/* BOTTOM LEFT DIAGONAL */}
-      <motion.line x1="0.176777" y1="219.176777" x2="74.1768" y2="145.1768"
+      <m.line x1="0.176777" y1="219.176777" x2="74.1768" y2="145.1768"
         stroke={pathColor} strokeWidth="0.5"
         initial={{ pathLength: 0 }} animate={{ pathLength: 1 }}
         transition={{ duration: 0.8, ease: 'easeOut', delay: 0.2 }}
       />
       {/* BOTTOM HORIZONTAL */}
-      <motion.line x1="74" y1="145.25" x2="164" y2="145.25"
+      <m.line x1="74" y1="145.25" x2="164" y2="145.25"
         stroke={pathColor} strokeWidth="0.5"
         initial={{ pathLength: 0, pathOffset: 0.5 }} animate={{ pathLength: 1, pathOffset: 0 }}
         transition={{ duration: 0.6, ease: 'easeOut' }}
       />
       {/* BOTTOM RIGHT DIAGONAL */}
-      <motion.line x1="236.822" y1="219.17557" x2="163.822" y2="145.1756"
+      <m.line x1="236.822" y1="219.17557" x2="163.822" y2="145.1756"
         stroke={pathColor} strokeWidth="0.5"
         initial={{ pathLength: 0 }} animate={{ pathLength: 1 }}
         transition={{ duration: 0.8, ease: 'easeOut', delay: 0.2 }}
       />
 
       {/* BOTTOM L-DOTS LEFT */}
-      {[{cx:78,cy:154,d:1.2},{cx:78,cy:150,d:1.3},{cx:82,cy:150,d:1.4}].map((p,i)=>(
-        <motion.circle key={i} cx={p.cx} cy={p.cy} r=".75" fill={pathColor}
+      {[{cx:78,cy:154,d:1.2},{cx:78,cy:150,d:1.3},{cx:82,cy:150,d:1.4}].map((p) => (
+        <m.circle key={`${p.cx}-${p.cy}`} cx={p.cx} cy={p.cy} r=".75" fill={pathColor}
           initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: p.d, duration: 0.3 }} />
       ))}
       {/* BOTTOM L-DOTS RIGHT */}
-      {[{cx:159,cy:154,d:1.2},{cx:155,cy:150,d:1.3},{cx:159,cy:150,d:1.4}].map((p,i)=>(
-        <motion.circle key={i} cx={p.cx} cy={p.cy} r=".75" fill={pathColor}
+      {[{cx:159,cy:154,d:1.2},{cx:155,cy:150,d:1.3},{cx:159,cy:150,d:1.4}].map((p) => (
+        <m.circle key={`${p.cx}-${p.cy}`} cx={p.cx} cy={p.cy} r=".75" fill={pathColor}
           initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: p.d, duration: 0.3 }} />
       ))}
     </svg>

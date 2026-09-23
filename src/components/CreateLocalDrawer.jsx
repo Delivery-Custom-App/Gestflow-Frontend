@@ -28,6 +28,7 @@ async function geocodeAddress(address) {
     try {
       const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&limit=1&countrycodes=cl`
       const res = await fetch(url, { headers: { 'User-Agent': 'Gestflow/1.0' } })
+      if (!res.ok) continue
       const data = await res.json()
       if (data.length > 0) return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) }
     } catch { /* continue */ }
@@ -45,7 +46,7 @@ function CreateLocalDrawer({ isOpen, onClose, onSuccess }) {
   const [suggestions, setSuggestions]           = useState([])
   const [showSuggestions, setShowSuggestions]   = useState(false)
   const [loadingSuggestions, setLoadingSuggestions] = useState(false)
-  const [selectedCoords, setSelectedCoords]     = useState(null)
+  const selectedCoordsRef = useRef(null) // solo se lee al enviar; no se muestra
   const debounceTimer = useRef(null)
 
   const handleChange = (e) => {
@@ -56,7 +57,7 @@ function CreateLocalDrawer({ isOpen, onClose, onSuccess }) {
   const handleAddressChange = (e) => {
     const value = e.target.value
     setFormData((prev) => ({ ...prev, address: value }))
-    setSelectedCoords(null)
+    selectedCoordsRef.current = null
     setGeocodeOk(null)
 
     clearTimeout(debounceTimer.current)
@@ -73,6 +74,7 @@ function CreateLocalDrawer({ isOpen, onClose, onSuccess }) {
         const normalized = normalizeChileanAddress(value)
         const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(normalized + ', Chile')}&format=json&limit=6&countrycodes=cl`
         const res = await fetch(url, { headers: { 'User-Agent': 'Gestflow/1.0' } })
+        if (!res.ok) throw new Error(`Nominatim respondió ${res.status}`)
         const data = await res.json()
         setSuggestions(data)
         setShowSuggestions(data.length > 0)
@@ -87,7 +89,7 @@ function CreateLocalDrawer({ isOpen, onClose, onSuccess }) {
 
   const handleSelectSuggestion = (suggestion) => {
     setFormData((prev) => ({ ...prev, address: suggestion.display_name }))
-    setSelectedCoords({ lat: parseFloat(suggestion.lat), lng: parseFloat(suggestion.lon) })
+    selectedCoordsRef.current = { lat: parseFloat(suggestion.lat), lng: parseFloat(suggestion.lon) }
     setGeocodeOk(true)
     setSuggestions([])
     setShowSuggestions(false)
@@ -106,7 +108,7 @@ function CreateLocalDrawer({ isOpen, onClose, onSuccess }) {
       if (!businessId) throw new Error('No se encontró business_id en el token')
 
       // Use already-resolved coords from autocomplete; fall back to geocoding
-      let coords = selectedCoords
+      let coords = selectedCoordsRef.current
       if (!coords) {
         setGeocoding(true)
         coords = await geocodeAddress(formData.address.trim())
@@ -129,7 +131,7 @@ function CreateLocalDrawer({ isOpen, onClose, onSuccess }) {
       await apiRequest('/locals', { method: 'POST', token, body })
 
       setFormData({ name: '', address: '', phone: '', sales_model: 'RESTAURANT' })
-      setSelectedCoords(null)
+      selectedCoordsRef.current = null
       setGeocodeOk(null)
       onSuccess()
       onClose()
@@ -145,7 +147,7 @@ function CreateLocalDrawer({ isOpen, onClose, onSuccess }) {
     if (!loading) {
       setError(null)
       setGeocodeOk(null)
-      setSelectedCoords(null)
+      selectedCoordsRef.current = null
       setSuggestions([])
       setShowSuggestions(false)
       onClose()
@@ -156,7 +158,7 @@ function CreateLocalDrawer({ isOpen, onClose, onSuccess }) {
 
   return (
     <>
-      <div
+      <div role="presentation"
         className={`fixed inset-0 bg-black/60 transition-opacity duration-300 ${
           isOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
         }`}
@@ -181,7 +183,7 @@ function CreateLocalDrawer({ isOpen, onClose, onSuccess }) {
               <p className="text-xs text-[hsl(var(--muted-foreground))]">Completa los datos del nuevo local</p>
             </div>
           </div>
-          <button
+          <button aria-label="Cerrar"
             type="button"
             onClick={handleClose}
             disabled={isBusy}
@@ -232,9 +234,9 @@ function CreateLocalDrawer({ isOpen, onClose, onSuccess }) {
 
               {showSuggestions && (
                 <div className="absolute top-full left-0 right-0 z-50 mt-1 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] shadow-xl overflow-hidden max-h-80 overflow-y-auto">
-                  {suggestions.map((s, i) => (
+                  {suggestions.map((s) => (
                     <button
-                      key={i}
+                      key={s.place_id}
                       type="button"
                       onMouseDown={(e) => { e.preventDefault(); handleSelectSuggestion(s) }}
                       className="w-full text-left px-4 py-3 text-sm hover:bg-[hsl(var(--muted))] border-b border-[hsl(var(--border))] last:border-b-0 transition-colors flex items-start gap-2"

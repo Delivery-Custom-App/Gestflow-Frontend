@@ -17,10 +17,10 @@ export default function MenuItemRow({ item, qty, onAdd, onRemove }) {
         <p className="mt-2 text-lg font-black text-[hsl(var(--primary))]">${formatCLP(item.price || 0)}</p>
       </div>
       <div className="flex shrink-0 items-center gap-2">
-        {qty > 0 && <button onClick={(event) => { event.stopPropagation(); onRemove(item.key) }}
+        {qty > 0 && <button type="button" aria-label={`Quitar ${item.name}`} onClick={(event) => { event.stopPropagation(); onRemove(item.key) }}
           className="flex h-11 w-11 touch-manipulation items-center justify-center rounded-full border border-[hsl(var(--border))] bg-[hsl(var(--background))] text-2xl font-black shadow-sm transition-colors hover:bg-[hsl(var(--accent))]">−</button>}
         {qty > 0 && <span className="min-w-8 text-center text-xl font-black text-[hsl(var(--primary))]">{qty}</span>}
-        <button onClick={(event) => { event.stopPropagation(); onAdd(item.key) }}
+        <button type="button" aria-label={`Agregar ${item.name}`} onClick={(event) => { event.stopPropagation(); onAdd(item.key) }}
           className="flex h-12 w-12 touch-manipulation items-center justify-center rounded-full bg-[hsl(var(--primary))] text-2xl font-black text-white shadow-md transition-colors hover:bg-[hsl(var(--primary))]/90">+</button>
       </div>
     </div>

@@ -198,8 +198,8 @@ export default function HrModule() {
               <CardContent>
                 <form className="grid gap-3 md:grid-cols-2" onSubmit={handleCreateEmployee} onFocus={loadUsers}>
                   <div>
-                    <Label>Usuario vinculado</Label>
-                    <select
+                    <Label htmlFor="hr-usuario-vinculado">Usuario vinculado</Label>
+                    <select id="hr-usuario-vinculado"
                       className="mt-1 w-full rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 py-2 text-sm"
                       value={empForm.user_id}
                       onChange={(e) => setEmpForm((f) => ({ ...f, user_id: e.target.value }))}
@@ -216,8 +216,8 @@ export default function HrModule() {
                   <div><Label>Cargo</Label><Input value={empForm.cargo} onChange={(e) => setEmpForm((f) => ({ ...f, cargo: e.target.value }))} required /></div>
                   <div><Label>Fecha ingreso</Label><Input type="date" value={empForm.fecha_ingreso} onChange={(e) => setEmpForm((f) => ({ ...f, fecha_ingreso: e.target.value }))} required /></div>
                   <div>
-                    <Label>Frecuencia de pago</Label>
-                    <select className="mt-1 w-full rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 py-2 text-sm" value={empForm.pay_frequency} onChange={(e) => setEmpForm((f) => ({ ...f, pay_frequency: e.target.value }))}>
+                    <Label htmlFor="hr-frecuencia-pago">Frecuencia de pago</Label>
+                    <select id="hr-frecuencia-pago" className="mt-1 w-full rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 py-2 text-sm" value={empForm.pay_frequency} onChange={(e) => setEmpForm((f) => ({ ...f, pay_frequency: e.target.value }))}>
                       {PAY_FREQUENCIES.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
                     </select>
                   </div>
@@ -264,8 +264,8 @@ export default function HrModule() {
               <CardContent>
                 <form className="grid gap-3 md:grid-cols-2" onSubmit={handleCreateShift}>
                   <div>
-                    <Label>Empleado</Label>
-                    <select className="mt-1 w-full rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 py-2 text-sm" value={shiftForm.employee_id} onChange={(e) => setShiftForm((f) => ({ ...f, employee_id: e.target.value }))} required>
+                    <Label htmlFor="hr-turno-empleado">Empleado</Label>
+                    <select id="hr-turno-empleado" className="mt-1 w-full rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 py-2 text-sm" value={shiftForm.employee_id} onChange={(e) => setShiftForm((f) => ({ ...f, employee_id: e.target.value }))} required>
                       <option value="">Selecciona…</option>
                       {employeeOptions.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
                     </select>
@@ -305,16 +305,16 @@ export default function HrModule() {
               <form className="grid gap-3 md:grid-cols-2" onSubmit={handleCreateLeave}>
                 {canManageHr && (
                   <div>
-                    <Label>Empleado (opcional)</Label>
-                    <select className="mt-1 w-full rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 py-2 text-sm" value={leaveForm.employee_id} onChange={(e) => setLeaveForm((f) => ({ ...f, employee_id: e.target.value }))}>
+                    <Label htmlFor="hr-permiso-empleado">Empleado (opcional)</Label>
+                    <select id="hr-permiso-empleado" className="mt-1 w-full rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 py-2 text-sm" value={leaveForm.employee_id} onChange={(e) => setLeaveForm((f) => ({ ...f, employee_id: e.target.value }))}>
                       <option value="">Mi ficha (empleado)</option>
                       {employeeOptions.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
                     </select>
                   </div>
                 )}
                 <div>
-                  <Label>Tipo</Label>
-                  <select className="mt-1 w-full rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 py-2 text-sm" value={leaveForm.type} onChange={(e) => setLeaveForm((f) => ({ ...f, type: e.target.value }))}>
+                  <Label htmlFor="hr-permiso-tipo">Tipo</Label>
+                  <select id="hr-permiso-tipo" className="mt-1 w-full rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 py-2 text-sm" value={leaveForm.type} onChange={(e) => setLeaveForm((f) => ({ ...f, type: e.target.value }))}>
                     {LEAVE_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
                   </select>
                 </div>

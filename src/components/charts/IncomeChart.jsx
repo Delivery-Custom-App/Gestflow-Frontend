@@ -1,3 +1,6 @@
+// recharts ya se carga bajo demanda: este modulo solo se importa desde paginas con React.lazy
+// (AuthenticatedRoutes) y el build lo deja en un chunk aparte, fuera del bundle inicial.
+// oxlint-disable-next-line react-doctor/prefer-dynamic-import
 import {
   AreaChart,
   Area,
@@ -9,9 +12,7 @@ import {
   Legend,
 } from 'recharts'
 import ChartSkeleton from '../ui/ChartSkeleton'
-
-const CLP = (v) =>
-  new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(v)
+import { formatCLPCurrency as CLP } from '../../lib/formatCLP'
 
 function IncomeChart({ data = [], loading = false, showCashFlow = false }) {
   if (loading) return <ChartSkeleton className="h-[220px]" />

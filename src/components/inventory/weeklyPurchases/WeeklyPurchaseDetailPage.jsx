@@ -27,7 +27,6 @@ import {
   TableCell,
 } from '@/components/ui/table'
 import { ChevronLeft } from 'lucide-react'
-import { cn } from '@/lib/utils'
 
 const STATUS_LABELS = {
   draft: 'Borrador',
@@ -60,8 +59,6 @@ function WeeklyPurchaseDetailPage() {
   const [actionError, setActionError] = useState('')
   const [supplierName, setSupplierName] = useState('')
 
-  const [statusEdit, setStatusEdit] = useState('draft')
-  const [savingStatus, setSavingStatus] = useState(false)
 
   const [recvInputs, setRecvInputs] = useState({})
   const [markingDelivered, setMarkingDelivered] = useState(false)
@@ -79,7 +76,6 @@ function WeeklyPurchaseDetailPage() {
     try {
       const data = await getWeeklyPurchaseOrder(orderId, businessId)
       setOrder(data && typeof data === 'object' ? data : null)
-      if (data?.status) setStatusEdit(data.status)
       const items = Array.isArray(data?.items) ? data.items : []
       const recv = {}
       for (const it of items) {
@@ -132,19 +128,6 @@ function WeeklyPurchaseDetailPage() {
     return () => { cancelled = true }
   }, [order?.supplier_id, businessId])
 
-  const applyStatus = async () => {
-    if (!businessId || !orderId) return
-    setSavingStatus(true)
-    setActionError('')
-    try {
-      const updated = await patchWeeklyPurchaseOrder(orderId, businessId, { status: statusEdit })
-      setOrder(updated)
-    } catch (e) {
-      setActionError(e?.message || 'No se pudo actualizar el estado.')
-    } finally {
-      setSavingStatus(false)
-    }
-  }
 
   const removeDraft = async () => {
     if (!businessId || !orderId || order?.status !== 'draft') return
@@ -174,15 +157,23 @@ function WeeklyPurchaseDetailPage() {
       const items = Array.isArray(order.items) ? order.items : []
       const warnings = []
 
+      // Suma por inventario primero: si el pedido trae el mismo producto dos veces,
+      // antes la segunda escritura pisaba a la primera (ambas partían del mismo stock).
+      const addByInventory = new Map()
       for (const item of items) {
         const inv = invByProduct[String(item.product_id)]
         if (!inv?.inventory_id) {
           warnings.push(`"${item.product_name_snapshot || item.product_id}" no encontrado en inventario — omitido`)
           continue
         }
-        const newStock = (Number(inv.stock_current) || 0) + (Number(item.quantity_ordered) || 0)
-        await patchInventoryStock(localId, inv.inventory_id, { stock: newStock })
+        const prev = addByInventory.get(inv.inventory_id) ?? { inv, qty: 0 }
+        prev.qty += Number(item.quantity_ordered) || 0
+        addByInventory.set(inv.inventory_id, prev)
       }
+      // Filas de inventario distintas: se actualizan en paralelo.
+      await Promise.all([...addByInventory.values()].map(({ inv, qty }) =>
+        patchInventoryStock(localId, inv.inventory_id, { stock: (Number(inv.stock_current) || 0) + qty }),
+      ))
 
       const updated = await patchWeeklyPurchaseOrder(orderId, businessId, { status: 'received' })
       setOrder(updated)
@@ -219,8 +210,6 @@ function WeeklyPurchaseDetailPage() {
       setActionError(e?.message || 'No se pudo registrar la recepción.')
     }
   }
-
-  const selectClass = 'h-9 rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3 py-1 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary)/0.3)]'
 
   return (
     <InventoryShell>

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate, useParams } from 'react-router'
 import { useMesaDetail } from '../../hooks/useMesaDetail'
 import { useMenuPOS } from '../../hooks/useMenuPOS'
@@ -32,7 +32,7 @@ export default function MesaDetail() {
 
   const [agregados, setAgregados] = useState({})
   const [showPicker, setShowPicker] = useState(false)
-  const [pickerOrderId, setPickerOrderId] = useState(null)
+  const pickerOrderIdRef = useRef(null) // orden destino del picker; solo se lee al agregar
   const [pickerSearch, setPickerSearch] = useState('')
   const [addingProduct, setAddingProduct] = useState(false)
   const [addError, setAddError] = useState(null)
@@ -61,7 +61,7 @@ export default function MesaDetail() {
   const limpiarExtras = () => setAgregados({})
 
   const handleOpenPicker = (orderId = null) => {
-    setPickerOrderId(orderId)
+    pickerOrderIdRef.current = orderId
     setAddError(null)
     setPickerSearch('')
     fetchMenu()
@@ -72,7 +72,7 @@ export default function MesaDetail() {
     setAddingProduct(true)
     setAddError(null)
     try {
-      let orderId = pickerOrderId
+      let orderId = pickerOrderIdRef.current
 
       if (!orderId) {
         const newOrder = await createOrder({
@@ -100,7 +100,7 @@ export default function MesaDetail() {
     } finally {
       setAddingProduct(false)
     }
-  }, [pickerOrderId, localId, mesaId, cajaId, refresh, fetchMenu])
+  }, [localId, mesaId, cajaId, refresh, fetchMenu])
 
   const pickerMenu = (menuData?.categories || []).filter((cat) => (cat.products?.length || 0) > 0)
   const handleGoBack = () => navigate(`/local/${localId}/pos`)
@@ -283,14 +283,14 @@ export default function MesaDetail() {
                   <div key={nombre} className="flex items-center justify-between p-2 rounded-lg bg-[hsl(var(--accent))]">
                     <span className="text-sm text-[hsl(var(--foreground))]">{nombre}</span>
                     <div className="flex items-center gap-1">
-                      <button
+                      <button type="button" aria-label={`Quitar ${nombre}`}
                         className="w-6 h-6 flex items-center justify-center rounded-full border border-[hsl(var(--border))] text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--destructive))] text-sm"
                         onClick={() => quitarExtra(nombre)}
                       >
                         −
                       </button>
                       <span className="text-xs font-medium w-8 text-center">x{cantidad}</span>
-                      <button
+                      <button type="button" aria-label={`Agregar ${nombre}`}
                         className="w-6 h-6 flex items-center justify-center rounded-full border border-[hsl(var(--border))] text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--primary))] text-sm"
                         onClick={() => agregarExtra(nombre)}
                       >

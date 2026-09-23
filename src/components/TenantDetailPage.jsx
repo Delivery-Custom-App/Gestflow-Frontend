@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useParams, useNavigate, Link } from 'react-router'
-import { motion } from 'framer-motion'
+import { m } from 'framer-motion'
+import { formatCLPCurrency } from '../lib/formatCLP'
 import {
   ArrowLeft, Building2, Store, Users, ShoppingCart, DollarSign, TrendingUp,
   Loader2, Shield, History, Power, UtensilsCrossed, Table2,
@@ -38,9 +39,7 @@ const ACTION_LABEL = {
   'user.reactivate': 'Reactivación de usuario',
 }
 
-function formatCurrency(value) {
-  return new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(value || 0)
-}
+const formatCurrency = formatCLPCurrency
 
 function formatDate(value) {
   if (!value) return '—'
@@ -85,11 +84,12 @@ function StatusBar({ data }) {
             <span className="font-semibold text-[hsl(var(--foreground))]">{value}</span>
           </div>
           <div className="h-1.5 rounded-full bg-[hsl(var(--muted))] overflow-hidden">
-            <motion.div
-              initial={{ width: 0 }}
-              animate={{ width: `${(value / total) * 100}%` }}
+            <m.div
+              initial={{ scaleX: 0 }}
+              animate={{ scaleX: value / total }}
               transition={{ duration: 0.6 }}
-              className="h-full rounded-full bg-[hsl(var(--primary))]"
+              style={{ originX: 0 }}
+              className="h-full w-full rounded-full bg-[hsl(var(--primary))]"
             />
           </div>
         </div>
@@ -333,7 +333,7 @@ export default function TenantDetailPage() {
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
-                        <select
+                        <select aria-label={`Modelo de venta de ${local.name}`}
                           value={alPaso ? SALES_MODEL.AL_PASO : SALES_MODEL.RESTAURANT}
                           disabled={saving}
                           onChange={(e) => handleSalesModelChange(local, e.target.value)}
@@ -363,8 +363,8 @@ export default function TenantDetailPage() {
               <p className="text-xs text-[hsl(var(--muted-foreground))]">Sin eventos registrados.</p>
             ) : (
               <div className="flex flex-col divide-y divide-[hsl(var(--border))]">
-                {(data.audit || []).map((e, i) => (
-                  <div key={e.id || i} className="py-2.5">
+                {(data.audit || []).map((e) => (
+                  <div key={e.id} className="py-2.5">
                     <div className="flex items-center justify-between gap-3">
                       <span className="text-sm font-semibold text-[hsl(var(--foreground))]">
                         {ACTION_LABEL[e.action] || e.action}

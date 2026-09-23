@@ -118,6 +118,7 @@ function MenuBuilderPage() {
   }, [products])
 
   const previewCategories = useMemo(() => {
+    const categoryNameById = new Map(categories.map((c) => [c.id, c.name]))
     const map = new Map()
     for (const p of products) {
       if (!p.is_active) continue
@@ -125,7 +126,7 @@ function MenuBuilderPage() {
       if (!map.has(key)) {
         map.set(key, {
           id: key,
-          name: p.category_name || categories.find((c) => c.id === key)?.name || 'Sin categoría',
+          name: p.category_name || categoryNameById.get(key) || 'Sin categoría',
           products: [],
         })
       }
@@ -324,7 +325,7 @@ function MenuBuilderPage() {
                             onSubmit={handleRenameCategory}
                             className="flex items-center gap-1 rounded-xl border border-[hsl(var(--primary)/0.35)] bg-[hsl(var(--primary)/0.08)] px-2 py-1.5"
                           >
-                            <input
+                            <input aria-label="Nombre de la categoría"
                               value={editingCategoryName}
                               onChange={(e) => setEditingCategoryName(e.target.value)}
                               className="h-8 min-w-0 flex-1 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-2 text-sm"
@@ -335,42 +336,38 @@ function MenuBuilderPage() {
                             </button>
                           </form>
                         ) : (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setSelectedCategoryId(cat.id)
-                              setMenuOpenId('')
-                            }}
+                          <div
                             className={cn(
-                              'group flex w-full items-center gap-2 rounded-xl px-2.5 py-2.5 text-left text-sm transition-colors',
+                              'group flex w-full items-center gap-2 rounded-xl pr-2.5 text-sm transition-colors',
                               active
                                 ? 'bg-[hsl(var(--primary)/0.12)] font-semibold text-[hsl(var(--primary))]'
                                 : 'text-[hsl(var(--foreground))] hover:bg-[hsl(var(--muted)/0.5)]',
                             )}
                           >
-                            <GripVertical className="h-3.5 w-3.5 shrink-0 opacity-35" />
-                            <span className="min-w-0 flex-1 truncate">{cat.name}</span>
-                            <span className={cn('text-[10px] tabular-nums', active ? 'opacity-80' : 'text-[hsl(var(--muted-foreground))]')}>
-                              {count}
-                            </span>
-                            <span
-                              role="button"
-                              tabIndex={0}
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                setMenuOpenId((id) => (id === cat.id ? '' : cat.id))
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSelectedCategoryId(cat.id)
+                                setMenuOpenId('')
                               }}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') {
-                                  e.stopPropagation()
-                                  setMenuOpenId((id) => (id === cat.id ? '' : cat.id))
-                                }
-                              }}
-                              className="rounded-md p-1 opacity-0 transition-opacity hover:bg-[hsl(var(--muted))] group-hover:opacity-100"
+                              className="flex min-w-0 flex-1 items-center gap-2 py-2.5 pl-2.5 text-left"
+                            >
+                              <GripVertical className="h-3.5 w-3.5 shrink-0 opacity-35" />
+                              <span className="min-w-0 flex-1 truncate">{cat.name}</span>
+                              <span className={cn('text-[10px] tabular-nums', active ? 'opacity-80' : 'text-[hsl(var(--muted-foreground))]')}>
+                                {count}
+                              </span>
+                            </button>
+                            <button
+                              type="button"
+                              aria-label={`Opciones de ${cat.name}`}
+                              aria-expanded={menuOpenId === cat.id}
+                              onClick={() => setMenuOpenId((id) => (id === cat.id ? '' : cat.id))}
+                              className="rounded-md p-1 opacity-0 transition-opacity hover:bg-[hsl(var(--muted))] group-hover:opacity-100 focus-visible:opacity-100"
                             >
                               <MoreHorizontal className="h-3.5 w-3.5" />
-                            </span>
-                          </button>
+                            </button>
+                          </div>
                         )}
                         {menuOpenId === cat.id && (
                           <div className="absolute right-2 top-full z-20 mt-1 w-36 overflow-hidden rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] py-1 shadow-lg">
@@ -403,7 +400,8 @@ function MenuBuilderPage() {
                 )}
               </div>
               <form onSubmit={handleCreateCategory} className="shrink-0 border-t border-[hsl(var(--border))] p-3 space-y-2">
-                <input
+                <label htmlFor="menu-builder-nueva-categoria" className="sr-only">Nombre de la nueva categoría</label>
+                <input id="menu-builder-nueva-categoria"
                   value={newCategoryName}
                   onChange={(e) => setNewCategoryName(e.target.value)}
                   placeholder="Nombre de categoría"
@@ -437,7 +435,8 @@ function MenuBuilderPage() {
                 </div>
                 <div className="relative w-full max-w-xs">
                   <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[hsl(var(--muted-foreground))]" />
-                  <input
+                  <label htmlFor="menu-builder-buscar-plato" className="sr-only">Buscar plato</label>
+                  <input id="menu-builder-buscar-plato"
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
                     placeholder="Buscar plato…"
@@ -486,9 +485,10 @@ function MenuBuilderPage() {
                           </p>
                         </div>
                         <div className="flex shrink-0 flex-col items-end gap-2.5 pl-2">
-                          <label className="flex cursor-pointer items-center gap-2 text-[11px] text-[hsl(var(--muted-foreground))]">
+                          <label htmlFor={`menu-en-venta-${pid}`} className="flex cursor-pointer items-center gap-2 text-[11px] text-[hsl(var(--muted-foreground))]">
                             <span>En venta</span>
                             <button
+                              id={`menu-en-venta-${pid}`}
                               type="button"
                               role="switch"
                               aria-checked={active}

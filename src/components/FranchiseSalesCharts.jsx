@@ -1,8 +1,6 @@
 import { useEffect, useState } from 'react'
 import { fetchBusinessSalesSummary } from '@/lib/businessSalesSummary'
-
-const CLP = (v) =>
-  new Intl.NumberFormat('es-CL', { style: 'currency', currency: 'CLP', maximumFractionDigits: 0 }).format(v)
+import { formatCLPCurrency as CLP } from '@/lib/formatCLP'
 
 function ChangeBadge({ value, suffix }) {
   if (value == null) {
