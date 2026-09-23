@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router'
 import { useMesaDetail } from '../../hooks/useMesaDetail'
 import { useMenuPOS } from '../../hooks/useMenuPOS'
 import { formatCLP } from '../../lib/formatCLP'

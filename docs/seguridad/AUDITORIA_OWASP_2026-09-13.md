@@ -13,7 +13,7 @@
 |---|---|---|---|---|
 | 1 | JWT en query string hacia endpoint OAuth deprecado | A02:2021 (CWE-598) | Alta | 🟡 **En curso** — fix en rama separada, PR a `Develop` pendiente de aprobación |
 | 2 | `access_token`/`refresh_token` en `localStorage` | A02:2021 | Media-Alta | 🔴 Abierto — requiere decisión de arquitectura (backend + frontend) |
-| 3 | Dependencias vulnerables (`react-router-dom`, `postcss`, `vite`) | A06:2021 | Media-Alta | 🔴 Abierto — fix disponible sin breaking change |
+| 3 | Dependencias vulnerables (`react-router`, `postcss`, `vite`) | A06:2021 | Media-Alta | ✅ **Resuelto** — `npm audit fix` (nanoid, postcss, vite) + bump react-router 6→7 (rama `feature/react-router-v7`) |
 | 4 | Sin cabeceras de seguridad (CSP, X-Frame-Options, HSTS) | A05:2021 | Media | 🔴 Abierto — corresponde a capa de hosting/CDN, no al SPA |
 
 Sin hallazgos en: XSS vía `dangerouslySetInnerHTML`/`eval`, secretos commiteados (`.env` reales no están trackeados), `href` dinámico sin sanitizar.
@@ -59,11 +59,11 @@ if (refresh_token) window.localStorage.setItem(REFRESH_TOKEN_KEY, refresh_token)
 
 | Paquete | Severidad | Issue | Fix |
 |---|---|---|---|
-| `react-router` / `react-router-dom` (6.0.0–7.17.0) | Moderate | Open redirect vía backslash en `<Link>`/`useNavigate`; constructor injection en `deserializeErrors()` (SSR hydration) | `npm audit fix` |
+| `react-router` / `react-router-dom` (6.0.0–7.17.0) | Moderate | Open redirect vía backslash en `<Link>`/`useNavigate`; constructor injection en `deserializeErrors()` (SSR hydration) | Bump 6→7 (rama `feature/react-router-v7`) — require salto mayor, ver `TAREAS_SECURITY_2026-09-16.md` |
 | `postcss` ≤8.5.22 | High | Path traversal / disclosure de `.map` vía `sourceMappingURL` con `from` sin definir | `npm audit fix` |
 | `vite` 8.0.0–8.0.15 | High | `server.fs.deny` bypass en Windows; NTLMv2 hash disclosure vía `launch-editor` (rutas UNC) | `npm audit fix` |
 
-Los tres tienen fix disponible sin salto de versión mayor (`npm audit fix`, sin `--force`).
+Estado 2026-09-22: los tres **resueltos** — `postcss` y `vite` vía `npm audit fix` (09-16), `react-router` con bump 6→7 a `react-router@7.18.4` (mitigación del Moderate).
 
 ---
 

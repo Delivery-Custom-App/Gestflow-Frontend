@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useParams, useNavigate, useLocation } from 'react-router-dom'
+import { useParams, useNavigate, useLocation } from 'react-router'
 import { useReportesPOS } from '../../hooks/useReportesPOS'
 import { formatCLP } from '../../lib/formatCLP'
 import { Button } from '@/components/ui/button'

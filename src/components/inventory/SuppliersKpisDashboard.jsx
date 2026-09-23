@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { useParams } from 'react-router'
 import { m, AnimatePresence } from 'framer-motion'
 import { getAuthContext } from '../../lib/apiClient'
 import {

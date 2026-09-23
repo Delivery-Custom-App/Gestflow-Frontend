@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router'
 import { useSelectedLocal } from '../../hooks/useSelectedLocal'
 // recharts ya se carga bajo demanda: este modulo solo se importa desde paginas con React.lazy
 // (AuthenticatedRoutes) y el build lo deja en un chunk aparte, fuera del bundle inicial.

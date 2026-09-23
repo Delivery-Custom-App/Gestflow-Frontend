@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router'
 
 // Roles ordenados Superadmin → Dueño → Admin → Trabajador
 const ROLES_SUPERADMIN = [

@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useCallback, useEffect, useMemo, useRef } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router'
 import { useAuth } from './AuthContext'
 import { useLocals } from '../hooks/useLocals'
 import { isSuperAdminRole } from '../auth/roleLabel'

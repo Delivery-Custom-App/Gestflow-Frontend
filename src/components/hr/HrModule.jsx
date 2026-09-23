@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { useParams } from 'react-router'
 import { useAuth } from '../../context/AuthContext'
 import { useEmployees } from '../../hooks/useEmployees'
 import { useShifts } from '../../hooks/useShifts'

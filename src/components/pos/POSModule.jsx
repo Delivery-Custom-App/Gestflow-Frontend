@@ -1,5 +1,5 @@
 import { useState, useCallback, useMemo } from 'react'
-import { useParams, useLocation } from 'react-router-dom'
+import { useParams, useLocation } from 'react-router'
 import { useMesasConEstado } from '../../hooks/useMesasConEstado'
 import { useMesasKPIs } from '../../hooks/useMesasKPIs'
 import MesasKPICards from './MesasKPICards'

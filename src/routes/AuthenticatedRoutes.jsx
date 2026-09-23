@@ -1,5 +1,5 @@
 import { lazy, Suspense, useMemo } from 'react'
-import { BrowserRouter as Router, Routes, Route, Navigate, useParams, useLocation } from 'react-router-dom'
+import { BrowserRouter as Router, Routes, Route, Navigate, useParams, useLocation } from 'react-router'
 import AppShell from '../components/AppShell'
 import ErrorBoundary from '../components/ErrorBoundary'
 import LoadingPage from '../components/LoadingPage'
@@ -39,8 +39,6 @@ import { isDirectSaleDemoUser } from '../constants/demoMode'
 import { isAlPasoLocal } from '../lib/salesModel'
 import { useAuth } from '../context/AuthContext'
 import { useLocals } from '../hooks/useLocals'
-
-const ROUTER_FUTURE_FLAGS = { v7_startTransition: true, v7_relativeSplatPath: true }
 
 function AdminLayout() {
   return <AppShell />
@@ -230,7 +228,7 @@ export default function AuthenticatedApp() {
 
   return (
     <ErrorBoundary>
-      <Router future={ROUTER_FUTURE_FLAGS}>
+      <Router>
         <OnboardingProvider>
           {/* Suspense muestra el fallback mientras se descarga el chunk de la ruta. */}
           <Suspense fallback={<LoadingPage />}>

@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react'
-import { Outlet, useNavigate, useLocation } from 'react-router-dom'
+import { Outlet, useNavigate, useLocation } from 'react-router'
 import { useAuth } from '../context/AuthContext'
 import { useLocals } from '../hooks/useLocals'
 import { useCurrentBusiness } from '../hooks/useCurrentBusiness'

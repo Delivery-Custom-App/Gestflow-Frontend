@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Navigate, useLocation, useParams } from 'react-router-dom'
+import { Navigate, useLocation, useParams } from 'react-router'
 import { parseApiDate } from '../utils/chileDateTime'
 import LoadingSpinner from './LoadingSpinner'
 import IncomeChart from './charts/IncomeChart'
