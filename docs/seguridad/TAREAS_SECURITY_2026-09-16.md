@@ -116,3 +116,5 @@ function onMessage(e) {
 **Por qué NO es urgente:** no es una vulnerabilidad activa explotada hoy, es ausencia de hardening — pero tampoco hay ninguna capa invisible cubriéndolo como se podría suponer con un hosting gestionado.
 
 **Qué hacer:** definir en qué capa van estas cabeceras (config del servidor propio que sirve el build) y aplicarlas ahí — no corresponde resolverlo dentro del SPA.
+
+**Ver propuesta:** `docs/seguridad/PROPUESTA_HEADERS_NGINX.md` (2026-09-24) — bloque nginx listo, coordinado con backend, pendiente de aplicar en `root@100.89.15.17`.
