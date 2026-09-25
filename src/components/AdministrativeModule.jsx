@@ -547,7 +547,7 @@ function FlujoCajaContent({ dashboard, cajas, resumenDiario, loading, error, onM
               <p className="mt-1 text-sm font-bold text-[hsl(var(--foreground))]">{formatMoney(Number(resumenDiario.total_esperado))}</p>
             </div>
           </div>
-          {resumenDiario.cajas.length === 0 && (
+          {safeArray(resumenDiario.cajas).length === 0 && (
             <p className="mt-3 text-xs text-[hsl(var(--muted-foreground))]">Todavía no se abrió ninguna caja hoy en este local.</p>
           )}
         </Panel>

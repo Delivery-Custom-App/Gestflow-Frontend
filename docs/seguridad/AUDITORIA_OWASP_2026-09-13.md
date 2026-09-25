@@ -71,6 +71,8 @@ Estado 2026-09-22: los tres **resueltos** — `postcss` y `vite` vía `npm audit
 
 No se encontró configuración de `Content-Security-Policy`, `X-Frame-Options`, `X-Content-Type-Options` ni `Strict-Transport-Security` en `index.html`, `.github/workflows/deploy.yml`, ni archivo de hosting (`vercel.json`/`netlify.toml`/config de nginx — ninguno existe en el repo). Corresponde configurarlo en la capa donde se sirve el build (hosting/CDN/reverse proxy), no en el SPA en sí.
 
+**Actualización 2026-09-24:** propuesta concreta de bloque nginx (CSP/X-Frame-Options/HSTS/nosniff), coordinada con `Gestflow-Backend-V2` (mismo nginx sirve ambos repos en `gestflow.mardev.cl`), en `docs/seguridad/PROPUESTA_HEADERS_NGINX.md`. Sigue 🔴 Abierto — falta aplicarla en el servidor.
+
 ---
 
 ## Sin hallazgos (verificado)
@@ -121,4 +123,4 @@ No se encontró configuración de `Content-Security-Policy`, `X-Frame-Options`, 
 3. Validar `event.origin` (contra `API_BASE`/origen del popup) en el listener de `MPConfigDrawer.jsx`. (#5, Baja-Media)
 4. Reemplazar `Math.random()` por `crypto.getRandomValues()` en `generatePassword()` de `UserManagementPage.jsx`. (#6, Media)
 5. ADR: migrar tokens de `localStorage` a cookies `HttpOnly`+`Secure`+`SameSite` (impacta backend + CSRF). (#2, Media-Alta, requiere decisión previa)
-6. Definir dónde y cómo se setean cabeceras de seguridad (CSP/X-Frame-Options/HSTS) dado que el deploy es a servidor propio vía SSH, no CDN. (#4, Media)
+6. Definir dónde y cómo se setean cabeceras de seguridad (CSP/X-Frame-Options/HSTS) dado que el deploy es a servidor propio vía SSH, no CDN. (#4, Media) — **propuesta escrita 2026-09-24**, ver `docs/seguridad/PROPUESTA_HEADERS_NGINX.md`; falta aplicarla en el servidor.
