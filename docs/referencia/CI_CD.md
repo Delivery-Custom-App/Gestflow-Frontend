@@ -15,7 +15,10 @@ PR/push → job "test" (lint diff + tests + cobertura + build)
 
 - `pull_request` hacia `main` → corre el job `test` (gate del PR).
 - `push` a `main` → corre `test` y, si pasa, `deploy`.
-- `workflow_dispatch` → permite relanzar el pipeline a mano desde la pestaña Actions (útil para reintentar un deploy sin hacer un commit nuevo).
+- `workflow_dispatch` → permite relanzar el pipeline a mano desde la pestaña Actions (útil para reintentar un deploy sin hacer un commit nuevo), y también dispara el deploy manual a `exemfoam.cl` (ver más abajo). Tiene 3 inputs:
+  - `target`: `gestflow` (default), `exemfoam` o `both` — a qué destino(s) deployar.
+  - `exemfoam_remote_path`: carpeta remota del FTP de exemfoam.cl (default `./`).
+  - `exemfoam_dry_run`: `true` (default) — simula el FTP deploy sin subir nada. Poner en `false` recién cuando se confirme que `exemfoam_remote_path` es la carpeta correcta.
 
 ## Job `test`
 
@@ -37,6 +40,23 @@ Depende de que `test` haya pasado (`needs: test`) y solo corre si el evento es `
 6. Health check contra `https://gestflow.mardev.cl`.
 
 Tiene `concurrency` con `cancel-in-progress: false`: si se dispara dos veces, los deploys se encolan en vez de pisarse.
+
+## Job `deploy-exemfoam` (manual)
+
+Deploy aparte, **solo manual** (`workflow_dispatch` con `target: exemfoam` o `both`) — no se dispara con push ni PR. Es un hosting cPanel distinto (`exemfoam.cl`) sin Tailscale/SSH, así que el deploy es por FTP:
+
+1. `npm ci` + `npm run build` (mismo build que el resto del pipeline).
+2. Sube `dist/` por FTP con [SamKirkland/FTP-Deploy-Action](https://github.com/SamKirkland/FTP-Deploy-Action) a la carpeta indicada en el input `exemfoam_remote_path`.
+3. Corre en modo `dry-run` por defecto (no sube nada, solo muestra qué haría) hasta que se confirme cuál es la carpeta remota correcta del hosting.
+
+Credenciales en el **Environment `exemfoam`** de GitHub (Settings → Environments), separadas de las de producción: `EXEMFOAM_FTP_SERVER`, `EXEMFOAM_FTP_USERNAME`, `EXEMFOAM_FTP_PASSWORD`.
+
+### Cómo lanzarlo
+
+1. Pestaña **Actions** → workflow **CI/CD** → **Run workflow**.
+2. `target`: `exemfoam`.
+3. `exemfoam_remote_path`: la carpeta remota (confirmar en el panel de control del hosting — típicamente `public_html` o `./` si el usuario FTP ya está *jailed* ahí).
+4. Primera vez: dejar `exemfoam_dry_run` en `true` y revisar el log del step "Deploy por FTP a exemfoam.cl" para confirmar que la carpeta es la correcta antes de poner `false`.
 
 ## Branch protection en `main`
 

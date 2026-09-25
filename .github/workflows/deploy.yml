@@ -6,6 +6,20 @@ on:
   pull_request:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      target:
+        description: "Destino del deploy manual"
+        type: choice
+        options: [gestflow, exemfoam, both]
+        default: gestflow
+      exemfoam_remote_path:
+        description: "Carpeta remota en el FTP de exemfoam.cl (solo si target incluye exemfoam)"
+        type: string
+        default: "./"
+      exemfoam_dry_run:
+        description: "Simular el deploy FTP a exemfoam.cl sin subir archivos (recomendado hasta confirmar la carpeta remota)"
+        type: boolean
+        default: true
 
 jobs:
   test:
@@ -71,7 +85,11 @@ jobs:
   deploy:
     name: Deploy to production
     needs: test
-    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    if: |
+      github.ref == 'refs/heads/main' && (
+        github.event_name == 'push' ||
+        (github.event_name == 'workflow_dispatch' && (inputs.target == 'gestflow' || inputs.target == 'both'))
+      )
     runs-on: ubuntu-latest
     environment: production
     concurrency:
@@ -146,3 +164,44 @@ jobs:
       - name: Health check
         run: |
           curl -sf -o /dev/null -w "site:%{http_code}\n" "https://gestflow.mardev.cl"
+
+  deploy-exemfoam:
+    name: Deploy a exemfoam.cl (FTP)
+    needs: test
+    if: github.event_name == 'workflow_dispatch' && (inputs.target == 'exemfoam' || inputs.target == 'both')
+    runs-on: ubuntu-latest
+    environment: exemfoam
+    concurrency:
+      group: exemfoam-frontend-deploy
+      cancel-in-progress: false
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Fijar versión de npm
+        run: npm install -g npm@10.9.2
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      # Manual y aislado del deploy a gestflow.mardev.cl — este hosting solo
+      # acepta FTP (cPanel), no hay Tailscale/SSH configurado ahí.
+      # dry-run: true por defecto hasta confirmar cuál es la carpeta remota
+      # correcta (ver input "exemfoam_remote_path" al lanzar el workflow).
+      - name: Deploy por FTP a exemfoam.cl
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ${{ secrets.EXEMFOAM_FTP_SERVER }}
+          username: ${{ secrets.EXEMFOAM_FTP_USERNAME }}
+          password: ${{ secrets.EXEMFOAM_FTP_PASSWORD }}
+          local-dir: ./dist/
+          server-dir: ${{ inputs.exemfoam_remote_path }}
+          dry-run: ${{ inputs.exemfoam_dry_run }}
