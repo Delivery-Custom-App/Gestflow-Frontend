@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { apiRequest, getOptionalAuthContext } from './apiClient'
-import { getActiveCaja, todayIso } from './salesApi'
+import { completeOrderMercadoPago, getActiveCaja, getBoleta, todayIso } from './salesApi'
 
 vi.mock('./apiClient', () => ({
   apiRequest: vi.fn(),
@@ -48,5 +48,60 @@ describe('getActiveCaja — cierre de caja diario', () => {
 
   it('todayIso() refleja la fecha simulada', () => {
     expect(todayIso()).toBe('2026-09-01')
+  })
+})
+
+describe('completeOrderMercadoPago — cierre del cobro por checkout', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('cierra la orden con PATCH y método de pago mercadopago', async () => {
+    apiRequest.mockResolvedValue({ id: 'ord-1', status: 'completed', payment_method: 'mercadopago' })
+
+    await completeOrderMercadoPago('ord-1')
+
+    expect(apiRequest).toHaveBeenCalledTimes(1)
+    expect(apiRequest).toHaveBeenCalledWith('/orders/ord-1', {
+      method: 'PATCH',
+      body: { status: 'completed', payment_method: 'mercadopago' },
+    })
+  })
+
+  it('en RESTAURANT camina los estados intermedios si la transición directa es inválida', async () => {
+    apiRequest
+      .mockRejectedValueOnce(new Error('400: transición inválida'))
+      .mockResolvedValue({ id: 'ord-2', status: 'completed', payment_method: 'mercadopago' })
+
+    await completeOrderMercadoPago('ord-2')
+
+    const estados = apiRequest.mock.calls.map(([, opts]) => opts.body.status)
+    expect(estados).toEqual(['completed', 'preparing', 'ready', 'completed'])
+  })
+
+  it('propaga cualquier otro error en vez de tragárselo', async () => {
+    apiRequest.mockRejectedValue(new Error('403: sin permisos'))
+
+    await expect(completeOrderMercadoPago('ord-3')).rejects.toThrow('403: sin permisos')
+    expect(apiRequest).toHaveBeenCalledTimes(1)
+  })
+
+  it('respeta created_at para las órdenes particionadas', async () => {
+    apiRequest.mockResolvedValue({ id: 'ord-4', status: 'completed' })
+
+    await completeOrderMercadoPago('ord-4', '2026-09-26T21:00:00Z')
+
+    expect(apiRequest).toHaveBeenCalledWith(
+      '/orders/ord-4?created_at=2026-09-26T21%3A00%3A00Z',
+      expect.objectContaining({ method: 'PATCH' }),
+    )
+  })
+
+  it('getBoleta pide el comprobante de la orden', async () => {
+    apiRequest.mockResolvedValue({ order_id: 'ord-5', items: [], total: 0 })
+
+    await getBoleta('ord-5')
+
+    expect(apiRequest).toHaveBeenCalledWith('/orders/ord-5/boleta')
   })
 })

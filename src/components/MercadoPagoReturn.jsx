@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
-import { apiRequest } from '../lib/apiClient'
+import { useCallback, useEffect, useState } from 'react'
+import { completeOrderMercadoPago, getBoleta } from '../lib/salesApi'
 
 function printComandaMP({ orderId, items, total }) {
   const now = new Date()
@@ -61,8 +61,14 @@ function printComandaMP({ orderId, items, total }) {
   doc.write(html)
   doc.close()
   iframe.onload = () => {
-    iframe.contentWindow.focus()
-    iframe.contentWindow.print()
+    // Si el navegador no puede imprimir, la venta ya quedó registrada igual:
+    // no se deja que un fallo de impresión tumbe el cierre del cobro.
+    try {
+      iframe.contentWindow.focus()
+      iframe.contentWindow.print()
+    } catch {
+      // sin impresora disponible
+    }
     setTimeout(() => {
       if (document.body.contains(iframe)) document.body.removeChild(iframe)
     }, 3000)
@@ -70,8 +76,40 @@ function printComandaMP({ orderId, items, total }) {
 }
 
 export default function MercadoPagoReturn() {
-  const [state, setState] = useState(null) // null | 'processing' | 'success' | 'failure' | 'pending'
+  const [state, setState] = useState(null) // null | 'processing' | 'success' | 'failure' | 'pending' | 'error'
   const [orderId, setOrderId] = useState(null)
+  const [errorMsg, setErrorMsg] = useState('')
+
+  /**
+   * Cierra la orden en el backend y, solo si eso funcionó, muestra el éxito
+   * e imprime el comprobante. Si el cierre falla no se puede decir que el pago
+   * quedó registrado: la venta no entró a la caja y alguien tiene que actuar.
+   */
+  const cerrarOrden = useCallback(async (mpOrderId) => {
+    setState('processing')
+    setErrorMsg('')
+    try {
+      await completeOrderMercadoPago(mpOrderId)
+    } catch (err) {
+      setErrorMsg(String(err?.message || err?.detail || 'No se pudo cerrar la orden.'))
+      setState('error')
+      return
+    }
+
+    setState('success')
+    // La impresión es secundaria: si falla, la venta ya quedó registrada igual.
+    try {
+      const boleta = await getBoleta(mpOrderId)
+      const items = (boleta?.items || []).map((it) => ({
+        product_name: it.product_name,
+        quantity: it.quantity,
+        total_price: it.subtotal,
+      }))
+      printComandaMP({ orderId: mpOrderId, items, total: boleta?.total || 0 })
+    } catch {
+      printComandaMP({ orderId: mpOrderId, items: [], total: 0 })
+    }
+  }, [])
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
@@ -87,28 +125,13 @@ export default function MercadoPagoReturn() {
     setOrderId(mpOrderId)
 
     if (mpStatus === 'approved') {
-      setState('processing')
-      // Cerrar la orden y obtener detalle para la comanda
-      Promise.all([
-        apiRequest('/orders/checkout/complete', {
-          method: 'POST',
-          body: { order_id: mpOrderId, payment_method: 'MERCADOPAGO' },
-        }),
-        apiRequest(`/orders/${mpOrderId}/summary`).catch(() => null),
-      ])
-        .then(([, summary]) => {
-          setState('success')
-          const items  = summary?.items  || []
-          const total  = summary?.total  || 0
-          printComandaMP({ orderId: mpOrderId, items, total })
-        })
-        .catch(() => setState('success')) // igual mostramos éxito aunque el print falle
+      cerrarOrden(mpOrderId)
     } else if (mpStatus === 'failure') {
       setState('failure')
     } else {
       setState('pending')
     }
-  }, [])
+  }, [cerrarOrden])
 
   if (!state) return null
 
@@ -136,6 +159,29 @@ export default function MercadoPagoReturn() {
               onClick={close}
               className="w-full py-2.5 rounded-xl bg-green-600 hover:bg-green-700 text-white font-semibold text-sm transition-colors"
             >
+              Volver al POS
+            </button>
+          </>
+        )}
+
+        {state === 'error' && (
+          <>
+            <div className="text-6xl">⚠️</div>
+            <h2 className="text-lg font-bold text-red-600">Pago cobrado, orden sin cerrar</h2>
+            <p className="text-sm text-gray-600">
+              MercadoPago aprobó el cobro, pero la orden no se pudo cerrar, así que la venta todavía
+              no entró a la caja. Reintenta; si vuelve a fallar, ciérrala a mano desde el POS antes
+              del arqueo.
+            </p>
+            {errorMsg && <p className="text-xs text-red-500 break-words">{errorMsg}</p>}
+            <p className="text-xs text-gray-400 font-mono">#{orderId?.slice(0, 8).toUpperCase()}</p>
+            <button
+              onClick={() => cerrarOrden(orderId)}
+              className="w-full py-2.5 rounded-xl bg-red-600 hover:bg-red-700 text-white font-semibold text-sm transition-colors"
+            >
+              Reintentar cierre
+            </button>
+            <button onClick={close} className="w-full py-2.5 rounded-xl bg-gray-200 hover:bg-gray-300 text-gray-700 font-semibold text-sm">
               Volver al POS
             </button>
           </>
