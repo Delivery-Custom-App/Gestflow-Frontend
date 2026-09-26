@@ -191,7 +191,9 @@ function AppearanceToggle() {
     try {
       document.documentElement.classList.toggle('dark', dark)
       window.localStorage.setItem('theme', dark ? 'dark' : 'light')
-    } catch {}
+    } catch {
+      // localStorage puede fallar en modo privado — no crítico, el toggle en memoria ya se aplicó
+    }
   }
 
   return (
