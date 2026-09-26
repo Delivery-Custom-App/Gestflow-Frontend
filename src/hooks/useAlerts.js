@@ -25,14 +25,12 @@ const ALERTS_ENABLED    = isV2FeatureEnabled('alerts')
 
 export function useAlerts(localId) {
   const [alerts, setAlerts]           = useState([])
-  const [loading, setLoading]         = useState(false)
+  const [loadedFor, setLoadedFor]     = useState(null) // localId cuya carga inicial terminó
   const [error, setError]             = useState(null)
   const [pendingCount, setPendingCount] = useState(0)
+  const [sseAttempt, setSseAttempt]   = useState(0)    // se incrementa para reintentar SSE
 
   const tokenRef   = useRef(null)
-  const sseRef     = useRef(null)
-  const pollRef    = useRef(null)
-  const evalRef    = useRef(null)
   const mounted    = useRef(true)
 
   // ── Fetch list ──────────────────────────────────────────────
@@ -63,18 +61,47 @@ export function useAlerts(localId) {
     }
   }, [localId, fetchAlerts])
 
-  // ── SSE connection ──────────────────────────────────────────
-  const openSSE = useCallback(() => {
-    if (!ALERTS_ENABLED || !localId || !tokenRef.current || !window.EventSource) return
+  // ── Bootstrap: evalúa al abrir, luego polling + evaluación periódica ──
+  useEffect(() => {
+    mounted.current = true
+    if (!ALERTS_ENABLED || !localId) return
+
+    let cancelled = false
+    let pollId = null
+    let evalId = null
+
+    const bootstrap = async () => {
+      // 1. Evalúa inventario al abrir la sección → genera/resuelve alertas del local
+      await silentEvaluate()
+      if (cancelled) return
+      // 2. Habilita SSE (ver efecto siguiente) + polling + evaluación periódica
+      setLoadedFor(localId)
+      pollId = setInterval(fetchAlerts, POLL_INTERVAL_MS)
+      evalId = setInterval(silentEvaluate, EVAL_INTERVAL_MS)
+    }
+    bootstrap()
+
+    return () => {
+      cancelled = true
+      mounted.current = false
+      clearInterval(pollId)
+      clearInterval(evalId)
+    }
+  }, [localId, silentEvaluate, fetchAlerts])
+
+  // ── SSE: una conexión por ejecución del efecto; reintentar = re-ejecutarlo ──
+  const sseReady = ALERTS_ENABLED && Boolean(localId) && loadedFor === localId
+  useEffect(() => {
+    if (!sseReady || !tokenRef.current || !window.EventSource) return
 
     const url = `${API_BASE}/api/alerts/stream?local_id=${localId}&token=${encodeURIComponent(tokenRef.current)}`
     const es = new EventSource(url)
-    sseRef.current = es
+    let retryTimer = null
 
     es.onmessage = (e) => {
       try {
         const payload = JSON.parse(e.data)
-        if (payload.pending !== undefined && mounted.current) {
+        if (payload.pending !== undefined) {
           setPendingCount(payload.pending)
           fetchAlerts()
         }
@@ -85,51 +112,14 @@ export function useAlerts(localId) {
 
     es.onerror = () => {
       es.close()
-      sseRef.current = null
-      setTimeout(() => { if (mounted.current) openSSE() }, SSE_RETRY_MS)
+      retryTimer = setTimeout(() => setSseAttempt((n) => n + 1), SSE_RETRY_MS)
     }
-  }, [localId, fetchAlerts])
-
-  // ── Polling fallback ────────────────────────────────────────
-  const startPolling = useCallback(() => {
-    if (!ALERTS_ENABLED) return
-    if (pollRef.current) clearInterval(pollRef.current)
-    pollRef.current = setInterval(fetchAlerts, POLL_INTERVAL_MS)
-  }, [fetchAlerts])
-
-  // ── Evaluación periódica automática ────────────────────────
-  const startAutoEval = useCallback(() => {
-    if (!ALERTS_ENABLED) return
-    if (evalRef.current) clearInterval(evalRef.current)
-    evalRef.current = setInterval(silentEvaluate, EVAL_INTERVAL_MS)
-  }, [silentEvaluate])
-
-  // ── Bootstrap ───────────────────────────────────────────────
-  useEffect(() => {
-    mounted.current = true
-    if (!ALERTS_ENABLED || !localId) {
-      setLoading(false)
-      return
-    }
-
-    setLoading(true)
-    // 1. Evalúa inventario al abrir la sección → genera/resuelve alertas del local
-    // 2. Luego inicia SSE + polling + evaluación periódica
-    silentEvaluate().finally(() => {
-      if (!mounted.current) return
-      setLoading(false)
-      openSSE()
-      startPolling()
-      startAutoEval()
-    })
 
     return () => {
-      mounted.current = false
-      sseRef.current?.close()
-      if (pollRef.current) clearInterval(pollRef.current)
-      if (evalRef.current) clearInterval(evalRef.current)
+      es.close()
+      clearTimeout(retryTimer)
     }
-  }, [localId, silentEvaluate, openSSE, startPolling, startAutoEval])
+  }, [sseReady, localId, sseAttempt, fetchAlerts])
 
   // ── Acciones manuales ───────────────────────────────────────
   const resolveAlert = useCallback(async (alertId) => {
@@ -147,5 +137,6 @@ export function useAlerts(localId) {
     return result
   }, [localId, fetchAlerts])
 
+  const loading = ALERTS_ENABLED && Boolean(localId) && loadedFor !== localId
   return { alerts, loading, error, pendingCount, resolveAlert, evaluateAlerts, refresh: fetchAlerts }
 }

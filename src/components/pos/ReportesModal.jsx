@@ -209,7 +209,7 @@ function Top5Item({ item, rank }) {
         </div>
         <div className="h-1.5 bg-[hsl(var(--accent))] rounded-full overflow-hidden">
           <div
-            className="h-full bg-[hsl(var(--primary))] rounded-full transition-all"
+            className="h-full bg-[hsl(var(--primary))] rounded-full transition-[width]"
             style={{ width: `${barWidth}%` }}
           />
         </div>

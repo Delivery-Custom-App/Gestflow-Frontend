@@ -23,15 +23,6 @@ function withQuery(path, params) {
   return queryString ? `${path}?${queryString}` : path
 }
 
-const EMPTY_RENDICIONES = {
-  approved_expenses_total: 0,
-  pending_expenses_total: 0,
-  completed_transfers_total: 0,
-  pending_transfers_total: 0,
-  net_flow: 0,
-  movements: [],
-}
-
 function orderAmount(order) {
   const n = Number(order?.total_amount ?? order?.total ?? order?.amount ?? order?.subtotal ?? 0)
   return Number.isFinite(n) ? n : 0
@@ -131,18 +122,6 @@ export async function getLocalDashboard(localId, token) {
   return apiRequest(`/dashboard/local/${localId}`, { token })
 }
 
-export async function getConsolidatedDashboard(businessId, token, { localId } = {}) {
-  void businessId
-  void token
-  if (!isV2FeatureEnabled('adminDashboard')) {
-    if (!localId) return buildDashboardFromOrders([], { localCount: 0 })
-    const orders = await listOrders(localId)
-    return buildDashboardFromOrders(orders, { localCount: 1 })
-  }
-  const path = withQuery('/dashboard/consolidated', { business_id: businessId })
-  return apiRequest(path, { token })
-}
-
 export function getOrdersByLocal(localId, token, status) {
   void token
   return listOrders(localId, { status })
@@ -185,67 +164,6 @@ export function assignExistingMpPos(cajaId, mercadopagoPosId) {
     method: 'POST',
     body: { mercadopago_pos_id: mercadopagoPosId },
   })
-}
-
-export async function getRendicionesDashboard(localId, token, options = {}) {
-  void localId
-  void token
-  void options
-  if (!isV2FeatureEnabled('rendiciones')) return { ...EMPTY_RENDICIONES }
-  const { startDate, endDate, movementLimit = 100 } = options
-  const path = withQuery('/dashboard/rendiciones', {
-    local_id: localId,
-    start_date: startDate,
-    end_date: endDate,
-    movement_limit: movementLimit,
-  })
-  return apiRequest(path, { token })
-}
-
-export async function getExpensesByLocal(localId, token, status) {
-  void localId
-  void token
-  void status
-  if (!isV2FeatureEnabled('rendiciones')) return []
-  const path = withQuery('/expenses', { local_id: localId, status })
-  return apiRequest(path, { token })
-}
-
-export async function getTransfersByLocal(localId, token, status) {
-  void localId
-  void token
-  void status
-  if (!isV2FeatureEnabled('rendiciones')) return []
-  const path = withQuery('/transfers', { local_id: localId, status })
-  return apiRequest(path, { token })
-}
-
-export function postExpense(body) {
-  if (!isV2FeatureEnabled('rendiciones')) {
-    throw new Error('Rendiciones aún no están disponibles en Backend V2')
-  }
-  return apiRequest('/expenses', { method: 'POST', body })
-}
-
-export function postTransfer(body) {
-  if (!isV2FeatureEnabled('rendiciones')) {
-    throw new Error('Rendiciones aún no están disponibles en Backend V2')
-  }
-  return apiRequest('/transfers', { method: 'POST', body })
-}
-
-export function patchExpense(expenseId, body) {
-  if (!isV2FeatureEnabled('rendiciones')) {
-    throw new Error('Rendiciones aún no están disponibles en Backend V2')
-  }
-  return apiRequest(`/expenses/${expenseId}`, { method: 'PATCH', body })
-}
-
-export function patchTransfer(transferId, body) {
-  if (!isV2FeatureEnabled('rendiciones')) {
-    throw new Error('Rendiciones aún no están disponibles en Backend V2')
-  }
-  return apiRequest(`/transfers/${transferId}`, { method: 'PATCH', body })
 }
 
 export async function getIncomeTrend(localId, token, days = 7) {

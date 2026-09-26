@@ -276,6 +276,19 @@ input[type='number'] {
 .stagger-5 { animation-delay: 0.25s; }
 .stagger-6 { animation-delay: 0.30s; }
 
+/* Respeta "reducir movimiento" del sistema operativo (WCAG 2.3.3) */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    animation-delay: 0ms !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
 /* ── Radix Dialog — override animaciones ───────────────────── */
 [data-radix-popper-content-wrapper] {
   animation: fade-in 0.18s ease both;

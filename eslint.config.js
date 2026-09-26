@@ -23,7 +23,24 @@ export default defineConfig([
       },
     },
     rules: {
-      'no-unused-vars': ['error', { varsIgnorePattern: '^[A-Z_]' }],
+      // El core de ESLint no rastrea usos en JSX: se ignoran componentes
+      // (Mayúscula), `motion`/`m` de framer-motion (<motion.div>, <m.div>) y
+      // props renombradas a componente ({ icon: Icon }).
+      'no-unused-vars': ['error', { varsIgnorePattern: '^(?:[A-Z_]|m$|motion$)', argsIgnorePattern: '^[A-Z_]' }],
+    },
+  },
+  {
+    // Node runtime (config de build/test), no del browser: process, __dirname, etc.
+    files: ['*.config.js'],
+    languageOptions: {
+      globals: globals.node,
+    },
+  },
+  {
+    // jsdom (window/document) + Node (Buffer, global) para specs y setup de vitest.
+    files: ['**/*.test.{js,jsx}', 'vitest.setup.js'],
+    languageOptions: {
+      globals: { ...globals.browser, ...globals.node },
     },
   },
   {

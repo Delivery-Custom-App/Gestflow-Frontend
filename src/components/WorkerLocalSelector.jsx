@@ -1,4 +1,4 @@
-import { useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router'
 import { useAuth } from '../context/AuthContext'
 import { useLocals } from '../hooks/useLocals'
 import { Home, LogOut, ArrowRight } from 'lucide-react'

@@ -1,5 +1,5 @@
-import { useState, useMemo, useEffect } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
+import { useState, useMemo } from 'react'
+import { m, AnimatePresence } from 'framer-motion'
 import { Pencil, ChevronRight, ChevronDown } from 'lucide-react'
 import StockStatusBadge from './StockStatusBadge'
 import { stockLevelFromRow } from './stockAlertUtils'
@@ -74,7 +74,12 @@ function ProductsTable({
     return Array.from(map.values())
   }, [items])
 
-  useEffect(() => { setExpandedGroups(new Set()) }, [items])
+  // Nuevos items => grupos colapsados (ajuste durante el render, sin efecto).
+  const [prevItems, setPrevItems] = useState(items)
+  if (items !== prevItems) {
+    setPrevItems(items)
+    setExpandedGroups(new Set())
+  }
 
   const toggleGroup = (key) => {
     setExpandedGroups((prev) => {
@@ -261,7 +266,7 @@ function ProductsTable({
                     const actualCls = level === 'critical' ? 'text-red-600 font-bold' : level === 'low' ? 'text-amber-600 font-semibold' : 'text-emerald-600 font-semibold'
                     const categoryTone = getCategoryTone({ id: row.category_id, name: row.category_name })
                     return (
-                      <motion.tr
+                      <m.tr
                         key={row.inventory_id ?? row.product_id}
                         className={`${ROW_CLASS} ${isSubRow ? 'bg-[hsl(var(--muted)/0.15)]' : ''}`}
                         style={{ boxShadow: `inset 3px 0 0 ${categoryTone.rail}` }}
@@ -313,7 +318,7 @@ function ProductsTable({
                             Editar
                           </Button>
                         </TableCell>
-                      </motion.tr>
+                      </m.tr>
                     )
                   }
 
@@ -333,7 +338,7 @@ function ProductsTable({
                     (() => {
                       const categoryTone = getCategoryTone({ id: rows[0].category_id, name: rows[0].category_name })
                       return (
-                    <motion.tr
+                    <m.tr
                       key={`grp-${key}`}
                       className={`${ROW_CLASS} cursor-pointer select-none`}
                       style={{ boxShadow: `inset 3px 0 0 ${categoryTone.rail}` }}
@@ -373,7 +378,7 @@ function ProductsTable({
                       <TableCell className="text-right tabular-nums">{formatClp(totalValue)}</TableCell>
                       <TableCell className="text-[hsl(var(--muted-foreground))]">—</TableCell>
                       <TableCell />
-                    </motion.tr>
+                    </m.tr>
                       )
                     })()
                   )
@@ -391,7 +396,7 @@ function ProductsTable({
       </div>
 
       {/* Edit drawer */}
-      <div
+      <div role="presentation"
         className={`fixed inset-0 bg-black/60 transition-opacity duration-300 ${
           editingRow ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
         }`}
@@ -414,7 +419,7 @@ function ProductsTable({
               </p>
             )}
           </div>
-          <button
+          <button aria-label="Cerrar"
             type="button"
             onClick={closeEditModal}
             disabled={saving || deleting}

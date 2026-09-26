@@ -37,8 +37,6 @@ export default function MenuModal({ localId, onClose }) {
       .filter((cat) => (cat.products?.length || 0) > 0)
   }, [data, selectedCat])
 
-  const totalVisible = filteredCategories.reduce((sum, c) => sum + c.products.length, 0)
-
   return (
     <Dialog open onOpenChange={onClose}>
       <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col">
@@ -56,7 +54,7 @@ export default function MenuModal({ localId, onClose }) {
 
         {/* Chips por categoría */}
         {data?.categories?.length > 0 && (
-          <div className="flex flex-wrap gap-2 pb-1" role="list" aria-label="Filtrar por categoría">
+          <div className="flex flex-wrap gap-2 pb-1" role="group" aria-label="Filtrar por categoría">
             <button
               className={`px-3 py-1 rounded-full text-xs font-medium transition-colors border ${
                 selectedCat === 'all'

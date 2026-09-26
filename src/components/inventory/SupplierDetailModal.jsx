@@ -23,6 +23,15 @@ const labelCls = 'text-[10px] font-semibold uppercase tracking-widest text-[hsl(
 const valCls   = 'text-sm font-medium text-[hsl(var(--foreground))]'
 
 /* ─── sección datos del proveedor ─────────────────────────── */
+function InfoRow({ label, value }) {
+  return (
+    <div className={fieldCls}>
+      <span className={labelCls}>{label}</span>
+      <span className={valCls}>{value}</span>
+    </div>
+  )
+}
+
 function InfoSection({ detail, supplierId, businessId, onUpdated }) {
   const [editing, setEditing] = useState(false)
   const [saving,  setSaving]  = useState(false)
@@ -65,12 +74,6 @@ function InfoSection({ detail, supplierId, businessId, onUpdated }) {
     finally { setSaving(false) }
   }
 
-  const ROW = ({ label, value }) => (
-    <div className={fieldCls}>
-      <span className={labelCls}>{label}</span>
-      <span className={valCls}>{value}</span>
-    </div>
-  )
 
   if (!editing) return (
     <div className="rounded-xl border border-[hsl(var(--border))] p-5 flex flex-col gap-4">
@@ -86,15 +89,15 @@ function InfoSection({ detail, supplierId, businessId, onUpdated }) {
         </button>
       </div>
       <div className="grid grid-cols-2 gap-x-8 gap-y-4">
-        <ROW label="Nombre"             value={str(detail.name)} />
-        <ROW label="RUT"                value={str(detail.rut)} />
-        <ROW label="Teléfono"          value={str(detail.phone)} />
-        <ROW label="Correo electrónico" value={str(detail.email)} />
-        <ROW label="Contacto"           value={str(detail.contact_name)} />
-        <ROW label="Categoría"          value={str(detail.category)} />
-        <ROW label="Dirección"          value={str(detail.address)} />
-        <ROW label="Inicio servicios"   value={date(detail.start_date)} />
-        <ROW label="Fecha ingreso"      value={date(detail.created_at)} />
+        <InfoRow label="Nombre"             value={str(detail.name)} />
+        <InfoRow label="RUT"                value={str(detail.rut)} />
+        <InfoRow label="Teléfono"          value={str(detail.phone)} />
+        <InfoRow label="Correo electrónico" value={str(detail.email)} />
+        <InfoRow label="Contacto"           value={str(detail.contact_name)} />
+        <InfoRow label="Categoría"          value={str(detail.category)} />
+        <InfoRow label="Dirección"          value={str(detail.address)} />
+        <InfoRow label="Inicio servicios"   value={date(detail.start_date)} />
+        <InfoRow label="Fecha ingreso"      value={date(detail.created_at)} />
       </div>
     </div>
   )
@@ -115,25 +118,25 @@ function InfoSection({ detail, supplierId, businessId, onUpdated }) {
 
       <div className="grid grid-cols-2 gap-4">
         <div className={fieldCls}>
-          <Label className={labelCls}>Nombre *</Label>
-          <input className={inputCls} value={name}    onChange={e => setName(e.target.value)}    placeholder="Nombre comercial" />
+          <Label htmlFor="supplier-detail-modal-nombre" className={labelCls}>Nombre *</Label>
+          <input id="supplier-detail-modal-nombre" className={inputCls} value={name}    onChange={e => setName(e.target.value)}    placeholder="Nombre comercial" />
         </div>
         <div className={fieldCls}>
-          <Label className={labelCls}>Teléfono</Label>
-          <input className={inputCls} value={phone}   onChange={e => setPhone(e.target.value)}   placeholder="+56 9 XXXXXXXX" />
+          <Label htmlFor="supplier-detail-modal-telefono" className={labelCls}>Teléfono</Label>
+          <input id="supplier-detail-modal-telefono" className={inputCls} value={phone}   onChange={e => setPhone(e.target.value)}   placeholder="+56 9 XXXXXXXX" />
         </div>
         <div className={fieldCls}>
-          <Label className={labelCls}>Correo electrónico</Label>
-          <input className={inputCls} type="email" value={email}   onChange={e => setEmail(e.target.value)}   placeholder="correo@proveedor.cl" />
+          <Label htmlFor="supplier-detail-modal-correo-electronico" className={labelCls}>Correo electrónico</Label>
+          <input id="supplier-detail-modal-correo-electronico" className={inputCls} type="email" value={email}   onChange={e => setEmail(e.target.value)}   placeholder="correo@proveedor.cl" />
         </div>
         <div className={fieldCls}>
-          <Label className={labelCls}>Contacto</Label>
-          <input className={inputCls} value={contact} onChange={e => setContact(e.target.value)} placeholder="Nombre del contacto" />
+          <Label htmlFor="supplier-detail-modal-contacto" className={labelCls}>Contacto</Label>
+          <input id="supplier-detail-modal-contacto" className={inputCls} value={contact} onChange={e => setContact(e.target.value)} placeholder="Nombre del contacto" />
         </div>
       </div>
       <div className={fieldCls}>
-        <Label className={labelCls}>Dirección</Label>
-        <input className={inputCls} value={address} onChange={e => setAddress(e.target.value)} placeholder="Dirección completa" />
+        <Label htmlFor="supplier-detail-modal-direccion" className={labelCls}>Dirección</Label>
+        <input id="supplier-detail-modal-direccion" className={inputCls} value={address} onChange={e => setAddress(e.target.value)} placeholder="Dirección completa" />
       </div>
 
       <div className="flex gap-2 pt-1">
@@ -178,17 +181,17 @@ function CommercialSection({ supplierId, businessId, detail, onUpdated }) {
       {ok  && <p className="text-xs text-emerald-600">✓ Guardado correctamente</p>}
       <div className="grid grid-cols-2 gap-4">
         <div className={fieldCls}>
-          <Label className={labelCls}>Plazo de pago (días)</Label>
-          <input className={inputCls} type="number" min="0" value={terms} onChange={e=>setTerms(e.target.value)} placeholder="Ej. 30" />
+          <Label htmlFor="supplier-detail-modal-plazo-de-pago-dias" className={labelCls}>Plazo de pago (días)</Label>
+          <input id="supplier-detail-modal-plazo-de-pago-dias" className={inputCls} type="number" min="0" value={terms} onChange={e=>setTerms(e.target.value)} placeholder="Ej. 30" />
         </div>
         <div className={fieldCls}>
-          <Label className={labelCls}>Plazo de entrega (días)</Label>
-          <input className={inputCls} type="number" min="0" value={lead} onChange={e=>setLead(e.target.value)} placeholder="Ej. 3" />
+          <Label htmlFor="supplier-detail-modal-plazo-de-entrega-dias" className={labelCls}>Plazo de entrega (días)</Label>
+          <input id="supplier-detail-modal-plazo-de-entrega-dias" className={inputCls} type="number" min="0" value={lead} onChange={e=>setLead(e.target.value)} placeholder="Ej. 3" />
         </div>
       </div>
       <div className={fieldCls}>
-        <Label className={labelCls}>Observaciones</Label>
-        <textarea value={notes} onChange={e=>setNotes(e.target.value)} rows={3} placeholder="Notas o condiciones"
+        <Label htmlFor="supplier-detail-modal-observaciones" className={labelCls}>Observaciones</Label>
+        <textarea id="supplier-detail-modal-observaciones" value={notes} onChange={e=>setNotes(e.target.value)} rows={3} placeholder="Notas o condiciones"
           className="w-full rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3 py-2 text-sm shadow-sm resize-none focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary)/0.3)]" />
       </div>
       <Button type="submit" size="sm" disabled={saving} className="self-start">
@@ -207,7 +210,7 @@ function SupplierDetailModal({ open, supplierId, businessId, row, onClose, onTog
 
   const load = useCallback(async () => {
     if (!supplierId || !businessId) return
-    setError(''); setLoading(true); setDetail(null)
+    setError(''); setLoading(true); setDetail(null); setConfirmingDelete(false)
     try {
       const data = await getSupplierDetailForBusiness(supplierId, businessId)
       setDetail(data && typeof data === 'object' ? data : null)
@@ -217,11 +220,16 @@ function SupplierDetailModal({ open, supplierId, businessId, row, onClose, onTog
   }, [supplierId, businessId])
 
   useEffect(() => {
-    if (!open || !supplierId || !businessId) { setDetail(null); setError(''); setConfirmingDelete(false); return }
+    if (!open || !supplierId || !businessId) return
     load()
   }, [open, supplierId, businessId, load])
 
-  const handleClose = () => { setConfirmingDelete(false); onClose() }
+  const handleClose = () => {
+    setConfirmingDelete(false)
+    setDetail(null)
+    setError('')
+    onClose()
+  }
 
   const isBusy    = rowActionId === String(supplierId)
   const isInactive = (detail?.is_active ?? row?.is_active) === false
@@ -232,7 +240,7 @@ function SupplierDetailModal({ open, supplierId, businessId, row, onClose, onTog
   return (
     <>
       {/* Overlay */}
-      <div
+      <div role="presentation"
         className={`fixed inset-0 bg-black/60 transition-opacity duration-300 ${
           open ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
         }`}
@@ -259,7 +267,7 @@ function SupplierDetailModal({ open, supplierId, businessId, row, onClose, onTog
               </Badge>
             )}
           </div>
-          <button
+          <button aria-label="Cerrar"
             type="button"
             onClick={handleClose}
             className="rounded-lg p-2 hover:bg-[hsl(var(--muted))] transition-colors"

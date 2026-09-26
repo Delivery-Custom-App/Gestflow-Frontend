@@ -63,7 +63,7 @@ export default function CreateMesaModal({ mesas, onClose, onSubmit }) {
 
   return (
     <div className="fixed inset-0 z-50">
-      <div
+      <div role="presentation"
         className={cn('absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity duration-300', visible ? 'opacity-100' : 'opacity-0')}
         onClick={handleClose}
       />

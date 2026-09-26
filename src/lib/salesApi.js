@@ -327,6 +327,8 @@ export async function createOrder(orderData = {}) {
   for (const raw of items) {
     const productId = raw.product_id || raw.recipe_id
     if (!productId) continue
+    // Secuencial a propósito: conserva el orden de los ítems/comanda y evita escrituras concurrentes sobre la misma orden/mesa.
+    // oxlint-disable-next-line react-doctor/async-await-in-loop
     const item = await addOrderItem(
       order.id,
       {

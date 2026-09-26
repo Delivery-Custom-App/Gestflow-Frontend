@@ -1,4 +1,4 @@
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router'
 import { ChevronLeft } from 'lucide-react'
 
 /**
@@ -22,7 +22,7 @@ function BackToInventoryHubButton({ navState } = {}) {
       <button
         type="button"
         onClick={handleClick}
-        className="inline-flex items-center gap-2 pl-2 pr-4 py-2 rounded-full border border-[hsl(var(--primary)/0.35)] bg-gradient-to-b from-white to-green-50 shadow-sm text-sm font-bold text-[hsl(var(--primary))] cursor-pointer transition-all duration-100 hover:border-[hsl(var(--primary)/0.55)] hover:shadow-md hover:-translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--primary)/0.5)]"
+        className="inline-flex items-center gap-2 pl-2 pr-4 py-2 rounded-full border border-[hsl(var(--primary)/0.35)] bg-gradient-to-b from-white to-green-50 shadow-sm text-sm font-bold text-[hsl(var(--primary))] cursor-pointer transition-[border-color,box-shadow,transform] duration-100 hover:border-[hsl(var(--primary)/0.55)] hover:shadow-md hover:-translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--primary)/0.5)]"
       >
         <span className="flex items-center justify-center w-8 h-8 rounded-full bg-[hsl(var(--primary)/0.12)] text-[hsl(var(--primary))]" aria-hidden="true">
           <ChevronLeft size={18} />

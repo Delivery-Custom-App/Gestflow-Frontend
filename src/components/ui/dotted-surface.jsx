@@ -26,7 +26,7 @@ export function DottedSurface({ className, forceDark = false, ...props }) {
     camera.position.set(0, 355, 1220)
 
     const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true })
-    renderer.setPixelRatio(window.devicePixelRatio)
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)) // tope 2x: pantallas 3x no aportan y triplican el costo
     renderer.setSize(container.clientWidth, container.clientHeight)
     renderer.setClearColor(0x000000, 0)
     container.appendChild(renderer.domElement)
@@ -66,10 +66,8 @@ export function DottedSurface({ className, forceDark = false, ...props }) {
     scene.add(points)
 
     let count = 0
-    let rafId
 
     const animate = () => {
-      rafId = requestAnimationFrame(animate)
 
       const pos = posAttr.array
       let i = 0
@@ -93,11 +91,11 @@ export function DottedSurface({ className, forceDark = false, ...props }) {
     }
 
     window.addEventListener('resize', handleResize)
-    animate()
+    renderer.setAnimationLoop(animate)
 
     return () => {
       window.removeEventListener('resize', handleResize)
-      cancelAnimationFrame(rafId)
+      renderer.setAnimationLoop(null)
       geometry.dispose()
       material.dispose()
       renderer.dispose()

@@ -56,6 +56,8 @@ function OrdenView({ mesa, localId, onBack, onTableUpdated }) {
     setErrorMsg('')
     try {
       for (const order of detail.active_orders) {
+        // Secuencial a propósito: conserva el orden de los ítems/comanda y evita escrituras concurrentes sobre la misma orden/mesa.
+        // oxlint-disable-next-line react-doctor/async-await-in-loop
         await updateOrderStatus(order.id, 'CANCELLED')
       }
       onTableUpdated?.()
@@ -254,6 +256,8 @@ function OrdenView({ mesa, localId, onBack, onTableUpdated }) {
                 variant="outline"
                 size="icon"
                 className="lg:hidden h-11 w-11 rounded-xl"
+                aria-label="Más opciones"
+                aria-expanded={showMobileMenu}
                 onClick={() => setShowMobileMenu(!showMobileMenu)}
               >
                 <MoreVertical size={18} />

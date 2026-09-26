@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
+import { m, AnimatePresence } from 'framer-motion'
 import { Users, Store, Plus, Trash2, ChevronDown, X, UserPlus, Loader2, Eye, EyeOff, Shield, HelpCircle, KeyRound, Building2 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { isSuperAdminRole } from '../auth/roleLabel'
@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router'
 
 // Roles ordenados Superadmin → Dueño → Admin → Trabajador
 const ROLES_SUPERADMIN = [
@@ -90,7 +90,7 @@ function CreateUserDrawer({ isOpen, onClose, onSuccess, locales, localesLoading,
 
   return (
     <>
-      <div
+      <div role="presentation"
         className={`fixed inset-0 bg-black/60 transition-opacity duration-300 ${isOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}
         style={{ zIndex: 500 }}
         onClick={handleClose}
@@ -110,7 +110,7 @@ function CreateUserDrawer({ isOpen, onClose, onSuccess, locales, localesLoading,
               <p className="text-xs text-[hsl(var(--muted-foreground))]">Completa los datos del usuario</p>
             </div>
           </div>
-          <button type="button" onClick={handleClose} disabled={loading} className="rounded-lg p-2 hover:bg-[hsl(var(--muted))] transition-colors disabled:opacity-50">
+          <button aria-label="Cerrar" type="button" onClick={handleClose} disabled={loading} className="rounded-lg p-2 hover:bg-[hsl(var(--muted))] transition-colors disabled:opacity-50">
             <X className="h-4 w-4 text-[hsl(var(--muted-foreground))]" />
           </button>
         </div>
@@ -131,7 +131,7 @@ function CreateUserDrawer({ isOpen, onClose, onSuccess, locales, localesLoading,
             <Label htmlFor="u-pwd">Contraseña <span className="text-red-500">*</span></Label>
             <div className="relative">
               <Input id="u-pwd" type={showPwd ? 'text' : 'password'} placeholder="Mínimo 6 caracteres" value={form.password} onChange={set('password')} disabled={loading} className="pr-9" />
-              <button type="button" onClick={() => setShowPwd((v) => !v)} className="absolute right-2.5 top-2.5 text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]">
+              <button aria-label={showPwd ? 'Ocultar contraseña' : 'Mostrar contraseña'} type="button" onClick={() => setShowPwd((v) => !v)} className="absolute right-2.5 top-2.5 text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]">
                 {showPwd ? <EyeOff size={16} /> : <Eye size={16} />}
               </button>
             </div>
@@ -297,14 +297,14 @@ export default function UsersListPage() {
     <>
     <AnimatePresence>
       {guideOpen && (
-        <motion.div
+        <m.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4"
           onClick={() => setGuideOpen(false)}
         >
-          <motion.div
+          <m.div
             initial={{ opacity: 0, scale: 0.95, y: 12 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.96, y: 8 }}
@@ -317,7 +317,7 @@ export default function UsersListPage() {
                 <HelpCircle size={16} className="text-[hsl(var(--primary))]" />
                 <h3 className="text-sm font-bold text-[hsl(var(--foreground))]">Guía — Gestión de Usuarios</h3>
               </div>
-              <button
+              <button type="button" aria-label="Cerrar guía"
                 onClick={() => setGuideOpen(false)}
                 className="flex items-center justify-center w-7 h-7 rounded-lg text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))] transition-colors"
               >
@@ -376,8 +376,8 @@ export default function UsersListPage() {
                 </div>
               ))}
             </div>
-          </motion.div>
-        </motion.div>
+          </m.div>
+        </m.div>
       )}
     </AnimatePresence>
     <div className="flex-1 overflow-y-auto no-scrollbar bg-[hsl(var(--background))]">

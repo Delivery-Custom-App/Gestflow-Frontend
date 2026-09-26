@@ -1,15 +1,14 @@
-import { useState, useEffect, useMemo } from 'react'
-import { Outlet, useNavigate, useLocation } from 'react-router-dom'
+import { useState, useMemo } from 'react'
+import { Outlet, useNavigate, useLocation } from 'react-router'
 import { useAuth } from '../context/AuthContext'
 import { useLocals } from '../hooks/useLocals'
 import { useCurrentBusiness } from '../hooks/useCurrentBusiness'
 import { useTheme } from '../context/ThemeContext'
-import { useAlerts } from '../hooks/useAlerts'
-import { motion, AnimatePresence } from 'framer-motion'
+import { m, AnimatePresence } from 'framer-motion'
 import { cn } from '@/lib/utils'
 import {
   LayoutDashboard, Store, ChevronDown, ChevronLeft, ChevronRight,
-  DollarSign, FileText, BarChart3, Wallet, Bell, Gift,
+  DollarSign, FileText, BarChart3, Wallet,
   Table2, ChefHat, Moon, Sun, UserCircle2,
   Package, Truck, ShoppingCart, BookMarked, PackageOpen, UtensilsCrossed,
   LogOut, Users, RotateCcw, MapPin, Building2, Settings,
@@ -25,9 +24,7 @@ const ROLE_BADGE_LABEL = {
 }
 
 const PLAN_BADGE_LABEL = { enterprise: 'Enterprise', professional: 'Professional', starter: 'Standard', basic: 'Standard' }
-import { ExpandableTabs } from './ui/expandable-tabs'
 import CoachMark from './onboarding/CoachMark'
-import { useOnboarding } from '../context/OnboardingContext'
 import { isSuperAdminRole, isAdminNegocioRole, normalizeRoleKey } from '../auth/roleLabel'
 import { WORKER_ROLES } from '../constants/roles'
 import { isDirectSaleDemoUser } from '../constants/demoMode'
@@ -36,7 +33,7 @@ import { isV2FeatureEnabled } from '../lib/v2Features'
 import { isAlPasoLocal } from '../lib/salesModel'
 
 /* ── key sets for accordion auto-open ──────────────────────────── */
-const ADMIN_KEYS = new Set(['administracion', 'ventas', 'rendiciones', 'reportes', 'flujo-caja', 'alertas', 'bonos'])
+const ADMIN_KEYS = new Set(['administracion', 'ventas', 'flujo-caja'])
 const POS_KEYS   = new Set(['pos', 'pos-mesas', 'pos-kitchen', 'pos-venta-directa'])
 const INV_KEYS   = new Set(['inv-hub', 'inv-prov', 'inv-stock', 'inv-stock-ctrl', 'inv-compras', 'inv-recetas'])
 
@@ -52,11 +49,7 @@ function deriveActiveKey(pathname) {
   if (pathname.includes('/pos/cocina'))                   return 'pos-kitchen'
   if (pathname.includes('/pos'))                          return 'pos-mesas'
   if (pathname.includes('/administrativo/ventas'))        return 'ventas'
-  if (pathname.includes('/administrativo/rendiciones'))   return 'rendiciones'
-  if (pathname.includes('/administrativo/reportes'))      return 'reportes'
   if (pathname.includes('/administrativo/flujo-caja'))    return 'flujo-caja'
-  if (pathname.includes('/administrativo/alertas'))       return 'alertas'
-  if (pathname.includes('/administrativo/bonos'))         return 'bonos'
   if (pathname.includes('/administrativo'))               return 'administracion'
   if (pathname.includes('/rrhh'))                         return 'hr-hub'
   if (pathname.includes('/usuarios'))                    return 'usuarios'
@@ -78,11 +71,7 @@ const ACCORDIONS = [
     icon: Wallet,
     items: [
       { key: 'ventas',      label: 'Ventas',        icon: DollarSign },
-      { key: 'rendiciones', label: 'Rendiciones',   icon: FileText   },
-      { key: 'reportes',    label: 'Reportes',      icon: BarChart3  },
       { key: 'flujo-caja',  label: 'Caja Virtual',  icon: Wallet     },
-      { key: 'alertas',     label: 'Alertas',       icon: Bell       },
-      { key: 'bonos',       label: 'Bonos',         icon: Gift       },
     ],
   },
   {
@@ -112,7 +101,6 @@ const ACCORDIONS = [
 /* ── Sidebar ────────────────────────────────────────────────────── */
 function Sidebar({ collapsed, onToggle, onClose }) {
   const { user, userRole, logout } = useAuth()
-  const { restart: restartTour } = useOnboarding()
   const { business } = useCurrentBusiness()
   const isSuperAdmin = isSuperAdminRole(userRole)
   const isOwner = isAdminNegocioRole(userRole)
@@ -209,7 +197,7 @@ function Sidebar({ collapsed, onToggle, onClose }) {
   const AL_PASO_POS_ITEMS = [
     { key: 'pos-venta-directa', label: 'Venta directa', icon: DollarSign },
   ]
-  const WORKER_FINANCE_ITEM_KEYS = new Set(['ventas', 'rendiciones'])
+  const WORKER_FINANCE_ITEM_KEYS = new Set(['ventas'])
   const visibleAccordions = isWorker
     ? (isAlPaso
         ? ACCORDIONS
@@ -256,13 +244,13 @@ function Sidebar({ collapsed, onToggle, onClose }) {
         {(!hideIcon || collapsed) && <Icon size={small ? 14 : 16} className="shrink-0" />}
         <AnimatePresence>
           {!collapsed && (
-            <motion.span
+            <m.span
               initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
               className="truncate flex items-center gap-1.5"
             >
               {item.label}
               {isDisabled && <span className="text-[9px] font-semibold uppercase tracking-wide opacity-70">pronto</span>}
-            </motion.span>
+            </m.span>
           )}
         </AnimatePresence>
       </button>
@@ -270,8 +258,9 @@ function Sidebar({ collapsed, onToggle, onClose }) {
   }
 
   return (
-    <motion.aside
-      animate={{ width: collapsed ? 90 : 240 }}
+    <m.aside
+      layout
+      style={{ width: collapsed ? 90 : 240 }}
       transition={{ type: 'spring', stiffness: 320, damping: 30 }}
       className="shrink-0 flex flex-col bg-[hsl(var(--card))] border-r border-[hsl(var(--border))] h-screen sticky top-0 overflow-hidden z-20"
     >
@@ -326,20 +315,16 @@ function Sidebar({ collapsed, onToggle, onClose }) {
       <nav className="flex-1 overflow-y-auto py-3 px-2 no-scrollbar">
         {/* DESCUBRIR */}
         <div className="mb-3">
-          {discoverItems.length > 0 && (
-            <>
-              <AnimatePresence>
-                {!collapsed && (
-                  <motion.p
-                    initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                    className="px-3 pb-1.5 text-xs text-[hsl(var(--muted-foreground))]"
-                  >
-                    Descubrir
-                  </motion.p>
-                )}
-              </AnimatePresence>
-            </>
-          )}
+          <AnimatePresence>
+            {discoverItems.length > 0 && !collapsed && (
+              <m.p
+                initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                className="px-3 pb-1.5 text-xs text-[hsl(var(--muted-foreground))]"
+              >
+                Descubrir
+              </m.p>
+            )}
+          </AnimatePresence>
 
           <div className={cn('rounded-xl border border-[hsl(var(--border))] flex flex-col gap-0.5', collapsed ? 'p-1' : 'p-1.5')}>
             {discoverItems.map((item) => navBtn(item, false, true))}
@@ -359,9 +344,9 @@ function Sidebar({ collapsed, onToggle, onClose }) {
               {collapsed && <Settings size={16} className="shrink-0" />}
               <AnimatePresence>
                 {!collapsed && (
-                  <motion.span initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex-1 text-left">
+                  <m.span initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex-1 text-left">
                     Configuración
-                  </motion.span>
+                  </m.span>
                 )}
               </AnimatePresence>
             </button>
@@ -394,17 +379,17 @@ function Sidebar({ collapsed, onToggle, onClose }) {
                   <Icon size={16} className="shrink-0" />
                   <AnimatePresence>
                     {!collapsed && (
-                      <motion.span
+                      <m.span
                         initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
                         className="flex-1 truncate text-left"
                       >
                         {section.label}
-                      </motion.span>
+                      </m.span>
                     )}
                   </AnimatePresence>
                 </button>
                 {!collapsed && (
-                  <button
+                  <button type="button" aria-label={`${open ? 'Contraer' : 'Expandir'} ${section.label}`} aria-expanded={open}
                     onClick={() => toggleAccordion(section.key)}
                     className={cn(
                       'flex items-center justify-center w-8 h-8 shrink-0 rounded-r-lg transition-colors',
@@ -413,30 +398,30 @@ function Sidebar({ collapsed, onToggle, onClose }) {
                         : 'text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--accent))] hover:text-[hsl(var(--foreground))]',
                     )}
                   >
-                    <motion.span
+                    <m.span
                       animate={{ rotate: open ? 180 : 0 }}
                       transition={{ duration: 0.2 }}
                       className="flex items-center justify-center"
                     >
                       <ChevronDown size={14} />
-                    </motion.span>
+                    </m.span>
                   </button>
                 )}
               </div>
 
               <AnimatePresence initial={false}>
                 {open && !collapsed && (
-                  <motion.div
-                    initial={{ height: 0, opacity: 0 }}
-                    animate={{ height: 'auto', opacity: 1 }}
-                    exit={{ height: 0, opacity: 0 }}
+                  <m.div
+                    initial={{ y: -6, opacity: 0 }}
+                    animate={{ y: 0, opacity: 1 }}
+                    exit={{ y: -6, opacity: 0 }}
                     transition={{ duration: 0.22, ease: 'easeInOut' }}
                     className="overflow-hidden"
                   >
                     <div className="pl-3 py-1 flex flex-col gap-0.5">
                       {section.items.map((item) => navBtn(item, true))}
                     </div>
-                  </motion.div>
+                  </m.div>
                 )}
               </AnimatePresence>
             </div>
@@ -457,9 +442,9 @@ function Sidebar({ collapsed, onToggle, onClose }) {
           {collapsed && <LogOut size={16} className="shrink-0" />}
           <AnimatePresence>
             {!collapsed && (
-              <motion.span initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+              <m.span initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
                 Cerrar sesión
-              </motion.span>
+              </m.span>
             )}
           </AnimatePresence>
         </button>
@@ -476,20 +461,16 @@ function Sidebar({ collapsed, onToggle, onClose }) {
           </div>
         )}
       </div>
-    </motion.aside>
+    </m.aside>
   )
 }
 
 /* ── TopBar ─────────────────────────────────────────────────────── */
 function TopBar({ localId }) {
-  const { userRole } = useAuth()
   const { locales } = useLocals()
   const { business } = useCurrentBusiness()
   const { darkMode, setDarkMode } = useTheme()
   const { state: locState } = useLocation()
-  const navigate = useNavigate()
-  const isWorkerRole = WORKER_ROLES.includes(userRole)
-  const { pendingCount } = useAlerts(localId)
 
   const toggleDarkMode = () => {
     const next = !darkMode
@@ -497,7 +478,7 @@ function TopBar({ localId }) {
     try {
       document.documentElement.classList.toggle('dark', next)
       window.localStorage.setItem('theme', next ? 'dark' : 'light')
-    } catch {}
+    } catch { /* storage no disponible */ }
   }
 
   const selectedLocal = useMemo(() => {
@@ -505,23 +486,6 @@ function TopBar({ localId }) {
     if (locState?.local?.name) return locState.local
     return locales.find((l) => String(l.id) === String(localId)) ?? null
   }, [localId, locState, locales])
-
-  const navState = locState?.local ? { local: locState.local } : localId ? { local: { id: localId } } : {}
-
-  // Build tabs — only show bell when there's a local and user isn't worker
-  const showBell = Boolean(localId && !isWorkerRole)
-  const tabs = [
-    ...(showBell ? [{ title: 'Notificaciones', icon: Bell, badge: pendingCount || null }] : []),
-  ]
-
-  const bellIdx = showBell ? 0 : -1
-
-  const handleTabChange = (index) => {
-    if (index === null) return
-    if (index === bellIdx) {
-      navigate(`/local/${localId}/administrativo/alertas`, { state: navState })
-    }
-  }
 
   return (
     <div className="shrink-0 flex items-center justify-between px-4 sm:px-6 h-14 border-b border-[hsl(var(--border))] bg-[hsl(var(--card))] shadow-sm z-10">
@@ -546,7 +510,7 @@ function TopBar({ localId }) {
         )}
       </div>
 
-      {/* Right: dark mode toggle + expandable tab controls */}
+      {/* Right: dark mode toggle */}
       <div className="shrink-0 flex items-center gap-2">
         <button
           type="button"
@@ -557,14 +521,6 @@ function TopBar({ localId }) {
         >
           {darkMode ? <Moon size={17} /> : <Sun size={17} />}
         </button>
-        {tabs.length > 0 && (
-          <ExpandableTabs
-            tabs={tabs}
-            activeColor="text-[hsl(var(--primary))]"
-            onChange={handleTabChange}
-            className="border-[hsl(var(--border))] bg-[hsl(var(--card))]"
-          />
-        )}
       </div>
     </div>
   )
@@ -575,21 +531,19 @@ function AppShell() {
   const [collapsed, setCollapsed] = useState(() => {
     try { return window.localStorage.getItem('appSidebarCollapsed') === '1' } catch { return false }
   })
-  const [mobileOpen, setMobileOpen] = useState(false)
 
   const { pathname } = useLocation()
   const localIdMatch = pathname.match(/\/local\/([^/]+)/)
   const localId = localIdMatch ? localIdMatch[1] : null
 
-  /* Cierra el drawer móvil al cambiar de ruta */
-  useEffect(() => { setMobileOpen(false) }, [pathname])
-
+  /* El drawer móvil queda abierto solo en la ruta donde se abrió: al navegar se cierra. */
+  const [mobileOpenPath, setMobileOpenPath] = useState(null)
+  const mobileOpen = mobileOpenPath === pathname
+  const closeMobile = () => setMobileOpenPath(null)
   const handleToggle = () => {
-    setCollapsed((v) => {
-      const next = !v
-      try { window.localStorage.setItem('appSidebarCollapsed', next ? '1' : '0') } catch {}
-      return next
-    })
+    const next = !collapsed
+    setCollapsed(next)
+    try { window.localStorage.setItem('appSidebarCollapsed', next ? '1' : '0') } catch { /* storage no disponible */ }
   }
 
   return (
@@ -598,14 +552,14 @@ function AppShell() {
       {/* Overlay backdrop (solo móvil) */}
       <AnimatePresence>
         {mobileOpen && (
-          <motion.div
+          <m.div
             key="mobile-backdrop"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.2 }}
             className="fixed inset-0 bg-black/50 z-30 md:hidden"
-            onClick={() => setMobileOpen(false)}
+            onClick={() => closeMobile()}
           />
         )}
       </AnimatePresence>
@@ -621,7 +575,7 @@ function AppShell() {
         <Sidebar
           collapsed={mobileOpen ? false : collapsed}
           onToggle={handleToggle}
-          onClose={() => setMobileOpen(false)}
+          onClose={() => closeMobile()}
         />
       </div>
 

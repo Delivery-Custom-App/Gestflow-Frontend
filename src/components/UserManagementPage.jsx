@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router'
 import { UserPlus, ArrowLeft, RefreshCw, Eye, EyeOff } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { isSuperAdminRole } from '../auth/roleLabel'
@@ -31,7 +31,8 @@ const labelCls = 'block text-sm font-medium text-[hsl(var(--foreground))] mb-1'
 
 function generatePassword() {
   const chars = 'abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789!@#$%'
-  return Array.from({ length: 12 }, () => chars[Math.floor(Math.random() * chars.length)]).join('')
+  const randomValues = crypto.getRandomValues(new Uint32Array(12))
+  return Array.from(randomValues, (v) => chars[v % chars.length]).join('')
 }
 
 export default function UserManagementPage() {
@@ -126,27 +127,28 @@ export default function UserManagementPage() {
             <form onSubmit={onSubmit} className="space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className={labelCls}>Nombre</label>
-                  <input className={inputCls} value={form.name} onChange={set('name')} placeholder="Juan Pérez" />
+                  <label htmlFor="user-management-page-nombre" className={labelCls}>Nombre</label>
+                  <input id="user-management-page-nombre" className={inputCls} value={form.name} onChange={set('name')} placeholder="Juan Pérez" />
                 </div>
                 <div>
-                  <label className={labelCls}>Correo</label>
-                  <input className={inputCls} type="email" value={form.email} onChange={set('email')} placeholder="juan@correo.com" />
+                  <label htmlFor="user-management-page-correo" className={labelCls}>Correo</label>
+                  <input id="user-management-page-correo" className={inputCls} type="email" value={form.email} onChange={set('email')} placeholder="juan@correo.com" />
                 </div>
 
                 {/* Contraseña con generador */}
                 <div className="sm:col-span-2">
-                  <label className={labelCls}>Contraseña</label>
+                  <label htmlFor="user-management-page-contrasena" className={labelCls}>Contraseña</label>
                   <div className="flex gap-2">
                     <div className="relative flex-1">
                       <input
+                        id="user-management-page-contrasena"
                         className={inputCls + ' pr-10'}
                         type={showPassword ? 'text' : 'password'}
                         value={form.password}
                         onChange={set('password')}
                         placeholder="Mínimo 6 caracteres"
                       />
-                      <button
+                      <button aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
                         type="button"
                         onClick={() => setShowPassword((v) => !v)}
                         className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]"
@@ -164,8 +166,8 @@ export default function UserManagementPage() {
                 </div>
 
                 <div className="sm:col-span-2">
-                  <label className={labelCls}>Rol</label>
-                  <select className={inputCls} value={form.role} onChange={set('role')}>
+                  <label htmlFor="user-management-page-rol" className={labelCls}>Rol</label>
+                  <select id="user-management-page-rol" className={inputCls} value={form.role} onChange={set('role')}>
                     {availableRoles.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
                   </select>
                 </div>
@@ -173,8 +175,8 @@ export default function UserManagementPage() {
 
               {!['SUPERADMIN', 'ADMIN_NEGOCIO'].includes(form.role) && (
                 <div>
-                  <label className={labelCls}>Local asignado</label>
-                  <select className={inputCls} value={form.local_id} onChange={set('local_id')} disabled={localesLoading}>
+                  <label htmlFor="user-management-page-local-asignado" className={labelCls}>Local asignado</label>
+                  <select id="user-management-page-local-asignado" className={inputCls} value={form.local_id} onChange={set('local_id')} disabled={localesLoading}>
                     <option value="">{localesLoading ? 'Cargando locales…' : '— Selecciona un local —'}</option>
                     {locales.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
                   </select>

@@ -364,7 +364,7 @@ function OpcionesDrawer({ isOpen, onClose, locales, thresholds, onSaveThresholds
   return (
     <>
       {/* Backdrop */}
-      <div
+      <div role="presentation"
         className={`fixed inset-0 bg-black/60 transition-opacity duration-300 ${
           isOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
         }`}

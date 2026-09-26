@@ -1,4 +1,3 @@
-import { useMesasKPIs } from '../../hooks/useMesasKPIs'
 import { Table2, Users, CircleDollarSign, CheckCircle2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -94,11 +93,7 @@ function KPICard({ config, value, loading, index }) {
   )
 }
 
-export default function MesasKPICards({ localId, onRefreshReady }) {
-  const { kpis, loading, error, refresh } = useMesasKPIs(localId)
-
-  if (onRefreshReady) onRefreshReady(refresh)
-
+export default function MesasKPICards({ kpis, loading, error }) {
   return (
     <section className="space-y-3">
       {error && (

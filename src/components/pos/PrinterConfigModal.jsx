@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Printer, Trash2, Wifi, WifiOff, Bluetooth, Pencil, X } from 'lucide-react'
 import {
@@ -14,28 +14,30 @@ import { toast } from 'sonner'
 const EMPTY_FORM = { name: '', model: '', connection_type: 'network', ip_address: '', port: 9100, bluetooth_name: '', is_active: true }
 
 export default function PrinterConfigModal({ localId, onClose, open = true }) {
-  const [printers, setPrinters] = useState([])
-  const [loading, setLoading] = useState(true)
+  const [printers, setPrinters] = useState(null) // null = cargando la primera vez
+  const loading = printers === null
   const [form, setForm] = useState(EMPTY_FORM)
   const [editingId, setEditingId] = useState(null)
   const [saving, setSaving] = useState(false)
   const [testingId, setTestingId] = useState(null)
 
-  useEffect(() => {
-    fetchPrinters()
-  }, [localId])
-
-  async function fetchPrinters() {
-    setLoading(true)
+  /** `isStale` permite descartar la respuesta si el efecto que la pidió ya se limpió. */
+  const fetchPrinters = useCallback(async (isStale = () => false) => {
     try {
       const data = await listPrinters(localId)
-      setPrinters(data || [])
+      if (!isStale()) setPrinters(data || [])
     } catch (err) {
+      if (isStale()) return
+      setPrinters((prev) => prev ?? [])
       toast.error('Error al cargar impresoras: ' + err.message)
-    } finally {
-      setLoading(false)
     }
-  }
+  }, [localId])
+
+  useEffect(() => {
+    let stale = false
+    fetchPrinters(() => stale)
+    return () => { stale = true }
+  }, [fetchPrinters])
 
   function handleEdit(printer) {
     setEditingId(printer.id)
@@ -136,7 +138,7 @@ export default function PrinterConfigModal({ localId, onClose, open = true }) {
   return (
     <>
       {/* Overlay */}
-      <div
+      <div role="presentation"
         className={`fixed inset-0 bg-black/60 transition-opacity duration-300 ${
           open ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
         }`}
@@ -162,7 +164,7 @@ export default function PrinterConfigModal({ localId, onClose, open = true }) {
               <p className="text-xs text-[hsl(var(--muted-foreground))]">Administra las impresoras de tickets</p>
             </div>
           </div>
-          <button onClick={onClose} className="rounded-lg p-2 hover:bg-[hsl(var(--muted))] transition-colors">
+          <button type="button" aria-label="Cerrar" onClick={onClose} className="rounded-lg p-2 hover:bg-[hsl(var(--muted))] transition-colors">
             <X className="h-4 w-4 text-[hsl(var(--muted-foreground))]" />
           </button>
         </div>
@@ -175,10 +177,11 @@ export default function PrinterConfigModal({ localId, onClose, open = true }) {
             </h3>
 
             <div>
-              <label className="block text-sm font-medium text-[hsl(var(--foreground))] mb-1">Tipo de conexión</label>
-              <div className="grid grid-cols-2 gap-2">
+              <p id="printer-tipo-conexion" className="block text-sm font-medium text-[hsl(var(--foreground))] mb-1">Tipo de conexión</p>
+              <div className="grid grid-cols-2 gap-2" role="group" aria-labelledby="printer-tipo-conexion">
                 <button
                   type="button"
+                  aria-pressed={form.connection_type === 'network'}
                   onClick={() => setForm(f => ({ ...f, connection_type: 'network' }))}
                   className={`h-9 rounded-md border text-sm font-medium transition-colors ${
                     form.connection_type === 'network'
@@ -190,6 +193,7 @@ export default function PrinterConfigModal({ localId, onClose, open = true }) {
                 </button>
                 <button
                   type="button"
+                  aria-pressed={form.connection_type === 'bluetooth'}
                   onClick={() => setForm(f => ({ ...f, connection_type: 'bluetooth' }))}
                   className={`h-9 rounded-md border text-sm font-medium transition-colors ${
                     form.connection_type === 'bluetooth'
@@ -209,8 +213,8 @@ export default function PrinterConfigModal({ localId, onClose, open = true }) {
 
             {form.connection_type === 'bluetooth' && (
               <div>
-                <label className="block text-sm font-medium text-[hsl(var(--foreground))] mb-1">Nombre Bluetooth del dispositivo</label>
-                <input
+                <label htmlFor="printer-config-modal-nombre-bluetooth-del-disposi" className="block text-sm font-medium text-[hsl(var(--foreground))] mb-1">Nombre Bluetooth del dispositivo</label>
+                <input id="printer-config-modal-nombre-bluetooth-del-disposi"
                   type="text"
                   value={form.bluetooth_name}
                   onChange={e => setForm(f => ({ ...f, bluetooth_name: e.target.value }))}
@@ -225,8 +229,8 @@ export default function PrinterConfigModal({ localId, onClose, open = true }) {
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-sm font-medium text-[hsl(var(--foreground))] mb-1">Nombre *</label>
-                <input
+                <label htmlFor="printer-config-modal-nombre" className="block text-sm font-medium text-[hsl(var(--foreground))] mb-1">Nombre *</label>
+                <input id="printer-config-modal-nombre"
                   type="text"
                   value={form.name}
                   onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
@@ -236,8 +240,8 @@ export default function PrinterConfigModal({ localId, onClose, open = true }) {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-[hsl(var(--foreground))] mb-1">Modelo</label>
-                <input
+                <label htmlFor="printer-config-modal-modelo" className="block text-sm font-medium text-[hsl(var(--foreground))] mb-1">Modelo</label>
+                <input id="printer-config-modal-modelo"
                   type="text"
                   value={form.model}
                   onChange={e => setForm(f => ({ ...f, model: e.target.value }))}
@@ -247,8 +251,8 @@ export default function PrinterConfigModal({ localId, onClose, open = true }) {
               </div>
               {form.connection_type === 'network' && (
               <div>
-                <label className="block text-sm font-medium text-[hsl(var(--foreground))] mb-1">IP *</label>
-                <input
+                <label htmlFor="printer-config-modal-ip" className="block text-sm font-medium text-[hsl(var(--foreground))] mb-1">IP *</label>
+                <input id="printer-config-modal-ip"
                   type="text"
                   value={form.ip_address}
                   onChange={e => setForm(f => ({ ...f, ip_address: e.target.value }))}
@@ -260,8 +264,8 @@ export default function PrinterConfigModal({ localId, onClose, open = true }) {
               )}
               {form.connection_type === 'network' && (
               <div>
-                <label className="block text-sm font-medium text-[hsl(var(--foreground))] mb-1">Puerto *</label>
-                <input
+                <label htmlFor="printer-config-modal-puerto" className="block text-sm font-medium text-[hsl(var(--foreground))] mb-1">Puerto *</label>
+                <input id="printer-config-modal-puerto"
                   type="number"
                   value={form.port}
                   onChange={e => setForm(f => ({ ...f, port: e.target.value }))}

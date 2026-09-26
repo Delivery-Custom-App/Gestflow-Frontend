@@ -18,17 +18,23 @@ function titleCase(str) {
  *   onConfirm   — callback(formattedName: string) llamado al confirmar
  *   disabled    — deshabilita el input
  *   hasError    — aplica borde rojo
+ *   id          — id del input (para asociar un <label htmlFor>)
  */
-function CategoryTypeaheadField({ categories = [], value = '', onConfirm, disabled = false, hasError = false }) {
+const NO_CATEGORIES = []
+
+function CategoryTypeaheadField({ id, categories = NO_CATEGORIES, value = '', onConfirm, disabled = false, hasError = false }) {
   const [input,     setInput]     = useState(value)
   const [open,      setOpen]      = useState(false)
   const [confirmed, setConfirmed] = useState(!!value)
   const wrapperRef = useRef(null)
 
-  useEffect(() => {
+  // Si el padre cambia `value`, se ajusta el estado en el mismo render (patrón de React docs).
+  const [prevValue, setPrevValue] = useState(value)
+  if (value !== prevValue) {
+    setPrevValue(value)
     setInput(value)
     setConfirmed(!!value)
-  }, [value])
+  }
 
   useEffect(() => {
     const handler = (e) => {
@@ -75,6 +81,7 @@ function CategoryTypeaheadField({ categories = [], value = '', onConfirm, disabl
   return (
     <div ref={wrapperRef} className="relative">
       <input
+        id={id}
         type="text"
         value={input}
         onChange={handleChange}

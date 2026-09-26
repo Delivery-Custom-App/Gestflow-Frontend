@@ -47,18 +47,6 @@ function NuevoProductoModal({ open, localId, onClose, onSuccess }) {
   const [categories,       setCategories]       = useState([])
   const [catsLoading,      setCatsLoading]      = useState(false)
 
-  useEffect(() => {
-    if (!open) return
-    setError('')
-    setSubmitting(false)
-    setProductName('')
-    setCategoryName('')
-    setUnit('unidad')
-    setCurrentStock('0')
-    setMinStock('0')
-    setMaxStock('0')
-    setUnitCost('')
-  }, [open])
 
   useEffect(() => {
     if (!open || !localId) { setCategories([]); return }
@@ -92,6 +80,7 @@ function NuevoProductoModal({ open, localId, onClose, onSuccess }) {
         unitCost:     Math.round(cost),
       })
       onSuccess?.()
+      resetForm()
       onClose?.()
     } catch (err) {
       setError(err?.message || 'No se pudo crear el producto.')
@@ -100,12 +89,28 @@ function NuevoProductoModal({ open, localId, onClose, onSuccess }) {
     }
   }
 
-  const handleClose = () => { if (!submitting) onClose?.() }
+  /** Deja el formulario vacío para la próxima apertura (todos los cierres pasan por aquí). */
+  const resetForm = () => {
+    setError('')
+    setProductName('')
+    setCategoryName('')
+    setUnit('unidad')
+    setCurrentStock('0')
+    setMinStock('0')
+    setMaxStock('0')
+    setUnitCost('')
+  }
+
+  const handleClose = () => {
+    if (submitting) return
+    resetForm()
+    onClose?.()
+  }
 
   return (
     <>
       {/* Overlay */}
-      <div
+      <div role="presentation"
         className={`fixed inset-0 bg-black/60 transition-opacity duration-300 ${
           open ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
         }`}
@@ -131,7 +136,7 @@ function NuevoProductoModal({ open, localId, onClose, onSuccess }) {
               <p className="text-xs text-[hsl(var(--muted-foreground))]">Ingrese los datos del producto</p>
             </div>
           </div>
-          <button
+          <button aria-label="Cerrar"
             type="button"
             onClick={handleClose}
             disabled={submitting}
@@ -168,6 +173,7 @@ function NuevoProductoModal({ open, localId, onClose, onSuccess }) {
                 <p className="text-xs text-[hsl(var(--muted-foreground))] py-2">Cargando categorías…</p>
               ) : (
                 <CategoryTypeaheadField
+                  id="np-category"
                   categories={categories}
                   value={categoryName}
                   onConfirm={async (name) => {

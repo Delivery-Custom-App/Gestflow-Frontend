@@ -1,5 +1,5 @@
-import { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { createContext, useContext, useState, useCallback, useEffect, useMemo, useRef } from 'react'
+import { useNavigate } from 'react-router'
 import { useAuth } from './AuthContext'
 import { useLocals } from '../hooks/useLocals'
 import { isSuperAdminRole } from '../auth/roleLabel'
@@ -25,7 +25,7 @@ const STEPS = {
     {
       target: 'nav-administracion',
       title: 'Administración',
-      desc: 'Flujo de caja, rendiciones, reportes y bonos de cada local desde aquí.',
+      desc: 'Ventas y caja virtual de cada local desde aquí.',
     },
     {
       target: 'nav-pos',
@@ -47,7 +47,7 @@ const STEPS = {
     {
       target: 'nav-administracion',
       title: 'Administración',
-      desc: 'Revisa flujo de caja, rendiciones, alertas y bonos de tu local.',
+      desc: 'Revisa las ventas y la caja virtual de tu local.',
     },
     {
       target: 'nav-pos',
@@ -137,6 +137,7 @@ export function OnboardingProvider({ children }) {
     if (!done) {
       const t = setTimeout(() => {
         localStorage.setItem(storageKey, '1')
+        setStep(0)
         setActive(true)
       }, 900)
       return () => clearTimeout(t)
@@ -174,17 +175,17 @@ export function OnboardingProvider({ children }) {
     setActive(true)
   }, [])
 
-  useEffect(() => {
-    if (active) setStep(0)
-  }, [active])
+  const value = useMemo(() => ({ active, step, steps, next, skip, restart }), [active, step, steps, next, skip, restart])
 
   return (
-    <OnboardingContext.Provider value={{ active, step, steps, next, skip, restart }}>
+    <OnboardingContext.Provider value={value}>
       {children}
     </OnboardingContext.Provider>
   )
 }
 
+// Patrón estándar de contexto: el hook vive junto a su Provider.
+// eslint-disable-next-line react-refresh/only-export-components
 export function useOnboarding() {
   return useContext(OnboardingContext)
 }

@@ -38,8 +38,8 @@ export default function ProductDetailModal({ product, onClose }) {
             <p className="text-xs font-semibold uppercase tracking-widest text-[hsl(var(--muted-foreground))]">Añadidos</p>
             {anyadidos.length > 0 ? (
               <ul className="space-y-1">
-                {anyadidos.map((item, i) => (
-                  <li key={i} className="flex items-center gap-2 text-sm text-[hsl(var(--foreground))]">
+                {anyadidos.map((item) => (
+                  <li key={item} className="flex items-center gap-2 text-sm text-[hsl(var(--foreground))]">
                     <span className="w-4 h-4 flex items-center justify-center rounded-full bg-[hsl(var(--primary))]/10 text-[hsl(var(--primary))] text-xs font-bold shrink-0">+</span>
                     {item.trim()}
                   </li>

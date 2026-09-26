@@ -23,7 +23,9 @@ function validateProduct(product) {
 }
 
 /** Lista de productos de la orden con edición de cantidad/precio y detalle. */
-function ProductList({ products = [], orderId = null, onProductsChanged = null, className = '' }) {
+const NO_PRODUCTS = []
+
+function ProductList({ products = NO_PRODUCTS, orderId = null, onProductsChanged = null, className = '' }) {
   const { updateItem, deleteItem, loading, error } = useOrderItems(orderId)
   const [editingId, setEditingId] = useState(null)
   const [editQuantity, setEditQuantity] = useState('')
@@ -35,14 +37,6 @@ function ProductList({ products = [], orderId = null, onProductsChanged = null, 
   // validaba dos veces por producto en cada render) — AC4, hallazgo H4.
   const validations = useMemo(() => products.map(validateProduct), [products])
   const hasInvalid = useMemo(() => validations.some((v) => !v.isValid), [validations])
-
-  if (!products || products.length === 0) {
-    return (
-      <div className={cn('py-4 text-center', className)}>
-        <p className="text-sm text-[hsl(var(--muted-foreground))]">No hay productos</p>
-      </div>
-    )
-  }
 
   const handleEditStart = useCallback((product) => {
     setEditingId(product.id)
@@ -80,6 +74,14 @@ function ProductList({ products = [], orderId = null, onProductsChanged = null, 
     }
   }, [deleteItem, onProductsChanged])
 
+  if (!products || products.length === 0) {
+    return (
+      <div className={cn('py-4 text-center', className)}>
+        <p className="text-sm text-[hsl(var(--muted-foreground))]">No hay productos</p>
+      </div>
+    )
+  }
+
   return (
     <div className={cn('space-y-2', className)}>
       {/* Header */}
@@ -98,7 +100,7 @@ function ProductList({ products = [], orderId = null, onProductsChanged = null, 
 
           return (
             <li
-              key={product.id || index}
+              key={product.id}
               className={cn(
                 'grid grid-cols-[1fr_auto_auto_auto_auto] gap-2 items-center px-2 py-1.5 rounded-lg text-sm',
                 !validation.isValid && 'bg-orange-50 border border-orange-200',

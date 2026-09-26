@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
+import { m, AnimatePresence } from 'framer-motion'
 import { Building2, MapPin, Plus, TrendingUp, TrendingDown, Settings, Search, ArrowUp, ChevronRight, ChevronDown, HelpCircle, X, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table'
@@ -46,7 +46,9 @@ function getFlowTrend(currentCount, delta, thresholds) {
 }
 
 
-function LocalsGrid({ locales, onLocalSelect, onCreateLocal, salesCounts = {}, deltaCounts = {}, isSuperAdmin = false, onRefresh }) {
+const NO_COUNTS = {}
+
+function LocalsGrid({ locales, onLocalSelect, onCreateLocal, salesCounts = NO_COUNTS, deltaCounts = NO_COUNTS, isSuperAdmin = false, onRefresh }) {
   const [thresholds,   setThresholds]   = useState(loadThresholds)
   const [showOpciones, setShowOpciones] = useState(false)
   const [search,       setSearch]       = useState('')
@@ -78,14 +80,14 @@ function LocalsGrid({ locales, onLocalSelect, onCreateLocal, salesCounts = {}, d
       {/* Guía de Tus Franquicias */}
       <AnimatePresence>
         {guideOpen && (
-          <motion.div
+          <m.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4"
             onClick={() => setGuideOpen(false)}
           >
-            <motion.div
+            <m.div
               initial={{ opacity: 0, scale: 0.95, y: 12 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.96, y: 8 }}
@@ -98,7 +100,7 @@ function LocalsGrid({ locales, onLocalSelect, onCreateLocal, salesCounts = {}, d
                   <HelpCircle size={16} className="text-[hsl(var(--primary))]" />
                   <h3 className="text-sm font-bold text-[hsl(var(--foreground))]">Guía — Tus Franquicias</h3>
                 </div>
-                <button
+                <button type="button" aria-label="Cerrar guía"
                   onClick={() => setGuideOpen(false)}
                   className="flex items-center justify-center w-7 h-7 rounded-lg text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))] transition-colors"
                 >
@@ -169,8 +171,8 @@ function LocalsGrid({ locales, onLocalSelect, onCreateLocal, salesCounts = {}, d
                   </div>
                 ))}
               </div>
-            </motion.div>
-          </motion.div>
+            </m.div>
+          </m.div>
         )}
       </AnimatePresence>
 
@@ -240,7 +242,8 @@ function LocalsGrid({ locales, onLocalSelect, onCreateLocal, salesCounts = {}, d
               <div className="flex flex-wrap items-center gap-3 px-5 py-4 border-b border-[hsl(var(--border))] bg-[hsl(var(--muted)/0.3)]">
                 <div className="relative flex-1 min-w-[180px] max-w-xs">
                   <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-[hsl(var(--muted-foreground))]" />
-                  <input
+                  <label htmlFor="locals-grid-buscar" className="sr-only">Buscar local</label>
+                  <input id="locals-grid-buscar"
                     type="text"
                     placeholder="Buscar local…"
                     value={search}
@@ -248,7 +251,7 @@ function LocalsGrid({ locales, onLocalSelect, onCreateLocal, salesCounts = {}, d
                     className="w-full pl-8 pr-3 py-1.5 text-sm rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--background))] text-[hsl(var(--foreground))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary)/0.3)] focus:border-[hsl(var(--primary))]"
                   />
                 </div>
-                <select
+                <select aria-label="Filtrar por nivel de flujo"
                   value={filterFlow}
                   onChange={(e) => setFilterFlow(e.target.value)}
                   className="py-1.5 px-2.5 text-sm rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--background))] text-[hsl(var(--foreground))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary)/0.3)]"
@@ -361,8 +364,8 @@ function LocalsGrid({ locales, onLocalSelect, onCreateLocal, salesCounts = {}, d
           )}
 
           {/* Map — collapsible */}
-          {locales.length > 0 && (
-            <div className="pb-6">
+          <div className={locales.length > 0 ? 'pb-6' : undefined}>
+            {locales.length > 0 && (
               <button
                 type="button"
                 onClick={() => setMapOpen((v) => !v)}
@@ -380,22 +383,22 @@ function LocalsGrid({ locales, onLocalSelect, onCreateLocal, salesCounts = {}, d
                   className={`h-4 w-4 text-[hsl(var(--muted-foreground))] transition-transform duration-200 shrink-0 ${mapOpen ? 'rotate-0' : '-rotate-90'}`}
                 />
               </button>
-              <AnimatePresence initial={false}>
-                {mapOpen && (
-                  <motion.div
+            )}
+            <AnimatePresence initial={false}>
+                {locales.length > 0 && mapOpen && (
+                  <m.div
                     key="map"
-                    initial={{ opacity: 0, height: 0 }}
-                    animate={{ opacity: 1, height: 'auto' }}
-                    exit={{ opacity: 0, height: 0 }}
+                    initial={{ opacity: 0, y: -8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -8 }}
                     transition={{ duration: 0.25, ease: 'easeInOut' }}
                     style={{ overflow: 'hidden' }}
                   >
                     <FranchisesMap locales={locales} />
-                  </motion.div>
+                  </m.div>
                 )}
               </AnimatePresence>
-            </div>
-          )}
+          </div>
         </div>
       </div>
 

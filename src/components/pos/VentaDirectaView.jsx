@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
-import { useParams } from 'react-router-dom'
+import { useParams } from 'react-router'
 import { CreditCard, Printer } from 'lucide-react'
 import { apiRequest } from '../../lib/apiClient'
 import { cancelOrder, createOrder, fetchProductsCatalog } from '../../lib/salesApi'
@@ -36,7 +36,7 @@ function ProductCard({ product, qty, onAdd, onRemove }) {
       </div>
       <div className="flex shrink-0 items-center gap-2">
         {qty > 0 && (
-          <button
+          <button type="button" aria-label={`Quitar ${product.name}`}
             onClick={() => onRemove(product.id)}
             className="flex h-11 w-11 touch-manipulation items-center justify-center rounded-full border border-[hsl(var(--border))] bg-[hsl(var(--background))] text-2xl font-black shadow-sm transition-colors hover:bg-[hsl(var(--accent))]"
           >
@@ -44,7 +44,7 @@ function ProductCard({ product, qty, onAdd, onRemove }) {
           </button>
         )}
         {qty > 0 && <span className="min-w-8 text-center text-xl font-black text-[hsl(var(--primary))]">{qty}</span>}
-        <button
+        <button type="button" aria-label={`Agregar ${product.name}`}
           onClick={() => onAdd(product.id)}
           disabled={qty >= (product.stock ?? 0)}
           className="flex h-12 w-12 touch-manipulation items-center justify-center rounded-full bg-[hsl(var(--primary))] text-2xl font-black text-white shadow-md transition-colors hover:bg-[hsl(var(--primary))]/90 disabled:opacity-40"
@@ -229,12 +229,12 @@ export default function VentaDirectaView() {
 
         {error && (
           <div className="px-3 py-2 rounded-lg bg-red-50 border border-red-200 text-sm text-red-600">
-            {error}<button className="ml-2 underline text-xs" onClick={() => setError('')}>✕</button>
+            {error}<button type="button" aria-label="Cerrar mensaje de error" className="ml-2 underline text-xs" onClick={() => setError('')}>✕</button>
           </div>
         )}
         {successMsg && (
           <div className="px-3 py-2 rounded-lg bg-green-50 border border-green-200 text-sm text-green-700">
-            {successMsg}<button className="ml-2 underline text-xs" onClick={() => setSuccessMsg('')}>✕</button>
+            {successMsg}<button type="button" aria-label="Cerrar mensaje" className="ml-2 underline text-xs" onClick={() => setSuccessMsg('')}>✕</button>
           </div>
         )}
 

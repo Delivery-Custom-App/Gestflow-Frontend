@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { useNavigate, useLocation } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router'
 import { useLocals } from '../hooks/useLocals'
 import { useAuth } from '../context/AuthContext'
 import CreateLocalDrawer from './CreateLocalDrawer'
@@ -90,6 +90,7 @@ function AdminDashboard() {
 
   useEffect(() => {
     if (!loading && locales.length) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- fetch async, setState ocurre tras el await (Promise.all), no sincrónico en el efecto
       fetchSalesCounts(locales)
       fetchDeltaCounts(locales)
     }

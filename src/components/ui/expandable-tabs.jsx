@@ -1,9 +1,13 @@
 "use client";
 
 import * as React from "react";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, m } from "framer-motion";
 import { useOnClickOutside } from "usehooks-ts";
 import { cn } from "@/lib/utils";
+
+function Separator() {
+  return <div className="mx-1 h-[24px] w-[1.2px] bg-border" aria-hidden="true" />;
+}
 
 const buttonVariants = {
   initial: { gap: 0, paddingLeft: ".5rem", paddingRight: ".5rem" },
@@ -43,9 +47,6 @@ export function ExpandableTabs({
     onChange?.(index);
   };
 
-  const Separator = () => (
-    <div className="mx-1 h-[24px] w-[1.2px] bg-border" aria-hidden="true" />
-  );
 
   return (
     <div
@@ -57,12 +58,12 @@ export function ExpandableTabs({
     >
       {tabs.map((tab, index) => {
         if (tab.type === "separator") {
-          return <Separator key={`separator-${index}`} />;
+          return <Separator key={`separator-after-${tabs[index - 1]?.title ?? "inicio"}`} />;
         }
 
         const Icon = tab.icon;
         return (
-          <motion.button
+          <m.button
             key={tab.title}
             variants={buttonVariants}
             initial={false}
@@ -87,7 +88,7 @@ export function ExpandableTabs({
             </div>
             <AnimatePresence initial={false}>
               {selected === index && (
-                <motion.span
+                <m.span
                   variants={spanVariants}
                   initial="initial"
                   animate="animate"
@@ -96,10 +97,10 @@ export function ExpandableTabs({
                   className="overflow-hidden"
                 >
                   {tab.title}
-                </motion.span>
+                </m.span>
               )}
             </AnimatePresence>
-          </motion.button>
+          </m.button>
         );
       })}
     </div>

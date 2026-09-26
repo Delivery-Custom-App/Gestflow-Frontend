@@ -1,5 +1,5 @@
 import { lazy, Suspense, useMemo } from 'react'
-import { BrowserRouter as Router, Routes, Route, Navigate, useParams, useLocation } from 'react-router-dom'
+import { BrowserRouter as Router, Routes, Route, Navigate, useParams, useLocation } from 'react-router'
 import AppShell from '../components/AppShell'
 import ErrorBoundary from '../components/ErrorBoundary'
 import LoadingPage from '../components/LoadingPage'
@@ -40,8 +40,6 @@ import { isAlPasoLocal } from '../lib/salesModel'
 import { useAuth } from '../context/AuthContext'
 import { useLocals } from '../hooks/useLocals'
 
-const ROUTER_FUTURE_FLAGS = { v7_startTransition: true, v7_relativeSplatPath: true }
-
 function AdminLayout() {
   return <AppShell />
 }
@@ -80,28 +78,47 @@ function LegacyComprasDetailRedirect() {
   return <Navigate to={`/local/${localId}/inventario/compras-semanales/${orderId}`} replace />
 }
 
+/**
+ * Defense-in-depth: bloquea /local/:localId/* si no coincide con el local
+ * asignado al usuario (admin/worker podían ver cualquier local cambiando la
+ * URL a mano). El enforcement real depende de que Backend-V2 valide local_id
+ * contra el JWT en cada endpoint — esto no reemplaza eso.
+ */
+export function LocalIdGuard({ assignedLocalId, children }) {
+  const { localId } = useParams()
+  if (String(localId) !== String(assignedLocalId)) {
+    return <Navigate to="/" replace />
+  }
+  return children
+}
+
 /** Rutas compartidas de local (inventario, POS, admin, dashboard) */
-function LocalRoutes() {
+/** Devuelve los <Route> de local (React Router exige <Route> como hijos directos: no es un componente). */
+/** `guarded`: true para roles limitados a un solo local (admin) — owner ve todos, no se pasa. */
+function localRoutes(assignedLocalId, guarded = false) {
+  const wrap = (element) =>
+    guarded ? <LocalIdGuard assignedLocalId={assignedLocalId}>{element}</LocalIdGuard> : element
+
   return (
     <>
-      <Route path="/local/:localId/inventario/stock" element={<MenuBuilderPage />} />
-      <Route path="/local/:localId/inventario/stock-control" element={<StockControlDashboard />} />
-      <Route path="/local/:localId/inventario/recipes" element={<RecipesPage />} />
-      <Route path="/local/:localId/inventario/compras-semanales/:orderId" element={<WeeklyPurchaseDetailPage />} />
-      <Route path="/local/:localId/inventario/compras-semanales" element={<WeeklyPurchasesPage />} />
-      <Route path="/local/:localId/inventario/proveedores/compras-semanales/:orderId" element={<LegacyComprasDetailRedirect />} />
-      <Route path="/local/:localId/inventario/proveedores/compras-semanales" element={<LegacyComprasRedirect />} />
-      <Route path="/local/:localId/inventario/proveedores" element={<SuppliersKpisDashboard />} />
-      <Route path="/local/:localId/inventario" element={<InventoryHub />} />
-      <Route path="/local/:localId/administrativo/:sectionId?" element={<AdministrativeModule />} />
-      <Route path="/local/:localId/rrhh" element={<HrModule />} />
-      <Route path="/local/:localId/pos" element={<RestaurantPosOrRedirect />} />
-      <Route path="/local/:localId/pos/cocina" element={<POSModule />} />
-      <Route path="/local/:localId/pos/reportes" element={<ReportesPage />} />
-      <Route path="/local/:localId/pos/mesa/:mesaId" element={<MesaDetail />} />
-      <Route path="/local/:localId/pos/venta-directa" element={<VentaDirectaView />} />
-      <Route path="/local/:localId/dashboard" element={<LocalDashboard />} />
-      <Route path="/local/:localId" element={<LocalModulesHomeRedirect />} />
+      <Route path="/local/:localId/inventario/stock" element={wrap(<MenuBuilderPage />)} />
+      <Route path="/local/:localId/inventario/stock-control" element={wrap(<StockControlDashboard />)} />
+      <Route path="/local/:localId/inventario/recipes" element={wrap(<RecipesPage />)} />
+      <Route path="/local/:localId/inventario/compras-semanales/:orderId" element={wrap(<WeeklyPurchaseDetailPage />)} />
+      <Route path="/local/:localId/inventario/compras-semanales" element={wrap(<WeeklyPurchasesPage />)} />
+      <Route path="/local/:localId/inventario/proveedores/compras-semanales/:orderId" element={wrap(<LegacyComprasDetailRedirect />)} />
+      <Route path="/local/:localId/inventario/proveedores/compras-semanales" element={wrap(<LegacyComprasRedirect />)} />
+      <Route path="/local/:localId/inventario/proveedores" element={wrap(<SuppliersKpisDashboard />)} />
+      <Route path="/local/:localId/inventario" element={wrap(<InventoryHub />)} />
+      <Route path="/local/:localId/administrativo/:sectionId?" element={wrap(<AdministrativeModule />)} />
+      <Route path="/local/:localId/rrhh" element={wrap(<HrModule />)} />
+      <Route path="/local/:localId/pos" element={wrap(<RestaurantPosOrRedirect />)} />
+      <Route path="/local/:localId/pos/cocina" element={wrap(<POSModule />)} />
+      <Route path="/local/:localId/pos/reportes" element={wrap(<ReportesPage />)} />
+      <Route path="/local/:localId/pos/mesa/:mesaId" element={wrap(<MesaDetail />)} />
+      <Route path="/local/:localId/pos/venta-directa" element={wrap(<VentaDirectaView />)} />
+      <Route path="/local/:localId/dashboard" element={wrap(<LocalDashboard />)} />
+      <Route path="/local/:localId" element={wrap(<LocalModulesHomeRedirect />)} />
     </>
   )
 }
@@ -135,7 +152,7 @@ function OwnerRoutes() {
         <Route path="/usuarios" element={<UsersListPage />} />
         <Route path="/usuarios/crear" element={<UserManagementPage />} />
         <Route path="/configuracion" element={<ConfiguracionPage />} />
-        {LocalRoutes()}
+        {localRoutes()}
         <Route path="*" element={<Navigate to="/admin" replace />} />
       </Route>
     </Routes>
@@ -159,7 +176,7 @@ function AdminRoutes({ assignedLocalId }) {
         <Route path="/usuarios" element={<Navigate to={home} replace />} />
         <Route path="/usuarios/crear" element={<Navigate to={home} replace />} />
         <Route path="/configuracion" element={<ConfiguracionPage />} />
-        {LocalRoutes()}
+        {localRoutes(assignedLocalId, true)}
         <Route path="*" element={<Navigate to={home} replace />} />
       </Route>
     </Routes>
@@ -176,17 +193,19 @@ function WorkerPosHomeRedirect({ assignedLocalId }) {
 }
 
 function WorkerRoutes({ assignedLocalId }) {
+  const wrap = (element) => <LocalIdGuard assignedLocalId={assignedLocalId}>{element}</LocalIdGuard>
+
   if (assignedLocalId) {
     return (
       <Routes>
         <Route element={<AdminLayout />}>
           <Route path="/" element={<WorkerPosHomeRedirect assignedLocalId={assignedLocalId} />} />
-          <Route path="/local/:localId/pos" element={<RestaurantPosOrRedirect />} />
-          <Route path="/local/:localId/pos/cocina" element={<POSModule />} />
-          <Route path="/local/:localId/pos/mesa/:mesaId" element={<MesaDetail />} />
-          <Route path="/local/:localId/pos/venta-directa" element={<VentaDirectaView />} />
-          <Route path="/local/:localId/administrativo/:sectionId?" element={<AdministrativeModule />} />
-          <Route path="/local/:localId/rrhh" element={<HrModule />} />
+          <Route path="/local/:localId/pos" element={wrap(<RestaurantPosOrRedirect />)} />
+          <Route path="/local/:localId/pos/cocina" element={wrap(<POSModule />)} />
+          <Route path="/local/:localId/pos/mesa/:mesaId" element={wrap(<MesaDetail />)} />
+          <Route path="/local/:localId/pos/venta-directa" element={wrap(<VentaDirectaView />)} />
+          <Route path="/local/:localId/administrativo/:sectionId?" element={wrap(<AdministrativeModule />)} />
+          <Route path="/local/:localId/rrhh" element={wrap(<HrModule />)} />
           <Route path="/configuracion" element={<ConfiguracionPage />} />
           <Route path="*" element={<WorkerPosHomeRedirect assignedLocalId={assignedLocalId} />} />
         </Route>
@@ -194,18 +213,19 @@ function WorkerRoutes({ assignedLocalId }) {
     )
   }
 
-  // Sin local asignado: selector de local (fallback)
+  // Sin local asignado: selector de local (fallback) — sin assignedLocalId, LocalIdGuard
+  // bloquea cualquier /local/:localId (no hay local válido contra el cual comparar).
   return (
     <Routes>
       <Route element={<AdminLayout />}>
         <Route path="/" element={<Navigate to="/admin" replace />} />
         <Route path="/admin" element={<AdminDashboard />} />
-        <Route path="/local/:localId/pos" element={<RestaurantPosOrRedirect />} />
-        <Route path="/local/:localId/pos/cocina" element={<POSModule />} />
-        <Route path="/local/:localId/pos/mesa/:mesaId" element={<MesaDetail />} />
-        <Route path="/local/:localId/pos/venta-directa" element={<VentaDirectaView />} />
-        <Route path="/local/:localId/administrativo/:sectionId?" element={<AdministrativeModule />} />
-        <Route path="/local/:localId/rrhh" element={<HrModule />} />
+        <Route path="/local/:localId/pos" element={wrap(<RestaurantPosOrRedirect />)} />
+        <Route path="/local/:localId/pos/cocina" element={wrap(<POSModule />)} />
+        <Route path="/local/:localId/pos/mesa/:mesaId" element={wrap(<MesaDetail />)} />
+        <Route path="/local/:localId/pos/venta-directa" element={wrap(<VentaDirectaView />)} />
+        <Route path="/local/:localId/administrativo/:sectionId?" element={wrap(<AdministrativeModule />)} />
+        <Route path="/local/:localId/rrhh" element={wrap(<HrModule />)} />
         <Route path="/configuracion" element={<ConfiguracionPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
@@ -229,7 +249,7 @@ export default function AuthenticatedApp() {
 
   return (
     <ErrorBoundary>
-      <Router future={ROUTER_FUTURE_FLAGS}>
+      <Router>
         <OnboardingProvider>
           {/* Suspense muestra el fallback mientras se descarga el chunk de la ruta. */}
           <Suspense fallback={<LoadingPage />}>

@@ -1,15 +1,14 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import {
   CreditCard, Trash2, RefreshCw, X,
   ChevronDown, ChevronUp, Wifi,
   CheckCircle2, Link2, Settings2,
 } from 'lucide-react'
-import { apiRequest, getAuthContext, setPointDeviceMode } from '../../lib/apiClient'
+import { apiRequest, setPointDeviceMode } from '../../lib/apiClient'
 import { isV2FeatureEnabled } from '../../lib/v2Features'
 import { toast } from 'sonner'
 
-const API_BASE = import.meta.env.VITE_API_URL || ''
 const EMPTY_MANUAL = { mp_pos_id: '', name: '' }
 const MP_POS_WEBHOOKS = isV2FeatureEnabled('mpPosWebhooks')
 const FEATURE_SOON_MSG = 'Todavía no está disponible. Probá de nuevo más tarde.'
@@ -27,7 +26,7 @@ function displayMachineId(device) {
 
 export default function MPConfigDrawer({ localId, onClose, open = true }) {
   // ── Credentials ──────────────────────────────────────────────────────────
-  const [mpStatus, setMpStatus]           = useState(null)
+  const [mpStatus, setMpStatus]           = useState(undefined) // undefined = cargando
   const [tokenInput, setTokenInput]       = useState('')
   const [savingCred, setSavingCred]       = useState(false)
 
@@ -39,7 +38,6 @@ export default function MPConfigDrawer({ localId, onClose, open = true }) {
   // ── Devices ───────────────────────────────────────────────────────────────
   const [registered, setRegistered]   = useState([])
   const [discovered, setDiscovered]   = useState(null)
-  const [loading, setLoading]         = useState(true)
   const [discovering, setDiscovering] = useState(false)
   const [linking, setLinking]         = useState(null)
 
@@ -49,38 +47,46 @@ export default function MPConfigDrawer({ localId, onClose, open = true }) {
   const [saving, setSaving]           = useState(false)
   const [togglingMode, setTogglingMode] = useState(null)
 
-  useEffect(() => {
-    if (open) fetchAll()
-    return () => cancelOAuthListeners()
-  }, [localId, open])
+  const loading = mpStatus === undefined
 
-  async function fetchAll() {
-    setLoading(true)
+  /** `isStale` permite descartar la respuesta si el efecto que la pidió ya se limpió. */
+  const fetchAll = useCallback(async (isStale = () => false) => {
     try {
       const status = await apiRequest(`/locals/${localId}/mp-settings`)
+      if (isStale()) return
       setMpStatus(status)
 
       if (MP_POS_WEBHOOKS) {
         const posData = await apiRequest(`/webhooks/mercadopago-pos?local_id=${localId}`).catch(() => [])
+        if (isStale()) return
         setRegistered(posData || [])
       } else {
         setRegistered([])
       }
     } catch (err) {
+      if (isStale()) return
       setMpStatus(null)
       toast.error('No se pudo cargar la configuración: ' + err.message)
-    } finally {
-      setLoading(false)
     }
-  }
+  }, [localId])
 
-  // ── OAuth handlers ────────────────────────────────────────────────────────
-  function cancelOAuthListeners() {
+  const cancelOAuthListeners = useCallback(() => {
     if (oauthCleanupRef.current) {
       oauthCleanupRef.current()
       oauthCleanupRef.current = null
     }
-  }
+  }, [])
+
+  useEffect(() => {
+    let stale = false
+    if (open) fetchAll(() => stale)
+    return () => {
+      stale = true
+      cancelOAuthListeners()
+    }
+  }, [open, fetchAll, cancelOAuthListeners])
+
+  // ── OAuth handlers ────────────────────────────────────────────────────────
 
   async function handleOAuthConnect() {
     if (!localId || oauthConnecting) return
@@ -90,15 +96,22 @@ export default function MPConfigDrawer({ localId, onClose, open = true }) {
     }
     cancelOAuthListeners()
 
-    let token = ''
+    let authorizationUrl = ''
     try {
-      token = (await getAuthContext()).token
-    } catch {
-      toast.error('Tu sesión expiró. Volvé a iniciar sesión para conectar MercadoPago.')
+      const { authorization_url } = await apiRequest('/mp-oauth/exchange', {
+        method: 'POST',
+        body: { local_id: localId },
+      })
+      authorizationUrl = authorization_url
+    } catch (err) {
+      if (err.status === 401) {
+        toast.error('Tu sesión expiró. Volvé a iniciar sesión para conectar MercadoPago.')
+      } else {
+        toast.error('No se pudo iniciar la conexión con MercadoPago: ' + err.message)
+      }
       return
     }
-    const url = `${API_BASE}/api/mp-oauth/start?local_id=${encodeURIComponent(localId)}&auth_token=${encodeURIComponent(token)}`
-    const popup = window.open(url, 'mp_oauth', 'width=660,height=730,left=200,top=80,toolbar=no,menubar=no,scrollbars=yes')
+    const popup = window.open(authorizationUrl, 'mp_oauth', 'width=660,height=730,left=200,top=80,toolbar=no,menubar=no,scrollbars=yes')
 
     if (!popup) {
       toast.error('No se pudo abrir la ventana. Permití ventanas emergentes para este sitio.')
@@ -297,7 +310,7 @@ export default function MPConfigDrawer({ localId, onClose, open = true }) {
   return (
     <>
       {/* Overlay */}
-      <div
+      <div role="presentation"
         className={`fixed inset-0 bg-black/60 transition-opacity duration-300 ${
           open ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
         }`}
@@ -323,7 +336,7 @@ export default function MPConfigDrawer({ localId, onClose, open = true }) {
               <p className="text-xs text-[hsl(var(--muted-foreground))]">MercadoPago Point</p>
             </div>
           </div>
-          <button onClick={onClose} className="rounded-lg p-2 hover:bg-[hsl(var(--muted))] transition-colors">
+          <button type="button" aria-label="Cerrar" onClick={onClose} className="rounded-lg p-2 hover:bg-[hsl(var(--muted))] transition-colors">
             <X className="h-4 w-4 text-[hsl(var(--muted-foreground))]" />
           </button>
         </div>
@@ -512,7 +525,8 @@ export default function MPConfigDrawer({ localId, onClose, open = true }) {
                 {!connected && (
                   <form onSubmit={handleSaveToken} className="space-y-2">
                     <p className="text-xs font-medium text-[hsl(var(--foreground))]">Conectar con un token</p>
-                    <input
+                    <label htmlFor="mp-config-token" className="sr-only">Token de acceso de MercadoPago</label>
+                    <input id="mp-config-token"
                       type="password"
                       value={tokenInput}
                       onChange={e => setTokenInput(e.target.value)}
@@ -531,7 +545,8 @@ export default function MPConfigDrawer({ localId, onClose, open = true }) {
                 {connected && (
                   <form onSubmit={handleManualAdd} className="space-y-2">
                     <p className="text-xs font-medium text-[hsl(var(--foreground))]">Agregar lector por ID</p>
-                    <input
+                    <label htmlFor="mp-config-lector-id" className="sr-only">ID del lector</label>
+                    <input id="mp-config-lector-id"
                       type="text"
                       value={manualForm.mp_pos_id}
                       onChange={e => setManualForm(f => ({ ...f, mp_pos_id: e.target.value }))}
@@ -539,7 +554,8 @@ export default function MPConfigDrawer({ localId, onClose, open = true }) {
                       className="w-full h-9 border border-[hsl(var(--border))] rounded-md px-3 text-sm bg-[hsl(var(--card))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary)/0.3)]"
                       required
                     />
-                    <input
+                    <label htmlFor="mp-config-lector-nombre" className="sr-only">Nombre del lector (opcional)</label>
+                    <input id="mp-config-lector-nombre"
                       type="text"
                       value={manualForm.name}
                       onChange={e => setManualForm(f => ({ ...f, name: e.target.value }))}
