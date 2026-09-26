@@ -84,6 +84,7 @@ export default function MercadoPagoReturn() {
     const clean = window.location.pathname
     window.history.replaceState({}, '', clean)
 
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- sincroniza estado desde query params de MP al volver del checkout, solo corre una vez al montar
     setOrderId(mpOrderId)
 
     if (mpStatus === 'approved') {
