@@ -90,6 +90,7 @@ function AdminDashboard() {
 
   useEffect(() => {
     if (!loading && locales.length) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- fetch async, setState ocurre tras el await (Promise.all), no sincrónico en el efecto
       fetchSalesCounts(locales)
       fetchDeltaCounts(locales)
     }
