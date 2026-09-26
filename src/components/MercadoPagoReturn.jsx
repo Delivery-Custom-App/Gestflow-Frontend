@@ -50,7 +50,6 @@ function printComandaMP({ orderId, items, total }) {
     <p>Total: <strong>$${Number(total || 0).toLocaleString('es-CL')}</strong></p>
     <span class="badge">✓ APROBADO</span>
   </div>
-  <script>window.onload=function(){ window.print(); }</script>
 </body>
 </html>`
 
