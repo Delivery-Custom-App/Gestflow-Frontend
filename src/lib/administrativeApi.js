@@ -8,7 +8,10 @@ import {
   getResumenDiario,
 } from './salesApi'
 import { apiRequest } from './apiClient'
+import { getProductsReport, getSalesReport } from './reportsApi'
 import { isV2FeatureEnabled } from './v2Features'
+
+const safeList = (v) => (Array.isArray(v) ? v : [])
 
 function withQuery(path, params) {
   const query = new URLSearchParams()
@@ -130,6 +133,75 @@ export function getOrdersByLocal(localId, token, status) {
 export async function getCajasByLocal(localId, token) {
   void token
   return listCajas(localId)
+}
+
+/** Últimos 7 días (hoy incluido) como fechas YYYY-MM-DD. */
+function ultimos7Dias(hoy = new Date()) {
+  const pad = (n) => String(n).padStart(2, '0')
+  return Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(hoy)
+    d.setDate(d.getDate() - (6 - i))
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+  })
+}
+
+/** 'dd/mm' para el eje del gráfico. */
+function etiquetaDia(iso) {
+  const [, m, d] = iso.split('-')
+  return `${d}/${m}`
+}
+
+const METODOS_TARJETA = new Set(['debit', 'credit', 'card', 'debito', 'credito', 'tarjeta'])
+
+/**
+ * Indicadores de la sección Ventas, calculados por el backend.
+ *
+ * Antes la pantalla se bajaba TODAS las órdenes del local y sumaba en el
+ * navegador. Ahora usa los reportes agregados (`/reports/sales` por día y
+ * `/reports/products`) más el arqueo del día (`/cajas/resumen-diario`), que ya
+ * trae el desglose por método de pago.
+ *
+ * El detalle orden por orden sigue necesitando `/orders`, pero se carga solo si
+ * el usuario lo pide: ya no se descarga para pintar indicadores.
+ */
+export async function getVentasIndicadores(localId) {
+  const dias = ultimos7Dias()
+  const [porDia, productos, resumen] = await Promise.all([
+    Promise.all(dias.map((d) => getSalesReport(localId, { startDate: d, endDate: d }).catch(() => null))),
+    getProductsReport(localId, { startDate: dias[0], endDate: dias[dias.length - 1] }).catch(() => null),
+    getResumenDiario(localId).catch(() => null),
+  ])
+
+  const tendenciaBruta = dias.map((iso, i) => ({
+    date: etiquetaDia(iso),
+    ingresos: Number(porDia[i]?.total_sales) || 0,
+  }))
+  const promedio = Math.round(tendenciaBruta.reduce((s, p) => s + p.ingresos, 0) / dias.length)
+
+  const porMetodo = { efectivo: 0, tarjetas: 0, otros: 0 }
+  for (const fila of safeList(resumen?.por_metodo)) {
+    const metodo = String(fila.payment_method || '').toLowerCase()
+    const monto = Number(fila.total) || 0
+    if (metodo === 'cash' || metodo === 'efectivo') porMetodo.efectivo += monto
+    else if (METODOS_TARJETA.has(metodo)) porMetodo.tarjetas += monto
+    else porMetodo.otros += monto
+  }
+
+  const hoy = porDia[porDia.length - 1]
+  return {
+    hoy: {
+      total: Number(resumen?.total_ingresos) || Number(hoy?.total_sales) || 0,
+      ordenes: Number(hoy?.total_orders) || 0,
+    },
+    porMetodo,
+    tendencia: tendenciaBruta.map((p) => ({ ...p, promedio })),
+    topProductos: safeList(productos?.ranking).map((p) => ({
+      product_id: p.product_id,
+      product_name: p.product_name,
+      units_sold: Number(p.quantity_sold) || 0,
+      revenue: Number(p.revenue) || 0,
+    })),
+  }
 }
 
 /**

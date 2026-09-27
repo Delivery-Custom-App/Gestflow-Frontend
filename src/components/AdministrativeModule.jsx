@@ -6,9 +6,9 @@ import IncomeChart from './charts/IncomeChart'
 import CajaMpPairingModal from './pos/CajaMpPairingModal'
 import { isV2FeatureEnabled } from '../lib/v2Features'
 import {
-  buildDashboardFromOrders,
   getCajasByLocal,
   getCajasFisicasByLocal,
+  getVentasIndicadores,
   getLocalDashboard,
   getOrdersByLocal,
   createCaja,
@@ -18,7 +18,6 @@ import {
   getResumenDiario,
 } from '../lib/administrativeApi'
 import { getAuthContext, apiRequest } from '../lib/apiClient'
-import { generateIncomeTrendFromOrders } from '../utils/chartDataHelpers'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
@@ -287,8 +286,9 @@ function periodMeta(ymd, granularity) {
   }
 }
 
-function VentasContent({ orders, loading, error }) {
+function VentasContent({ indicadores, orders, loading, error, onCargarDetalle, detalleLoading }) {
   const all = useMemo(() => safeArray(orders), [orders])
+  const detalleCargado = Array.isArray(orders)
   const [granularity, setGranularity] = useState('month')
   const [expandedKey, setExpandedKey] = useState(null)
 
@@ -299,20 +299,6 @@ function VentasContent({ orders, loading, error }) {
     if (_normalizeOrderStatus(o.status) === 'cancelled') return false
     return new Date(o.created_at) >= cutoff24h
   })
-
-  const summary = last24h.reduce(
-    (acc, order) => {
-      const amount = getOrderAmount(order)
-      const method = normalizePaymentMethod(order?.payment_method)
-      acc.total += amount; acc.count += 1
-      if (method === 'Efectivo') acc.cash += amount
-      else if (method === 'Debito') acc.debit += amount
-      else if (method === 'Credito') acc.credit += amount
-      else acc.other += amount
-      return acc
-    },
-    { total: 0, count: 0, cash: 0, debit: 0, credit: 0, other: 0 }
-  )
 
   // ── Histórico consolidado por período ──
   const buckets = useMemo(() => {
@@ -353,8 +339,12 @@ function VentasContent({ orders, loading, error }) {
   const periodNoun = granularity === 'week' ? 'semanas' : granularity === 'month' ? 'meses' : 'años'
 
   // Tendencia de 7 días y top productos (antes en Reportes), calculados con las mismas órdenes.
-  const incomeTrend = useMemo(() => generateIncomeTrendFromOrders(all), [all])
-  const topProducts = useMemo(() => buildDashboardFromOrders(all).top_products, [all])
+  // Indicadores: los calcula el backend. El detalle por orden, si se pidió,
+  // alimenta los paneles de abajo.
+  const incomeTrend = safeArray(indicadores?.tendencia)
+  const topProducts = safeArray(indicadores?.topProductos)
+  const hoy = indicadores?.hoy || { total: 0, ordenes: 0 }
+  const porMetodo = indicadores?.porMetodo || { efectivo: 0, tarjetas: 0, otros: 0 }
 
   const stateNode = <SectionState loading={loading} error={error} isEmpty={false} emptyMessage="" />
   if (loading || error) return stateNode
@@ -362,16 +352,16 @@ function VentasContent({ orders, loading, error }) {
   return (
     <div className="space-y-5">
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <KpiCard label="Total Hoy"  value={formatMoney(summary.total)}  sub={`${summary.count} venta${summary.count !== 1 ? 's' : ''}`} />
-        <KpiCard label="Efectivo"   value={formatMoney(summary.cash)} />
-        <KpiCard label="Débito"     value={formatMoney(summary.debit)}   accent="blue" />
-        <KpiCard label="Crédito"    value={formatMoney(summary.credit)}  accent="purple" />
+        <KpiCard label="Total Hoy"  value={formatMoney(hoy.total)}  sub={`${hoy.ordenes} venta${hoy.ordenes !== 1 ? 's' : ''}`} />
+        <KpiCard label="Efectivo"   value={formatMoney(porMetodo.efectivo)} />
+        <KpiCard label="Tarjetas"   value={formatMoney(porMetodo.tarjetas)} accent="blue" />
+        <KpiCard label="Otros"      value={formatMoney(porMetodo.otros)}    accent="purple" />
       </div>
       <div className="grid gap-5 lg:grid-cols-2">
         <Panel title="Tendencia de Ventas" sub="Ingresos diarios de los últimos 7 días">
           <IncomeChart data={incomeTrend} />
         </Panel>
-        <Panel title="Top Productos" sub="Por ingresos, sobre órdenes completadas">
+        <Panel title="Top Productos" sub="Por ingresos, últimos 7 días">
           <AmTable
             headers={['Producto', 'Unidades', 'Ingresos']}
             rowKeys={topProducts.slice(0, 8).map((p) => p.product_id ?? p.product_name)}
@@ -380,6 +370,21 @@ function VentasContent({ orders, loading, error }) {
           />
         </Panel>
       </div>
+
+      {!detalleCargado && (
+        <Panel title="Detalle de órdenes" sub="Se carga aparte porque trae el histórico completo del local">
+          <p className="text-sm text-[hsl(var(--muted-foreground))]">
+            Los indicadores de arriba los calcula el servidor. El detalle orden por orden y los
+            consolidados por período se descargan solo si los necesitas.
+          </p>
+          <Button className="mt-3" size="sm" onClick={onCargarDetalle} disabled={detalleLoading}>
+            {detalleLoading ? 'Cargando detalle…' : 'Cargar detalle de órdenes'}
+          </Button>
+        </Panel>
+      )}
+
+      {detalleCargado && (
+      <>
       <Panel title="Ventas del Día" sub="Órdenes no canceladas de las últimas 24 h">
         {last24h.length === 0 ? (
           <p className="text-sm text-[hsl(var(--muted-foreground))]">
@@ -493,6 +498,8 @@ function VentasContent({ orders, loading, error }) {
           </div>
         )}
       </Panel>
+      </>
+      )}
     </div>
   )
 }
@@ -1011,7 +1018,7 @@ function renderSectionContent(activeSection, payload) {
       return <ConfiguracionContent localId={payload.localId} />
     case 'ventas':
     default:
-      return <VentasContent orders={payload.orders} loading={payload.loading} error={payload.error} />
+      return <VentasContent indicadores={payload.indicadores} orders={payload.orders} loading={payload.loading} error={payload.error} onCargarDetalle={payload.onCargarDetalle} detalleLoading={payload.detalleLoading} />
   }
 }
 
@@ -1020,7 +1027,26 @@ function renderSectionContent(activeSection, payload) {
 function AdministrativeModule() {
   const location = useLocation()
   const { localId, sectionId } = useParams()
-  const [sectionData, setSectionData] = useState({ dashboard: null, orders: [], cajas: [] })
+  const [sectionData, setSectionData] = useState({ dashboard: null, orders: null, cajas: [], indicadores: null })
+  const [detalleLoading, setDetalleLoading] = useState(false)
+
+  /**
+   * Descarga el detalle orden por orden. Solo bajo pedido: `/orders` no admite
+   * filtro de fecha ni paginación, así que trae el histórico completo del local
+   * y no debe pagarse al entrar a la pantalla.
+   */
+  const cargarDetalleOrdenes = async () => {
+    setDetalleLoading(true)
+    try {
+      const { token } = await getAuthContext()
+      const rows = await getOrdersByLocal(localId, token)
+      setSectionData((prev) => ({ ...prev, orders: rows }))
+    } catch (error) {
+      setSectionError(error.message || 'No se pudo cargar el detalle de órdenes')
+    } finally {
+      setDetalleLoading(false)
+    }
+  }
   const [loading, setLoading] = useState(false)
   const [sectionError, setSectionError] = useState('')
   const [showNuevaCaja, setShowNuevaCaja]               = useState(false)
@@ -1048,7 +1074,9 @@ function AdministrativeModule() {
           updates.dashboard = await getLocalDashboard(localId, token)
         }
         if (activeSection === 'ventas') {
-          updates.orders = await getOrdersByLocal(localId, token)
+          // Indicadores agregados por el backend. El detalle orden por orden se
+          // pide aparte, solo si el usuario lo abre.
+          updates.indicadores = await getVentasIndicadores(localId)
         }
         if (activeSection === 'flujo-caja') {
           const [cajasData, cajasFisicasData, resumenDiarioData] = await Promise.all([
@@ -1170,6 +1198,8 @@ function AdministrativeModule() {
           error:    sectionError,
           localId,
           onRefresh: () => setRefreshKey(k => k + 1),
+          onCargarDetalle: cargarDetalleOrdenes,
+          detalleLoading,
           onManagePairing: isV2FeatureEnabled('cajaMpPairing') ? setPairingCaja : undefined,
           onViewMovimientos: isV2FeatureEnabled('movimientosCaja') ? setMovimientosCaja : undefined,
         })}
