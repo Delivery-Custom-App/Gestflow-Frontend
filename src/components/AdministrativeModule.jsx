@@ -8,6 +8,7 @@ import { isV2FeatureEnabled } from '../lib/v2Features'
 import {
   buildDashboardFromOrders,
   getCajasByLocal,
+  getCajasFisicasByLocal,
   getLocalDashboard,
   getOrdersByLocal,
   createCaja,
@@ -508,11 +509,12 @@ const MP_PAIRING_ACTION = {
   paired:           'Ver vinculación',
 }
 
-function FlujoCajaContent({ dashboard, cajas, resumenDiario, loading, error, onManagePairing, onViewMovimientos }) {
+function FlujoCajaContent({ dashboard, cajas, cajasFisicas, resumenDiario, loading, error, onManagePairing, onViewMovimientos }) {
   const cajasList = safeArray(cajas)
+  const cajasFisicasList = safeArray(cajasFisicas)
   const showMpPairing = typeof onManagePairing === 'function'
   const showMovimientos = typeof onViewMovimientos === 'function'
-  const showActions = showMpPairing || showMovimientos
+  const showActions = showMovimientos
   const stateNode = <SectionState loading={loading} error={error} isEmpty={!dashboard && !loading && !error} emptyMessage="Sin datos de flujo. Completa órdenes desde el POS y registra gastos para ver gráficos." />
   if (loading || error || (!dashboard && !loading && !error)) return stateNode
 
@@ -520,7 +522,6 @@ function FlujoCajaContent({ dashboard, cajas, resumenDiario, loading, error, onM
     'Nombre Caja',
     'Fecha',
     'Estado',
-    ...(showMpPairing ? ['MercadoPago'] : []),
     ...(showActions ? ['Acciones'] : []),
   ]
   const openCajasCount = cajasList.filter((c) => c.is_active).length
@@ -562,29 +563,12 @@ function FlujoCajaContent({ dashboard, cajas, resumenDiario, loading, error, onM
               formatBusinessDate(c.business_date),
               c.is_active ? 'Abierta' : (c.status === 'closed' ? 'Cerrada' : (c.is_active ? 'Activa' : 'Inactiva')),
             ]
-            if (showMpPairing) {
-              const status = c.mp?.pairing_status || 'unprovisioned'
-              const badge = MP_PAIRING_BADGE[status] || MP_PAIRING_BADGE.unprovisioned
-              row.push(
-                <div className="flex items-center gap-2" key={`mp-${c.id}`}>
-                  <Badge variant={badge.variant}>{badge.label}</Badge>
-                  {status === 'paired' && c.mp?.terminal_id && (
-                    <span className="text-xs text-[hsl(var(--muted-foreground))]">{c.mp.terminal_id}</span>
-                  )}
-                </div>,
-              )
-            }
             if (showActions) {
               row.push(
                 <div className="flex items-center gap-2" key={`actions-${c.id}`}>
                   {showMovimientos && (
                     <Button size="sm" variant="outline" onClick={() => onViewMovimientos(c)}>
                       Ver movimientos
-                    </Button>
-                  )}
-                  {showMpPairing && (
-                    <Button size="sm" variant="outline" onClick={() => onManagePairing(c)}>
-                      {MP_PAIRING_ACTION[c.mp?.pairing_status || 'unprovisioned'] || MP_PAIRING_ACTION.unprovisioned}
                     </Button>
                   )}
                 </div>,
@@ -595,6 +579,31 @@ function FlujoCajaContent({ dashboard, cajas, resumenDiario, loading, error, onM
           emptyMessage="No hay cajas registradas para este local."
         />
       </Panel>
+      {showMpPairing && (
+        <Panel title="Cajas físicas" sub="La terminal MercadoPago se vincula a la caja física, no al turno">
+          <AmTable
+            headers={['Caja física', 'MercadoPago', 'Acciones']}
+            rowKeys={cajasFisicasList.map((cf) => cf.id)}
+            rows={cajasFisicasList.map((cf) => {
+              const status = cf.mp?.pairing_status || 'unprovisioned'
+              const badge = MP_PAIRING_BADGE[status] || MP_PAIRING_BADGE.unprovisioned
+              return [
+                cf.name || 'Caja sin nombre',
+                <div className="flex items-center gap-2" key={`mp-${cf.id}`}>
+                  <Badge variant={badge.variant}>{badge.label}</Badge>
+                  {status === 'paired' && cf.mp?.terminal_id && (
+                    <span className="text-xs text-[hsl(var(--muted-foreground))]">{cf.mp.terminal_id}</span>
+                  )}
+                </div>,
+                <Button size="sm" variant="outline" key={`pair-${cf.id}`} onClick={() => onManagePairing(cf)}>
+                  {MP_PAIRING_ACTION[status] || MP_PAIRING_ACTION.unprovisioned}
+                </Button>,
+              ]
+            })}
+            emptyMessage="No hay cajas físicas registradas para este local."
+          />
+        </Panel>
+      )}
     </div>
   )
 }
@@ -997,7 +1006,7 @@ function CajaMovimientosModal({ caja, onClose, onClosed }) {
 function renderSectionContent(activeSection, payload) {
   switch (activeSection) {
     case 'flujo-caja':
-      return <FlujoCajaContent dashboard={payload.dashboard} cajas={payload.cajas} resumenDiario={payload.resumenDiario} loading={payload.loading} error={payload.error} onManagePairing={payload.onManagePairing} onViewMovimientos={payload.onViewMovimientos} />
+      return <FlujoCajaContent dashboard={payload.dashboard} cajas={payload.cajas} cajasFisicas={payload.cajasFisicas} resumenDiario={payload.resumenDiario} loading={payload.loading} error={payload.error} onManagePairing={payload.onManagePairing} onViewMovimientos={payload.onViewMovimientos} />
     case 'configuracion':
       return <ConfiguracionContent localId={payload.localId} />
     case 'ventas':
@@ -1042,13 +1051,16 @@ function AdministrativeModule() {
           updates.orders = await getOrdersByLocal(localId, token)
         }
         if (activeSection === 'flujo-caja') {
-          const [cajasData, resumenDiarioData] = await Promise.all([
+          const [cajasData, cajasFisicasData, resumenDiarioData] = await Promise.all([
             getCajasByLocal(localId, token),
+            // Solo ADMIN y superiores pueden listar cajas físicas y su estado MP.
+            getCajasFisicasByLocal(localId).catch(() => []),
             // 403 para EMPLEADO (arqueo consolidado es supervisorio) -- no
             // debe tumbar el resto de la sección si ocurre.
             getResumenDiario(localId).catch(() => null),
           ])
           updates.cajas = cajasData
+          updates.cajasFisicas = cajasFisicasData
           updates.resumenDiario = resumenDiarioData
         }
         if (!ignore) setSectionData((prev) => ({ ...prev, ...updates }))

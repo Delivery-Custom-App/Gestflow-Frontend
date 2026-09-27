@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import {
-  provisionCajaMp,
-  verifyCajaMpPairing,
+  provisionCajaFisicaMp,
+  verifyCajaFisicaMpPairing,
   putLocalMpLocation,
   getAvailableMpPos,
   assignExistingMpPos,
@@ -23,7 +23,7 @@ export default function CajaMpPairingModal({ caja, localId, onClose, onUpdated }
     setStep('provisioning')
     setError(null)
     try {
-      await provisionCajaMp(caja.id)
+      await provisionCajaFisicaMp(caja.id)
       onUpdated()
       setStep('awaiting_pairing')
     } catch (e) {
@@ -102,7 +102,7 @@ export default function CajaMpPairingModal({ caja, localId, onClose, onUpdated }
     setError(null)
     setInfo(null)
     try {
-      const res = await verifyCajaMpPairing(caja.id)
+      const res = await verifyCajaFisicaMpPairing(caja.id)
       if (res.pairing_status === 'paired') {
         setTerminalId(res.terminal_id)
         setStep('paired')
@@ -128,7 +128,7 @@ export default function CajaMpPairingModal({ caja, localId, onClose, onUpdated }
         <div className="flex items-center justify-between px-6 py-4 border-b border-[hsl(var(--border))]">
           <div>
             <h2 className="font-semibold text-[hsl(var(--foreground))] text-sm">Vincular MercadoPago</h2>
-            <p className="text-xs text-[hsl(var(--muted-foreground))]">Caja: <span className="font-bold text-[hsl(var(--foreground))]">{caja?.name}</span></p>
+            <p className="text-xs text-[hsl(var(--muted-foreground))]">Caja física: <span className="font-bold text-[hsl(var(--foreground))]">{caja?.name}</span></p>
           </div>
           <button type="button" aria-label="Cerrar"
             onClick={onClose}
@@ -264,7 +264,7 @@ export default function CajaMpPairingModal({ caja, localId, onClose, onUpdated }
                   <li>Enciende la terminal Point Smart.</li>
                   <li>Desde tu celular, abrí la app de Mercado Pago con la cuenta conectada.</li>
                   <li>Escaneá el código QR que muestra la terminal.</li>
-                  <li>En la terminal, seleccioná la Caja: <span className="font-bold">{caja?.name}</span>.</li>
+                  <li>En la terminal, seleccioná la caja física: <span className="font-bold">{caja?.name}</span>.</li>
                 </ol>
               </div>
               {info && <p className="text-xs text-[hsl(var(--muted-foreground))]">{info}</p>}
