@@ -19,12 +19,23 @@ import {
   getResumenDiario,
 } from '../lib/administrativeApi'
 import { getAuthContext, apiRequest } from '../lib/apiClient'
+import { useAuth } from '../context/AuthContext'
+import { normalizeRoleKey } from '../auth/roleLabel'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 import { formatCLPCurrency as formatMoney } from '../lib/formatCLP'
 import { m, AnimatePresence } from 'framer-motion'
 import { MapPin, X, ChevronUp, ChevronRight, ShoppingCart, HelpCircle, CreditCard, ArrowLeftRight, Lock } from 'lucide-react'
+
+/**
+ * Las cajas físicas son supervisorias: el backend restringe su estado de
+ * MercadoPago a ADMIN y superiores (`_ADMIN_ROLES` en mp_provisioning), y
+ * vincular una terminal o renombrar el mueble no es tarea de quien atiende.
+ * Un EMPLEADO veía el panel igual, con el estado en "no disponible" y botones
+ * que solo podían terminar en 403.
+ */
+const ROLES_CAJAS_FISICAS = new Set(['ADMIN', 'ADMINNEGOCIO', 'SUPERADMIN'])
 
 const sections = [
   { id: 'ventas',        label: 'Ventas',        subtitle: 'Ventas del día, tendencia, productos más vendidos e histórico' },
@@ -1083,6 +1094,8 @@ function renderSectionContent(activeSection, payload) {
 function AdministrativeModule() {
   const location = useLocation()
   const { localId, sectionId } = useParams()
+  const { userRole } = useAuth()
+  const puedeGestionarCajasFisicas = ROLES_CAJAS_FISICAS.has(normalizeRoleKey(userRole))
   const [sectionData, setSectionData] = useState({ dashboard: null, orders: null, cajas: [], indicadores: null })
   const [detalleLoading, setDetalleLoading] = useState(false)
   const [cajaFisicaModal, setCajaFisicaModal] = useState(null)
@@ -1138,8 +1151,9 @@ function AdministrativeModule() {
         if (activeSection === 'flujo-caja') {
           const [cajasData, cajasFisicasData, resumenDiarioData] = await Promise.all([
             getCajasByLocal(localId, token),
-            // Solo ADMIN y superiores pueden listar cajas físicas y su estado MP.
-            getCajasFisicasByLocal(localId).catch(() => []),
+            // Solo ADMIN y superiores gestionan cajas físicas: para el resto no
+            // se pide nada, porque el panel no se muestra.
+            puedeGestionarCajasFisicas ? getCajasFisicasByLocal(localId).catch(() => []) : [],
             // 403 para EMPLEADO (arqueo consolidado es supervisorio) -- no
             // debe tumbar el resto de la sección si ocurre.
             getResumenDiario(localId).catch(() => null),
@@ -1159,7 +1173,7 @@ function AdministrativeModule() {
     }
     fetchSectionData()
     return () => { ignore = true }
-  }, [localId, activeSection, isKnownSection, refreshKey])
+  }, [localId, activeSection, isKnownSection, refreshKey, puedeGestionarCajasFisicas])
 
   if (!isKnownSection) {
     return <Navigate to={`/local/${localId}/administrativo/ventas`} replace state={location.state} />
@@ -1174,7 +1188,7 @@ function AdministrativeModule() {
           onSaved={() => setRefreshKey(k => k + 1)}
         />
       )}
-      {cajaFisicaModal && (
+      {puedeGestionarCajasFisicas && cajaFisicaModal && (
         <CajaFisicaModal
           localId={localId}
           cajaFisica={cajaFisicaModal.cajaFisica}
@@ -1182,7 +1196,7 @@ function AdministrativeModule() {
           onSaved={() => setRefreshKey(k => k + 1)}
         />
       )}
-      {isV2FeatureEnabled('cajaMpPairing') && pairingCaja && (
+      {puedeGestionarCajasFisicas && isV2FeatureEnabled('cajaMpPairing') && pairingCaja && (
         <CajaMpPairingModal
           caja={pairingCaja}
           localId={localId}
@@ -1264,9 +1278,9 @@ function AdministrativeModule() {
           localId,
           onRefresh: () => setRefreshKey(k => k + 1),
           onCargarDetalle: cargarDetalleOrdenes,
-          onGestionarCajaFisica: isV2FeatureEnabled('cajaMpPairing') ? setCajaFisicaModal : undefined,
+          onGestionarCajaFisica: puedeGestionarCajasFisicas && isV2FeatureEnabled('cajaMpPairing') ? setCajaFisicaModal : undefined,
           detalleLoading,
-          onManagePairing: isV2FeatureEnabled('cajaMpPairing') ? setPairingCaja : undefined,
+          onManagePairing: puedeGestionarCajasFisicas && isV2FeatureEnabled('cajaMpPairing') ? setPairingCaja : undefined,
           onViewMovimientos: isV2FeatureEnabled('movimientosCaja') ? setMovimientosCaja : undefined,
         })}
       </main>

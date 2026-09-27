@@ -3,6 +3,7 @@ import { render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router'
 import AdministrativeModule from './AdministrativeModule'
 import userEvent from '@testing-library/user-event'
+import { AuthProvider } from '../context/AuthContext'
 import { getCajasByLocal, getCajasFisicasByLocal, getOrdersByLocal, getResumenDiario, getVentasIndicadores } from '../lib/administrativeApi'
 
 vi.mock('../lib/apiClient', async (importOriginal) => ({
@@ -91,13 +92,17 @@ vi.mock('../lib/administrativeApi', async (importOriginal) => ({
   getResumenDiario: vi.fn(() => Promise.resolve(mockResumenDiario)),
 }))
 
-function renderAdmin(section) {
+// El módulo lee el rol del contexto: las cajas físicas son supervisorias y no
+// se muestran a quien atiende. Por defecto se monta como dueña del negocio.
+function renderAdmin(section, userRole = 'Admin Negocio') {
   return render(
-    <MemoryRouter initialEntries={[`/local/loc-1/administrativo/${section}`]}>
-      <Routes>
-        <Route path="/local/:localId/administrativo/:sectionId?" element={<AdministrativeModule />} />
-      </Routes>
-    </MemoryRouter>,
+    <AuthProvider user={{ id: 'u-1' }} userRole={userRole} logout={() => {}}>
+      <MemoryRouter initialEntries={[`/local/loc-1/administrativo/${section}`]}>
+        <Routes>
+          <Route path="/local/:localId/administrativo/:sectionId?" element={<AdministrativeModule />} />
+        </Routes>
+      </MemoryRouter>
+    </AuthProvider>,
   )
 }
 
@@ -227,6 +232,33 @@ describe('AdministrativeModule', () => {
 
     await user.click(within(panel).getByRole('button', { name: '+ Nueva caja física' }))
     expect(await screen.findByText('modal de caja física')).toBeInTheDocument()
+  })
+
+  it.each(['Empleado', 'Cajero'])('%s no ve el panel de cajas físicas', async (rol) => {
+    renderAdmin('flujo-caja', rol)
+
+    // La sección sigue funcionando: lo que desaparece es el panel supervisorio.
+    expect(await screen.findByRole('heading', { name: 'Cajas del Local' })).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Cajas físicas' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '+ Nueva caja física' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Renombrar' })).not.toBeInTheDocument()
+    expect(screen.queryByText(/estado de MercadoPago/i)).not.toBeInTheDocument()
+  })
+
+  it('a un empleado no se le piden las cajas físicas: el backend le responde 403', async () => {
+    renderAdmin('flujo-caja', 'Empleado')
+
+    await waitFor(() => expect(getCajasByLocal).toHaveBeenCalled())
+    expect(getCajasFisicasByLocal).not.toHaveBeenCalled()
+  })
+
+  it.each(['Admin', 'Admin Negocio', 'Superadmin'])('%s sigue viendo y gestionando las cajas físicas', async (rol) => {
+    renderAdmin('flujo-caja', rol)
+
+    const panel = (await screen.findByRole('heading', { name: 'Cajas físicas' })).closest('article')
+    expect(within(panel).getByText('Caja principal')).toBeInTheDocument()
+    expect(within(panel).getByRole('button', { name: '+ Nueva caja física' })).toBeInTheDocument()
+    await waitFor(() => expect(getCajasFisicasByLocal).toHaveBeenCalledWith('loc-1'))
   })
 
   it('Caja Virtual muestra ingresos del mes y cajas abiertas, sin gastos ni flujo neto', async () => {
