@@ -16,6 +16,13 @@ export const V2_FEATURES = {
    * botones no se montan; la UI queda lista para cuando el backend exista.
    */
   splitPayments: false,
+  /**
+   * Proveedores. V2 no tiene el módulo: no existen `/suppliers` ni sus
+   * derivados (detalle, KPIs, historial de compras). Las funciones del front
+   * son sustitutos que devuelven listas vacías, así que con la bandera apagada
+   * la pantalla lo dice en vez de mostrar ceros que parecen datos reales.
+   */
+  suppliers: false,
   receiptPrint: false,
   superAdminAudit: true,
   superAdminObservability: true,
