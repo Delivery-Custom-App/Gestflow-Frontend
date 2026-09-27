@@ -12,13 +12,13 @@ import { Label } from '@/components/ui/label'
 
 /**
  * Modal para editar una mesa existente
- * Permite cambiar: nombre, capacidad, zona, estado activo/inactivo
+ * Permite cambiar: nombre, capacidad, estado activo/inactivo.
+ * Sin zona: el backend no tiene zonas y el dato se descartaba al guardar.
  */
 export default function EditMesaModal({ mesa, onClose, onSubmit }) {
   const [form, setForm] = useState({
     name: mesa.name || '',
     capacidad: mesa.capacidad || 4,
-    zona: mesa.zona || '',
     is_active: mesa.is_active !== false,
   })
 
@@ -36,9 +36,6 @@ export default function EditMesaModal({ mesa, onClose, onSubmit }) {
       next.capacidad = 'La capacidad debe estar entre 1 y 100'
     }
 
-    if (!form.zona.trim()) {
-      next.zona = 'La zona es obligatoria'
-    }
 
     return Object.keys(next).length === 0 ? {} : next
   }
@@ -69,7 +66,6 @@ export default function EditMesaModal({ mesa, onClose, onSubmit }) {
         id: mesa.id,
         name: form.name.trim(),
         capacidad: form.capacidad,
-        zona: form.zona.trim(),
         is_active: form.is_active,
       })
     } finally {
@@ -118,23 +114,6 @@ export default function EditMesaModal({ mesa, onClose, onSubmit }) {
               className={errors.capacidad ? 'border-[hsl(var(--destructive))]' : ''}
             />
             {errors.capacidad && <p className="text-xs text-[hsl(var(--destructive))]">{errors.capacidad}</p>}
-          </div>
-
-          {/* Zona */}
-          <div className="space-y-1.5">
-            <Label htmlFor="edit-mesa-zona">
-              Zona <span className="text-[hsl(var(--destructive))]">*</span>
-            </Label>
-            <Input
-              id="edit-mesa-zona"
-              type="text"
-              name="zona"
-              value={form.zona}
-              onChange={handleChange}
-              placeholder="Ej: Salón, Patio, Terraza"
-              className={errors.zona ? 'border-[hsl(var(--destructive))]' : ''}
-            />
-            {errors.zona && <p className="text-xs text-[hsl(var(--destructive))]">{errors.zona}</p>}
           </div>
 
           {/* Estado activo/inactivo */}
