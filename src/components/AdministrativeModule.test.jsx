@@ -44,11 +44,17 @@ const mockCajas = [
   { id: 'caja-2', name: 'Caja 2', business_date: '2026-09-12', is_active: false, status: 'closed', mp: null },
 ]
 
+const mockCajasFisicas = [
+  { id: 'cf-1', name: 'Caja principal', is_active: true, mp: null },
+  { id: 'cf-2', name: 'Caja terraza', is_active: true, mp: { pairing_status: 'paired', terminal_id: 'PAX-123' } },
+]
+
 vi.mock('../lib/administrativeApi', async (importOriginal) => ({
   ...(await importOriginal()),
   getOrdersByLocal: vi.fn(() => Promise.resolve(mockOrders)),
   getLocalDashboard: vi.fn(() => Promise.resolve({ monthly_sales: 120000 })),
   getCajasByLocal: vi.fn(() => Promise.resolve(mockCajas)),
+  getCajasFisicasByLocal: vi.fn(() => Promise.resolve(mockCajasFisicas)),
   getResumenDiario: vi.fn(() => Promise.resolve(null)),
 }))
 
@@ -84,6 +90,21 @@ describe('AdministrativeModule', () => {
     const topPanel = screen.getByRole('heading', { name: 'Top Productos' }).closest('article')
     expect(within(topPanel).getByText('Café Americano')).toBeInTheDocument()
     expect(within(topPanel).getByText('Sandwich Ave Palta')).toBeInTheDocument()
+  })
+
+  it('Caja Virtual vincula MercadoPago desde las cajas físicas, no desde los turnos', async () => {
+    renderAdmin('flujo-caja')
+
+    // El panel de cajas físicas es el que ofrece la vinculación.
+    const panelFisicas = (await screen.findByRole('heading', { name: 'Cajas físicas' })).closest('article')
+    expect(within(panelFisicas).getByText('Caja principal')).toBeInTheDocument()
+    expect(within(panelFisicas).getByText('PAX-123')).toBeInTheDocument()
+    expect(within(panelFisicas).getAllByRole('button').length).toBe(mockCajasFisicas.length)
+
+    // La tabla de turnos ya no habla de MercadoPago: ese estado era por caja física.
+    const panelTurnos = screen.getByRole('heading', { name: 'Cajas del Local' }).closest('article')
+    expect(within(panelTurnos).queryByText('MercadoPago')).not.toBeInTheDocument()
+    expect(within(panelTurnos).queryByText('Vincular MP')).not.toBeInTheDocument()
   })
 
   it('Caja Virtual muestra ingresos del mes y cajas abiertas, sin gastos ni flujo neto', async () => {
