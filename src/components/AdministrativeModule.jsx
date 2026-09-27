@@ -4,6 +4,7 @@ import { parseApiDate } from '../utils/chileDateTime'
 import LoadingSpinner from './LoadingSpinner'
 import IncomeChart from './charts/IncomeChart'
 import CajaMpPairingModal from './pos/CajaMpPairingModal'
+import CajaFisicaModal from './pos/CajaFisicaModal'
 import { isV2FeatureEnabled } from '../lib/v2Features'
 import {
   getCajasByLocal,
@@ -151,12 +152,17 @@ const PANEL_ACCENT = {
   warning: 'border-[hsl(var(--warning)/0.35)] bg-[hsl(var(--warning)/0.06)] dark:bg-[hsl(var(--warning)/0.12)]',
 }
 
-function Panel({ title, sub, accent, children }) {
+function Panel({ title, sub, accent, action, children }) {
   const accentCls = PANEL_ACCENT[accent] || 'border-[hsl(var(--border))] bg-[hsl(var(--card))]'
   return (
     <article className={cn('rounded-xl border p-5 shadow-sm', accentCls)}>
-      {title && <h3 className="mb-0.5 text-sm font-bold text-[hsl(var(--foreground))]">{title}</h3>}
-      {sub && <p className="mb-4 text-xs text-[hsl(var(--muted-foreground))]">{sub}</p>}
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          {title && <h3 className="mb-0.5 text-sm font-bold text-[hsl(var(--foreground))]">{title}</h3>}
+          {sub && <p className="mb-4 text-xs text-[hsl(var(--muted-foreground))]">{sub}</p>}
+        </div>
+        {action && <div className="shrink-0">{action}</div>}
+      </div>
       {children}
     </article>
   )
@@ -520,7 +526,7 @@ const MP_PAIRING_ACTION = {
   paired:           'Ver vinculación',
 }
 
-function FlujoCajaContent({ dashboard, cajas, cajasFisicas, resumenDiario, loading, error, onManagePairing, onViewMovimientos }) {
+function FlujoCajaContent({ dashboard, cajas, cajasFisicas, resumenDiario, loading, error, onManagePairing, onViewMovimientos, onGestionarCajaFisica }) {
   const cajasList = safeArray(cajas)
   const cajasFisicasList = safeArray(cajasFisicas)
   // El backend entrega los turnos del día anidados dentro de cada caja física
@@ -621,6 +627,11 @@ function FlujoCajaContent({ dashboard, cajas, cajasFisicas, resumenDiario, loadi
       {showMpPairing && (
         <Panel
           title="Cajas físicas"
+          action={onGestionarCajaFisica && (
+            <Button size="sm" variant="outline" onClick={() => onGestionarCajaFisica({ nueva: true })}>
+              + Nueva caja física
+            </Button>
+          )}
           sub={estadoMpDisponible
             ? 'La terminal MercadoPago se vincula a la caja física, no al turno'
             : 'No se pudo consultar el estado de MercadoPago: se listan las cajas, pero su vinculación no se puede confirmar'}
@@ -640,9 +651,16 @@ function FlujoCajaContent({ dashboard, cajas, cajasFisicas, resumenDiario, loadi
                     <span className="text-xs text-[hsl(var(--muted-foreground))]">{cf.mp.terminal_id}</span>
                   )}
                 </div>,
-                <Button size="sm" variant="outline" key={`pair-${cf.id}`} onClick={() => onManagePairing(cf)}>
-                  {MP_PAIRING_ACTION[status] || MP_PAIRING_ACTION.unprovisioned}
-                </Button>,
+                <div className="flex items-center gap-2" key={`acc-${cf.id}`}>
+                  {onGestionarCajaFisica && (
+                    <Button size="sm" variant="outline" onClick={() => onGestionarCajaFisica({ cajaFisica: cf })}>
+                      Renombrar
+                    </Button>
+                  )}
+                  <Button size="sm" variant="outline" onClick={() => onManagePairing(cf)}>
+                    {MP_PAIRING_ACTION[status] || MP_PAIRING_ACTION.unprovisioned}
+                  </Button>
+                </div>,
               ]
             })}
             emptyMessage="No hay cajas físicas registradas para este local."
@@ -1051,7 +1069,7 @@ function CajaMovimientosModal({ caja, onClose, onClosed }) {
 function renderSectionContent(activeSection, payload) {
   switch (activeSection) {
     case 'flujo-caja':
-      return <FlujoCajaContent dashboard={payload.dashboard} cajas={payload.cajas} cajasFisicas={payload.cajasFisicas} resumenDiario={payload.resumenDiario} loading={payload.loading} error={payload.error} onManagePairing={payload.onManagePairing} onViewMovimientos={payload.onViewMovimientos} />
+      return <FlujoCajaContent dashboard={payload.dashboard} cajas={payload.cajas} cajasFisicas={payload.cajasFisicas} resumenDiario={payload.resumenDiario} loading={payload.loading} error={payload.error} onManagePairing={payload.onManagePairing} onViewMovimientos={payload.onViewMovimientos} onGestionarCajaFisica={payload.onGestionarCajaFisica} />
     case 'configuracion':
       return <ConfiguracionContent localId={payload.localId} />
     case 'ventas':
@@ -1067,6 +1085,7 @@ function AdministrativeModule() {
   const { localId, sectionId } = useParams()
   const [sectionData, setSectionData] = useState({ dashboard: null, orders: null, cajas: [], indicadores: null })
   const [detalleLoading, setDetalleLoading] = useState(false)
+  const [cajaFisicaModal, setCajaFisicaModal] = useState(null)
 
   /**
    * Descarga el detalle orden por orden. Solo bajo pedido: `/orders` no admite
@@ -1155,6 +1174,14 @@ function AdministrativeModule() {
           onSaved={() => setRefreshKey(k => k + 1)}
         />
       )}
+      {cajaFisicaModal && (
+        <CajaFisicaModal
+          localId={localId}
+          cajaFisica={cajaFisicaModal.cajaFisica}
+          onClose={() => setCajaFisicaModal(null)}
+          onSaved={() => setRefreshKey(k => k + 1)}
+        />
+      )}
       {isV2FeatureEnabled('cajaMpPairing') && pairingCaja && (
         <CajaMpPairingModal
           caja={pairingCaja}
@@ -1237,6 +1264,7 @@ function AdministrativeModule() {
           localId,
           onRefresh: () => setRefreshKey(k => k + 1),
           onCargarDetalle: cargarDetalleOrdenes,
+          onGestionarCajaFisica: isV2FeatureEnabled('cajaMpPairing') ? setCajaFisicaModal : undefined,
           detalleLoading,
           onManagePairing: isV2FeatureEnabled('cajaMpPairing') ? setPairingCaja : undefined,
           onViewMovimientos: isV2FeatureEnabled('movimientosCaja') ? setMovimientosCaja : undefined,
