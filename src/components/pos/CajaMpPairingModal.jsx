@@ -109,7 +109,7 @@ export default function CajaMpPairingModal({ caja, localId, onClose, onUpdated }
         onUpdated()
       } else {
         setStep('awaiting_pairing')
-        setInfo('Todavía no detectamos la terminal. Verifica que hayas elegido esta Caja en la terminal y volvé a intentar.')
+        setInfo('Todavía no detectamos la terminal. Verifica que hayas elegido esta caja física en la terminal y volvé a intentar.')
       }
     } catch (e) {
       setError(e?.message || 'Error al verificar el emparejamiento')
@@ -289,7 +289,7 @@ export default function CajaMpPairingModal({ caja, localId, onClose, onUpdated }
           {step === 'paired' && (
             <div className="space-y-3 text-center py-2">
               <p className="text-3xl">✅</p>
-              <p className="text-sm font-semibold text-[hsl(var(--foreground))]">Caja vinculada</p>
+              <p className="text-sm font-semibold text-[hsl(var(--foreground))]">Caja física vinculada</p>
               {terminalId && <p className="text-xs text-[hsl(var(--muted-foreground))] font-mono break-all">Terminal: {terminalId}</p>}
               <button onClick={onClose} className="w-full py-2.5 rounded-xl border border-[hsl(var(--border))] text-sm text-[hsl(var(--foreground))] hover:bg-[hsl(var(--accent))] transition-colors">
                 Cerrar

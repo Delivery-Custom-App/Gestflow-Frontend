@@ -39,7 +39,7 @@ const ROLES_CAJAS_FISICAS = new Set(['ADMIN', 'ADMINNEGOCIO', 'SUPERADMIN'])
 
 const sections = [
   { id: 'ventas',        label: 'Ventas',        subtitle: 'Ventas del día, tendencia, productos más vendidos e histórico' },
-  { id: 'flujo-caja',    label: 'Caja Virtual',  subtitle: 'Cajas del local, movimientos y arqueo del día' },
+  { id: 'flujo-caja',    label: 'Caja y turnos', subtitle: 'Turnos de caja, movimientos y arqueo del día' },
   { id: 'configuracion', label: 'Configuración', subtitle: 'Dispositivos POS y ajustes del local' },
 ]
 
@@ -245,7 +245,7 @@ function SectionActions({ activeSection, onNuevaCaja }) {
   if (activeSection === 'flujo-caja') {
     return (
       <div className="flex gap-2">
-        <Button onClick={onNuevaCaja}>+ Nueva Caja</Button>
+        <Button onClick={onNuevaCaja}>+ Abrir turno de caja</Button>
       </div>
     )
   }
@@ -553,7 +553,7 @@ function FlujoCajaContent({ dashboard, cajas, cajasFisicas, resumenDiario, loadi
   if (loading || error || (!dashboard && !loading && !error)) return stateNode
 
   const headers = [
-    'Nombre Caja',
+    'Turno',
     'Fecha',
     'Estado',
     ...(showActions ? ['Acciones'] : []),
@@ -562,12 +562,17 @@ function FlujoCajaContent({ dashboard, cajas, cajasFisicas, resumenDiario, loadi
 
   return (
     <div className="space-y-5">
+      {/* «Caja» significaba dos cosas en esta pantalla: se aclara en una línea. */}
+      <p className="text-xs text-[hsl(var(--muted-foreground))]">
+        <span className="font-semibold text-[hsl(var(--foreground))]">Turno de caja:</span> se abre y se cierra cada día, con su arqueo.{' '}
+        <span className="font-semibold text-[hsl(var(--foreground))]">Caja física:</span> el puesto donde está la terminal; es permanente.
+      </p>
       <div className="grid grid-cols-2 gap-4">
         <KpiCard label="Ingresos del Mes" value={formatMoney(dashboard?.monthly_sales)} sub="Mes actual" />
-        <KpiCard label="Cajas Abiertas"   value={String(openCajasCount)} sub={`De ${cajasList.length} registrada${cajasList.length !== 1 ? 's' : ''}`} accent="blue" />
+        <KpiCard label="Turnos Abiertos"  value={String(openCajasCount)} sub={`De ${cajasList.length} registrado${cajasList.length !== 1 ? 's' : ''}`} accent="blue" />
       </div>
       {resumenDiario && (
-        <Panel title="Resumen del día" sub={`Consolidado de todas las cajas del local · ${formatBusinessDate(resumenDiario.business_date)}`}>
+        <Panel title="Resumen del día" sub={`Consolidado de todos los turnos del local · ${formatBusinessDate(resumenDiario.business_date)}`}>
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
             <div className="rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--muted))] p-3">
               <p className="text-[10px] font-semibold uppercase tracking-wide text-[hsl(var(--muted-foreground))]">Apertura total</p>
@@ -583,7 +588,7 @@ function FlujoCajaContent({ dashboard, cajas, cajasFisicas, resumenDiario, loadi
             </div>
           </div>
           {turnosDelDia === 0 ? (
-            <p className="mt-3 text-xs text-[hsl(var(--muted-foreground))]">Todavía no se abrió ninguna caja hoy en este local.</p>
+            <p className="mt-3 text-xs text-[hsl(var(--muted-foreground))]">Todavía no se abrió ningún turno de caja hoy en este local.</p>
           ) : (
             <div className="mt-4">
               <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-[hsl(var(--muted-foreground))]">
@@ -596,7 +601,7 @@ function FlujoCajaContent({ dashboard, cajas, cajasFisicas, resumenDiario, loadi
                   const turnos = safeArray(cf.cajas)
                   const abiertos = turnos.filter((t) => t.status === 'open').length
                   return [
-                    cf.nombre || 'Caja sin nombre',
+                    cf.nombre || 'Caja física sin nombre',
                     `${turnos.length}${abiertos ? ` · ${abiertos} abierto${abiertos !== 1 ? 's' : ''}` : ''}`,
                     formatMoney(Number(cf.monto_apertura_total)),
                     formatMoney(Number(cf.total_ingresos)),
@@ -609,15 +614,15 @@ function FlujoCajaContent({ dashboard, cajas, cajasFisicas, resumenDiario, loadi
           )}
         </Panel>
       )}
-      <Panel title="Cajas del Local" sub="Fuente: endpoint /cajas por local">
+      <Panel title="Turnos de caja" sub="Se abren con un monto de apertura y se cierran con el arqueo del día">
         <AmTable
           headers={headers}
           rowKeys={cajasList.map((c) => c.id)}
           rows={cajasList.map((c) => {
             const row = [
-              c.name || 'Caja sin nombre',
+              c.name || 'Turno sin nombre',
               formatBusinessDate(c.business_date),
-              c.is_active ? 'Abierta' : (c.status === 'closed' ? 'Cerrada' : (c.is_active ? 'Activa' : 'Inactiva')),
+              c.is_active ? 'Abierto' : (c.status === 'closed' ? 'Cerrado' : 'Inactivo'),
             ]
             if (showActions) {
               row.push(
@@ -632,7 +637,7 @@ function FlujoCajaContent({ dashboard, cajas, cajasFisicas, resumenDiario, loadi
             }
             return row
           })}
-          emptyMessage="No hay cajas registradas para este local."
+          emptyMessage="Este local todavía no tiene turnos de caja."
         />
       </Panel>
       {showMpPairing && (
@@ -645,7 +650,7 @@ function FlujoCajaContent({ dashboard, cajas, cajasFisicas, resumenDiario, loadi
           )}
           sub={estadoMpDisponible
             ? 'La terminal MercadoPago se vincula a la caja física, no al turno'
-            : 'No se pudo consultar el estado de MercadoPago: se listan las cajas, pero su vinculación no se puede confirmar'}
+            : 'No se pudo consultar el estado de MercadoPago: se listan las cajas físicas, pero su vinculación no se puede confirmar'}
           accent={estadoMpDisponible ? undefined : 'warning'}
         >
           <AmTable
@@ -655,7 +660,7 @@ function FlujoCajaContent({ dashboard, cajas, cajasFisicas, resumenDiario, loadi
               const status = cf.mpDisponible === false ? 'desconocido' : (cf.mp?.pairing_status || 'unprovisioned')
               const badge = MP_PAIRING_BADGE[status] || MP_PAIRING_BADGE.unprovisioned
               return [
-                cf.name || 'Caja sin nombre',
+                cf.name || 'Caja física sin nombre',
                 <div className="flex items-center gap-2" key={`mp-${cf.id}`}>
                   <Badge variant={badge.variant}>{badge.label}</Badge>
                   {status === 'paired' && cf.mp?.terminal_id && (
@@ -809,7 +814,7 @@ function ConfiguracionContent({ localId }) {
   )
 }
 
-// ── Modal Nueva Caja ────────────────────────────────────────
+// ── Modal de apertura de turno ───────────────────────────────
 
 function NuevaCajaModal({ localId, onClose, onSaved }) {
   const [name,    setName]    = useState('')
@@ -827,7 +832,7 @@ function NuevaCajaModal({ localId, onClose, onSaved }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault()
-    if (!name.trim()) { setErr('Ingresa un nombre para la caja'); return }
+    if (!name.trim()) { setErr('Ingresa un nombre para el turno'); return }
     setSaving(true); setErr('')
     try {
       await createCaja({ local_id: localId, name: name.trim(), is_active: true })
@@ -851,8 +856,8 @@ function NuevaCajaModal({ localId, onClose, onSaved }) {
               <CreditCard size={18} className="text-[hsl(var(--primary))]" />
             </span>
             <div>
-              <h2 className="text-base font-bold text-[hsl(var(--foreground))]">Nueva Caja</h2>
-              <p className="text-xs text-[hsl(var(--muted-foreground))]">Crear una caja para este local</p>
+              <h2 className="text-base font-bold text-[hsl(var(--foreground))]">Abrir turno de caja</h2>
+              <p className="text-xs text-[hsl(var(--muted-foreground))]">El turno se abre y se cierra cada día; la caja física es el puesto y no se toca aquí</p>
             </div>
           </div>
           <button type="button" aria-label="Cerrar" onClick={handleClose} disabled={saving}
@@ -875,7 +880,7 @@ function NuevaCajaModal({ localId, onClose, onSaved }) {
               <label htmlFor="caja-nombre" className={labelCls}>Nombre</label>
               {/* Foco al abrir el drawer: patrón de diálogo accesible (WAI-ARIA APG). */}
               {/* oxlint-disable-next-line react-doctor/no-autofocus */}
-              <input id="caja-nombre" type="text" value={name} onChange={e => setName(e.target.value)} placeholder="Ej: Caja 1" className={inputCls} required autoFocus />
+              <input id="caja-nombre" type="text" value={name} onChange={e => setName(e.target.value)} placeholder="Ej: Turno mañana" className={inputCls} required autoFocus />
             </div>
 
             <div className="flex gap-2 justify-end pt-1">
@@ -885,7 +890,7 @@ function NuevaCajaModal({ localId, onClose, onSaved }) {
               </button>
               <button type="submit" disabled={saving}
                 className="px-5 py-2 rounded-lg text-sm font-semibold text-white bg-[hsl(var(--primary))] hover:opacity-90 shadow-sm transition-colors disabled:opacity-50">
-                {saving ? 'Guardando…' : 'Crear caja'}
+                {saving ? 'Guardando…' : 'Abrir turno'}
               </button>
             </div>
           </form>
@@ -937,7 +942,7 @@ function CajaMovimientosModal({ caja, onClose, onClosed }) {
         ])
         if (!ignore) { setResumen(resumenData); setMovimientos(movimientosData) }
       } catch (e) {
-        if (!ignore) setErr(e?.message || 'No se pudo cargar el movimiento de la caja')
+        if (!ignore) setErr(e?.message || 'No se pudo cargar el movimiento del turno')
       } finally {
         // Sí se resetea en finally; la guarda evita que una respuesta obsoleta apague el loader de una carga más nueva.
         // oxlint-disable-next-line react-doctor/no-loading-flag-reset-outside-finally
@@ -954,14 +959,14 @@ function CajaMovimientosModal({ caja, onClose, onClosed }) {
   }
 
   const handleCloseCaja = async () => {
-    if (!window.confirm('¿Cerrar esta caja? Es el cierre del arqueo del día — no se puede reabrir después.')) return
+    if (!window.confirm('¿Cerrar este turno? Es el cierre del arqueo del día — no se puede reabrir después.')) return
     setClosing(true); setErr('')
     try {
       await closeCaja(caja.id)
       onClosed?.()
       handleClose()
     } catch (e) {
-      setErr(e?.message || 'No se pudo cerrar la caja')
+      setErr(e?.message || 'No se pudo cerrar el turno')
       setClosing(false)
     }
   }
@@ -978,10 +983,10 @@ function CajaMovimientosModal({ caja, onClose, onClosed }) {
               <ArrowLeftRight size={18} className="text-[hsl(var(--primary))]" />
             </span>
             <div>
-              <h2 className="text-base font-bold text-[hsl(var(--foreground))]">Movimientos de Caja</h2>
+              <h2 className="text-base font-bold text-[hsl(var(--foreground))]">Movimientos del turno</h2>
               <p className="text-xs text-[hsl(var(--muted-foreground))]">
-                {caja.name || 'Caja sin nombre'} · {formatBusinessDate(caja.business_date)}
-                {isOpen ? ' · Abierta' : ' · Cerrada'}
+                {caja.name || 'Turno sin nombre'} · {formatBusinessDate(caja.business_date)}
+                {isOpen ? ' · Abierto' : ' · Cerrado'}
               </p>
             </div>
           </div>
@@ -1039,7 +1044,7 @@ function CajaMovimientosModal({ caja, onClose, onClosed }) {
               <div>
                 <h3 className="mb-2 text-xs font-bold uppercase tracking-wide text-[hsl(var(--muted-foreground))]">Movimientos</h3>
                 {movimientos.length === 0 ? (
-                  <p className="text-xs text-[hsl(var(--muted-foreground))]">Todavía no hay movimientos registrados en esta caja.</p>
+                  <p className="text-xs text-[hsl(var(--muted-foreground))]">Todavía no hay movimientos registrados en este turno.</p>
                 ) : (
                   <div className="flex flex-col gap-2">
                     {movimientos.map((mov) => (
@@ -1068,7 +1073,7 @@ function CajaMovimientosModal({ caja, onClose, onClosed }) {
               className="flex w-full items-center justify-center gap-2 rounded-lg border border-red-200 dark:border-red-800/50 px-4 py-2 text-sm font-semibold text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors disabled:opacity-50"
             >
               <Lock size={14} />
-              {closing ? 'Cerrando…' : 'Cerrar caja (arqueo del día)'}
+              {closing ? 'Cerrando…' : 'Cerrar turno (arqueo del día)'}
             </button>
           </div>
         )}
@@ -1233,7 +1238,7 @@ function AdministrativeModule() {
               <div className="px-5 py-4 space-y-3">
                 {[
                   { icon: ShoppingCart, color: 'text-emerald-600', title: 'Ventas', desc: 'Ventas de las últimas 24 horas por método de pago, tendencia de los últimos 7 días, productos más vendidos e histórico consolidado por semana, mes o año.' },
-                  { icon: CreditCard, color: 'text-amber-600', title: 'Caja Virtual', desc: 'Cajas del local: resumen del día, movimientos de cada caja, cierre del arqueo diario y vinculación con MercadoPago.' },
+                  { icon: CreditCard, color: 'text-amber-600', title: 'Caja y turnos', desc: 'Turnos de caja: resumen del día, movimientos de cada turno y cierre del arqueo diario. Y las cajas físicas del local, el puesto permanente al que se vincula la terminal MercadoPago.' },
                 ].map(({ icon: Icon, color, title, desc, highlight }) => (
                   <div key={title} className={`flex gap-3 rounded-xl p-3 ${highlight ? 'bg-[hsl(var(--primary)/0.08)] border border-[hsl(var(--primary)/0.2)]' : 'bg-[hsl(var(--muted)/0.4)]'}`}>
                     <div className={`mt-0.5 shrink-0 ${color}`}><Icon size={15} /></div>

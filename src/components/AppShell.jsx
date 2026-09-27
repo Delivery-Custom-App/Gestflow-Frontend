@@ -71,7 +71,7 @@ const ACCORDIONS = [
     icon: Wallet,
     items: [
       { key: 'ventas',      label: 'Ventas',        icon: DollarSign },
-      { key: 'flujo-caja',  label: 'Caja Virtual',  icon: Wallet     },
+      { key: 'flujo-caja',  label: 'Caja y turnos', icon: Wallet     },
     ],
   },
   {
