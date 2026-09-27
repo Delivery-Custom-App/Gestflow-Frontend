@@ -505,12 +505,16 @@ function VentasContent({ indicadores, orders, loading, error, onCargarDetalle, d
 }
 
 const MP_PAIRING_BADGE = {
+  // Cuando el backend no responde el estado, no se afirma que no está vinculada:
+  // no saberlo y no estarlo son cosas distintas.
+  desconocido:      { label: 'Estado no disponible', variant: 'warning' },
   unprovisioned:    { label: 'Sin vincular',      variant: 'secondary' },
   awaiting_pairing: { label: 'Esperando terminal', variant: 'warning' },
   paired:           { label: 'Vinculada',          variant: 'success' },
 }
 
 const MP_PAIRING_ACTION = {
+  desconocido:      'Revisar vinculación',
   unprovisioned:    'Vincular MP',
   awaiting_pairing: 'Verificar vinculación',
   paired:           'Ver vinculación',
@@ -521,6 +525,8 @@ function FlujoCajaContent({ dashboard, cajas, cajasFisicas, resumenDiario, loadi
   const cajasFisicasList = safeArray(cajasFisicas)
   // El backend entrega los turnos del día anidados dentro de cada caja física
   // (`por_caja_fisica[].cajas`), no en un arreglo de primer nivel.
+  // Si la consulta del estado MP falló, las filas lo traen marcado.
+  const estadoMpDisponible = cajasFisicasList.every((cf) => cf.mpDisponible !== false)
   const porCajaFisica = safeArray(resumenDiario?.por_caja_fisica)
   const turnosDelDia = porCajaFisica.reduce((n, cf) => n + safeArray(cf.cajas).length, 0)
   const showMpPairing = typeof onManagePairing === 'function'
@@ -613,12 +619,18 @@ function FlujoCajaContent({ dashboard, cajas, cajasFisicas, resumenDiario, loadi
         />
       </Panel>
       {showMpPairing && (
-        <Panel title="Cajas físicas" sub="La terminal MercadoPago se vincula a la caja física, no al turno">
+        <Panel
+          title="Cajas físicas"
+          sub={estadoMpDisponible
+            ? 'La terminal MercadoPago se vincula a la caja física, no al turno'
+            : 'No se pudo consultar el estado de MercadoPago: se listan las cajas, pero su vinculación no se puede confirmar'}
+          accent={estadoMpDisponible ? undefined : 'warning'}
+        >
           <AmTable
             headers={['Caja física', 'MercadoPago', 'Acciones']}
             rowKeys={cajasFisicasList.map((cf) => cf.id)}
             rows={cajasFisicasList.map((cf) => {
-              const status = cf.mp?.pairing_status || 'unprovisioned'
+              const status = cf.mpDisponible === false ? 'desconocido' : (cf.mp?.pairing_status || 'unprovisioned')
               const badge = MP_PAIRING_BADGE[status] || MP_PAIRING_BADGE.unprovisioned
               return [
                 cf.name || 'Caja sin nombre',
