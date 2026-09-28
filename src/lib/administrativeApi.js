@@ -214,6 +214,17 @@ export async function getVentasIndicadores(localId) {
  *
  * V2 expone el nombre como `nombre`; se normaliza a `name` para el resto de la UI.
  */
+/**
+ * Solo el listado de cajas físicas, sin el estado de MercadoPago. Lo usa la
+ * apertura de turno, que necesita saber sobre qué caja física se abre: el
+ * estado MP está restringido a ADMIN y superiores, y quien abre el turno
+ * suele ser el empleado del mostrador.
+ */
+export async function listarCajasFisicas(localId) {
+  const rows = await apiRequest(`/cajas-fisicas?local_id=${encodeURIComponent(localId)}`)
+  return safeList(rows).map((c) => ({ ...c, name: c.nombre ?? c.name ?? null }))
+}
+
 export async function getCajasFisicasByLocal(localId) {
   const pedirEstadoMp = apiRequest(`/locals/${encodeURIComponent(localId)}/mp/cajas-fisicas-status`)
     // Se distingue "no hay vinculación" de "no se pudo consultar": tragarse el

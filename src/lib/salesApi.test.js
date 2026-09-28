@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { apiRequest, getOptionalAuthContext } from './apiClient'
-import { completeOrderMercadoPago, getActiveCaja, getBoleta, todayIso } from './salesApi'
+import { completeOrderMercadoPago, createCajaV2, getActiveCaja, getBoleta, todayIso } from './salesApi'
 
 vi.mock('./apiClient', () => ({
   apiRequest: vi.fn(),
@@ -103,5 +103,58 @@ describe('completeOrderMercadoPago — cierre del cobro por checkout', () => {
     await getBoleta('ord-5')
 
     expect(apiRequest).toHaveBeenCalledWith('/orders/ord-5/boleta')
+  })
+})
+
+describe('createCajaV2 — apertura de turno (contrato del ticket #40)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    getOptionalAuthContext.mockResolvedValue({ user: { id: 'u-1' } })
+    apiRequest.mockResolvedValue({ id: 'caja-9', caja_fisica_id: 'cf-1', status: 'open' })
+  })
+
+  it('abre el turno sobre la caja física, no sobre el local', async () => {
+    await createCajaV2({ caja_fisica_id: 'cf-1', monto_apertura: 50000 })
+
+    expect(apiRequest).toHaveBeenCalledWith('/cajas', {
+      method: 'POST',
+      body: { caja_fisica_id: 'cf-1', cashier_user_id: 'u-1', monto_apertura: 50000 },
+    })
+    // local_id era el contrato viejo: el backend lo deriva de la caja física
+    // y responde 422 si falta caja_fisica_id.
+    expect(apiRequest.mock.calls[0][1].body).not.toHaveProperty('local_id')
+  })
+
+  it('no manda la petición si no se eligió caja física', async () => {
+    await expect(createCajaV2({ monto_apertura: 1000 })).rejects.toThrow(/caja física/i)
+    expect(apiRequest).not.toHaveBeenCalled()
+  })
+
+  it('toma el cajero de la sesión cuando no se pasa', async () => {
+    await createCajaV2({ caja_fisica_id: 'cf-2' })
+
+    expect(apiRequest.mock.calls[0][1].body.cashier_user_id).toBe('u-1')
+  })
+
+  it('sin monto abre el turno en cero, no en NaN', async () => {
+    await createCajaV2({ caja_fisica_id: 'cf-2' })
+
+    expect(apiRequest.mock.calls[0][1].body.monto_apertura).toBe(0)
+  })
+
+  it('sin usuario en sesión no intenta abrir el turno', async () => {
+    getOptionalAuthContext.mockResolvedValue({ user: null })
+
+    await expect(createCajaV2({ caja_fisica_id: 'cf-1' })).rejects.toThrow(/quién abre el turno/i)
+    expect(apiRequest).not.toHaveBeenCalled()
+  })
+
+  it('el turno devuelto se presenta como turno, no como caja', async () => {
+    apiRequest.mockResolvedValue({ id: 'abcdef12-3456', caja_fisica_id: 'cf-1', status: 'open' })
+
+    const turno = await createCajaV2({ caja_fisica_id: 'cf-1' })
+
+    expect(turno.name).toBe('Turno abcdef12')
+    expect(turno.is_active).toBe(true)
   })
 })
