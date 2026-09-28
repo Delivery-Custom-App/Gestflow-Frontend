@@ -364,15 +364,6 @@ export async function cancelPointCharge(orderId) {
   return apiRequest(`/payments/point/orders/${orderId}/charge`, { method: 'DELETE' })
 }
 
-/** Lista las terminales Point vinculadas a la cuenta de MercadoPago. */
-export async function listPointDevices() {
-  return apiRequest('/payments/point/devices')
-}
-
-/** Cambia el modo de operación del terminal entre PDV y STANDALONE. */
-export async function setPointDeviceMode(deviceId, operatingMode) {
-  return apiRequest(`/payments/point/devices/${deviceId}/mode`, {
-    method: 'PATCH',
-    body: { operating_mode: operatingMode },
-  })
-}
+// El listado de lectores y el cambio de modo viven en lectoresApi: el
+// inventario sale de `/pos-machines` y el modo de `/payments/point/devices/
+// {mp_pos_id}/mode`. `GET /payments/point/devices` no existe en Backend V2.
