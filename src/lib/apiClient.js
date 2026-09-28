@@ -278,6 +278,8 @@ export async function updateMyAvatar(avatar_url) {
 }
 
 // ─── Printers (OP-02) ─────────────────────────────────────────────────────────
+// Ninguna de estas rutas existe en Backend V2. Se conservan, sin uso, detrás
+// de la bandera `printers`, para cuando exista un servicio de impresión.
 
 export async function listPrinters(localId) {
   return apiRequest(`/printers?local_id=${localId}`)
@@ -308,25 +310,11 @@ export async function testPrinterConnection(id) {
   return apiRequest(`/printers/${id}/test`, { method: 'POST' })
 }
 
-// ─── Comandas (OP-02) ─────────────────────────────────────────────────────────
-
-export async function printComanda(orderId, printerConfigId = null) {
-  return apiRequest(`/comandas/${orderId}/print`, {
-    method: 'POST',
-    body: printerConfigId ? { printer_config_id: printerConfigId } : {},
-  })
-}
-
-export async function reprintComanda(orderId, printerConfigId = null) {
-  return apiRequest(`/comandas/${orderId}/reprint`, {
-    method: 'POST',
-    body: printerConfigId ? { printer_config_id: printerConfigId } : {},
-  })
-}
-
-export async function getComandaPrints(orderId) {
-  return apiRequest(`/comandas/${orderId}/prints`)
-}
+// ─── Comandas ─────────────────────────────────────────────────────────────────
+// La comanda y la boleta se piden a `/orders/{id}/comanda` y `/orders/{id}/
+// boleta` (ver salesApi) y se imprimen desde el navegador (ver ticketPrint).
+// Las funciones que llamaban a `/comandas/{id}/print`, `/reprint` y `/prints`
+// se retiraron: esos endpoints no existen en Backend V2.
 
 // ─── Split Payments / Pago Multi-Comensal (OP-03) ─────────────────────────────
 

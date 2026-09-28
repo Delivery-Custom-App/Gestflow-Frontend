@@ -5,6 +5,7 @@ import LoadingSpinner from './LoadingSpinner'
 import IncomeChart from './charts/IncomeChart'
 import CajaMpPairingModal from './pos/CajaMpPairingModal'
 import CajaFisicaModal from './pos/CajaFisicaModal'
+import TicketModal from './pos/TicketModal'
 import { isV2FeatureEnabled } from '../lib/v2Features'
 import {
   getCajasByLocal,
@@ -180,7 +181,7 @@ function Panel({ title, sub, accent, action, children }) {
   )
 }
 
-function RowCard({ title, sub, meta, pill, receiptUrl }) {
+function RowCard({ title, sub, meta, pill, receiptUrl, action }) {
   return (
     <article className="flex items-start justify-between gap-3 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-3">
       <div className="flex-1 min-w-0">
@@ -194,9 +195,10 @@ function RowCard({ title, sub, meta, pill, receiptUrl }) {
           </a>
         )}
       </div>
-      {pill && (
-        <Badge variant="secondary" className="shrink-0 text-[10px]">{pill}</Badge>
-      )}
+      <div className="flex shrink-0 items-center gap-2">
+        {pill && <Badge variant="secondary" className="text-[10px]">{pill}</Badge>}
+        {action}
+      </div>
     </article>
   )
 }
@@ -304,7 +306,7 @@ function periodMeta(ymd, granularity) {
   }
 }
 
-function VentasContent({ indicadores, orders, loading, error, onCargarDetalle, detalleLoading }) {
+function VentasContent({ indicadores, orders, loading, error, onCargarDetalle, detalleLoading, onVerBoleta }) {
   const all = useMemo(() => safeArray(orders), [orders])
   const detalleCargado = Array.isArray(orders)
   const [granularity, setGranularity] = useState('month')
@@ -417,6 +419,11 @@ function VentasContent({ indicadores, orders, loading, error, onCargarDetalle, d
                 sub={`#${String(order.id || '').slice(0, 8)} — ${normalizePaymentMethod(order.payment_method)} — ${formatDateTime(order.created_at)}`}
                 meta={`Estado: ${order.status || '—'} · Fuente: ${order.source || '—'}`}
                 pill={normalizePaymentMethod(order.payment_method)}
+                action={isV2FeatureEnabled('receiptPrint') && (
+                  <Button size="sm" variant="outline" onClick={() => onVerBoleta(order)}>
+                    Boleta
+                  </Button>
+                )}
               />
             ))}
           </div>
@@ -1171,7 +1178,7 @@ function renderSectionContent(activeSection, payload) {
       return <ConfiguracionContent localId={payload.localId} />
     case 'ventas':
     default:
-      return <VentasContent indicadores={payload.indicadores} orders={payload.orders} loading={payload.loading} error={payload.error} onCargarDetalle={payload.onCargarDetalle} detalleLoading={payload.detalleLoading} />
+      return <VentasContent indicadores={payload.indicadores} orders={payload.orders} loading={payload.loading} error={payload.error} onCargarDetalle={payload.onCargarDetalle} detalleLoading={payload.detalleLoading} onVerBoleta={payload.onVerBoleta} />
   }
 }
 
@@ -1185,6 +1192,7 @@ function AdministrativeModule() {
   const [sectionData, setSectionData] = useState({ dashboard: null, orders: null, cajas: [], indicadores: null })
   const [detalleLoading, setDetalleLoading] = useState(false)
   const [cajaFisicaModal, setCajaFisicaModal] = useState(null)
+  const [boletaOrden, setBoletaOrden] = useState(null)
 
   /**
    * Descarga el detalle orden por orden. Solo bajo pedido: `/orders` no admite
@@ -1277,6 +1285,14 @@ function AdministrativeModule() {
             : undefined}
         />
       )}
+      {boletaOrden && (
+        <TicketModal
+          tipo="boleta"
+          orderId={boletaOrden.id}
+          createdAt={boletaOrden.created_at}
+          onClose={() => setBoletaOrden(null)}
+        />
+      )}
       {puedeGestionarCajasFisicas && cajaFisicaModal && (
         <CajaFisicaModal
           localId={localId}
@@ -1367,6 +1383,7 @@ function AdministrativeModule() {
           localId,
           onRefresh: () => setRefreshKey(k => k + 1),
           onCargarDetalle: cargarDetalleOrdenes,
+          onVerBoleta: setBoletaOrden,
           onGestionarCajaFisica: puedeGestionarCajasFisicas && isV2FeatureEnabled('cajaMpPairing') ? setCajaFisicaModal : undefined,
           detalleLoading,
           onManagePairing: puedeGestionarCajasFisicas && isV2FeatureEnabled('cajaMpPairing') ? setPairingCaja : undefined,

@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
+import TicketModal from './TicketModal'
 import { Search, UtensilsCrossed, Clock } from 'lucide-react'
 import { useKitchenOrders } from '../../hooks/useKitchenOrders'
 
@@ -80,6 +81,7 @@ function StatusPill({ label, count, bg, fg }) {
 // ── OrderCard ─────────────────────────────────────────────────────
 function OrderCard({ order, mesaMap, onUpdateStatus, tokenIndex }) {
   const [updating, setUpdating] = useState(false)
+  const [verComanda, setVerComanda] = useState(false)
   const [now, setNow] = useState(Date.now)
 
   const isPending = order.status === 'PENDING'
@@ -221,8 +223,11 @@ function OrderCard({ order, mesaMap, onUpdateStatus, tokenIndex }) {
       {/* Action button */}
       <div className="px-4 pb-4">
         {isReady ? (
-          <button className="w-full flex items-center justify-center gap-1.5 py-2 text-xs font-semibold rounded-lg border border-[hsl(var(--border))] text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--accent))] transition-colors">
-            🖨 Imprimir Orden
+          <button
+            onClick={() => setVerComanda(true)}
+            className="w-full flex items-center justify-center gap-1.5 py-2 text-xs font-semibold rounded-lg border border-[hsl(var(--border))] text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--accent))] transition-colors"
+          >
+            🖨 Ver comanda
           </button>
         ) : isPending ? (
           <button
@@ -242,6 +247,15 @@ function OrderCard({ order, mesaMap, onUpdateStatus, tokenIndex }) {
           </button>
         )}
       </div>
+
+      {verComanda && (
+        <TicketModal
+          tipo="comanda"
+          orderId={order.id}
+          createdAt={order.created_at}
+          onClose={() => setVerComanda(false)}
+        />
+      )}
     </div>
   )
 }

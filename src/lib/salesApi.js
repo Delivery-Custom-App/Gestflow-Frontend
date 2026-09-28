@@ -441,6 +441,14 @@ export async function getBoleta(orderId, createdAt) {
   return apiRequest(orderResourcePath(orderId, createdAt, '/boleta'))
 }
 
+/**
+ * Comanda de cocina de la orden: sin precios, solo lo que hay que preparar.
+ * En RESTAURANT el backend deja fuera los ítems sin receta.
+ */
+export async function getComanda(orderId, createdAt) {
+  return apiRequest(orderResourcePath(orderId, createdAt, '/comanda'))
+}
+
 export async function cancelOrder(orderId, createdAt) {
   return updateOrderStatus(orderId, 'cancelled', createdAt)
 }
