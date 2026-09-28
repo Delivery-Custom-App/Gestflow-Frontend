@@ -2,6 +2,7 @@ import { lazy, Suspense, useMemo } from 'react'
 import { BrowserRouter as Router, Routes, Route, Navigate, useParams, useLocation } from 'react-router'
 import AppShell from '../components/AppShell'
 import ErrorBoundary from '../components/ErrorBoundary'
+import CambioContrasenaObligatorio from '../components/CambioContrasenaObligatorio'
 import LoadingPage from '../components/LoadingPage'
 
 // Carga diferida (code-splitting): cada página se compila en su propio chunk y
@@ -234,7 +235,18 @@ function WorkerRoutes({ assignedLocalId }) {
 }
 
 export default function AuthenticatedApp() {
-  const { userRole, assignedLocalId } = useAuth()
+  const { userRole, assignedLocalId, mustChangePassword } = useAuth()
+
+  // #29: con la contraseña temporal sin cambiar, el backend responde 403 en
+  // todas las rutas menos el login, /auth/me y el cambio. Se resuelve antes
+  // de entrar, sin tocar la URL: al terminar se sigue donde se iba.
+  if (mustChangePassword) {
+    return (
+      <ErrorBoundary>
+        <CambioContrasenaObligatorio />
+      </ErrorBoundary>
+    )
+  }
 
   let routes
   if (isSuperAdminRole(userRole)) {

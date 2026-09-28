@@ -174,6 +174,9 @@ export function AppAuthProvider({ children }) {
       user: user ?? null,
       userRole: role,
       assignedLocalId: getAssignedLocalId(user),
+      // #29: el backend bloquea toda la API mientras esto sea true, así que
+      // la sesión tiene que resolverlo antes de dejar operar.
+      mustChangePassword: Boolean(user?.must_change_password),
       logout,
       refreshUser,
       isWorker: role != null && WORKER_ROLES.includes(role),
@@ -218,13 +221,15 @@ export function useAuth() {
 }
 
 /** Tests / montajes aislados: contexto estático sin backend de auth. */
-export function AuthProvider({ user, userRole, logout, children }) {
+export function AuthProvider({ user, userRole, logout, refreshUser, children }) {
   const value = useMemo(() => {
     const role = userRole ?? null
     return {
       user: user ?? null,
       userRole: role,
+      mustChangePassword: Boolean(user?.must_change_password),
       logout,
+      refreshUser: refreshUser ?? (() => Promise.resolve(null)),
       isWorker: role != null && WORKER_ROLES.includes(role),
       isInventoryAdmin: isInventoryAdminRole(role),
       appLoading: false,
@@ -239,7 +244,7 @@ export function AuthProvider({ user, userRole, logout, children }) {
         handleSubmit: (event) => event?.preventDefault?.(),
       },
     }
-  }, [user, userRole, logout])
+  }, [user, userRole, logout, refreshUser])
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }
