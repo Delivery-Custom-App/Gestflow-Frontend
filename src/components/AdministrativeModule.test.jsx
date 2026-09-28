@@ -23,6 +23,7 @@ vi.mock('../hooks/useSelectedLocal', () => ({
 
 vi.mock('./pos/CajaMpPairingModal', () => ({ default: () => null }))
 vi.mock('./pos/CajaFisicaModal', () => ({ default: () => <div>modal de caja física</div> }))
+vi.mock('./pos/TicketModal', () => ({ default: ({ tipo }) => <div>ticket de {tipo}</div> }))
 
 // recharts no dibuja en jsdom: basta con verificar qué datos recibe el gráfico.
 vi.mock('./charts/IncomeChart', () => ({
@@ -273,6 +274,18 @@ describe('AdministrativeModule', () => {
     expect(screen.queryByText('Total Gastos')).not.toBeInTheDocument()
     expect(screen.queryByText('Flujo Neto')).not.toBeInTheDocument()
     expect(getCajasByLocal).toHaveBeenCalledWith('loc-1', 'test-token')
+  })
+
+  it('cada venta del día ofrece ver su boleta', async () => {
+    const user = userEvent.setup()
+    renderAdmin('ventas')
+
+    await user.click(await screen.findByRole('button', { name: 'Cargar detalle de órdenes' }))
+    const botones = await screen.findAllByRole('button', { name: 'Boleta' })
+    expect(botones).toHaveLength(mockOrders.length)
+
+    await user.click(botones[0])
+    expect(await screen.findByText('ticket de boleta')).toBeInTheDocument()
   })
 
   // «Caja» significaba dos cosas en la misma pantalla: el turno que se abre y

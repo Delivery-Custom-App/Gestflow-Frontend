@@ -63,3 +63,21 @@ export async function eliminarLocal(localId) {
   await apiRequest(`/locals/${id}`, { method: 'PATCH', body: { is_active: false } })
   await apiRequest(`/locals/${id}`, { method: 'DELETE' })
 }
+
+/**
+ * El backend guarda la ubicación en campos separados (`street_name`,
+ * `city_name`, `state_name`, `latitude`, `longitude`), mientras que la
+ * interfaz muestra una dirección y un punto en el mapa. Sin esta traducción,
+ * un local con dirección guardada se seguiría viendo "sin dirección" y no
+ * aparecería en el mapa de franquicias.
+ */
+export function mapLocalOut(local) {
+  if (!local || typeof local !== 'object') return local
+  const direccion = [local.street_name, local.city_name].filter(Boolean).join(', ')
+  return {
+    ...local,
+    address: local.address ?? (direccion || null),
+    lat: local.latitude ?? null,
+    lng: local.longitude ?? null,
+  }
+}

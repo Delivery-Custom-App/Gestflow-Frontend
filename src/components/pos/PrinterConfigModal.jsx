@@ -10,6 +10,7 @@ import {
 } from '../../lib/apiClient'
 import { printEscposViaBluetooth, isBluetoothSupported } from '../../lib/bluetoothPrinter'
 import { toast } from 'sonner'
+import { isV2FeatureEnabled } from '../../lib/v2Features'
 
 const EMPTY_FORM = { name: '', model: '', connection_type: 'network', ip_address: '', port: 9100, bluetooth_name: '', is_active: true }
 
@@ -23,6 +24,9 @@ export default function PrinterConfigModal({ localId, onClose, open = true }) {
 
   /** `isStale` permite descartar la respuesta si el efecto que la pidió ya se limpió. */
   const fetchPrinters = useCallback(async (isStale = () => false) => {
+    // Sin servicio de impresoras en el backend no hay nada que pedir: pedirlo
+    // solo produciría un 404 en la consola.
+    if (!isV2FeatureEnabled('printers')) { setPrinters([]); return }
     try {
       const data = await listPrinters(localId)
       if (!isStale()) setPrinters(data || [])
@@ -133,6 +137,39 @@ export default function PrinterConfigModal({ localId, onClose, open = true }) {
     } finally {
       setTestingId(null)
     }
+  }
+
+  if (!isV2FeatureEnabled('printers')) {
+    return (
+      <>
+        <div role="presentation"
+          className={`fixed inset-0 bg-black/60 transition-opacity duration-300 ${open ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}
+          style={{ zIndex: 500 }} onClick={onClose} />
+        <div
+          className={`fixed inset-y-0 right-0 w-full max-w-md bg-[hsl(var(--card))] shadow-2xl border-l border-[hsl(var(--border))] flex flex-col transform transition-transform duration-300 ease-in-out ${open ? 'translate-x-0' : 'translate-x-full'}`}
+          style={{ zIndex: 501 }}
+        >
+          <div className="flex items-center justify-between px-6 py-5 border-b border-[hsl(var(--border))]">
+            <h2 className="text-base font-bold text-[hsl(var(--foreground))]">Impresoras</h2>
+            <button type="button" aria-label="Cerrar" onClick={onClose}
+              className="flex h-7 w-7 items-center justify-center rounded-lg text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))] transition-colors">
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+          <div className="px-6 py-6 flex flex-col gap-3">
+            <p className="text-sm font-semibold text-[hsl(var(--foreground))]">
+              La administración de impresoras no está disponible
+            </p>
+            <p className="text-sm text-[hsl(var(--muted-foreground))]">
+              Backend V2 no registra impresoras ni tiene servicio de impresión, así que no hay nada
+              que configurar aquí. La comanda y la boleta se imprimen desde el navegador: se abren
+              en pantalla y el diálogo de impresión del sistema elige la impresora.
+            </p>
+            <Button variant="outline" className="self-start" onClick={onClose}>Entendido</Button>
+          </div>
+        </div>
+      </>
+    )
   }
 
   return (
