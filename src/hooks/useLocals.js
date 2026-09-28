@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { apiRequest, getOptionalAuthContext } from '../lib/apiClient'
+import { mapLocalOut } from '../lib/localsApi'
 
 /**
  * Hook para obtener locales del backend
@@ -26,7 +27,8 @@ export function useLocals() {
       const url = businessId ? `/locals?business_id=${businessId}` : '/locals'
 
       const dataLocales = await apiRequest(url, { token })
-      setLocales(Array.isArray(dataLocales) ? dataLocales : [])
+      // Traduce la ubicación del backend a lo que muestran la lista y el mapa.
+      setLocales(Array.isArray(dataLocales) ? dataLocales.map(mapLocalOut) : [])
     } catch (err) {
       console.error('Error obteniendo locales:', err)
       setError(err.message)

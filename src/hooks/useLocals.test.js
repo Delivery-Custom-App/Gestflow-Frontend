@@ -28,7 +28,22 @@ describe('useLocals', () => {
     const { result } = renderHook(() => useLocals())
     await waitFor(() => expect(result.current.loading).toBe(false))
     expect(apiRequest).toHaveBeenCalledWith('/locals', { token: 'tok' })
-    expect(result.current.locales).toEqual([{ id: 'l1' }])
+    expect(result.current.locales).toEqual([{ id: 'l1', address: null, lat: null, lng: null }])
+  })
+
+  it('traduce la ubicación del backend para la lista y el mapa', async () => {
+    getOptionalAuthContext.mockResolvedValue({ token: 'tok', businessId: null })
+    apiRequest.mockResolvedValue([
+      { id: 'l1', street_name: '5 Norte 147', city_name: 'Viña del Mar', latitude: -33.01, longitude: -71.55 },
+    ])
+    const { result } = renderHook(() => useLocals())
+    await waitFor(() => expect(result.current.loading).toBe(false))
+
+    expect(result.current.locales[0]).toMatchObject({
+      address: '5 Norte 147, Viña del Mar',
+      lat: -33.01,
+      lng: -71.55,
+    })
   })
 
   it('con businessId agrega el filtro a la query', async () => {

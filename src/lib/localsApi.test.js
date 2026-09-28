@@ -5,7 +5,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { apiRequest } from './apiClient'
-import { eliminarLocal, getResumenBorradoLocal, SE_CONSERVA, SE_ELIMINA } from './localsApi'
+import { SE_CONSERVA, SE_ELIMINA, eliminarLocal, getResumenBorradoLocal, mapLocalOut } from './localsApi'
 
 vi.mock('./apiClient', () => ({ apiRequest: vi.fn() }))
 
@@ -85,5 +85,32 @@ describe('Borrado de un local', () => {
 
     await expect(eliminarLocal('loc-1')).rejects.toThrow('403: No autorizado')
     expect(apiRequest).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('mapLocalOut — la ubicación guardada se muestra', () => {
+  it('compone la dirección desde los campos del backend', () => {
+    const local = mapLocalOut({ id: 'l1', street_name: '5 Norte 147', city_name: 'Viña del Mar', state_name: 'Valparaíso' })
+
+    expect(local.address).toBe('5 Norte 147, Viña del Mar')
+  })
+
+  it('expone las coordenadas como las pide el mapa de franquicias', () => {
+    const local = mapLocalOut({ id: 'l1', latitude: -33.017306, longitude: -71.5576 })
+
+    expect(local.lat).toBe(-33.017306)
+    expect(local.lng).toBe(-71.5576)
+  })
+
+  it('un local sin ubicación no finge tenerla', () => {
+    const local = mapLocalOut({ id: 'l1' })
+
+    expect(local.address).toBeNull()
+    expect(local.lat).toBeNull()
+    expect(local.lng).toBeNull()
+  })
+
+  it('con solo la calle, la dirección es la calle', () => {
+    expect(mapLocalOut({ street_name: 'Errázuriz 1178' }).address).toBe('Errázuriz 1178')
   })
 })
