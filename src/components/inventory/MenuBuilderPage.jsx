@@ -12,13 +12,14 @@ import { apiRequest } from '../../lib/apiClient'
 import { formatCLPCurrency as formatMoney } from '../../lib/formatCLP'
 import InventoryShell from './InventoryShell'
 import NuevoProductoModal from './NuevoProductoModal'
+import ImportarCatalogoDrawer from './ImportarCatalogoDrawer'
 import LoadingSpinner from '../LoadingSpinner'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import {
   GripVertical, Plus, Pencil, Trash2, MoreHorizontal,
-  Eye, ArrowUpDown, Sparkles, UtensilsCrossed, Search,
+  Eye, ArrowUpDown, Sparkles, UtensilsCrossed, Search, PackagePlus,
 } from 'lucide-react'
 
 function MenuBuilderPage() {
@@ -34,6 +35,7 @@ function MenuBuilderPage() {
   const [topTab, setTopTab] = useState('edit') // edit | preview | settings
 
   const [menuOpenId, setMenuOpenId] = useState('')
+  const [importarAbierto, setImportarAbierto] = useState(false)
   const [editingCategoryId, setEditingCategoryId] = useState('')
   const [editingCategoryName, setEditingCategoryName] = useState('')
   const [newCategoryName, setNewCategoryName] = useState('')
@@ -547,6 +549,15 @@ function MenuBuilderPage() {
               <Button
                 variant="outline"
                 className="h-auto min-h-11 w-full justify-start gap-2 whitespace-normal px-3 py-2.5 text-left text-sm leading-snug"
+                onClick={() => setImportarAbierto(true)}
+                disabled={!localId}
+              >
+                <PackagePlus className="h-4 w-4 shrink-0" />
+                <span>Importar del catálogo</span>
+              </Button>
+              <Button
+                variant="outline"
+                className="h-auto min-h-11 w-full justify-start gap-2 whitespace-normal px-3 py-2.5 text-left text-sm leading-snug"
                 onClick={() => toast.info('Reconocimiento de carta con IA aún no está disponible.')}
               >
                 <Sparkles className="h-4 w-4 shrink-0" />
@@ -568,6 +579,16 @@ function MenuBuilderPage() {
           </div>
         )}
       </div>
+
+      {importarAbierto && (
+        <ImportarCatalogoDrawer
+          localId={localId}
+          salesModel={selectedLocal?.sales_model}
+          yaEnElMenu={products.map((p) => p.name)}
+          onClose={() => setImportarAbierto(false)}
+          onImportado={load}
+        />
+      )}
 
       <NuevoProductoModal
         open={modalOpen}
