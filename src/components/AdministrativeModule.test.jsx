@@ -3,7 +3,7 @@ import { render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router'
 import AdministrativeModule from './AdministrativeModule'
 import userEvent from '@testing-library/user-event'
-import { getCajasByLocal, getOrdersByLocal, getVentasIndicadores } from '../lib/administrativeApi'
+import { getCajasByLocal, getOrdersByLocal, getResumenDiario, getVentasIndicadores } from '../lib/administrativeApi'
 
 vi.mock('../lib/apiClient', async (importOriginal) => ({
   ...(await importOriginal()),
@@ -55,6 +55,26 @@ const mockIndicadores = {
   ],
 }
 
+const mockResumenDiario = {
+  business_date: '2026-09-26',
+  monto_apertura_total: '100000.00',
+  total_ingresos: '9400.00',
+  total_esperado: '109400.00',
+  por_caja_fisica: [
+    {
+      caja_fisica_id: 'cf-1',
+      nombre: 'Caja principal',
+      monto_apertura_total: '100000.00',
+      total_ingresos: '9400.00',
+      total_esperado: '109400.00',
+      cajas: [
+        { caja_id: 'caja-1', status: 'open', monto_apertura: '50000.00', total_ingresos: '9400.00' },
+        { caja_id: 'caja-2', status: 'closed', monto_apertura: '50000.00', total_ingresos: '0.00' },
+      ],
+    },
+  ],
+}
+
 const mockCajasFisicas = [
   { id: 'cf-1', name: 'Caja principal', is_active: true, mp: null },
   { id: 'cf-2', name: 'Caja terraza', is_active: true, mp: { pairing_status: 'paired', terminal_id: 'PAX-123' } },
@@ -67,7 +87,7 @@ vi.mock('../lib/administrativeApi', async (importOriginal) => ({
   getCajasByLocal: vi.fn(() => Promise.resolve(mockCajas)),
   getCajasFisicasByLocal: vi.fn(() => Promise.resolve(mockCajasFisicas)),
   getVentasIndicadores: vi.fn(() => Promise.resolve(mockIndicadores)),
-  getResumenDiario: vi.fn(() => Promise.resolve(null)),
+  getResumenDiario: vi.fn(() => Promise.resolve(mockResumenDiario)),
 }))
 
 function renderAdmin(section) {
@@ -143,6 +163,32 @@ describe('AdministrativeModule', () => {
     const panelTurnos = screen.getByRole('heading', { name: 'Cajas del Local' }).closest('article')
     expect(within(panelTurnos).queryByText('MercadoPago')).not.toBeInTheDocument()
     expect(within(panelTurnos).queryByText('Vincular MP')).not.toBeInTheDocument()
+  })
+
+  it('el resumen del día muestra el detalle por caja física, no un mensaje de "sin cajas"', async () => {
+    renderAdmin('flujo-caja')
+
+    const resumen = (await screen.findByRole('heading', { name: 'Resumen del día' })).closest('article')
+    expect(within(resumen).queryByText(/Todavía no se abrió ninguna caja/)).not.toBeInTheDocument()
+    expect(within(resumen).getByText('Detalle por caja física')).toBeInTheDocument()
+    expect(within(resumen).getByText('Caja principal')).toBeInTheDocument()
+    // Dos turnos del día, uno de ellos abierto.
+    expect(within(resumen).getByText('2 · 1 abierto')).toBeInTheDocument()
+  })
+
+  it('avisa que no se abrió ninguna caja solo cuando de verdad no hay turnos del día', async () => {
+    getResumenDiario.mockResolvedValueOnce({
+      business_date: '2026-09-26',
+      monto_apertura_total: '0.00',
+      total_ingresos: '0.00',
+      total_esperado: '0.00',
+      por_caja_fisica: [],
+    })
+    renderAdmin('flujo-caja')
+
+    const resumen = (await screen.findByRole('heading', { name: 'Resumen del día' })).closest('article')
+    expect(within(resumen).getByText('Todavía no se abrió ninguna caja hoy en este local.')).toBeInTheDocument()
+    expect(within(resumen).queryByText('Detalle por caja física')).not.toBeInTheDocument()
   })
 
   it('Caja Virtual muestra ingresos del mes y cajas abiertas, sin gastos ni flujo neto', async () => {

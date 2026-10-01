@@ -519,6 +519,10 @@ const MP_PAIRING_ACTION = {
 function FlujoCajaContent({ dashboard, cajas, cajasFisicas, resumenDiario, loading, error, onManagePairing, onViewMovimientos }) {
   const cajasList = safeArray(cajas)
   const cajasFisicasList = safeArray(cajasFisicas)
+  // El backend entrega los turnos del día anidados dentro de cada caja física
+  // (`por_caja_fisica[].cajas`), no en un arreglo de primer nivel.
+  const porCajaFisica = safeArray(resumenDiario?.por_caja_fisica)
+  const turnosDelDia = porCajaFisica.reduce((n, cf) => n + safeArray(cf.cajas).length, 0)
   const showMpPairing = typeof onManagePairing === 'function'
   const showMovimientos = typeof onViewMovimientos === 'function'
   const showActions = showMovimientos
@@ -555,8 +559,30 @@ function FlujoCajaContent({ dashboard, cajas, cajasFisicas, resumenDiario, loadi
               <p className="mt-1 text-sm font-bold text-[hsl(var(--foreground))]">{formatMoney(Number(resumenDiario.total_esperado))}</p>
             </div>
           </div>
-          {safeArray(resumenDiario.cajas).length === 0 && (
+          {turnosDelDia === 0 ? (
             <p className="mt-3 text-xs text-[hsl(var(--muted-foreground))]">Todavía no se abrió ninguna caja hoy en este local.</p>
+          ) : (
+            <div className="mt-4">
+              <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-[hsl(var(--muted-foreground))]">
+                Detalle por caja física
+              </p>
+              <AmTable
+                headers={['Caja física', 'Turnos', 'Apertura', 'Ingresos', 'Esperado']}
+                rowKeys={porCajaFisica.map((cf) => cf.caja_fisica_id)}
+                rows={porCajaFisica.map((cf) => {
+                  const turnos = safeArray(cf.cajas)
+                  const abiertos = turnos.filter((t) => t.status === 'open').length
+                  return [
+                    cf.nombre || 'Caja sin nombre',
+                    `${turnos.length}${abiertos ? ` · ${abiertos} abierto${abiertos !== 1 ? 's' : ''}` : ''}`,
+                    formatMoney(Number(cf.monto_apertura_total)),
+                    formatMoney(Number(cf.total_ingresos)),
+                    formatMoney(Number(cf.total_esperado)),
+                  ]
+                })}
+                emptyMessage="Sin cajas físicas con movimiento hoy."
+              />
+            </div>
           )}
         </Panel>
       )}
