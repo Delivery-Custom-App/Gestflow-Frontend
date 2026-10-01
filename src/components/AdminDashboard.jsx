@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useNavigate, useLocation } from 'react-router'
 import { useLocals } from '../hooks/useLocals'
 import { useAuth } from '../context/AuthContext'
+import { isAdminNegocioRole, isSuperAdminRole } from '../auth/roleLabel'
 import CreateLocalDrawer from './CreateLocalDrawer'
 import LocalsGrid from './LocalsGrid'
 import LoadingSpinner from './LoadingSpinner'
@@ -17,7 +18,11 @@ function AdminDashboard() {
   const navigate   = useNavigate()
   const location   = useLocation()
   const { userRole } = useAuth()
-  const isSuperAdmin = userRole?.toUpperCase() === 'SUPERADMIN'
+  // El backend autoriza el borrado de locales a SUPERADMIN y a ADMIN_NEGOCIO
+  // (solo los de su propio negocio). Esta pantalla la ve el dueño del negocio:
+  // condicionarla a SUPERADMIN dejaba la sección inalcanzable.
+  const puedeEliminarLocales =
+    isSuperAdminRole(userRole) || isAdminNegocioRole(userRole)
 
   const [isDrawerOpen, setIsDrawerOpen] = useState(false)
   const [salesCounts, setSalesCounts]   = useState({})
@@ -153,7 +158,7 @@ function AdminDashboard() {
             onCreateLocal={() => setIsDrawerOpen(true)}
             salesCounts={salesCounts}
             deltaCounts={deltaCounts}
-            isSuperAdmin={isSuperAdmin}
+            canDeleteLocals={puedeEliminarLocales}
             onRefresh={handleRefresh}
           />
       </div>

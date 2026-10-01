@@ -48,7 +48,7 @@ function getFlowTrend(currentCount, delta, thresholds) {
 
 const NO_COUNTS = {}
 
-function LocalsGrid({ locales, onLocalSelect, onCreateLocal, salesCounts = NO_COUNTS, deltaCounts = NO_COUNTS, isSuperAdmin = false, onRefresh }) {
+function LocalsGrid({ locales, onLocalSelect, onCreateLocal, salesCounts = NO_COUNTS, deltaCounts = NO_COUNTS, canDeleteLocals = false, onRefresh }) {
   const [thresholds,   setThresholds]   = useState(loadThresholds)
   const [showOpciones, setShowOpciones] = useState(false)
   const [search,       setSearch]       = useState('')
@@ -408,7 +408,7 @@ function LocalsGrid({ locales, onLocalSelect, onCreateLocal, salesCounts = NO_CO
         locales={locales}
         thresholds={thresholds}
         onSaveThresholds={handleSaveThresholds}
-        isSuperAdmin={isSuperAdmin}
+        canDeleteLocals={canDeleteLocals}
         onDeleteDone={() => { setShowOpciones(false); onRefresh?.() }}
       />
     </>

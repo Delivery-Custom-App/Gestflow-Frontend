@@ -3,21 +3,13 @@ import { Settings, Trash2, AlertTriangle, Loader2, ChevronRight } from 'lucide-r
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { apiRequest, getOptionalAuthContext } from '../lib/apiClient'
+import { eliminarLocal, getResumenBorradoLocal } from '../lib/localsApi'
 
 // ── Summary row labels ──────────────────────────────────────
+// Solo estos dos se pueden contar de verdad: sus listados filtran por local.
 const SUMMARY_LABELS = {
-  mesas:          { label: 'Mesas',           icon: '🪑' },
-  categorias:     { label: 'Categorías',       icon: '📂' },
-  productos:      { label: 'Productos',        icon: '📦' },
-  recetas:        { label: 'Recetas / Menú',   icon: '🍽' },
-  proveedores:    { label: 'Proveedores',      icon: '🚚' },
-  inventario:     { label: 'Registros inventario', icon: '📊' },
-  ordenes:        { label: 'Órdenes',          icon: '🛒' },
-  gastos:         { label: 'Gastos',           icon: '💸' },
-  transferencias: { label: 'Transferencias',   icon: '🔄' },
-  cajas:          { label: 'Cajas',            icon: '🗄' },
-  alertas:        { label: 'Alertas',          icon: '🔔' },
+  mesas:         { label: 'Mesas',         icon: '🪑' },
+  cajas_fisicas: { label: 'Cajas físicas', icon: '🗄' },
 }
 
 // ── Thresholds section ──────────────────────────────────────
@@ -174,8 +166,7 @@ function DeleteSection({ locales, onDeleteDone }) {
   const handleConfirm1 = async () => {
     setStep('loading')
     try {
-      const { token } = await getOptionalAuthContext()
-      const data = await apiRequest(`/locals/${target.id}/deletion-summary`, { token })
+      const data = await getResumenBorradoLocal(target.id)
       setSummary(data)
       setStep('confirm2')
     } catch (err) {
@@ -187,8 +178,7 @@ function DeleteSection({ locales, onDeleteDone }) {
   const handleFinalDelete = async () => {
     setStep('deleting')
     try {
-      const { token } = await getOptionalAuthContext()
-      await apiRequest(`/locals/${target.id}/cascade`, { method: 'DELETE', token })
+      await eliminarLocal(target.id)
       setStep('list')
       setTarget(null)
       setSummary(null)
@@ -291,6 +281,7 @@ function DeleteSection({ locales, onDeleteDone }) {
 
   if (step === 'confirm2' || step === 'deleting') {
     const isDeleting = step === 'deleting'
+    const hayTurnosAbiertos = (summary?.turnosAbiertos || 0) > 0
     return (
       <div className="flex flex-col gap-4">
         <h3 className="text-xs font-bold text-[hsl(var(--muted-foreground))] uppercase tracking-widest">
@@ -311,7 +302,7 @@ function DeleteSection({ locales, onDeleteDone }) {
         {summary && (
           <div className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] overflow-hidden">
             {Object.entries(SUMMARY_LABELS).map(([key, { label, icon }]) => {
-              const val = summary[key]
+              const val = summary.conteos?.[key]
               if (val === undefined || val === null) return null
               return (
                 <div
@@ -330,6 +321,34 @@ function DeleteSection({ locales, onDeleteDone }) {
           </div>
         )}
 
+        {summary && (
+          <div className="space-y-2 text-xs">
+            <div>
+              <p className="font-bold text-[hsl(var(--foreground))]">También se elimina</p>
+              <ul className="mt-1 list-disc pl-4 text-[hsl(var(--muted-foreground))] space-y-0.5">
+                {summary.se_elimina.map((linea) => <li key={linea}>{linea}</li>)}
+              </ul>
+            </div>
+            <div>
+              <p className="font-bold text-[hsl(var(--foreground))]">Se conserva</p>
+              <ul className="mt-1 list-disc pl-4 text-[hsl(var(--muted-foreground))] space-y-0.5">
+                {summary.se_conserva.map((linea) => <li key={linea}>{linea}</li>)}
+              </ul>
+            </div>
+            <p className="text-[hsl(var(--muted-foreground))]">
+              El local se desactiva y se elimina en el mismo paso. Es permanente: no se puede deshacer.
+            </p>
+          </div>
+        )}
+
+        {hayTurnosAbiertos && (
+          <p className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+            Este local tiene {summary.turnosAbiertos} turno{summary.turnosAbiertos !== 1 ? 's' : ''} de caja
+            abierto{summary.turnosAbiertos !== 1 ? 's' : ''}. Ciérralo{summary.turnosAbiertos !== 1 ? 's' : ''} antes
+            de eliminar el local: el servidor rechaza el borrado mientras queden abiertos.
+          </p>
+        )}
+
         {deleteError && (
           <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{deleteError}</p>
         )}
@@ -342,7 +361,7 @@ function DeleteSection({ locales, onDeleteDone }) {
             size="sm"
             className="flex-1 bg-red-600 hover:bg-red-700 text-white"
             onClick={handleFinalDelete}
-            disabled={isDeleting}
+            disabled={isDeleting || hayTurnosAbiertos}
           >
             {isDeleting ? (
               <span className="flex items-center gap-2">
@@ -360,7 +379,7 @@ function DeleteSection({ locales, onDeleteDone }) {
 }
 
 // ── Main drawer ─────────────────────────────────────────────
-function OpcionesDrawer({ isOpen, onClose, locales, thresholds, onSaveThresholds, isSuperAdmin, onDeleteDone }) {
+function OpcionesDrawer({ isOpen, onClose, locales, thresholds, onSaveThresholds, canDeleteLocals, onDeleteDone }) {
   return (
     <>
       {/* Backdrop */}
@@ -391,7 +410,7 @@ function OpcionesDrawer({ isOpen, onClose, locales, thresholds, onSaveThresholds
         <div key={String(isOpen)} className="flex-1 overflow-y-auto px-6 py-6 flex flex-col gap-8 no-scrollbar">
           <ThresholdsSection thresholds={thresholds} onSave={onSaveThresholds} />
 
-          {isSuperAdmin && (
+          {canDeleteLocals && (
             <>
               <div className="h-px bg-[hsl(var(--border))]" />
               <DeleteSection locales={locales} onDeleteDone={onDeleteDone} />
