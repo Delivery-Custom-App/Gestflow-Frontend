@@ -5,10 +5,12 @@ import LoadingSpinner from './LoadingSpinner'
 import IncomeChart from './charts/IncomeChart'
 import CajaMpPairingModal from './pos/CajaMpPairingModal'
 import CajaFisicaModal from './pos/CajaFisicaModal'
+import TicketModal from './pos/TicketModal'
 import { isV2FeatureEnabled } from '../lib/v2Features'
 import {
   getCajasByLocal,
   getCajasFisicasByLocal,
+  listarCajasFisicas,
   getVentasIndicadores,
   getLocalDashboard,
   getOrdersByLocal,
@@ -179,7 +181,7 @@ function Panel({ title, sub, accent, action, children }) {
   )
 }
 
-function RowCard({ title, sub, meta, pill, receiptUrl }) {
+function RowCard({ title, sub, meta, pill, receiptUrl, action }) {
   return (
     <article className="flex items-start justify-between gap-3 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-3">
       <div className="flex-1 min-w-0">
@@ -193,9 +195,10 @@ function RowCard({ title, sub, meta, pill, receiptUrl }) {
           </a>
         )}
       </div>
-      {pill && (
-        <Badge variant="secondary" className="shrink-0 text-[10px]">{pill}</Badge>
-      )}
+      <div className="flex shrink-0 items-center gap-2">
+        {pill && <Badge variant="secondary" className="text-[10px]">{pill}</Badge>}
+        {action}
+      </div>
     </article>
   )
 }
@@ -303,7 +306,7 @@ function periodMeta(ymd, granularity) {
   }
 }
 
-function VentasContent({ indicadores, orders, loading, error, onCargarDetalle, detalleLoading }) {
+function VentasContent({ indicadores, orders, loading, error, onCargarDetalle, detalleLoading, onVerBoleta }) {
   const all = useMemo(() => safeArray(orders), [orders])
   const detalleCargado = Array.isArray(orders)
   const [granularity, setGranularity] = useState('month')
@@ -416,6 +419,11 @@ function VentasContent({ indicadores, orders, loading, error, onCargarDetalle, d
                 sub={`#${String(order.id || '').slice(0, 8)} — ${normalizePaymentMethod(order.payment_method)} — ${formatDateTime(order.created_at)}`}
                 meta={`Estado: ${order.status || '—'} · Fuente: ${order.source || '—'}`}
                 pill={normalizePaymentMethod(order.payment_method)}
+                action={isV2FeatureEnabled('receiptPrint') && (
+                  <Button size="sm" variant="outline" onClick={() => onVerBoleta(order)}>
+                    Boleta
+                  </Button>
+                )}
               />
             ))}
           </div>
@@ -546,6 +554,8 @@ function FlujoCajaContent({ dashboard, cajas, cajasFisicas, resumenDiario, loadi
   const estadoMpDisponible = cajasFisicasList.every((cf) => cf.mpDisponible !== false)
   const porCajaFisica = safeArray(resumenDiario?.por_caja_fisica)
   const turnosDelDia = porCajaFisica.reduce((n, cf) => n + safeArray(cf.cajas).length, 0)
+  // Para decir en la tabla sobre qué caja física se abrió cada turno.
+  const nombrePorCajaFisica = new Map(cajasFisicasList.map((cf) => [String(cf.id), cf.name]))
   const showMpPairing = typeof onManagePairing === 'function'
   const showMovimientos = typeof onViewMovimientos === 'function'
   const showActions = showMovimientos
@@ -619,8 +629,14 @@ function FlujoCajaContent({ dashboard, cajas, cajasFisicas, resumenDiario, loadi
           headers={headers}
           rowKeys={cajasList.map((c) => c.id)}
           rows={cajasList.map((c) => {
+            const cajaFisica = nombrePorCajaFisica.get(String(c.caja_fisica_id))
             const row = [
-              c.name || 'Turno sin nombre',
+              <div key={`turno-${c.id}`}>
+                <span>{c.name || 'Turno sin nombre'}</span>
+                {cajaFisica && (
+                  <span className="block text-xs text-[hsl(var(--muted-foreground))]">{cajaFisica}</span>
+                )}
+              </div>,
               formatBusinessDate(c.business_date),
               c.is_active ? 'Abierto' : (c.status === 'closed' ? 'Cerrado' : 'Inactivo'),
             ]
@@ -816,13 +832,38 @@ function ConfiguracionContent({ localId }) {
 
 // ── Modal de apertura de turno ───────────────────────────────
 
-function NuevaCajaModal({ localId, onClose, onSaved }) {
-  const [name,    setName]    = useState('')
+/** Acepta "50.000" o "50000"; lo que no sea dígito se descarta. */
+function montoDesdeTexto(texto) {
+  return Number(String(texto ?? '').replace(/[^\d]/g, '')) || 0
+}
+
+function AbrirTurnoModal({ localId, onClose, onSaved, onCrearCajaFisica }) {
+  // null mientras se cargan: distingue "todavía no sé" de "no hay ninguna".
+  const [cajasFisicas, setCajasFisicas] = useState(null)
+  const [cajaFisicaId, setCajaFisicaId] = useState('')
+  const [monto,   setMonto]   = useState('')
   const [saving,  setSaving]  = useState(false)
   const [err,     setErr]     = useState('')
   const [visible, setVisible] = useState(false)
 
   useEffect(() => { requestAnimationFrame(() => setVisible(true)) }, [])
+
+  useEffect(() => {
+    let ignore = false
+    listarCajasFisicas(localId)
+      .then((filas) => {
+        if (ignore) return
+        setCajasFisicas(filas)
+        // Con una sola caja física no tiene sentido hacer elegir.
+        if (filas.length === 1) setCajaFisicaId(String(filas[0].id))
+      })
+      .catch(() => {
+        if (ignore) return
+        setCajasFisicas([])
+        setErr('No se pudieron cargar las cajas físicas de este local')
+      })
+    return () => { ignore = true }
+  }, [localId])
 
   const handleClose = () => {
     if (saving) return
@@ -832,13 +873,21 @@ function NuevaCajaModal({ localId, onClose, onSaved }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault()
-    if (!name.trim()) { setErr('Ingresa un nombre para el turno'); return }
+    if (!cajaFisicaId) { setErr('Elige la caja física donde se abre el turno'); return }
     setSaving(true); setErr('')
     try {
-      await createCaja({ local_id: localId, name: name.trim(), is_active: true })
+      await createCaja({ caja_fisica_id: cajaFisicaId, monto_apertura: montoDesdeTexto(monto) })
       onSaved()
       handleClose()
-    } catch (e) { setErr(e?.message || 'Error al guardar'); setSaving(false) }
+    } catch (e) {
+      const mensaje = String(e?.message || '')
+      // El backend rechaza un segundo turno del mismo cajero en la misma caja
+      // física el mismo día; se explica en vez de mostrar el 409.
+      setErr(/409|ya existe una caja abierta/i.test(mensaje)
+        ? 'Ya tienes un turno abierto hoy en esa caja física. Ciérralo antes de abrir otro.'
+        : (mensaje || 'No se pudo abrir el turno'))
+      setSaving(false)
+    }
   }
 
   const inputCls = 'h-9 w-full rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 text-sm text-[hsl(var(--foreground))] placeholder:text-[hsl(var(--muted-foreground))] shadow-sm focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary)/0.4)] transition-colors'
@@ -875,25 +924,64 @@ function NuevaCajaModal({ localId, onClose, onSaved }) {
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-            <div className="flex flex-col gap-1.5">
-              <label htmlFor="caja-nombre" className={labelCls}>Nombre</label>
-              {/* Foco al abrir el drawer: patrón de diálogo accesible (WAI-ARIA APG). */}
-              {/* oxlint-disable-next-line react-doctor/no-autofocus */}
-              <input id="caja-nombre" type="text" value={name} onChange={e => setName(e.target.value)} placeholder="Ej: Turno mañana" className={inputCls} required autoFocus />
-            </div>
+          {cajasFisicas === null && (
+            <p className="text-sm text-[hsl(var(--muted-foreground))]">Cargando las cajas físicas del local…</p>
+          )}
 
-            <div className="flex gap-2 justify-end pt-1">
-              <button type="button" onClick={handleClose} disabled={saving}
-                className="px-4 py-2 rounded-lg text-sm font-medium border border-[hsl(var(--border))] text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))] transition-colors disabled:opacity-40">
-                Cancelar
-              </button>
-              <button type="submit" disabled={saving}
-                className="px-5 py-2 rounded-lg text-sm font-semibold text-white bg-[hsl(var(--primary))] hover:opacity-90 shadow-sm transition-colors disabled:opacity-50">
-                {saving ? 'Guardando…' : 'Abrir turno'}
-              </button>
+          {cajasFisicas?.length === 0 && (
+            <div className="flex flex-col gap-3 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--muted)/0.4)] p-4">
+              <p className="text-sm text-[hsl(var(--foreground))]">
+                Este local todavía no tiene ninguna caja física registrada, y un turno se abre siempre sobre una.
+              </p>
+              {onCrearCajaFisica ? (
+                <button type="button" onClick={onCrearCajaFisica}
+                  className="self-start px-4 py-2 rounded-lg text-sm font-semibold text-white bg-[hsl(var(--primary))] hover:opacity-90 shadow-sm transition-colors">
+                  Crear caja física
+                </button>
+              ) : (
+                <p className="text-xs text-[hsl(var(--muted-foreground))]">
+                  Pídele a un administrador que registre la caja física de este local.
+                </p>
+              )}
             </div>
-          </form>
+          )}
+
+          {cajasFisicas?.length > 0 && (
+            <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+              <div className="flex flex-col gap-1.5">
+                <label htmlFor="turno-caja-fisica" className={labelCls}>Caja física</label>
+                {/* Foco al abrir el drawer: patrón de diálogo accesible (WAI-ARIA APG). */}
+                {/* oxlint-disable-next-line react-doctor/no-autofocus */}
+                <select id="turno-caja-fisica" value={cajaFisicaId} onChange={e => setCajaFisicaId(e.target.value)} className={inputCls} required autoFocus>
+                  <option value="">Elige una caja física</option>
+                  {cajasFisicas.map((cf) => (
+                    <option key={cf.id} value={cf.id}>{cf.name || 'Caja física sin nombre'}</option>
+                  ))}
+                </select>
+                <p className="text-xs text-[hsl(var(--muted-foreground))]">El puesto donde se atiende. El turno queda asociado a ella.</p>
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <label htmlFor="turno-monto" className={labelCls}>Monto de apertura</label>
+                <input id="turno-monto" type="text" inputMode="numeric" value={monto}
+                  onChange={e => setMonto(e.target.value)} placeholder="Ej: 50000" className={inputCls} />
+                <p className="text-xs text-[hsl(var(--muted-foreground))]">
+                  El efectivo con el que parte la caja. Se compara con él en el arqueo del cierre.
+                </p>
+              </div>
+
+              <div className="flex gap-2 justify-end pt-1">
+                <button type="button" onClick={handleClose} disabled={saving}
+                  className="px-4 py-2 rounded-lg text-sm font-medium border border-[hsl(var(--border))] text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))] transition-colors disabled:opacity-40">
+                  Cancelar
+                </button>
+                <button type="submit" disabled={saving}
+                  className="px-5 py-2 rounded-lg text-sm font-semibold text-white bg-[hsl(var(--primary))] hover:opacity-90 shadow-sm transition-colors disabled:opacity-50">
+                  {saving ? 'Abriendo…' : 'Abrir turno'}
+                </button>
+              </div>
+            </form>
+          )}
         </div>
       </div>
     </div>
@@ -1090,7 +1178,7 @@ function renderSectionContent(activeSection, payload) {
       return <ConfiguracionContent localId={payload.localId} />
     case 'ventas':
     default:
-      return <VentasContent indicadores={payload.indicadores} orders={payload.orders} loading={payload.loading} error={payload.error} onCargarDetalle={payload.onCargarDetalle} detalleLoading={payload.detalleLoading} />
+      return <VentasContent indicadores={payload.indicadores} orders={payload.orders} loading={payload.loading} error={payload.error} onCargarDetalle={payload.onCargarDetalle} detalleLoading={payload.detalleLoading} onVerBoleta={payload.onVerBoleta} />
   }
 }
 
@@ -1104,6 +1192,7 @@ function AdministrativeModule() {
   const [sectionData, setSectionData] = useState({ dashboard: null, orders: null, cajas: [], indicadores: null })
   const [detalleLoading, setDetalleLoading] = useState(false)
   const [cajaFisicaModal, setCajaFisicaModal] = useState(null)
+  const [boletaOrden, setBoletaOrden] = useState(null)
 
   /**
    * Descarga el detalle orden por orden. Solo bajo pedido: `/orders` no admite
@@ -1187,10 +1276,21 @@ function AdministrativeModule() {
   return (
     <>
       {showNuevaCaja && (
-        <NuevaCajaModal
+        <AbrirTurnoModal
           localId={localId}
           onClose={() => setShowNuevaCaja(false)}
           onSaved={() => setRefreshKey(k => k + 1)}
+          onCrearCajaFisica={puedeGestionarCajasFisicas
+            ? () => { setShowNuevaCaja(false); setCajaFisicaModal({ nueva: true }) }
+            : undefined}
+        />
+      )}
+      {boletaOrden && (
+        <TicketModal
+          tipo="boleta"
+          orderId={boletaOrden.id}
+          createdAt={boletaOrden.created_at}
+          onClose={() => setBoletaOrden(null)}
         />
       )}
       {puedeGestionarCajasFisicas && cajaFisicaModal && (
@@ -1283,6 +1383,7 @@ function AdministrativeModule() {
           localId,
           onRefresh: () => setRefreshKey(k => k + 1),
           onCargarDetalle: cargarDetalleOrdenes,
+          onVerBoleta: setBoletaOrden,
           onGestionarCajaFisica: puedeGestionarCajasFisicas && isV2FeatureEnabled('cajaMpPairing') ? setCajaFisicaModal : undefined,
           detalleLoading,
           onManagePairing: puedeGestionarCajasFisicas && isV2FeatureEnabled('cajaMpPairing') ? setPairingCaja : undefined,

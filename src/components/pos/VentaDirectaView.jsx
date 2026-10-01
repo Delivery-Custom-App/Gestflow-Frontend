@@ -1,17 +1,15 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useParams } from 'react-router'
 import { CreditCard, Printer } from 'lucide-react'
-import { apiRequest } from '../../lib/apiClient'
 import { cancelOrder, createOrder, fetchProductsCatalog } from '../../lib/salesApi'
 import { formatCLP } from '../../lib/formatCLP'
 import { useCajaActiva } from '../../hooks/useCajaActiva'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import MercadoPagoModal from './MercadoPagoModal'
+import TicketModal from './TicketModal'
 import PrinterConfigModal from './PrinterConfigModal'
 import MPConfigDrawer from './MPConfigDrawer'
-import { printEscposViaBluetooth } from '../../lib/bluetoothPrinter'
-import { toast } from 'sonner'
 import { isV2FeatureEnabled } from '../../lib/v2Features'
 
 /**
@@ -130,32 +128,17 @@ export default function VentaDirectaView() {
     }
   }
 
-  const printReceipt = useCallback(async (orderId) => {
+  /**
+   * La boleta la arma el backend (`/orders/{id}/boleta`) y se muestra en
+   * pantalla para imprimirla desde el navegador. Antes se pedía a
+   * `/comandas/{id}/receipt`, que no existe, y se mandaba por Bluetooth a un
+   * servicio de impresoras que tampoco existe.
+   */
+  const [boletaOrderId, setBoletaOrderId] = useState(null)
+
+  const printReceipt = useCallback((orderId) => {
     if (!isV2FeatureEnabled('receiptPrint')) return
-    try {
-      const res = await apiRequest(`/comandas/${orderId}/receipt`, { method: 'POST', body: {} })
-      if (res?.warning) {
-        toast.info(res.warning)
-        return
-      }
-      if (res?.payload_base64) {
-        toast.info('Elige la impresora para la boleta...')
-        await printEscposViaBluetooth(res.payload_base64, res.bluetooth_name)
-        toast.success('Boleta impresa')
-        return
-      }
-      if (res?.status === 'FAILED') {
-        toast.error(res?.error_message || 'No se pudo imprimir la boleta')
-        return
-      }
-      toast.success('Boleta impresa')
-    } catch (err) {
-      if (err?.name === 'NotFoundError') {
-        toast.info('Impresión de boleta cancelada')
-        return
-      }
-      toast.error('No se pudo imprimir la boleta: ' + err.message)
-    }
+    setBoletaOrderId(orderId)
   }, [])
 
   const handlePaymentSuccess = useCallback(() => {
@@ -297,6 +280,10 @@ export default function VentaDirectaView() {
         localId={localId}
         onClose={() => setShowMPConfig(false)}
       />
+      )}
+
+      {boletaOrderId && (
+        <TicketModal tipo="boleta" orderId={boletaOrderId} onClose={() => setBoletaOrderId(null)} />
       )}
     </div>
   )

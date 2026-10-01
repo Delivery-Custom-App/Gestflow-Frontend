@@ -7,8 +7,15 @@ export const V2_FEATURES = {
   mercadopagoPoint: true,
   mpConfig: true,
   cajaMpPairing: true,
+  /**
+   * Administración de impresoras: registrar una, probarla, mandarle a
+   * imprimir. Eso no existe en V2 (`/printers` y `/comandas/{id}/print`
+   * devuelven 404) y no está previsto: la impresión la resuelve el navegador.
+   * La pantalla de configuración queda apagada con su código intacto.
+   */
   printers: false,
-  comandas: false,
+  /** Comanda de cocina: `GET /orders/{id}/comanda`, impresa por el navegador. */
+  comandas: true,
   /**
    * Pago multi-comensal. V2 no tiene nada de pagos divididos: `/orders/{id}/
    * split-payments`, su `/summary` y `/split-payments/{id}` devuelven 404, y no
@@ -23,7 +30,8 @@ export const V2_FEATURES = {
    * la pantalla lo dice en vez de mostrar ceros que parecen datos reales.
    */
   suppliers: false,
-  receiptPrint: false,
+  /** Boleta del cliente: `GET /orders/{id}/boleta`, impresa por el navegador. */
+  receiptPrint: true,
   superAdminAudit: true,
   superAdminObservability: true,
   /** Resumen de caja (total esperado + desglose por método) y su lista de movimientos. */

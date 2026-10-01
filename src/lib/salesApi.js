@@ -110,7 +110,7 @@ export function mapCajaOut(caja) {
   if (!caja || typeof caja !== 'object') return caja
   return {
     ...caja,
-    name: caja.name || `Caja ${String(caja.id || '').slice(0, 8)}`,
+    name: caja.name || `Turno ${String(caja.id || '').slice(0, 8)}`,
     is_active: String(caja.status) === 'open',
     caja_id: caja.id,
   }
@@ -148,17 +148,23 @@ export async function listCajas(localId) {
   return (Array.isArray(rows) ? rows : []).map(mapCajaOut)
 }
 
-export async function createCajaV2({ local_id, cashier_user_id, monto_apertura = 0, name: _name }) {
+/**
+ * Abre un turno de caja. El turno pertenece a una caja física (el mueble), no
+ * al local: el backend deriva el local de ella. Mandar `local_id` en vez de
+ * `caja_fisica_id` era el contrato anterior y hoy responde 422.
+ */
+export async function createCajaV2({ caja_fisica_id, cashier_user_id, monto_apertura = 0 }) {
+  if (!caja_fisica_id) throw new Error('Elige la caja física donde se abre el turno')
   let cashierId = cashier_user_id
   if (!cashierId) {
     const { user } = await getOptionalAuthContext()
     cashierId = user?.id
   }
-  if (!cashierId) throw new Error('cashier_user_id requerido para abrir caja')
+  if (!cashierId) throw new Error('No se pudo identificar a quién abre el turno')
   const row = await apiRequest('/cajas', {
     method: 'POST',
     body: {
-      local_id,
+      caja_fisica_id: String(caja_fisica_id),
       cashier_user_id: cashierId,
       monto_apertura: Number(monto_apertura) || 0,
     },
@@ -433,6 +439,14 @@ export async function completeOrderMercadoPago(orderId, createdAt) {
 /** Boleta de la orden (ítems con precios y total) para imprimir el comprobante. */
 export async function getBoleta(orderId, createdAt) {
   return apiRequest(orderResourcePath(orderId, createdAt, '/boleta'))
+}
+
+/**
+ * Comanda de cocina de la orden: sin precios, solo lo que hay que preparar.
+ * En RESTAURANT el backend deja fuera los ítems sin receta.
+ */
+export async function getComanda(orderId, createdAt) {
+  return apiRequest(orderResourcePath(orderId, createdAt, '/comanda'))
 }
 
 export async function cancelOrder(orderId, createdAt) {

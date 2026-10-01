@@ -4,7 +4,7 @@ import { MemoryRouter, Route, Routes } from 'react-router'
 import AdministrativeModule from './AdministrativeModule'
 import userEvent from '@testing-library/user-event'
 import { AuthProvider } from '../context/AuthContext'
-import { getCajasByLocal, getCajasFisicasByLocal, getOrdersByLocal, getResumenDiario, getVentasIndicadores } from '../lib/administrativeApi'
+import { createCaja, getCajasByLocal, getCajasFisicasByLocal, getOrdersByLocal, getResumenDiario, getVentasIndicadores, listarCajasFisicas } from '../lib/administrativeApi'
 
 vi.mock('../lib/apiClient', async (importOriginal) => ({
   ...(await importOriginal()),
@@ -23,6 +23,7 @@ vi.mock('../hooks/useSelectedLocal', () => ({
 
 vi.mock('./pos/CajaMpPairingModal', () => ({ default: () => null }))
 vi.mock('./pos/CajaFisicaModal', () => ({ default: () => <div>modal de caja física</div> }))
+vi.mock('./pos/TicketModal', () => ({ default: ({ tipo }) => <div>ticket de {tipo}</div> }))
 
 // recharts no dibuja en jsdom: basta con verificar qué datos recibe el gráfico.
 vi.mock('./charts/IncomeChart', () => ({
@@ -43,8 +44,8 @@ const mockOrders = [
 ]
 
 const mockCajas = [
-  { id: 'caja-1', name: 'Caja 1', business_date: '2026-09-13', is_active: true, mp: null },
-  { id: 'caja-2', name: 'Caja 2', business_date: '2026-09-12', is_active: false, status: 'closed', mp: null },
+  { id: 'caja-1', name: 'Turno 1', caja_fisica_id: 'cf-1', business_date: '2026-09-13', is_active: true, mp: null },
+  { id: 'caja-2', name: 'Turno 2', caja_fisica_id: 'cf-2', business_date: '2026-09-12', is_active: false, status: 'closed', mp: null },
 ]
 
 const mockIndicadores = {
@@ -90,6 +91,8 @@ vi.mock('../lib/administrativeApi', async (importOriginal) => ({
   getCajasFisicasByLocal: vi.fn(() => Promise.resolve(mockCajasFisicas)),
   getVentasIndicadores: vi.fn(() => Promise.resolve(mockIndicadores)),
   getResumenDiario: vi.fn(() => Promise.resolve(mockResumenDiario)),
+  listarCajasFisicas: vi.fn(() => Promise.resolve(mockCajasFisicas)),
+  createCaja: vi.fn(() => Promise.resolve({ id: 'caja-9', caja_fisica_id: 'cf-1' })),
 }))
 
 // El módulo lee el rol del contexto: las cajas físicas son supervisorias y no
@@ -273,6 +276,18 @@ describe('AdministrativeModule', () => {
     expect(getCajasByLocal).toHaveBeenCalledWith('loc-1', 'test-token')
   })
 
+  it('cada venta del día ofrece ver su boleta', async () => {
+    const user = userEvent.setup()
+    renderAdmin('ventas')
+
+    await user.click(await screen.findByRole('button', { name: 'Cargar detalle de órdenes' }))
+    const botones = await screen.findAllByRole('button', { name: 'Boleta' })
+    expect(botones).toHaveLength(mockOrders.length)
+
+    await user.click(botones[0])
+    expect(await screen.findByText('ticket de boleta')).toBeInTheDocument()
+  })
+
   // «Caja» significaba dos cosas en la misma pantalla: el turno que se abre y
   // cierra cada día, y el mueble donde está la terminal. Vocabulario fijado:
   // "turno de caja" y "caja física".
@@ -304,15 +319,93 @@ describe('AdministrativeModule', () => {
     expect(screen.getByText(/el puesto donde está la terminal/)).toBeInTheDocument()
   })
 
-  it('el formulario de apertura habla de abrir un turno, no de crear una caja', async () => {
+  it('el formulario de apertura pide caja física y efectivo inicial, no un nombre', async () => {
     const user = userEvent.setup()
     renderAdmin('flujo-caja')
 
     await user.click(await screen.findByRole('button', { name: '+ Abrir turno de caja' }))
 
     expect(await screen.findByRole('heading', { name: 'Abrir turno de caja' })).toBeInTheDocument()
+    expect(await screen.findByLabelText('Caja física')).toBeInTheDocument()
+    expect(screen.getByLabelText('Monto de apertura')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Abrir turno' })).toBeInTheDocument()
-    expect(screen.getByPlaceholderText('Ej: Turno mañana')).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Crear caja' })).not.toBeInTheDocument()
+    // El turno no tiene nombre en el modelo: pedirlo era pedir un dato que se descartaba.
+    expect(screen.queryByPlaceholderText('Ej: Turno mañana')).not.toBeInTheDocument()
   })
+
+  it('abre el turno sobre la caja física elegida y con el monto escrito', async () => {
+    const user = userEvent.setup()
+    renderAdmin('flujo-caja')
+
+    await user.click(await screen.findByRole('button', { name: '+ Abrir turno de caja' }))
+    await user.selectOptions(await screen.findByLabelText('Caja física'), 'cf-2')
+    await user.type(screen.getByLabelText('Monto de apertura'), '50000')
+    await user.click(screen.getByRole('button', { name: 'Abrir turno' }))
+
+    // El contrato del backend (ticket #40): la caja física, no el local.
+    await waitFor(() => expect(createCaja).toHaveBeenCalledWith({
+      caja_fisica_id: 'cf-2',
+      monto_apertura: 50000,
+    }))
+  })
+
+  it('acepta el monto escrito con puntos de miles', async () => {
+    const user = userEvent.setup()
+    renderAdmin('flujo-caja')
+
+    await user.click(await screen.findByRole('button', { name: '+ Abrir turno de caja' }))
+    await user.selectOptions(await screen.findByLabelText('Caja física'), 'cf-1')
+    await user.type(screen.getByLabelText('Monto de apertura'), '50.000')
+    await user.click(screen.getByRole('button', { name: 'Abrir turno' }))
+
+    await waitFor(() => expect(createCaja).toHaveBeenCalledWith({
+      caja_fisica_id: 'cf-1',
+      monto_apertura: 50000,
+    }))
+  })
+
+  it('un segundo turno del día en la misma caja física se explica en castellano', async () => {
+    createCaja.mockRejectedValueOnce(new Error('409: Ya existe una caja abierta hoy para este cajero en esta caja física'))
+    const user = userEvent.setup()
+    renderAdmin('flujo-caja')
+
+    await user.click(await screen.findByRole('button', { name: '+ Abrir turno de caja' }))
+    await user.selectOptions(await screen.findByLabelText('Caja física'), 'cf-1')
+    await user.click(screen.getByRole('button', { name: 'Abrir turno' }))
+
+    expect(await screen.findByText(/ya tienes un turno abierto hoy en esa caja física/i)).toBeInTheDocument()
+    expect(screen.queryByText(/^409/)).not.toBeInTheDocument()
+  })
+
+  it('sin cajas físicas explica por qué no se puede abrir un turno y ofrece crearla', async () => {
+    listarCajasFisicas.mockResolvedValueOnce([])
+    const user = userEvent.setup()
+    renderAdmin('flujo-caja')
+
+    await user.click(await screen.findByRole('button', { name: '+ Abrir turno de caja' }))
+
+    expect(await screen.findByText(/todavía no tiene ninguna caja física registrada/i)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Crear caja física' })).toBeInTheDocument()
+    expect(screen.queryByLabelText('Monto de apertura')).not.toBeInTheDocument()
+    expect(createCaja).not.toHaveBeenCalled()
+  })
+
+  it('a un empleado sin cajas físicas se le dice a quién pedírsela, sin ofrecerle crearla', async () => {
+    listarCajasFisicas.mockResolvedValueOnce([])
+    const user = userEvent.setup()
+    renderAdmin('flujo-caja', 'Empleado')
+
+    await user.click(await screen.findByRole('button', { name: '+ Abrir turno de caja' }))
+
+    expect(await screen.findByText(/pídele a un administrador/i)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Crear caja física' })).not.toBeInTheDocument()
+  })
+
+  it('la tabla de turnos dice sobre qué caja física se abrió cada uno', async () => {
+    renderAdmin('flujo-caja')
+
+    const panel = (await screen.findByRole('heading', { name: 'Turnos de caja' })).closest('article')
+    expect(within(panel).getByText('Caja principal')).toBeInTheDocument()
+  })
+
 })
