@@ -21,6 +21,7 @@ vi.mock('../hooks/useSelectedLocal', () => ({
 }))
 
 vi.mock('./pos/CajaMpPairingModal', () => ({ default: () => null }))
+vi.mock('./pos/CajaFisicaModal', () => ({ default: () => <div>modal de caja física</div> }))
 
 // recharts no dibuja en jsdom: basta con verificar qué datos recibe el gráfico.
 vi.mock('./charts/IncomeChart', () => ({
@@ -157,7 +158,9 @@ describe('AdministrativeModule', () => {
     const panelFisicas = (await screen.findByRole('heading', { name: 'Cajas físicas' })).closest('article')
     expect(within(panelFisicas).getByText('Caja principal')).toBeInTheDocument()
     expect(within(panelFisicas).getByText('PAX-123')).toBeInTheDocument()
-    expect(within(panelFisicas).getAllByRole('button').length).toBe(mockCajasFisicas.length)
+    // Una acción de vinculación por caja física (además de crear y renombrar).
+    expect(within(panelFisicas).getByRole('button', { name: 'Vincular MP' })).toBeInTheDocument()
+    expect(within(panelFisicas).getByRole('button', { name: 'Ver vinculación' })).toBeInTheDocument()
 
     // La tabla de turnos ya no habla de MercadoPago: ese estado era por caja física.
     const panelTurnos = screen.getByRole('heading', { name: 'Cajas del Local' }).closest('article')
@@ -212,6 +215,18 @@ describe('AdministrativeModule', () => {
     expect(within(panel).getByText('Vinculada')).toBeInTheDocument()
     expect(within(panel).getByText('PAX-123')).toBeInTheDocument()
     expect(within(panel).queryByText('Estado no disponible')).not.toBeInTheDocument()
+  })
+
+  it('el panel de cajas físicas ofrece crearlas y renombrarlas', async () => {
+    const user = userEvent.setup()
+    renderAdmin('flujo-caja')
+
+    const panel = (await screen.findByRole('heading', { name: 'Cajas físicas' })).closest('article')
+    expect(within(panel).getByRole('button', { name: '+ Nueva caja física' })).toBeInTheDocument()
+    expect(within(panel).getAllByRole('button', { name: 'Renombrar' })).toHaveLength(mockCajasFisicas.length)
+
+    await user.click(within(panel).getByRole('button', { name: '+ Nueva caja física' }))
+    expect(await screen.findByText('modal de caja física')).toBeInTheDocument()
   })
 
   it('Caja Virtual muestra ingresos del mes y cajas abiertas, sin gastos ni flujo neto', async () => {

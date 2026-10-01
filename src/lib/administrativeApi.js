@@ -242,6 +242,24 @@ export function createCaja(body) {
 
 export { getCajaResumen, getMovimientosCaja, closeCaja, getResumenDiario }
 
+/** Alta de caja física. El backend responde 409 si el nombre ya existe en el local. */
+export async function crearCajaFisica(localId, nombre) {
+  const row = await apiRequest('/cajas-fisicas', {
+    method: 'POST',
+    body: { local_id: localId, nombre: String(nombre || '').trim() },
+  })
+  return { ...row, name: row?.nombre ?? null }
+}
+
+/** Renombra una caja física. Misma regla de nombre único por local. */
+export async function renombrarCajaFisica(cajaFisicaId, nombre) {
+  const row = await apiRequest(`/cajas-fisicas/${encodeURIComponent(String(cajaFisicaId))}`, {
+    method: 'PATCH',
+    body: { nombre: String(nombre || '').trim() },
+  })
+  return { ...row, name: row?.nombre ?? null }
+}
+
 export function provisionCajaFisicaMp(cajaFisicaId) {
   return apiRequest(`/cajas-fisicas/${cajaFisicaId}/mp/provision`, { method: 'POST' })
 }
