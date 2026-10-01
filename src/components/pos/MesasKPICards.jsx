@@ -1,4 +1,4 @@
-import { Table2, Users, CircleDollarSign, CheckCircle2 } from 'lucide-react'
+import { Table2, Users, CheckCircle2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 const KPI_CONFIG = [
@@ -15,12 +15,6 @@ const KPI_CONFIG = [
     icon: Users,
   },
   {
-    key: 'en_cobro',
-    label: 'En cobro',
-    valueClass: 'text-[hsl(var(--mesa-cobro))]',
-    icon: CircleDollarSign,
-  },
-  {
     key: 'libres',
     label: 'Disponibles',
     valueClass: 'text-[hsl(var(--mesa-libre))]',
@@ -34,7 +28,6 @@ function resolveKpiValue(kpis, key) {
     total: ['total', 'total_mesas'],
     libres: ['libres', 'mesas_libres'],
     ocupadas: ['ocupadas', 'mesas_ocupadas'],
-    en_cobro: ['en_cobro', 'mesas_en_cobro'],
   }
   for (const alias of aliases[key] || [key]) {
     if (kpis[alias] != null) return kpis[alias]

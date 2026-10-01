@@ -3,7 +3,7 @@ import { render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router'
 import AdministrativeModule from './AdministrativeModule'
 import userEvent from '@testing-library/user-event'
-import { getCajasByLocal, getOrdersByLocal, getResumenDiario, getVentasIndicadores } from '../lib/administrativeApi'
+import { getCajasByLocal, getCajasFisicasByLocal, getOrdersByLocal, getResumenDiario, getVentasIndicadores } from '../lib/administrativeApi'
 
 vi.mock('../lib/apiClient', async (importOriginal) => ({
   ...(await importOriginal()),
@@ -76,8 +76,8 @@ const mockResumenDiario = {
 }
 
 const mockCajasFisicas = [
-  { id: 'cf-1', name: 'Caja principal', is_active: true, mp: null },
-  { id: 'cf-2', name: 'Caja terraza', is_active: true, mp: { pairing_status: 'paired', terminal_id: 'PAX-123' } },
+  { id: 'cf-1', name: 'Caja principal', is_active: true, mp: null, mpDisponible: true },
+  { id: 'cf-2', name: 'Caja terraza', is_active: true, mp: { pairing_status: 'paired', terminal_id: 'PAX-123' }, mpDisponible: true },
 ]
 
 vi.mock('../lib/administrativeApi', async (importOriginal) => ({
@@ -189,6 +189,29 @@ describe('AdministrativeModule', () => {
     const resumen = (await screen.findByRole('heading', { name: 'Resumen del día' })).closest('article')
     expect(within(resumen).getByText('Todavía no se abrió ninguna caja hoy en este local.')).toBeInTheDocument()
     expect(within(resumen).queryByText('Detalle por caja física')).not.toBeInTheDocument()
+  })
+
+  it('si no se puede consultar el estado de MercadoPago, no se afirma que la caja está sin vincular', async () => {
+    getCajasFisicasByLocal.mockResolvedValueOnce([
+      { id: 'cf-1', name: 'Caja principal', is_active: true, mp: null, mpDisponible: false },
+    ])
+    renderAdmin('flujo-caja')
+
+    const panel = (await screen.findByRole('heading', { name: 'Cajas físicas' })).closest('article')
+    expect(within(panel).getByText('Estado no disponible')).toBeInTheDocument()
+    expect(within(panel).queryByText('Sin vincular')).not.toBeInTheDocument()
+    // Y la pantalla lo dice, en vez de dejarlo en silencio.
+    expect(within(panel).getByText(/No se pudo consultar el estado de MercadoPago/i)).toBeInTheDocument()
+  })
+
+  it('con el estado disponible, la columna refleja la vinculación real de cada caja', async () => {
+    renderAdmin('flujo-caja')
+
+    const panel = (await screen.findByRole('heading', { name: 'Cajas físicas' })).closest('article')
+    expect(within(panel).getByText('Sin vincular')).toBeInTheDocument()
+    expect(within(panel).getByText('Vinculada')).toBeInTheDocument()
+    expect(within(panel).getByText('PAX-123')).toBeInTheDocument()
+    expect(within(panel).queryByText('Estado no disponible')).not.toBeInTheDocument()
   })
 
   it('Caja Virtual muestra ingresos del mes y cajas abiertas, sin gastos ni flujo neto', async () => {

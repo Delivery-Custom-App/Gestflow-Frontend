@@ -98,8 +98,11 @@ export function mapMesaOut(mesa) {
     nombre: mesa.nombre || mesa.name,
     state,
     is_active: true,
-    capacidad: mesa.capacidad ?? null,
-    zona: mesa.zona ?? null,
+    // V2 entrega `capacity`; la UI la lee como `capacidad`. Leer solo el nombre
+    // en español hacía que siempre cayera al valor por defecto de la tarjeta.
+    capacidad: mesa.capacity ?? mesa.capacidad ?? null,
+    // El backend no tiene zonas: se expone null explícito, no un dato inventado.
+    zona: null,
   }
 }
 
@@ -195,13 +198,36 @@ export async function listMesas(localId) {
   return (Array.isArray(rows) ? rows : []).map(mapMesaOut)
 }
 
-export async function createMesa({ local_id, name, nombre, capacidad: _c, zona: _z }) {
+/**
+ * Mesas con el total de su pedido en curso.
+ *
+ * MesaOut no trae importes, así que el total sale de las órdenes abiertas del
+ * local: una sola consulta filtrada por estado, no el histórico completo.
+ */
+export async function listMesasConTotales(localId) {
+  const [mesas, abiertas] = await Promise.all([
+    listMesas(localId),
+    apiRequest(`/orders?local_id=${encodeURIComponent(String(localId))}&status=open`).catch(() => []),
+  ])
+  const totalPorMesa = new Map()
+  for (const orden of Array.isArray(abiertas) ? abiertas : []) {
+    if (!orden?.mesa_id) continue
+    const clave = String(orden.mesa_id)
+    totalPorMesa.set(clave, (totalPorMesa.get(clave) || 0) + (Number(orden.total) || 0))
+  }
+  return mesas.map((m) => ({ ...m, total: totalPorMesa.get(String(m.id)) ?? null }))
+}
+
+export async function createMesa({ local_id, name, nombre, capacidad }) {
+  const capacity = Number(capacidad)
   const row = await apiRequest('/mesas', {
     method: 'POST',
     body: {
       local_id,
       nombre: String(nombre || name || '').trim(),
       status: 'available',
+      // V2 acepta capacidad desde la migración 0025.
+      ...(Number.isFinite(capacity) && capacity > 0 ? { capacity } : {}),
     },
   })
   return mapMesaOut(row)
@@ -211,6 +237,10 @@ export async function updateMesa(mesaId, body = {}) {
   const patch = {}
   if (body.name != null || body.nombre != null) {
     patch.nombre = String(body.nombre || body.name).trim()
+  }
+  if (body.capacidad != null || body.capacity != null) {
+    const capacity = Number(body.capacity ?? body.capacidad)
+    if (Number.isFinite(capacity) && capacity > 0) patch.capacity = capacity
   }
   if (body.status != null) patch.status = body.status
   if (body.state === 'libre') patch.status = 'available'
@@ -413,7 +443,8 @@ export async function computeMesasKpis(localId) {
   const mesas = await listMesas(localId)
   const libres = mesas.filter((m) => m.state === 'libre').length
   const ocupadas = mesas.filter((m) => m.state === 'ocupada').length
-  const enCobro = mesas.filter((m) => m.state === 'en_cobro').length
+  // V2 solo tiene available/occupied: no existe un estado "en cobro".
+  const enCobro = 0
   return {
     total: mesas.length,
     libres,

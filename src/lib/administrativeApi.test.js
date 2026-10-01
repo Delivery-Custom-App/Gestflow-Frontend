@@ -84,7 +84,7 @@ describe('Vinculación MercadoPago por caja física', () => {
     expect(filas[1].mp).toMatchObject({ pairing_status: 'paired', terminal_id: 'PAX-123' })
   })
 
-  it('si el estado MP falla, las cajas físicas se listan igual sin vinculación', async () => {
+  it('si el estado MP falla, las cajas se listan igual pero marcadas como estado no consultable', async () => {
     apiRequest.mockImplementation((path) => {
       if (path.startsWith('/cajas-fisicas')) return Promise.resolve([{ id: 'cf-1', nombre: 'Caja 1' }])
       return Promise.reject(new Error('403'))
@@ -93,6 +93,22 @@ describe('Vinculación MercadoPago por caja física', () => {
     const filas = await getCajasFisicasByLocal(LOCAL)
 
     expect(filas).toHaveLength(1)
+    expect(filas[0].mp).toBeNull()
+    // Sin vinculación y sin poder consultarla son cosas distintas: el segundo
+    // caso no debe pintarse como "Sin vincular".
+    expect(filas[0].mpDisponible).toBe(false)
+  })
+
+  it('si el estado MP responde, las filas quedan marcadas como consultables', async () => {
+    apiRequest.mockImplementation((path) => {
+      if (path.startsWith('/cajas-fisicas')) return Promise.resolve([{ id: 'cf-1', nombre: 'Caja 1' }])
+      if (path.includes('/mp/cajas-fisicas-status')) return Promise.resolve([])
+      return Promise.resolve([])
+    })
+
+    const filas = await getCajasFisicasByLocal(LOCAL)
+
+    expect(filas[0].mpDisponible).toBe(true)
     expect(filas[0].mp).toBeNull()
   })
 

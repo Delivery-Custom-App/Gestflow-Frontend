@@ -2,12 +2,14 @@ import { useState, useEffect, useCallback } from 'react'
 import {
   createMesa as createMesaV2,
   deleteMesa as deleteMesaV2,
-  listMesas,
+  listMesasConTotales,
   updateMesa as updateMesaV2,
 } from '../lib/salesApi'
 
 /**
- * Mesas con estado (libre/ocupada). V2: status available|occupied mapeado a state.
+ * Mesas con estado (libre/ocupada) y el total de su pedido en curso.
+ * V2: status available|occupied mapeado a state; el importe sale de las órdenes
+ * abiertas del local, porque MesaOut no trae totales.
  */
 export function useMesasConEstado(localId) {
   const [mesas, setMesas] = useState([])
@@ -19,7 +21,7 @@ export function useMesasConEstado(localId) {
     try {
       setLoading(true)
       setError(null)
-      setMesas(await listMesas(localId))
+      setMesas(await listMesasConTotales(localId))
     } catch (err) {
       console.error('Error al cargar mesas:', err)
       let errorMessage = err.message || 'Error al cargar mesas'

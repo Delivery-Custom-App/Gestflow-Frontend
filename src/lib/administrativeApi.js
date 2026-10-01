@@ -215,15 +215,24 @@ export async function getVentasIndicadores(localId) {
  * V2 expone el nombre como `nombre`; se normaliza a `name` para el resto de la UI.
  */
 export async function getCajasFisicasByLocal(localId) {
-  const [cajasFisicas, mpStatuses] = await Promise.all([
+  const pedirEstadoMp = apiRequest(`/locals/${encodeURIComponent(localId)}/mp/cajas-fisicas-status`)
+    // Se distingue "no hay vinculación" de "no se pudo consultar": tragarse el
+    // error y devolver lista vacía hacía que la columna dijera "Sin vincular",
+    // que es un estado falso.
+    .then((filas) => ({ filas, disponible: true }))
+    .catch(() => ({ filas: [], disponible: false }))
+
+  const [cajasFisicas, estadoMp] = await Promise.all([
     apiRequest(`/cajas-fisicas?local_id=${encodeURIComponent(localId)}`),
-    apiRequest(`/locals/${encodeURIComponent(localId)}/mp/cajas-fisicas-status`).catch(() => []),
+    pedirEstadoMp,
   ])
-  const statusByCajaFisica = new Map((mpStatuses || []).map((s) => [String(s.caja_fisica_id), s]))
-  return (Array.isArray(cajasFisicas) ? cajasFisicas : []).map((c) => ({
+
+  const statusByCajaFisica = new Map(safeList(estadoMp.filas).map((s) => [String(s.caja_fisica_id), s]))
+  return safeList(cajasFisicas).map((c) => ({
     ...c,
     name: c.nombre ?? c.name ?? null,
     mp: statusByCajaFisica.get(String(c.id)) || null,
+    mpDisponible: estadoMp.disponible,
   }))
 }
 

@@ -4,7 +4,9 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
 
-const INITIAL_FORM = { name: '', capacidad: '', zona: '' }
+// Sin zona: el backend no tiene zonas, así que pedirla era pedir un dato que
+// se descartaba antes de enviar la petición.
+const INITIAL_FORM = { name: '', capacidad: '' }
 
 export default function CreateMesaModal({ mesas, onClose, onSubmit }) {
   const [form, setForm] = useState(INITIAL_FORM)
@@ -32,9 +34,6 @@ export default function CreateMesaModal({ mesas, onClose, onSubmit }) {
     } else if (Number(form.capacidad) <= 0 || !Number.isInteger(Number(form.capacidad))) {
       next.capacidad = 'Ingresa un número entero mayor a 0'
     }
-    if (!form.zona.trim()) {
-      next.zona = 'La zona es obligatoria'
-    }
     return next
   }
 
@@ -52,7 +51,7 @@ export default function CreateMesaModal({ mesas, onClose, onSubmit }) {
     setSubmitting(true)
     setServerError('')
     try {
-      await onSubmit({ name: form.name.trim(), capacidad: form.capacidad, zona: form.zona.trim() })
+      await onSubmit({ name: form.name.trim(), capacidad: form.capacidad })
       handleClose()
     } catch (err) {
       setServerError(err.message || 'Error al crear la mesa')
@@ -110,23 +109,6 @@ export default function CreateMesaModal({ mesas, onClose, onSubmit }) {
               className={cn(errors.capacidad && 'border-[hsl(var(--destructive))]')}
             />
             {errors.capacidad && <p className="text-xs text-[hsl(var(--destructive))]">{errors.capacidad}</p>}
-          </div>
-
-          <div className="space-y-1.5">
-            <Label htmlFor="mesa-zona">
-              Zona <span className="text-[hsl(var(--destructive))]">*</span>
-            </Label>
-            <Input
-              id="mesa-zona"
-              name="zona"
-              type="text"
-              placeholder="Ingresar zona"
-              value={form.zona}
-              onChange={handleChange}
-              disabled={submitting}
-              className={cn(errors.zona && 'border-[hsl(var(--destructive))]')}
-            />
-            {errors.zona && <p className="text-xs text-[hsl(var(--destructive))]">{errors.zona}</p>}
           </div>
 
           {serverError && (

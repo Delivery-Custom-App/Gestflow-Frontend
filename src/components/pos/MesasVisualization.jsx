@@ -77,8 +77,10 @@ const STATE_CONFIG = {
   },
 }
 
+/** Sin capacidad registrada no se inventa un tamaño. */
 function sizeLabel(capacidad) {
-  const n = Number(capacidad) || 4
+  const n = Number(capacidad)
+  if (!Number.isFinite(n) || n <= 0) return null
   if (n <= 2) return 'Pequeña'
   if (n <= 4) return 'Mediana'
   return 'Grande'
@@ -244,7 +246,8 @@ function TableIllustration({ chairs = 4, className, stateKey = 'libre' }) {
 const MesaCard = memo(function MesaCard({ mesa, index, onMesaSelect, onEditMesa, onDeleteMesa }) {
   const stateKey = mesa.is_active === false ? 'inactiva' : (mesa.state || 'libre')
   const stateConfig = STATE_CONFIG[stateKey] || STATE_CONFIG.libre
-  const capacidad = Number(mesa.capacidad) || 4
+  const capacidadNum = Number(mesa.capacidad)
+  const capacidad = Number.isFinite(capacidadNum) && capacidadNum > 0 ? capacidadNum : null
   const total = mesaTotal(mesa)
   const code = mesaCode(mesa, index)
   const staggerClass = `stagger-${Math.min((index % 6) + 1, 6)}`
@@ -306,7 +309,7 @@ const MesaCard = memo(function MesaCard({ mesa, index, onMesaSelect, onEditMesa,
         className="flex flex-1 flex-col items-center px-4 pb-4 pt-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--primary))]/50 focus-visible:ring-offset-2 disabled:cursor-not-allowed"
       >
         <div className="relative mb-4 text-[hsl(var(--muted-foreground))]">
-          <TableIllustration className="h-32 w-32" chairs={capacidad} stateKey={stateKey} />
+          <TableIllustration className="h-32 w-32" chairs={capacidad ?? 4} stateKey={stateKey} />
           <div className="absolute inset-0 flex items-center justify-center">
             <span className="text-base font-bold tracking-wider text-[hsl(var(--foreground))] drop-shadow-sm">
               {code}
@@ -320,7 +323,9 @@ const MesaCard = memo(function MesaCard({ mesa, index, onMesaSelect, onEditMesa,
               <Users size={14} />
               <span className="text-xs font-medium">Capacidad</span>
             </div>
-            <span className="text-sm font-bold text-[hsl(var(--foreground))]">{capacidad}</span>
+            <span className={cn('text-sm font-bold', capacidad == null ? 'text-[hsl(var(--muted-foreground))]' : 'text-[hsl(var(--foreground))]')}>
+              {capacidad ?? 'Sin definir'}
+            </span>
           </div>
           
           <div className="flex items-center justify-between rounded-lg bg-[hsl(var(--muted))]/30 px-3 py-2">
@@ -334,11 +339,13 @@ const MesaCard = memo(function MesaCard({ mesa, index, onMesaSelect, onEditMesa,
           </div>
         </div>
 
-        <div className="mt-3 w-full text-center">
-          <span className="inline-block rounded-full bg-[hsl(var(--muted))]/40 px-3 py-1 text-[10px] font-medium uppercase tracking-wider text-[hsl(var(--muted-foreground))]">
-            {sizeLabel(capacidad)}
-          </span>
-        </div>
+        {sizeLabel(capacidad) && (
+          <div className="mt-3 w-full text-center">
+            <span className="inline-block rounded-full bg-[hsl(var(--muted))]/40 px-3 py-1 text-[10px] font-medium uppercase tracking-wider text-[hsl(var(--muted-foreground))]">
+              {sizeLabel(capacidad)}
+            </span>
+          </div>
+        )}
       </button>
     </div>
   )
