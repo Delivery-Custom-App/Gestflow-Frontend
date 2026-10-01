@@ -1,4 +1,5 @@
 import { useState, useCallback, useMemo } from 'react'
+import { Link2, X as XIcon } from 'lucide-react'
 import { useParams, useLocation } from 'react-router'
 import { useMesasConEstado } from '../../hooks/useMesasConEstado'
 import { useMesasKPIs } from '../../hooks/useMesasKPIs'
@@ -6,6 +7,7 @@ import MesasKPICards from './MesasKPICards'
 import MesasFilters from './MesasFilters'
 import { applyFilters, EMPTY_MESA_FILTERS } from './filterMesas'
 import MesasVisualization from './MesasVisualization'
+import { useGruposDeMesas } from '../../hooks/useGruposDeMesas'
 import KitchenDisplay from './KitchenDisplay'
 import CreateMesaModal from './CreateMesaModal'
 import EditMesaModal from './EditMesaModal'
@@ -38,6 +40,63 @@ export default function POSModule() {
   const [selectedMesa, setSelectedMesa] = useState(null)
   const [showPrinterConfig, setShowPrinterConfig] = useState(false)
   const [showMPConfig, setShowMPConfig] = useState(false)
+
+  // ── Agrupar mesas ───────────────────────────────────────────────────
+  const { porMesa: gruposPorMesa, crear: crearGrupo, deshacer: deshacerGrupo } = useGruposDeMesas(localId)
+  const [modoAgrupar, setModoAgrupar] = useState(false)
+  const [seleccionadas, setSeleccionadas] = useState(() => new Set())
+  const [grupoError, setGrupoError] = useState(null)
+  const [guardandoGrupo, setGuardandoGrupo] = useState(false)
+
+  const salirDeAgrupar = useCallback(() => {
+    setModoAgrupar(false)
+    setSeleccionadas(new Set())
+    setGrupoError(null)
+  }, [])
+
+  const handleToggleSeleccion = useCallback((mesa) => {
+    setGrupoError(null)
+    setSeleccionadas((previas) => {
+      const siguiente = new Set(previas)
+      const clave = String(mesa.id)
+      if (siguiente.has(clave)) siguiente.delete(clave)
+      else siguiente.add(clave)
+      return siguiente
+    })
+  }, [])
+
+  const handleCrearGrupo = useCallback(async () => {
+    setGuardandoGrupo(true)
+    setGrupoError(null)
+    try {
+      await crearGrupo([...seleccionadas])
+      salirDeAgrupar()
+      refreshMesas()
+      refreshKpis()
+    } catch (e) {
+      setGrupoError(e?.message || 'No se pudieron juntar las mesas')
+    } finally {
+      setGuardandoGrupo(false)
+    }
+  }, [crearGrupo, seleccionadas, salirDeAgrupar, refreshMesas, refreshKpis])
+
+  const handleDeshacerGrupo = useCallback(async (grupo) => {
+    setGrupoError(null)
+    try {
+      await deshacerGrupo(grupo.id)
+      refreshMesas()
+      refreshKpis()
+    } catch (e) {
+      setGrupoError(e?.message || 'No se pudo separar el grupo')
+    }
+  }, [deshacerGrupo, refreshMesas, refreshKpis])
+
+  const capacidadSeleccionada = useMemo(
+    () => mesas
+      .filter((m) => seleccionadas.has(String(m.id)))
+      .reduce((total, m) => total + (Number(m.capacidad) || 0), 0),
+    [mesas, seleccionadas],
+  )
 
   const handleSubmitMesa = async (formData) => {
     await createMesa(formData)
@@ -196,12 +255,68 @@ export default function POSModule() {
             ) : (
               <section className="space-y-4" data-onboarding="pos-mesas-grid">
                 <MesasFilters mesas={mesas} filters={mesaFilters} onFiltersChange={setMesaFilters} filteredCount={filteredMesas.length} />
+
+                {/* Juntar mesas para un grupo grande: la atención pasa a ser una sola. */}
+                {modoAgrupar ? (
+                  <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border-2 border-[hsl(var(--primary)/0.4)] bg-[hsl(var(--primary)/0.06)] px-4 py-3">
+                    <div className="text-sm text-[hsl(var(--foreground))]">
+                      <strong className="font-semibold">{seleccionadas.size} mesa{seleccionadas.size === 1 ? '' : 's'} elegida{seleccionadas.size === 1 ? '' : 's'}</strong>
+                      {capacidadSeleccionada > 0 && (
+                        <span className="text-[hsl(var(--muted-foreground))]"> · {capacidadSeleccionada} personas en total</span>
+                      )}
+                      <p className="text-xs text-[hsl(var(--muted-foreground))]">Solo se pueden juntar mesas libres que no estén ya en un grupo.</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={salirDeAgrupar}
+                        className="rounded-lg border border-[hsl(var(--border))] px-3 py-1.5 text-sm text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))] transition-colors"
+                      >
+                        Cancelar
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleCrearGrupo}
+                        disabled={seleccionadas.size < 2 || guardandoGrupo}
+                        className="rounded-lg bg-[hsl(var(--primary))] px-4 py-1.5 text-sm font-semibold text-white shadow-sm transition-opacity hover:opacity-90 disabled:opacity-40"
+                      >
+                        {guardandoGrupo ? 'Juntando…' : 'Juntar mesas'}
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex justify-end">
+                    <button
+                      type="button"
+                      onClick={() => setModoAgrupar(true)}
+                      className="inline-flex items-center gap-2 rounded-lg border border-[hsl(var(--border))] px-3 py-1.5 text-sm text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--primary))] hover:border-[hsl(var(--primary))] transition-colors"
+                    >
+                      <Link2 size={14} />
+                      Agrupar mesas
+                    </button>
+                  </div>
+                )}
+
+                {grupoError && (
+                  <div className="flex items-start justify-between gap-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 dark:border-red-800/50 dark:bg-red-950/30">
+                    <p className="text-xs text-red-600 dark:text-red-400">{grupoError}</p>
+                    <button type="button" aria-label="Cerrar aviso" onClick={() => setGrupoError(null)} className="text-red-500 hover:opacity-70">
+                      <XIcon size={14} />
+                    </button>
+                  </div>
+                )}
+
                 <MesasVisualization
                   mesas={filteredMesas}
                   loading={mesasLoading}
                   onMesaSelect={handleMesaSelect}
                   onEditMesa={isWorker ? null : handleEditMesa}
                   onDeleteMesa={isWorker ? null : handleDeleteMesa}
+                  gruposPorMesa={gruposPorMesa}
+                  modoAgrupar={modoAgrupar}
+                  seleccionadas={seleccionadas}
+                  onToggleSeleccion={handleToggleSeleccion}
+                  onDeshacerGrupo={handleDeshacerGrupo}
                 />
               </section>
             )}

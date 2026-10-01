@@ -1,5 +1,5 @@
 import { memo } from 'react'
-import { Pencil, Trash2, Users, DollarSign } from 'lucide-react'
+import { Pencil, Trash2, Users, DollarSign, Link2, Unlink, Check } from 'lucide-react'
 import { formatCLP } from '../../lib/formatCLP'
 import { cn } from '@/lib/utils'
 
@@ -7,7 +7,10 @@ import { cn } from '@/lib/utils'
  * Grilla de mesas pulida inspirada en:
  * https://dribbble.com/shots/27183895-Restaurant-Dashboard-Table-Management
  */
-function MesasVisualization({ mesas = [], loading = false, onMesaSelect = null, onEditMesa = null, onDeleteMesa = null }) {
+function MesasVisualization({
+  mesas = [], loading = false, onMesaSelect = null, onEditMesa = null, onDeleteMesa = null,
+  gruposPorMesa = null, modoAgrupar = false, seleccionadas = null, onToggleSeleccion = null, onDeshacerGrupo = null,
+}) {
   if (loading) {
     return (
       <div className="p-8 flex items-center justify-center">
@@ -38,6 +41,11 @@ function MesasVisualization({ mesas = [], loading = false, onMesaSelect = null, 
           onMesaSelect={onMesaSelect}
           onEditMesa={onEditMesa}
           onDeleteMesa={onDeleteMesa}
+          grupo={gruposPorMesa?.get(String(mesa.id)) || null}
+          modoAgrupar={modoAgrupar}
+          seleccionada={Boolean(seleccionadas?.has(String(mesa.id)))}
+          onToggleSeleccion={onToggleSeleccion}
+          onDeshacerGrupo={onDeshacerGrupo}
         />
       ))}
     </div>
@@ -243,7 +251,10 @@ function TableIllustration({ chairs = 4, className, stateKey = 'libre' }) {
   )
 }
 
-const MesaCard = memo(function MesaCard({ mesa, index, onMesaSelect, onEditMesa, onDeleteMesa }) {
+const MesaCard = memo(function MesaCard({
+  mesa, index, onMesaSelect, onEditMesa, onDeleteMesa,
+  grupo = null, modoAgrupar = false, seleccionada = false, onToggleSeleccion = null, onDeshacerGrupo = null,
+}) {
   const stateKey = mesa.is_active === false ? 'inactiva' : (mesa.state || 'libre')
   const stateConfig = STATE_CONFIG[stateKey] || STATE_CONFIG.libre
   const capacidadNum = Number(mesa.capacidad)
@@ -252,7 +263,15 @@ const MesaCard = memo(function MesaCard({ mesa, index, onMesaSelect, onEditMesa,
   const code = mesaCode(mesa, index)
   const staggerClass = `stagger-${Math.min((index % 6) + 1, 6)}`
 
+  // Solo se pueden juntar mesas libres y sin grupo: el backend lo rechaza, así
+  // que la tarjeta no deja seleccionar lo que no se puede.
+  const seleccionable = modoAgrupar && stateKey === 'libre' && !grupo
+
   const handleOpen = () => {
+    if (modoAgrupar) {
+      if (seleccionable) onToggleSeleccion?.(mesa)
+      return
+    }
     if (stateKey !== 'inactiva') onMesaSelect?.(mesa)
   }
 
@@ -266,10 +285,42 @@ const MesaCard = memo(function MesaCard({ mesa, index, onMesaSelect, onEditMesa,
         'shadow-sm hover:shadow-lg',
         stateConfig.border,
         stateKey === 'inactiva' ? 'opacity-50' : 'hover:-translate-y-1',
+        seleccionada && 'ring-2 ring-[hsl(var(--primary))] ring-offset-2',
+        modoAgrupar && !seleccionable && 'opacity-60',
       )}
     >
+      {grupo && (
+        <div className="flex items-center justify-between gap-2 rounded-t-2xl bg-[hsl(var(--primary)/0.1)] px-4 py-1.5">
+          <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-[hsl(var(--primary))]">
+            <Link2 size={12} />
+            {grupo.etiqueta} · {grupo.mesaIds.length} mesas
+            {grupo.capacidad ? ` · ${grupo.capacidad} personas` : ''}
+          </span>
+          {onDeshacerGrupo && !modoAgrupar && (
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onDeshacerGrupo(grupo) }}
+              className="inline-flex items-center gap-1 text-xs font-medium text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--primary))] transition-colors"
+              title="Separar el grupo"
+            >
+              <Unlink size={12} />
+              Separar
+            </button>
+          )}
+        </div>
+      )}
+
+      {seleccionada && (
+        <span className="absolute right-3 top-3 z-10 flex h-6 w-6 items-center justify-center rounded-full bg-[hsl(var(--primary))] text-white shadow">
+          <Check size={14} />
+        </span>
+      )}
+
       <div className="flex items-start justify-between gap-2 p-4 pb-2">
-        <div className="flex items-center gap-1.5 opacity-0 transition-opacity group-hover:opacity-100">
+        <div className={cn(
+          'flex items-center gap-1.5 transition-opacity',
+          modoAgrupar ? 'invisible' : 'opacity-0 group-hover:opacity-100',
+        )}>
           {onEditMesa && (
             <button
               type="button"
