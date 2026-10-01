@@ -9,7 +9,13 @@ export const V2_FEATURES = {
   cajaMpPairing: true,
   printers: false,
   comandas: false,
-  splitPayments: true,
+  /**
+   * Pago multi-comensal. V2 no tiene nada de pagos divididos: `/orders/{id}/
+   * split-payments`, su `/summary` y `/split-payments/{id}` devuelven 404, y no
+   * existe el modelo en la base. Mientras siga en false, MultiPaymentModal y sus
+   * botones no se montan; la UI queda lista para cuando el backend exista.
+   */
+  splitPayments: false,
   receiptPrint: false,
   superAdminAudit: true,
   superAdminObservability: true,

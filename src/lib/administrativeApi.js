@@ -129,12 +129,30 @@ export function getOrdersByLocal(localId, token, status) {
 
 export async function getCajasByLocal(localId, token) {
   void token
-  const [cajas, mpStatuses] = await Promise.all([
-    listCajas(localId),
-    apiRequest(`/locals/${encodeURIComponent(localId)}/mp/cajas-status`).catch(() => []),
+  return listCajas(localId)
+}
+
+/**
+ * Cajas físicas del local con su estado de vinculación a MercadoPago.
+ *
+ * El terminal Point se vincula a la **caja física** (el mueble donde está el
+ * hardware), no al turno de caja: en V2 el device cuelga de
+ * `pos_machines.caja_fisica_id` y los endpoints viven bajo `/cajas-fisicas/...`.
+ * Un turno dura un día; la terminal sigue ahí mañana.
+ *
+ * V2 expone el nombre como `nombre`; se normaliza a `name` para el resto de la UI.
+ */
+export async function getCajasFisicasByLocal(localId) {
+  const [cajasFisicas, mpStatuses] = await Promise.all([
+    apiRequest(`/cajas-fisicas?local_id=${encodeURIComponent(localId)}`),
+    apiRequest(`/locals/${encodeURIComponent(localId)}/mp/cajas-fisicas-status`).catch(() => []),
   ])
-  const statusByCaja = new Map((mpStatuses || []).map((s) => [String(s.caja_id), s]))
-  return cajas.map((c) => ({ ...c, mp: statusByCaja.get(String(c.id)) || null }))
+  const statusByCajaFisica = new Map((mpStatuses || []).map((s) => [String(s.caja_fisica_id), s]))
+  return (Array.isArray(cajasFisicas) ? cajasFisicas : []).map((c) => ({
+    ...c,
+    name: c.nombre ?? c.name ?? null,
+    mp: statusByCajaFisica.get(String(c.id)) || null,
+  }))
 }
 
 export function createCaja(body) {
@@ -143,12 +161,12 @@ export function createCaja(body) {
 
 export { getCajaResumen, getMovimientosCaja, closeCaja, getResumenDiario }
 
-export function provisionCajaMp(cajaId) {
-  return apiRequest(`/cajas/${cajaId}/mp/provision`, { method: 'POST' })
+export function provisionCajaFisicaMp(cajaFisicaId) {
+  return apiRequest(`/cajas-fisicas/${cajaFisicaId}/mp/provision`, { method: 'POST' })
 }
 
-export function verifyCajaMpPairing(cajaId) {
-  return apiRequest(`/cajas/${cajaId}/mp/verify-pairing`, { method: 'POST' })
+export function verifyCajaFisicaMpPairing(cajaFisicaId) {
+  return apiRequest(`/cajas-fisicas/${cajaFisicaId}/mp/verify-pairing`, { method: 'POST' })
 }
 
 export function putLocalMpLocation(localId, body) {
@@ -159,8 +177,8 @@ export function getAvailableMpPos(localId) {
   return apiRequest(`/locals/${localId}/mp/available-pos`)
 }
 
-export function assignExistingMpPos(cajaId, mercadopagoPosId) {
-  return apiRequest(`/cajas/${cajaId}/mp/assign-existing`, {
+export function assignExistingMpPos(cajaFisicaId, mercadopagoPosId) {
+  return apiRequest(`/cajas-fisicas/${cajaFisicaId}/mp/assign-existing`, {
     method: 'POST',
     body: { mercadopago_pos_id: mercadopagoPosId },
   })
