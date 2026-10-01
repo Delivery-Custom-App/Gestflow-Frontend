@@ -368,9 +368,13 @@ export async function updateOrderStatus(orderId, status, createdAt, extra = {}) 
   return mapOrderOut(updated)
 }
 
-/** Completa orden (cobro efectivo). En RESTAURANT camina open→preparing→ready→completed. */
-export async function completeOrderCash(orderId, _cashReceived, createdAt) {
-  const extra = { payment_method: 'cash' }
+/**
+ * Completa una orden con su método de pago. En RESTAURANT el backend exige
+ * caminar open→preparing→ready→completed, así que ante un 400 por transición
+ * inválida se recorren los estados intermedios y se reintenta.
+ */
+export async function completeOrder(orderId, paymentMethod, createdAt) {
+  const extra = { payment_method: paymentMethod }
   try {
     return await updateOrderStatus(orderId, 'completed', createdAt, extra)
   } catch (err) {
@@ -380,6 +384,25 @@ export async function completeOrderCash(orderId, _cashReceived, createdAt) {
     await updateOrderStatus(orderId, 'ready', createdAt)
     return updateOrderStatus(orderId, 'completed', createdAt, extra)
   }
+}
+
+/** Completa orden (cobro efectivo). */
+export async function completeOrderCash(orderId, _cashReceived, createdAt) {
+  return completeOrder(orderId, 'cash', createdAt)
+}
+
+/**
+ * Completa orden cobrada por el checkout de MercadoPago.
+ * V2 no tiene `/orders/checkout/complete`: se cierra con el PATCH de la orden,
+ * que es lo que registra el ingreso en la caja y en el arqueo del día.
+ */
+export async function completeOrderMercadoPago(orderId, createdAt) {
+  return completeOrder(orderId, 'mercadopago', createdAt)
+}
+
+/** Boleta de la orden (ítems con precios y total) para imprimir el comprobante. */
+export async function getBoleta(orderId, createdAt) {
+  return apiRequest(orderResourcePath(orderId, createdAt, '/boleta'))
 }
 
 export async function cancelOrder(orderId, createdAt) {
