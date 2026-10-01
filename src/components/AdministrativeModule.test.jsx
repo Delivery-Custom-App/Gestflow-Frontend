@@ -3,6 +3,7 @@ import { render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router'
 import AdministrativeModule from './AdministrativeModule'
 import userEvent from '@testing-library/user-event'
+import { AuthProvider } from '../context/AuthContext'
 import { getCajasByLocal, getCajasFisicasByLocal, getOrdersByLocal, getResumenDiario, getVentasIndicadores } from '../lib/administrativeApi'
 
 vi.mock('../lib/apiClient', async (importOriginal) => ({
@@ -91,13 +92,17 @@ vi.mock('../lib/administrativeApi', async (importOriginal) => ({
   getResumenDiario: vi.fn(() => Promise.resolve(mockResumenDiario)),
 }))
 
-function renderAdmin(section) {
+// El módulo lee el rol del contexto: las cajas físicas son supervisorias y no
+// se muestran a quien atiende. Por defecto se monta como dueña del negocio.
+function renderAdmin(section, userRole = 'Admin Negocio') {
   return render(
-    <MemoryRouter initialEntries={[`/local/loc-1/administrativo/${section}`]}>
-      <Routes>
-        <Route path="/local/:localId/administrativo/:sectionId?" element={<AdministrativeModule />} />
-      </Routes>
-    </MemoryRouter>,
+    <AuthProvider user={{ id: 'u-1' }} userRole={userRole} logout={() => {}}>
+      <MemoryRouter initialEntries={[`/local/loc-1/administrativo/${section}`]}>
+        <Routes>
+          <Route path="/local/:localId/administrativo/:sectionId?" element={<AdministrativeModule />} />
+        </Routes>
+      </MemoryRouter>
+    </AuthProvider>,
   )
 }
 
@@ -151,7 +156,7 @@ describe('AdministrativeModule', () => {
     expect(await screen.findByRole('heading', { name: 'Ventas del Día' })).toBeInTheDocument()
   })
 
-  it('Caja Virtual vincula MercadoPago desde las cajas físicas, no desde los turnos', async () => {
+  it('Caja y turnos vincula MercadoPago desde las cajas físicas, no desde los turnos', async () => {
     renderAdmin('flujo-caja')
 
     // El panel de cajas físicas es el que ofrece la vinculación.
@@ -163,7 +168,7 @@ describe('AdministrativeModule', () => {
     expect(within(panelFisicas).getByRole('button', { name: 'Ver vinculación' })).toBeInTheDocument()
 
     // La tabla de turnos ya no habla de MercadoPago: ese estado era por caja física.
-    const panelTurnos = screen.getByRole('heading', { name: 'Cajas del Local' }).closest('article')
+    const panelTurnos = screen.getByRole('heading', { name: 'Turnos de caja' }).closest('article')
     expect(within(panelTurnos).queryByText('MercadoPago')).not.toBeInTheDocument()
     expect(within(panelTurnos).queryByText('Vincular MP')).not.toBeInTheDocument()
   })
@@ -179,7 +184,7 @@ describe('AdministrativeModule', () => {
     expect(within(resumen).getByText('2 · 1 abierto')).toBeInTheDocument()
   })
 
-  it('avisa que no se abrió ninguna caja solo cuando de verdad no hay turnos del día', async () => {
+  it('avisa que no se abrió ningún turno solo cuando de verdad no hay turnos del día', async () => {
     getResumenDiario.mockResolvedValueOnce({
       business_date: '2026-09-26',
       monto_apertura_total: '0.00',
@@ -190,7 +195,7 @@ describe('AdministrativeModule', () => {
     renderAdmin('flujo-caja')
 
     const resumen = (await screen.findByRole('heading', { name: 'Resumen del día' })).closest('article')
-    expect(within(resumen).getByText('Todavía no se abrió ninguna caja hoy en este local.')).toBeInTheDocument()
+    expect(within(resumen).getByText('Todavía no se abrió ningún turno de caja hoy en este local.')).toBeInTheDocument()
     expect(within(resumen).queryByText('Detalle por caja física')).not.toBeInTheDocument()
   })
 
@@ -229,15 +234,85 @@ describe('AdministrativeModule', () => {
     expect(await screen.findByText('modal de caja física')).toBeInTheDocument()
   })
 
-  it('Caja Virtual muestra ingresos del mes y cajas abiertas, sin gastos ni flujo neto', async () => {
+  it.each(['Empleado', 'Cajero'])('%s no ve el panel de cajas físicas', async (rol) => {
+    renderAdmin('flujo-caja', rol)
+
+    // La sección sigue funcionando: lo que desaparece es el panel supervisorio.
+    expect(await screen.findByRole('heading', { name: 'Turnos de caja' })).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Cajas físicas' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '+ Nueva caja física' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Renombrar' })).not.toBeInTheDocument()
+    expect(screen.queryByText(/estado de MercadoPago/i)).not.toBeInTheDocument()
+  })
+
+  it('a un empleado no se le piden las cajas físicas: el backend le responde 403', async () => {
+    renderAdmin('flujo-caja', 'Empleado')
+
+    await waitFor(() => expect(getCajasByLocal).toHaveBeenCalled())
+    expect(getCajasFisicasByLocal).not.toHaveBeenCalled()
+  })
+
+  it.each(['Admin', 'Admin Negocio', 'Superadmin'])('%s sigue viendo y gestionando las cajas físicas', async (rol) => {
+    renderAdmin('flujo-caja', rol)
+
+    const panel = (await screen.findByRole('heading', { name: 'Cajas físicas' })).closest('article')
+    expect(within(panel).getByText('Caja principal')).toBeInTheDocument()
+    expect(within(panel).getByRole('button', { name: '+ Nueva caja física' })).toBeInTheDocument()
+    await waitFor(() => expect(getCajasFisicasByLocal).toHaveBeenCalledWith('loc-1'))
+  })
+
+  it('Caja y turnos muestra ingresos del mes y turnos abiertos, sin gastos ni flujo neto', async () => {
     renderAdmin('flujo-caja')
 
-    const cajasCard = (await screen.findByText('Cajas Abiertas')).closest('article')
+    const cajasCard = (await screen.findByText('Turnos Abiertos')).closest('article')
     expect(within(cajasCard).getByText('1')).toBeInTheDocument()
-    expect(within(cajasCard).getByText('De 2 registradas')).toBeInTheDocument()
+    expect(within(cajasCard).getByText('De 2 registrados')).toBeInTheDocument()
     expect(screen.getByText('Ingresos del Mes')).toBeInTheDocument()
     expect(screen.queryByText('Total Gastos')).not.toBeInTheDocument()
     expect(screen.queryByText('Flujo Neto')).not.toBeInTheDocument()
     expect(getCajasByLocal).toHaveBeenCalledWith('loc-1', 'test-token')
+  })
+
+  // «Caja» significaba dos cosas en la misma pantalla: el turno que se abre y
+  // cierra cada día, y el mueble donde está la terminal. Vocabulario fijado:
+  // "turno de caja" y "caja física".
+  it('nombra el turno como turno y el mueble como caja física, sin usar "caja" a secas', async () => {
+    renderAdmin('flujo-caja')
+
+    expect(await screen.findByRole('heading', { name: 'Turnos de caja' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Cajas físicas' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '+ Abrir turno de caja' })).toBeInTheDocument()
+    expect(screen.getByText('Turnos Abiertos')).toBeInTheDocument()
+
+    // Los nombres viejos, que se leían como si fueran el mismo concepto.
+    expect(screen.queryByRole('heading', { name: 'Cajas del Local' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '+ Nueva Caja' })).not.toBeInTheDocument()
+    expect(screen.queryByText('Cajas Abiertas')).not.toBeInTheDocument()
+
+    // El turno es masculino: el estado de la tabla concuerda.
+    const panelTurnos = screen.getByRole('heading', { name: 'Turnos de caja' }).closest('article')
+    expect(within(panelTurnos).getByText('Abierto')).toBeInTheDocument()
+    expect(within(panelTurnos).getByText('Cerrado')).toBeInTheDocument()
+  })
+
+  it('explica en pantalla la diferencia entre turno de caja y caja física', async () => {
+    renderAdmin('flujo-caja')
+
+    expect(await screen.findByText(/Turno de caja:/)).toBeInTheDocument()
+    expect(screen.getByText(/se abre y se cierra cada día/)).toBeInTheDocument()
+    expect(screen.getByText(/Caja física:/)).toBeInTheDocument()
+    expect(screen.getByText(/el puesto donde está la terminal/)).toBeInTheDocument()
+  })
+
+  it('el formulario de apertura habla de abrir un turno, no de crear una caja', async () => {
+    const user = userEvent.setup()
+    renderAdmin('flujo-caja')
+
+    await user.click(await screen.findByRole('button', { name: '+ Abrir turno de caja' }))
+
+    expect(await screen.findByRole('heading', { name: 'Abrir turno de caja' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Abrir turno' })).toBeInTheDocument()
+    expect(screen.getByPlaceholderText('Ej: Turno mañana')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Crear caja' })).not.toBeInTheDocument()
   })
 })
