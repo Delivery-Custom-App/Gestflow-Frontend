@@ -2,6 +2,8 @@
  * Menú de Inventario: solo se ofrece lo que el backend sabe responder.
  * Proveedores y Pedidos (compras semanales) no existen en Backend V2, así que
  * quedan fuera del menú mientras sus banderas de V2_FEATURES estén apagadas.
+ *
+ * Menú del vendedor: depende del tipo de local y es una sola entrada.
  */
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { render, screen } from '@testing-library/react'
@@ -14,20 +16,29 @@ const mockLocales = [
   { id: 'loc-paso', name: 'Mostrador Express', sales_model: 'AL_PASO' },
 ]
 
-vi.mock('../context/AuthContext', () => ({
-  useAuth: () => ({ user: { email: 'admin@demo.gestflow.dev' }, userRole: 'Admin Negocio', logout: vi.fn() }),
+const session = vi.hoisted(() => ({
+  email: 'admin@demo.gestflow.dev',
+  role: 'Admin Negocio',
+  locales: null,
+  loading: false,
 }))
-vi.mock('../hooks/useLocals', () => ({ useLocals: () => ({ locales: mockLocales }) }))
+
+vi.mock('../context/AuthContext', () => ({
+  useAuth: () => ({ user: { email: session.email }, userRole: session.role, logout: vi.fn() }),
+}))
+vi.mock('../hooks/useLocals', () => ({
+  useLocals: () => ({ locales: session.locales ?? mockLocales, loading: session.loading }),
+}))
 vi.mock('../hooks/useCurrentBusiness', () => ({ useCurrentBusiness: () => ({ business: { name: 'Café GestFlow Demo' } }) }))
 vi.mock('./onboarding/CoachMark', () => ({ default: () => null }))
 vi.mock('../context/ThemeContext', () => ({ useTheme: () => ({ darkMode: false, setDarkMode: vi.fn() }) }))
 
-function renderShell(localId) {
+function renderShell(localId, path = 'inventario') {
   return render(
-    <MemoryRouter initialEntries={[`/local/${localId}/inventario`]}>
+    <MemoryRouter initialEntries={[`/local/${localId}/${path}`]}>
       <Routes>
         <Route path="/local/:localId/*" element={<AppShell />}>
-          <Route path="inventario" element={<p>contenido</p>} />
+          <Route path="*" element={<p>contenido</p>} />
         </Route>
       </Routes>
     </MemoryRouter>,
@@ -35,7 +46,12 @@ function renderShell(localId) {
 }
 
 const original = { ...V2_FEATURES }
-afterEach(() => Object.assign(V2_FEATURES, original))
+afterEach(() => {
+  Object.assign(V2_FEATURES, original)
+  Object.assign(session, {
+    email: 'admin@demo.gestflow.dev', role: 'Admin Negocio', locales: null, loading: false,
+  })
+})
 
 describe('AppShell — menú de Inventario', () => {
   it('las banderas de proveedores y compras semanales están apagadas', () => {
@@ -71,5 +87,73 @@ describe('AppShell — menú de Inventario', () => {
 
     expect(screen.getByRole('button', { name: 'Proveedores' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Pedidos' })).toBeInTheDocument()
+  })
+})
+
+const FUERA_DEL_MENU_DEL_VENDEDOR = [
+  /^RRHH$/, /Recursos Humanos/, /Finanzas/, /Administración/, /^Ventas$/, /Caja y turnos/,
+  /Inventario/, /^Menú$/, /Control de stock/, /^Recetas$/, /Cocina/, /^Dashboard$/,
+]
+
+function noSeVe(patrones) {
+  for (const name of patrones) {
+    expect(screen.queryByRole('button', { name })).not.toBeInTheDocument()
+  }
+}
+
+describe('AppShell — menú del vendedor', () => {
+  it('en un local con mesas ve solo Gestión de Mesas', () => {
+    session.role = 'Empleado'
+    renderShell('loc-mesas', 'pos')
+
+    expect(screen.getByRole('button', { name: 'Gestión de Mesas' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Venta directa' })).not.toBeInTheDocument()
+    noSeVe(FUERA_DEL_MENU_DEL_VENDEDOR)
+  })
+
+  it('en un local de comida al paso ve solo Venta directa', () => {
+    session.role = 'Empleado'
+    renderShell('loc-paso', 'pos/venta-directa')
+
+    expect(screen.getByRole('button', { name: 'Venta directa' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Gestión de Mesas' })).not.toBeInTheDocument()
+    noSeVe(FUERA_DEL_MENU_DEL_VENDEDOR)
+  })
+
+  it('el rol Cajero tiene el mismo menú que el Empleado', () => {
+    session.role = 'Cajero'
+    renderShell('loc-paso', 'pos/venta-directa')
+
+    expect(screen.getByRole('button', { name: 'Venta directa' })).toBeInTheDocument()
+    noSeVe(FUERA_DEL_MENU_DEL_VENDEDOR)
+  })
+
+  it('el usuario demo de venta directa también ve solo Venta directa', () => {
+    session.role = 'Empleado'
+    session.email = 'rustik.demo@gestflow.dev'
+    renderShell('loc-mesas', 'pos/venta-directa')
+
+    expect(screen.getByRole('button', { name: 'Venta directa' })).toBeInTheDocument()
+    noSeVe(FUERA_DEL_MENU_DEL_VENDEDOR)
+  })
+
+  it('mientras no se conoce el tipo de local no ofrece ninguna entrada de venta', () => {
+    session.role = 'Empleado'
+    session.locales = []
+    session.loading = true
+    renderShell('loc-paso', 'pos')
+
+    expect(screen.queryByRole('button', { name: 'Gestión de Mesas' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Venta directa' })).not.toBeInTheDocument()
+    noSeVe(FUERA_DEL_MENU_DEL_VENDEDOR)
+  })
+
+  it('el dueño del negocio conserva RRHH, Finanzas e Inventario', () => {
+    renderShell('loc-mesas', 'pos')
+
+    expect(screen.getByRole('button', { name: 'RRHH' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Cocina' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Administración' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Inventario' })).toBeInTheDocument()
   })
 })

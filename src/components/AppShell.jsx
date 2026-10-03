@@ -30,7 +30,7 @@ import { WORKER_ROLES } from '../constants/roles'
 import { isDirectSaleDemoUser } from '../constants/demoMode'
 import { formatShortAddress } from '../lib/formatAddress'
 import { isV2FeatureEnabled } from '../lib/v2Features'
-import { isAlPasoLocal } from '../lib/salesModel'
+import { isAlPasoLocal, normalizeSalesModel } from '../lib/salesModel'
 
 /* ── key sets for accordion auto-open ──────────────────────────── */
 const ADMIN_KEYS = new Set(['administracion', 'ventas', 'flujo-caja'])
@@ -108,7 +108,7 @@ function Sidebar({ collapsed, onToggle, onClose }) {
   const isOwner = isAdminNegocioRole(userRole)
   const isWorker = WORKER_ROLES.includes(userRole)
   const isDemoUser = isDirectSaleDemoUser(user?.email)
-  const { locales } = useLocals()
+  const { locales, loading: localesLoading } = useLocals()
   const navigate = useNavigate()
   const { pathname, state: locState } = useLocation()
 
@@ -119,6 +119,8 @@ function Sidebar({ collapsed, onToggle, onClose }) {
     [locales, localId, locState],
   )
   const isAlPaso = isAlPasoLocal(currentLocal) || isDemoUser
+  // El tipo de local llega de /locals: hasta entonces no se sabe qué menú le toca al vendedor.
+  const localKindKnown = isDemoUser || normalizeSalesModel(currentLocal?.sales_model) !== null || !localesLoading
   const activeKey = deriveActiveKey(pathname)
   const navState  = locState?.local ? { local: locState.local } : localId ? { local: { id: localId } } : {}
 
@@ -190,7 +192,7 @@ function Sidebar({ collapsed, onToggle, onClose }) {
     ...(isSuperAdmin ? [{ key: 'gestor-observabilidad', label: 'Observabilidad', icon: BarChart3 }] : []),
     ...(isOwner ? [{ key: 'usuarios', label: 'Usuarios', icon: Users }] : []),
     ...(isOwner && isV2FeatureEnabled('hrModule') && !localId ? [{ key: 'hr-hub', label: 'Recursos Humanos', icon: Users, disabled: true }] : []),
-    ...(isV2FeatureEnabled('hrModule') && localId ? [{ key: 'hr-hub', label: 'RRHH', icon: Users }] : []),
+    ...(isV2FeatureEnabled('hrModule') && localId && !isWorker ? [{ key: 'hr-hub', label: 'RRHH', icon: Users }] : []),
     ...(!isWorker && localId ? [{ key: 'dashboard', label: 'Dashboard', icon: LayoutDashboard }] : []),
   ]
 
@@ -199,19 +201,20 @@ function Sidebar({ collapsed, onToggle, onClose }) {
   const AL_PASO_POS_ITEMS = [
     { key: 'pos-venta-directa', label: 'Venta directa', icon: DollarSign },
   ]
-  const WORKER_FINANCE_ITEM_KEYS = new Set(['ventas'])
   const availableAccordions = ACCORDIONS.map((s) => ({
     ...s,
     items: s.items.filter((i) => !i.feature || isV2FeatureEnabled(i.feature)),
   }))
+  // Vendedor: una sola entrada según el tipo de local (Venta directa si es al
+  // paso, Gestión de Mesas si tiene mesas). Sin Finanzas, Inventario, RRHH ni Cocina.
+  const posAccordion = availableAccordions.find((s) => s.key === 'pos')
+  const workerAccordions = !localKindKnown
+    ? []
+    : isAlPaso
+      ? [{ ...posAccordion, label: 'Punto de venta', items: AL_PASO_POS_ITEMS }]
+      : [{ ...posAccordion, items: posAccordion.items.filter((i) => i.key === 'pos-mesas') }]
   const visibleAccordions = isWorker
-    ? (isAlPaso
-        ? availableAccordions
-            .filter((s) => s.key === 'pos' || s.key === 'administracion')
-            .map((s) => s.key === 'pos'
-              ? { ...s, label: 'Punto de venta', items: AL_PASO_POS_ITEMS }
-              : { ...s, label: 'Finanzas', items: s.items.filter((i) => WORKER_FINANCE_ITEM_KEYS.has(i.key)) })
-        : availableAccordions.filter((s) => s.key === 'pos'))
+    ? workerAccordions
     : isAlPaso
       ? availableAccordions.map((s) => {
           if (s.key === 'pos') return { ...s, label: 'Punto de venta', items: AL_PASO_POS_ITEMS }

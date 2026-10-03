@@ -45,22 +45,40 @@ function AdminLayout() {
   return <AppShell />
 }
 
+/**
+ * Tipo de local. El tipo llega de /locals: hasta entonces `ready` es false y
+ * `alPaso` no es confiable (un local al paso se vería como restaurante).
+ */
 function useLocalIsAlPaso(localId) {
   const { user } = useAuth()
-  const { locales } = useLocals()
+  const { locales, loading } = useLocals()
   return useMemo(() => {
-    if (isDirectSaleDemoUser(user?.email)) return true
+    if (isDirectSaleDemoUser(user?.email)) return { alPaso: true, ready: true }
     const local = locales.find((l) => String(l.id) === String(localId))
-    return isAlPasoLocal(local)
-  }, [locales, localId, user?.email])
+    return { alPaso: isAlPasoLocal(local), ready: local != null || !loading }
+  }, [locales, loading, localId, user?.email])
 }
 
 /** Si el local es comida al paso, /pos (mesas) redirige a venta directa. */
 function RestaurantPosOrRedirect() {
   const { localId } = useParams()
-  const alPaso = useLocalIsAlPaso(localId)
+  const { alPaso, ready } = useLocalIsAlPaso(localId)
+  if (!ready) return <LoadingPage />
   if (alPaso) return <Navigate to={`/local/${localId}/pos/venta-directa`} replace />
   return <POSModule />
+}
+
+/**
+ * Vendedor: cada tipo de local tiene una sola pantalla de venta. `only` es la
+ * pantalla que le corresponde; la del otro tipo redirige a la suya.
+ */
+function WorkerSalesModelGate({ only, children }) {
+  const { localId } = useParams()
+  const { alPaso, ready } = useLocalIsAlPaso(localId)
+  if (!ready) return <LoadingPage />
+  if (only === 'alPaso' && !alPaso) return <Navigate to={`/local/${localId}/pos`} replace />
+  if (only === 'restaurant' && alPaso) return <Navigate to={`/local/${localId}/pos/venta-directa`} replace />
+  return children
 }
 
 function LocalModulesHomeRedirect() {
@@ -184,16 +202,32 @@ function AdminRoutes({ assignedLocalId }) {
   )
 }
 
-/** TRABAJADOR: solo POS de su local asignado */
+/**
+ * TRABAJADOR: solo la pantalla de venta de su local — Gestión de Mesas (con
+ * mesas) o Venta directa (al paso). Finanzas, Inventario, RRHH y Cocina no
+ * tienen ruta: caen en el `*` y vuelven a su inicio.
+ */
 function WorkerPosHomeRedirect({ assignedLocalId }) {
-  const alPaso = useLocalIsAlPaso(assignedLocalId)
+  const { alPaso, ready } = useLocalIsAlPaso(assignedLocalId)
+  if (assignedLocalId && !ready) return <LoadingPage />
   const home = assignedLocalId
     ? `/local/${assignedLocalId}/pos${alPaso ? '/venta-directa' : ''}`
     : '/'
   return <Navigate to={home} replace />
 }
 
-function WorkerRoutes({ assignedLocalId }) {
+/** Devuelve los <Route> de venta del trabajador (mismo motivo que `localRoutes`: no es un componente). */
+function workerLocalRoutes(wrap) {
+  return (
+    <>
+      <Route path="/local/:localId/pos" element={wrap(<RestaurantPosOrRedirect />)} />
+      <Route path="/local/:localId/pos/mesa/:mesaId" element={wrap(<WorkerSalesModelGate only="restaurant"><MesaDetail /></WorkerSalesModelGate>)} />
+      <Route path="/local/:localId/pos/venta-directa" element={wrap(<WorkerSalesModelGate only="alPaso"><VentaDirectaView /></WorkerSalesModelGate>)} />
+    </>
+  )
+}
+
+export function WorkerRoutes({ assignedLocalId }) {
   const wrap = (element) => <LocalIdGuard assignedLocalId={assignedLocalId}>{element}</LocalIdGuard>
 
   if (assignedLocalId) {
@@ -201,12 +235,7 @@ function WorkerRoutes({ assignedLocalId }) {
       <Routes>
         <Route element={<AdminLayout />}>
           <Route path="/" element={<WorkerPosHomeRedirect assignedLocalId={assignedLocalId} />} />
-          <Route path="/local/:localId/pos" element={wrap(<RestaurantPosOrRedirect />)} />
-          <Route path="/local/:localId/pos/cocina" element={wrap(<POSModule />)} />
-          <Route path="/local/:localId/pos/mesa/:mesaId" element={wrap(<MesaDetail />)} />
-          <Route path="/local/:localId/pos/venta-directa" element={wrap(<VentaDirectaView />)} />
-          <Route path="/local/:localId/administrativo/:sectionId?" element={wrap(<AdministrativeModule />)} />
-          <Route path="/local/:localId/rrhh" element={wrap(<HrModule />)} />
+          {workerLocalRoutes(wrap)}
           <Route path="/configuracion" element={<ConfiguracionPage />} />
           <Route path="*" element={<WorkerPosHomeRedirect assignedLocalId={assignedLocalId} />} />
         </Route>
@@ -221,12 +250,7 @@ function WorkerRoutes({ assignedLocalId }) {
       <Route element={<AdminLayout />}>
         <Route path="/" element={<Navigate to="/admin" replace />} />
         <Route path="/admin" element={<AdminDashboard />} />
-        <Route path="/local/:localId/pos" element={wrap(<RestaurantPosOrRedirect />)} />
-        <Route path="/local/:localId/pos/cocina" element={wrap(<POSModule />)} />
-        <Route path="/local/:localId/pos/mesa/:mesaId" element={wrap(<MesaDetail />)} />
-        <Route path="/local/:localId/pos/venta-directa" element={wrap(<VentaDirectaView />)} />
-        <Route path="/local/:localId/administrativo/:sectionId?" element={wrap(<AdministrativeModule />)} />
-        <Route path="/local/:localId/rrhh" element={wrap(<HrModule />)} />
+        {workerLocalRoutes(wrap)}
         <Route path="/configuracion" element={<ConfiguracionPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
