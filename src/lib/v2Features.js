@@ -28,8 +28,24 @@ export const V2_FEATURES = {
    * derivados (detalle, KPIs, historial de compras). Las funciones del front
    * son sustitutos que devuelven listas vacías, así que con la bandera apagada
    * la pantalla lo dice en vez de mostrar ceros que parecen datos reales.
+   *
+   * Con la bandera apagada, "Proveedores" no se ofrece en el menú de Inventario
+   * (AppShell.jsx, ítem `inv-prov`). Para volver a encenderla hace falta que
+   * Backend V2 exponga `/suppliers` (CRUD), su detalle, KPIs e historial de
+   * compras; luego basta con poner esta bandera en true y el ítem reaparece.
    */
   suppliers: false,
+  /**
+   * Compras semanales ("Pedidos" en el menú de Inventario). V2 no tiene el
+   * módulo: no existe `/weekly-purchase-orders` (listar, crear, detalle, PATCH
+   * ni sus items), que es lo que consume `weeklyPurchasesApi.js`; hoy la
+   * pantalla falla al abrirse. Con la bandera apagada no se ofrece en el menú
+   * (AppShell.jsx, ítem `inv-compras`) ni el acceso "Ir a Pedidos" del Hub de
+   * inventario. Para volver a encenderla hace falta ese módulo en el backend
+   * —que además depende de `/suppliers`, ver `suppliers`— y luego poner esta
+   * bandera en true. Las rutas y las pantallas siguen en el código.
+   */
+  weeklyPurchases: false,
   /** Boleta del cliente: `GET /orders/{id}/boleta`, impresa por el navegador. */
   receiptPrint: true,
   superAdminAudit: true,

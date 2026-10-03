@@ -35,7 +35,7 @@ const STEPS = {
     {
       target: 'nav-inventario',
       title: 'Inventario',
-      desc: 'Controla stock, proveedores, pedidos de insumos y gestiona las recetas del menú.',
+      desc: 'Controla el stock de tus productos y gestiona las recetas del menú.',
     },
   ],
   admin: [
@@ -57,7 +57,7 @@ const STEPS = {
     {
       target: 'nav-inventario',
       title: 'Inventario',
-      desc: 'Controla stock, proveedores, pedidos de insumos y gestiona las recetas del menú.',
+      desc: 'Controla el stock de tus productos y gestiona las recetas del menú.',
     },
   ],
   worker: [

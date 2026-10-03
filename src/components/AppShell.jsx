@@ -64,6 +64,8 @@ function deriveActiveKey(pathname) {
 }
 
 /* ── nav config ─────────────────────────────────────────────────── */
+// Un ítem con `feature` solo se ofrece si esa bandera de V2_FEATURES está
+// encendida (src/lib/v2Features.js): no se muestra lo que el backend no tiene.
 const ACCORDIONS = [
   {
     key: 'administracion',
@@ -89,10 +91,10 @@ const ACCORDIONS = [
     icon: PackageOpen,
     items: [
       { key: 'inv-hub',        label: 'Estado Inventario', icon: PackageOpen  },
-      { key: 'inv-prov',       label: 'Proveedores',       icon: Truck        },
+      { key: 'inv-prov',       label: 'Proveedores',       icon: Truck,        feature: 'suppliers' },
       { key: 'inv-stock',      label: 'Menú',              icon: UtensilsCrossed },
       { key: 'inv-stock-ctrl', label: 'Control de stock',  icon: Package      },
-      { key: 'inv-compras',    label: 'Pedidos',           icon: ShoppingCart },
+      { key: 'inv-compras',    label: 'Pedidos',           icon: ShoppingCart, feature: 'weeklyPurchases' },
       { key: 'inv-recetas',    label: 'Recetas',           icon: BookMarked   },
     ],
   },
@@ -198,16 +200,20 @@ function Sidebar({ collapsed, onToggle, onClose }) {
     { key: 'pos-venta-directa', label: 'Venta directa', icon: DollarSign },
   ]
   const WORKER_FINANCE_ITEM_KEYS = new Set(['ventas'])
+  const availableAccordions = ACCORDIONS.map((s) => ({
+    ...s,
+    items: s.items.filter((i) => !i.feature || isV2FeatureEnabled(i.feature)),
+  }))
   const visibleAccordions = isWorker
     ? (isAlPaso
-        ? ACCORDIONS
+        ? availableAccordions
             .filter((s) => s.key === 'pos' || s.key === 'administracion')
             .map((s) => s.key === 'pos'
               ? { ...s, label: 'Punto de venta', items: AL_PASO_POS_ITEMS }
               : { ...s, label: 'Finanzas', items: s.items.filter((i) => WORKER_FINANCE_ITEM_KEYS.has(i.key)) })
-        : ACCORDIONS.filter((s) => s.key === 'pos'))
+        : availableAccordions.filter((s) => s.key === 'pos'))
     : isAlPaso
-      ? ACCORDIONS.map((s) => {
+      ? availableAccordions.map((s) => {
           if (s.key === 'pos') return { ...s, label: 'Punto de venta', items: AL_PASO_POS_ITEMS }
           if (s.key === 'inventario') {
             return {
@@ -217,7 +223,7 @@ function Sidebar({ collapsed, onToggle, onClose }) {
           }
           return s
         })
-      : ACCORDIONS
+      : availableAccordions
 
   const navBtn = (item, small = false, hideIcon = false) => {
     const isActive = activeKey === item.key

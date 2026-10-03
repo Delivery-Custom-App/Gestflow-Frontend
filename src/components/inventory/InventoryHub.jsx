@@ -10,6 +10,7 @@ import {
 } from 'recharts'
 import { getInventoryKpisByLocal, getInventoryStockList } from '../../lib/inventoryApi'
 import { useAlerts } from '../../hooks/useAlerts'
+import { isV2FeatureEnabled } from '../../lib/v2Features'
 import InventoryShell from './InventoryShell'
 import LoadingSpinner from '../LoadingSpinner'
 import ChartSkeleton from '../ui/ChartSkeleton'
@@ -101,6 +102,16 @@ function InventoryHub() {
   const selectedLocal = useSelectedLocal(localId)
 
   const nav = (path) => navigate(`/local/${localId}/${path}`, { state: { local: selectedLocal } })
+  // Sin backend de proveedores / compras semanales no se ofrecen esos accesos.
+  const suppliersEnabled = isV2FeatureEnabled('suppliers')
+  const purchasesEnabled = isV2FeatureEnabled('weeklyPurchases')
+  const guideSections = [
+    'Stock (gestión detallada)',
+    ...(suppliersEnabled ? ['Proveedores (gestión de proveedores)'] : []),
+    'Recetas (fórmulas y costos)',
+    ...(purchasesEnabled ? ['Compras Semanales (órdenes de compra)'] : []),
+  ]
+  const guideSectionsText = `${guideSections.slice(0, -1).join(', ')} y ${guideSections[guideSections.length - 1]}`
 
   const [kpis, setKpis]           = useState(null)
   const [kpisLoading, setKL]      = useState(true)
@@ -194,8 +205,8 @@ function InventoryHub() {
                   { icon: Package, color: 'text-[hsl(var(--primary))]', title: 'Resumen de inventario', desc: 'Los indicadores superiores muestran la cantidad total de productos, cuántos tienen stock óptimo, cuántos están bajos, cuántos en estado crítico y el valor total del inventario.' },
                   { icon: TrendingDown, color: 'text-amber-600', title: 'Distribución de stock', desc: 'Gráfico de barras que muestra cuántos productos están en cada nivel de stock (Óptimo, Bajo, Crítico) para ver de un vistazo la situación general.' },
                   { icon: AlertTriangle, color: 'text-red-600', title: 'Productos críticos', desc: 'Lista los 5 productos con menor stock comparando su cantidad actual contra el mínimo definido. Los más urgentes aparecen primero.' },
-                  { icon: ShoppingCart, color: 'text-blue-600', title: 'Alertas de inventario', desc: 'Notificaciones automáticas de productos que necesitan reposición urgente. Haz clic en "Ir a Pedidos" para crear una orden de compra.' },
-                  { icon: ArrowRight, color: 'text-[hsl(var(--primary))]', title: 'Secciones del inventario', highlight: true, desc: 'Desde el menú lateral accedes a: Stock (gestión detallada), Proveedores (gestión de proveedores), Recetas (fórmulas y costos) y Compras Semanales (órdenes de compra).' },
+                  { icon: ShoppingCart, color: 'text-blue-600', title: 'Alertas de inventario', desc: `Notificaciones automáticas de productos que necesitan reposición urgente.${purchasesEnabled ? ' Haz clic en "Ir a Pedidos" para crear una orden de compra.' : ''}` },
+                  { icon: ArrowRight, color: 'text-[hsl(var(--primary))]', title: 'Secciones del inventario', highlight: true, desc: `Desde el menú lateral accedes a: ${guideSectionsText}.` },
                 ].map(({ icon: Icon, color, title, desc, highlight }) => (
                   <div key={title} className={`flex gap-3 rounded-xl p-3 ${highlight ? 'bg-[hsl(var(--primary)/0.08)] border border-[hsl(var(--primary)/0.2)]' : 'bg-[hsl(var(--muted)/0.4)]'}`}>
                     <div className={`mt-0.5 shrink-0 ${color}`}><Icon size={15} /></div>
@@ -342,9 +353,11 @@ function InventoryHub() {
                       <Badge variant="destructive" className="text-xs px-2 py-0.5">{inventoryAlerts.length}</Badge>
                     )}
                   </CardTitle>
-                  <Button type="button" variant="ghost" size="sm" onClick={() => nav('inventario/compras-semanales')} className="gap-1 text-sm">
-                    Ir a Pedidos <ArrowRight size={14} />
-                  </Button>
+                  {purchasesEnabled && (
+                    <Button type="button" variant="ghost" size="sm" onClick={() => nav('inventario/compras-semanales')} className="gap-1 text-sm">
+                      Ir a Pedidos <ArrowRight size={14} />
+                    </Button>
+                  )}
                 </div>
               </CardHeader>
               <CardContent className="pt-0">

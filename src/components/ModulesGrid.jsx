@@ -25,9 +25,9 @@ const modules = [
   {
     id: 'inventario',
     title: 'Inventario',
-    subtitle: 'Recetas, stock de productos y proveedores',
+    subtitle: 'Recetas y stock de productos',
     Icon: Package,
-    features: ['Recetas', 'Menú', 'Proveedores', 'Órdenes de Compra'],
+    features: ['Recetas', 'Menú', 'Control de stock'],
     disabled: false,
   },
   {
