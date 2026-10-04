@@ -337,31 +337,12 @@ function Sidebar({ collapsed, onToggle, onClose }) {
             )}
           </AnimatePresence>
 
-          <div className={cn('rounded-xl border border-[hsl(var(--border))] flex flex-col gap-0.5', collapsed ? 'p-1' : 'p-1.5')}>
-            {discoverItems.map((item) => navBtn(item, false, true))}
-
-            {/* Configuración */}
-            <button
-              onClick={() => { onClose?.(); navigate('/configuracion') }}
-              title={collapsed ? 'Configuración' : undefined}
-              className={cn(
-                'w-full flex items-center gap-2.5 px-3 rounded-lg font-medium transition-colors text-left py-2.5 text-sm',
-                pathname === '/configuracion'
-                  ? 'bg-[hsl(var(--accent))] text-[hsl(var(--foreground))]'
-                  : 'text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--accent))] hover:text-[hsl(var(--foreground))]',
-                collapsed ? 'justify-center px-0' : null,
-              )}
-            >
-              {collapsed && <Settings size={16} className="shrink-0" />}
-              <AnimatePresence>
-                {!collapsed && (
-                  <m.span initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex-1 text-left">
-                    Configuración
-                  </m.span>
-                )}
-              </AnimatePresence>
-            </button>
-          </div>
+          {/* Configuración vive en la barra superior, junto al cambio de tema (TopBar). */}
+          {discoverItems.length > 0 && (
+            <div className={cn('rounded-xl border border-[hsl(var(--border))] flex flex-col gap-0.5', collapsed ? 'p-1' : 'p-1.5')}>
+              {discoverItems.map((item) => navBtn(item, false, true))}
+            </div>
+          )}
         </div>
 
         {/* Accordions: menú + submenú expansible */}
@@ -481,7 +462,9 @@ function TopBar({ localId }) {
   const { locales } = useLocals()
   const { business } = useCurrentBusiness()
   const { darkMode, setDarkMode } = useTheme()
-  const { state: locState } = useLocation()
+  const { state: locState, pathname } = useLocation()
+  const navigate = useNavigate()
+  const enConfiguracion = pathname === '/configuracion'
 
   const toggleDarkMode = () => {
     const next = !darkMode
@@ -521,8 +504,23 @@ function TopBar({ localId }) {
         )}
       </div>
 
-      {/* Right: dark mode toggle */}
+      {/* Right: ajustes personales — Configuración y cambio de tema, juntos */}
       <div className="shrink-0 flex items-center gap-2">
+        <button
+          type="button"
+          onClick={() => navigate('/configuracion')}
+          aria-label="Configuración"
+          aria-current={enConfiguracion ? 'page' : undefined}
+          title="Configuración"
+          className={cn(
+            'w-9 h-9 flex items-center justify-center rounded-full transition-colors',
+            enConfiguracion
+              ? 'bg-[hsl(var(--accent))] text-[hsl(var(--foreground))]'
+              : 'text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--accent))] hover:text-[hsl(var(--foreground))]',
+          )}
+        >
+          <Settings size={17} />
+        </button>
         <button
           type="button"
           onClick={toggleDarkMode}

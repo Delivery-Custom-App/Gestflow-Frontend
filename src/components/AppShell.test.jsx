@@ -328,3 +328,61 @@ describe('AppShell — Inicio del dueño', () => {
     expect(screen.queryByRole('button', { name: 'Inicio' })).not.toBeInTheDocument()
   })
 })
+
+function renderConConfiguracion(path) {
+  return render(
+    <MemoryRouter initialEntries={[path]}>
+      <Routes>
+        <Route element={<AppShell />}>
+          <Route path="/admin" element={<p>pantalla de inicio</p>} />
+          <Route path="/configuracion" element={<p>pantalla de configuración</p>} />
+          <Route path="/local/:localId/*" element={<p>contenido del local</p>} />
+        </Route>
+      </Routes>
+    </MemoryRouter>,
+  )
+}
+
+describe('AppShell — Configuración junto al cambio de tema', () => {
+  afterEach(() => {
+    try { window.localStorage.removeItem('appSidebarCollapsed') } catch { /* sin storage */ }
+  })
+
+  it('está en la barra superior, al lado del cambio de tema, y no en el menú lateral', () => {
+    renderConConfiguracion('/admin')
+
+    const configuracion = screen.getByRole('button', { name: 'Configuración' })
+    const tema = screen.getByRole('button', { name: 'Cambiar a modo oscuro' })
+    expect(configuracion.parentElement).toBe(tema.parentElement)
+    expect(within(screen.getByRole('navigation')).queryByRole('button', { name: 'Configuración' })).not.toBeInTheDocument()
+  })
+
+  it('lleva a la misma pantalla y se marca como activa en ella', async () => {
+    const user = userEvent.setup()
+    renderConConfiguracion('/local/loc-mesas/pos')
+
+    const boton = screen.getByRole('button', { name: 'Configuración' })
+    expect(boton).not.toHaveAttribute('aria-current')
+    await user.click(boton)
+
+    expect(screen.getByText('pantalla de configuración')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Configuración' })).toHaveAttribute('aria-current', 'page')
+  })
+
+  it('con el menú colapsado se sigue entendiendo qué es', () => {
+    window.localStorage.setItem('appSidebarCollapsed', '1')
+    renderConConfiguracion('/admin')
+
+    const boton = screen.getByRole('button', { name: 'Configuración' })
+    expect(boton).toHaveAttribute('title', 'Configuración')
+  })
+
+  it('el vendedor también la tiene, y su menú no queda con un recuadro vacío', () => {
+    session.role = 'Empleado'
+    renderConConfiguracion('/local/loc-mesas/pos')
+
+    expect(screen.getByRole('button', { name: 'Configuración' })).toBeInTheDocument()
+    expect(screen.queryByText('Descubrir')).not.toBeInTheDocument()
+    expect(within(screen.getByRole('navigation')).getAllByRole('button')[0]).toHaveAccessibleName(/POS Restaurante/)
+  })
+})
