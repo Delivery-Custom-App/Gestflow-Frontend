@@ -223,9 +223,11 @@ function displayNameFromUser(u) {
   const completo = [u?.first_name, u?.last_name].map((s) => String(s || '').trim()).filter(Boolean).join(' ')
   if (completo) return completo
   if (u?.name) return u.name
+  // Sin nombre cargado: el mismo que muestran Configuración y el menú ("centro.admin" → "Centro Admin").
   const email = String(u?.email || '')
-  const local = email.split('@')[0]
-  return local || '—'
+  if (!email) return '—'
+  const local = email.split('@')[0] || ''
+  return local.replace(/[._-]+/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()).trim() || email
 }
 
 /**

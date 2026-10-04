@@ -132,6 +132,8 @@ function localRoutes(assignedLocalId, guarded = false) {
       <Route path="/local/:localId/inventario/proveedores" element={wrap(<SuppliersKpisDashboard />)} />
       <Route path="/local/:localId/inventario" element={wrap(<InventoryHub />)} />
       <Route path="/local/:localId/administrativo/:sectionId?" element={wrap(<AdministrativeModule />)} />
+      {/* Usuarios de un local sin salir de él (el encargado, solo el suyo: LocalIdGuard). */}
+      <Route path="/local/:localId/usuarios" element={wrap(<UsersListPage />)} />
       {/* RRHH apagado con `hrModule`: sin la ruta, la dirección cae en el `*` de cada rol. */}
       {isV2FeatureEnabled('hrModule') && <Route path="/local/:localId/rrhh" element={wrap(<HrModule />)} />}
       <Route path="/local/:localId/pos" element={wrap(<RestaurantPosOrRedirect />)} />
@@ -181,12 +183,17 @@ export function OwnerRoutes() {
   )
 }
 
-/** ADMIN: acceso solo a SU local — sin Tus Locales, sin Usuarios */
+/**
+ * ADMIN (encargado): acceso solo a SU local. Ve a los usuarios de su local
+ * (`/usuarios` lo lleva a los de su local) pero no crea usuarios: el backend
+ * se lo rechaza, así que `/usuarios/crear` sigue cerrado.
+ */
 export function AdminRoutes({ assignedLocalId }) {
   // Si tiene local asignado, home es ese local; si no, muestra selector vacío
   const home = assignedLocalId
     ? `/local/${assignedLocalId}/dashboard`
     : '/admin'
+  const usuariosDeSuLocal = assignedLocalId ? `/local/${assignedLocalId}/usuarios` : home
 
   return (
     <Routes>
@@ -194,8 +201,7 @@ export function AdminRoutes({ assignedLocalId }) {
         <Route path="/" element={<Navigate to={home} replace />} />
         {/* /admin redirige siempre a su local */}
         <Route path="/admin" element={<Navigate to={home} replace />} />
-        {/* Bloquea /usuarios */}
-        <Route path="/usuarios" element={<Navigate to={home} replace />} />
+        <Route path="/usuarios" element={<Navigate to={usuariosDeSuLocal} replace />} />
         <Route path="/usuarios/crear" element={<Navigate to={home} replace />} />
         <Route path="/configuracion" element={<ConfiguracionPage />} />
         {localRoutes(assignedLocalId, true)}

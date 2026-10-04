@@ -17,7 +17,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { render, screen, cleanup, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { MemoryRouter, Route, Routes } from 'react-router'
+import { MemoryRouter, Route, Routes, useParams } from 'react-router'
 import AppShell from './AppShell'
 import { V2_FEATURES } from '../lib/v2Features'
 
@@ -384,5 +384,72 @@ describe('AppShell — Configuración junto al cambio de tema', () => {
     expect(screen.getByRole('button', { name: 'Configuración' })).toBeInTheDocument()
     expect(screen.queryByText('Descubrir')).not.toBeInTheDocument()
     expect(within(screen.getByRole('navigation')).getAllByRole('button')[0]).toHaveAccessibleName(/POS Restaurante/)
+  })
+})
+
+// Muestra a qué local llevó el menú: así la prueba ve que es el mismo de la URL.
+function UsuariosDelLocal() {
+  const { localId } = useParams()
+  return <p>{`usuarios de ${localId}`}</p>
+}
+
+function renderConUsuarios(path) {
+  return render(
+    <MemoryRouter initialEntries={[path]}>
+      <Routes>
+        <Route element={<AppShell />}>
+          <Route path="/admin" element={<p>pantalla de inicio</p>} />
+          <Route path="/usuarios" element={<p>usuarios del negocio</p>} />
+          <Route path="/local/:localId/usuarios" element={<UsuariosDelLocal />} />
+          <Route path="/local/:localId/*" element={<p>contenido del local</p>} />
+        </Route>
+      </Routes>
+    </MemoryRouter>,
+  )
+}
+
+describe('AppShell — Usuarios por rol', () => {
+  const menu = () => within(screen.getByRole('navigation'))
+
+  it('fuera de una franquicia, el dueño va a los usuarios de todo el negocio', async () => {
+    const user = userEvent.setup()
+    renderConUsuarios('/admin')
+
+    await user.click(menu().getByRole('button', { name: 'Usuarios' }))
+    expect(screen.getByText('usuarios del negocio')).toBeInTheDocument()
+  })
+
+  it('dentro de una franquicia, el dueño va a los de ese local sin salir de ella', async () => {
+    const user = userEvent.setup()
+    // loc-paso no es el primero de la lista de locales: el menú usa el de la URL.
+    renderConUsuarios('/local/loc-paso/pos/venta-directa')
+
+    await user.click(menu().getByRole('button', { name: 'Usuarios' }))
+    expect(screen.getByText('usuarios de loc-paso')).toBeInTheDocument()
+    // Sigue dentro: el menú del local (POS, Inventario…) sigue a la vista.
+    expect(menu().getByRole('button', { name: 'Inventario' })).toBeInTheDocument()
+  })
+
+  it('el encargado también tiene Usuarios, y lo lleva a los de su local', async () => {
+    const user = userEvent.setup()
+    session.role = 'Admin'
+    renderConUsuarios('/local/loc-mesas/dashboard')
+
+    await user.click(menu().getByRole('button', { name: 'Usuarios' }))
+    expect(screen.getByText('usuarios de loc-mesas')).toBeInTheDocument()
+  })
+
+  it('un encargado sin local asignado no recibe un Usuarios que no lleva a ninguna parte', () => {
+    session.role = 'Admin'
+    renderConUsuarios('/admin')
+
+    expect(menu().queryByRole('button', { name: 'Usuarios' })).not.toBeInTheDocument()
+  })
+
+  it('el vendedor no tiene Usuarios', () => {
+    session.role = 'Empleado'
+    renderConUsuarios('/local/loc-mesas/pos')
+
+    expect(menu().queryByRole('button', { name: 'Usuarios' })).not.toBeInTheDocument()
   })
 })
