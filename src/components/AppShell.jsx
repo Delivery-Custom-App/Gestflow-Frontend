@@ -15,6 +15,7 @@ import {
 } from 'lucide-react'
 import AunaroSymbol from '@/assets/brand/AunaroSymbol'
 import { nombreVisible } from '@/lib/altaUsuario'
+import TurnoVendedorBarra from './turno/TurnoVendedorBarra'
 
 const ROLE_BADGE_LABEL = {
   SUPERADMIN: 'Superadmin',
@@ -508,8 +509,9 @@ function TopBar({ localId }) {
         )}
       </div>
 
-      {/* Right: ajustes personales — Configuración y cambio de tema, juntos */}
+      {/* Right: el turno del vendedor (solo en su vista) y los ajustes personales */}
       <div className="shrink-0 flex items-center gap-2">
+        <TurnoVendedorBarra />
         <button
           type="button"
           onClick={() => navigate('/configuracion')}

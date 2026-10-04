@@ -227,6 +227,7 @@ export function AuthProvider({ user, userRole, logout, refreshUser, children }) 
     return {
       user: user ?? null,
       userRole: role,
+      assignedLocalId: getAssignedLocalId(user),
       mustChangePassword: Boolean(user?.must_change_password),
       logout,
       refreshUser: refreshUser ?? (() => Promise.resolve(null)),

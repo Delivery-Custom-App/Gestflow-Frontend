@@ -46,6 +46,16 @@ export const V2_FEATURES = {
    * bandera en true: el campo aparece, se exige y viaja como `rut`.
    */
   userRut: false,
+  /**
+   * "Cerrar turno" en la vista del vendedor. Lo acordado es que el vendedor
+   * abre su turno al entrar y que lo cierran el encargado o el dueño (Caja y
+   * turnos). El botón ya está hecho —confirma, cierra con `PATCH /cajas/{id}`
+   * y explica el 409 si quedan órdenes en curso— y espera a que el backend
+   * defina la opción del vendedor. Hoy, con la bandera apagada, no se muestra.
+   * Ojo: técnicamente el backend ya le permitiría cerrar su propio turno (no
+   * revisa el rol, ver B-05), así que encenderla es decisión de producto.
+   */
+  cierreTurnoVendedor: false,
   mercadopagoPoint: true,
   mpConfig: true,
   cajaMpPairing: true,

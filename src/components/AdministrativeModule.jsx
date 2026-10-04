@@ -21,6 +21,7 @@ import {
   getResumenDiario,
 } from '../lib/administrativeApi'
 import { getAuthContext, apiRequest } from '../lib/apiClient'
+import { mensajeCierreTurno } from '../lib/turnos'
 import { useAuth } from '../context/AuthContext'
 import { normalizeRoleKey } from '../auth/roleLabel'
 import { Button } from '@/components/ui/button'
@@ -1054,7 +1055,8 @@ function CajaMovimientosModal({ caja, onClose, onClosed }) {
       onClosed?.()
       handleClose()
     } catch (e) {
-      setErr(e?.message || 'No se pudo cerrar el turno')
+      // Con órdenes en curso el backend responde 409: se explica qué hacer.
+      setErr(mensajeCierreTurno(e))
       setClosing(false)
     }
   }
