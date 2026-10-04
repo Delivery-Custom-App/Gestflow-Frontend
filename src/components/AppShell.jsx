@@ -102,11 +102,12 @@ const ACCORDIONS = [
 
 /* ── Sidebar ────────────────────────────────────────────────────── */
 function Sidebar({ collapsed, onToggle, onClose }) {
-  const { user, userRole, logout } = useAuth()
+  const { user, userRole, logout, assignedLocalId } = useAuth()
   const { business } = useCurrentBusiness()
   const isSuperAdmin = isSuperAdminRole(userRole)
   const isOwner = isAdminNegocioRole(userRole)
   const isWorker = WORKER_ROLES.includes(userRole)
+  const isEncargado = normalizeRoleKey(userRole) === 'ADMIN'
   const isDemoUser = isDirectSaleDemoUser(user?.email)
   const { locales, loading: localesLoading } = useLocals()
   const navigate = useNavigate()
@@ -160,7 +161,8 @@ function Sidebar({ collapsed, onToggle, onClose }) {
     onClose?.()
     switch (item.key) {
       case 'locales':   navigate('/admin'); break
-      case 'usuarios':  navigate('/usuarios'); break
+      // Dentro de una franquicia, los usuarios de ese local sin salir de ella.
+      case 'usuarios':  navigate(localId ? `/local/${localId}/usuarios` : '/usuarios', { state: navState }); break
       case 'gestor':    navigate('/gestor'); break
       case 'gestor-resumen':       navigate('/gestor/resumen'); break
       case 'gestor-auditoria':     navigate('/gestor/auditoria'); break
@@ -192,7 +194,9 @@ function Sidebar({ collapsed, onToggle, onClose }) {
     ...(isSuperAdmin ? [{ key: 'gestor-usuarios', label: 'Usuarios', icon: Users }] : []),
     ...(isSuperAdmin ? [{ key: 'gestor-auditoria', label: 'Auditoría', icon: FileText }] : []),
     ...(isSuperAdmin ? [{ key: 'gestor-observabilidad', label: 'Observabilidad', icon: BarChart3 }] : []),
-    ...(isOwner ? [{ key: 'usuarios', label: 'Usuarios', icon: Users }] : []),
+    // El dueño ve a los de todos sus locales; el encargado, a los del suyo
+    // (sin local asignado no hay usuarios que mostrarle: el ítem no se ofrece).
+    ...(isOwner || (isEncargado && (assignedLocalId || localId)) ? [{ key: 'usuarios', label: 'Usuarios', icon: Users }] : []),
     // RRHH está apagado con `hrModule` (src/lib/v2Features.js): ningún rol lo ve.
     ...(isV2FeatureEnabled('hrModule') && localId && !isWorker ? [{ key: 'hr-hub', label: 'RRHH', icon: Users }] : []),
     ...(!isWorker && localId ? [{ key: 'dashboard', label: 'Dashboard', icon: LayoutDashboard }] : []),

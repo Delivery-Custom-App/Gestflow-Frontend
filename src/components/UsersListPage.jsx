@@ -1,11 +1,12 @@
 import { useState, useEffect, useCallback } from 'react'
 import { m, AnimatePresence } from 'framer-motion'
-import { Users, Store, Plus, Trash2, ChevronDown, X, UserPlus, Loader2, Eye, EyeOff, Shield, HelpCircle, KeyRound, Building2 } from 'lucide-react'
+import { Users, Store, Plus, Trash2, X, UserPlus, Loader2, Eye, EyeOff, Shield, HelpCircle, KeyRound, Filter } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { isSuperAdminRole } from '../auth/roleLabel'
 import { isInventoryAdminRole } from '../utils/inventoryAccess'
 import { useLocals } from '../hooks/useLocals'
 import { listUsers, deleteUser, createUser, getOptionalAuthContext } from '../lib/apiClient'
+import { SIN_LOCAL, usuariosVisibles } from '../lib/listaUsuarios'
 import {
   AVISO_VENDEDOR, LARGO_MINIMO_CONTRASENA, ROL_LABEL, datosDeAlta, formatearRut, pideRut,
   puedeCrearUsuarios, rolConLocal, rolesAsignables, validarAlta,
@@ -15,9 +16,20 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { useNavigate } from 'react-router'
+import { useNavigate, useParams } from 'react-router'
 
 const FORM_VACIO = { nombre: '', apellido: '', rut: '', email: '', password: '', role: 'EMPLEADO', local_id: '' }
+
+const ORDEN_ROL = { SUPERADMIN: 0, ADMIN_NEGOCIO: 1, ADMIN: 2, EMPLEADO: 3 }
+
+/*
+ * ¿Quién ve qué? (el backend ya filtra por permisos en GET /users):
+ * - El dueño ve a las personas de todos sus locales, con columna y filtro por
+ *   local; dentro de una franquicia (/local/:localId/usuarios), solo las de ese
+ *   local, sin salir de ella.
+ * - El encargado ve solo a las de su local, y no crea ni elimina: el backend
+ *   no le permite crear usuarios (403).
+ */
 
 function roleBadge(role) {
   const r = String(role || '').toUpperCase()
@@ -30,8 +42,10 @@ function roleBadge(role) {
 }
 
 // ── Drawer crear usuario ─────────────────────────────────────────────────────
-export function CreateUserDrawer({ isOpen, onClose, onSuccess, locales, localesLoading, userRole }) {
-  const [form, setForm]       = useState(FORM_VACIO)
+export function CreateUserDrawer({ isOpen, onClose, onSuccess, locales, localesLoading, userRole, localIdPorDefecto = '' }) {
+  // Abierto desde una franquicia, el alta llega con ese local elegido.
+  const formInicial = { ...FORM_VACIO, local_id: localIdPorDefecto || '' }
+  const [form, setForm]       = useState(formInicial)
   const [loading, setLoading] = useState(false)
   const [err, setErr]         = useState('')
   const [showPwd, setShowPwd] = useState(false)
@@ -41,7 +55,7 @@ export function CreateUserDrawer({ isOpen, onClose, onSuccess, locales, localesL
   const setRut = (e) => setForm((f) => ({ ...f, rut: formatearRut(e.target.value) }))
 
   const reset = () => {
-    setForm(FORM_VACIO)
+    setForm(formInicial)
     setErr('')
     setShowPwd(false)
   }
@@ -190,7 +204,9 @@ export default function UsersListPage() {
   const [err, setErr]             = useState('')
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [guideOpen,  setGuideOpen]  = useState(false)
-  const [openGroups, setOpenGroups] = useState(new Set(['__superadmin__']))
+  const [filtroLocal, setFiltroLocal] = useState('')
+  // Dentro de una franquicia (/local/:localId/usuarios) la lista es la de ese local.
+  const { localId } = useParams()
 
   const loadUsers = useCallback(async () => {
     setLoading(true)
@@ -201,16 +217,7 @@ export default function UsersListPage() {
         businessId = ctx.businessId
       }
       const data = await listUsers(businessId)
-      const list = Array.isArray(data) ? data : []
-      setUsers(list)
-      // Abrir todos los grupos por defecto al cargar (incluyendo __superadmin__)
-      const ids = new Set(['__superadmin__'])
-      for (const u of list) {
-        const role = String(u.role || '').toUpperCase()
-        const lid = role === 'SUPERADMIN' ? '__superadmin__' : u.local_id ? String(u.local_id) : '__none__'
-        ids.add(lid)
-      }
-      setOpenGroups(ids)
+      setUsers(Array.isArray(data) ? data : [])
     } catch (e) {
       setErr(e.detail || e.message || 'Error al cargar usuarios')
       setUsers([])
@@ -237,7 +244,11 @@ export default function UsersListPage() {
     )
   }
 
+  const puedeCrear = puedeCrearUsuarios(userRole)
+
   const canDelete = (targetUser) => {
+    // El encargado solo consulta la lista: no crea ni elimina usuarios.
+    if (!puedeCrear) return false
     const me = String(user?.id || '')
     const myRole = String(userRole || '').toUpperCase().replace(/[\s_-]+/g, '')
     const targetRole = String(targetUser.role || '').toUpperCase().replace(/[\s_-]+/g, '')
@@ -254,42 +265,22 @@ export default function UsersListPage() {
     catch (e2) { setErr(e2.detail || e2.message || 'Error al eliminar usuario') }
   }
 
-  const toggleGroup = (lid) => {
-    setOpenGroups((prev) => {
-      const next = new Set(prev)
-      next.has(lid) ? next.delete(lid) : next.add(lid)
-      return next
-    })
-  }
-
-  const ROLE_ORDER = { SUPERADMIN: 0, ADMIN: 1, CAJERO: 2, EMPLEADO: 3 }
-  const sortByRole = (a, b) => {
-    const ra = ROLE_ORDER[String(a.role || '').toUpperCase()] ?? 99
-    const rb = ROLE_ORDER[String(b.role || '').toUpperCase()] ?? 99
-    return ra - rb
-  }
-
   const localNameById = Object.fromEntries(locales.map((l) => [String(l.id), l.name]))
-  const groupsMap = new Map()
-  for (const u of users) {
-    const role = String(u.role || '').toUpperCase()
-    const lid = role === 'SUPERADMIN' ? '__superadmin__' : u.local_id ? String(u.local_id) : '__none__'
-    if (!groupsMap.has(lid)) groupsMap.set(lid, [])
-    groupsMap.get(lid).push(u)
-  }
-  const groups = Array.from(groupsMap.entries())
-    .map(([lid, us]) => ({
-      localId: lid,
-      localName: lid === '__superadmin__' ? 'SuperAdministradores' : lid === '__none__' ? 'Sin local asignado' : (localNameById[lid] || `Local ${lid.slice(0, 8)}…`),
-      users: [...us].sort(sortByRole),
-    }))
-    .sort((a, b) => {
-      if (a.localId === '__superadmin__') return -1
-      if (b.localId === '__superadmin__') return 1
-      if (a.localId === '__none__') return 1
-      if (b.localId === '__none__') return -1
-      return a.localName.localeCompare(b.localName)
-    })
+  const nombreLocal = (id) => (id ? localNameById[String(id)] || `Local ${String(id).slice(0, 8)}…` : 'Sin local')
+  const ordenRol = (u) => ORDEN_ROL[String(u.role || '').toUpperCase()] ?? 99
+
+  // Por local (sin local al final) y, dentro de cada uno, del rol más alto al vendedor.
+  const visibles = [...usuariosVisibles(users, { localId, filtroLocal })].sort((a, b) => {
+    if (!a.local_id !== !b.local_id) return a.local_id ? -1 : 1
+    const porLocal = nombreLocal(a.local_id).localeCompare(nombreLocal(b.local_id))
+    return porLocal || ordenRol(a) - ordenRol(b)
+  })
+  // El filtro solo tiene sentido en la vista de todo el negocio, con más de un local.
+  // "Sin local" (el dueño, por ejemplo) es una opción del filtro, pero no cuenta como local.
+  const localesConUsuarios = [...new Set(users.map((u) => (u.local_id ? String(u.local_id) : SIN_LOCAL)))]
+  const cantidadLocales = localesConUsuarios.filter((id) => id !== SIN_LOCAL).length
+  const mostrarFiltro = !localId && cantidadLocales > 1
+  const titulo = localId ? `Usuarios de ${nombreLocal(localId)}` : 'Gestión de usuarios'
 
   return (
     <>
@@ -328,7 +319,9 @@ export default function UsersListPage() {
                   icon: Users,
                   color: 'text-[hsl(var(--primary))]',
                   title: 'Lista de usuarios',
-                  desc: 'Muestra todos los usuarios de tu negocio agrupados por franquicia. Cada grupo se puede abrir o cerrar haciendo clic en el encabezado.',
+                  desc: localId
+                    ? 'Muestra a las personas de esta franquicia. Sigues dentro de ella: el menú lateral es el del local.'
+                    : 'Muestra a las personas de todas tus franquicias, con el local de cada una.',
                 },
                 {
                   icon: Shield,
@@ -336,24 +329,27 @@ export default function UsersListPage() {
                   title: 'Roles',
                   desc: 'Cada usuario tiene un rol: Dueño de negocio (todas sus franquicias), Encargado de local (gestiona su franquicia) o Vendedor (el punto de venta de su local).',
                 },
-                {
-                  icon: Building2,
+                // El encargado solo consulta la lista de su local: sin filtro ni alta.
+                ...(puedeCrear ? [{
+                  icon: Filter,
                   color: 'text-[hsl(var(--primary))]',
-                  title: 'Grupos por franquicia',
-                  desc: 'Los usuarios se organizan automáticamente según la franquicia a la que pertenecen. Los Super Administradores aparecen en su propio grupo.',
-                },
-                {
+                  title: 'Filtrar por local',
+                  desc: 'En la vista de todo el negocio, el filtro deja ver solo a las personas de una franquicia. Dentro de una franquicia, la lista ya es la de ese local.',
+                }] : []),
+                ...(puedeCrear ? [{
                   icon: UserPlus,
                   color: 'text-[hsl(var(--primary))]',
                   title: 'Crear usuario',
-                  desc: 'Registra un nuevo usuario con su nombre, correo, contraseña, rol y la franquicia a la que pertenece.',
+                  desc: 'Registra un nuevo usuario con su nombre, correo, contraseña, rol y la franquicia a la que pertenece. Dentro de una franquicia, llega con ese local elegido.',
                   highlight: true,
-                },
+                }] : []),
                 {
                   icon: KeyRound,
                   color: 'text-amber-600',
                   title: 'Contraseña',
-                  desc: `La contraseña se define al crear el usuario. Debe tener al menos ${LARGO_MINIMO_CONTRASENA} caracteres. Un vendedor la cambia en su primer ingreso; cualquiera puede cambiarla después desde Configuración.`,
+                  desc: puedeCrear
+                    ? `La contraseña se define al crear el usuario. Debe tener al menos ${LARGO_MINIMO_CONTRASENA} caracteres. Un vendedor la cambia en su primer ingreso; cualquiera puede cambiarla después desde Configuración.`
+                    : 'Cada persona cambia su propia contraseña desde Configuración. Las cuentas nuevas las crea el dueño del negocio.',
                 },
               ].map(({ icon: Icon, color, title, desc, highlight }) => (
                 <div
@@ -388,14 +384,23 @@ export default function UsersListPage() {
               <Users size={22} />
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-[hsl(var(--foreground))]">Gestión de usuarios</h1>
+              <h1 className="text-2xl font-bold text-[hsl(var(--foreground))]">{titulo}</h1>
               <p className="text-sm text-[hsl(var(--muted-foreground))]">
-                {users.length} usuario{users.length === 1 ? '' : 's'} · {groups.length} grupo{groups.length === 1 ? '' : 's'} por local
+                {visibles.length} usuario{visibles.length === 1 ? '' : 's'}
+                {!localId && ` · ${cantidadLocales} local${cantidadLocales === 1 ? '' : 'es'}`}
+                {localId && puedeCrear && (
+                  <>
+                    {' · '}
+                    <button type="button" onClick={() => navigate('/usuarios')} className="font-medium text-[hsl(var(--primary))] hover:underline">
+                      Ver todo el negocio
+                    </button>
+                  </>
+                )}
               </p>
             </div>
           </div>
           <div className="flex flex-col items-end gap-1.5">
-            {puedeCrearUsuarios(userRole) && (
+            {puedeCrear && (
               <Button size="sm" onClick={() => setDrawerOpen(true)}>
                 <Plus size={16} /> Crear usuario
               </Button>
@@ -412,83 +417,88 @@ export default function UsersListPage() {
 
         {err && <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{err}</div>}
 
-        {/* Lista acordeón */}
+        {mostrarFiltro && (
+          <div className="flex items-center gap-2">
+            <label htmlFor="usuarios-filtro-local" className="flex items-center gap-1.5 text-sm text-[hsl(var(--muted-foreground))]">
+              <Filter size={14} /> Local
+            </label>
+            <select
+              id="usuarios-filtro-local"
+              value={filtroLocal}
+              onChange={(e) => setFiltroLocal(e.target.value)}
+              className="rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3 py-1.5 text-sm text-[hsl(var(--foreground))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary))]/40"
+            >
+              <option value="">Todos los locales</option>
+              {localesConUsuarios
+                .filter((id) => id !== SIN_LOCAL)
+                .sort((a, b) => nombreLocal(a).localeCompare(nombreLocal(b)))
+                .map((id) => <option key={id} value={id}>{nombreLocal(id)}</option>)}
+              {localesConUsuarios.includes(SIN_LOCAL) && <option value={SIN_LOCAL}>Sin local</option>}
+            </select>
+          </div>
+        )}
+
         {loading ? (
           <p className="text-sm text-[hsl(var(--muted-foreground))]">Cargando usuarios…</p>
-        ) : users.length === 0 ? (
-          <Card><CardContent className="p-8 text-center text-[hsl(var(--muted-foreground))]">No hay usuarios.</CardContent></Card>
+        ) : visibles.length === 0 ? (
+          <Card><CardContent className="p-8 text-center text-[hsl(var(--muted-foreground))]">
+            {localId ? 'Este local todavía no tiene usuarios.' : 'No hay usuarios.'}
+          </CardContent></Card>
         ) : (
-          <div className="flex flex-col gap-2">
-            {groups.map((g) => {
-              const isOpen = openGroups.has(g.localId)
-              return (
-                <Card key={g.localId} className="overflow-hidden">
-                  {/* Cabecera clickeable */}
-                  <button
-                    type="button"
-                    onClick={() => toggleGroup(g.localId)}
-                    className="w-full flex items-center justify-between px-5 py-4 bg-[hsl(var(--muted))]/40 hover:bg-[hsl(var(--muted))]/70 transition-colors"
-                  >
-                    <div className="flex items-center gap-2">
-                      {g.localId === '__superadmin__'
-                        ? <Shield size={17} className="text-violet-600 shrink-0" />
-                        : <Store size={17} className="text-[hsl(var(--primary))] shrink-0" />
-                      }
-                      <span className="text-sm font-semibold text-[hsl(var(--foreground))]">{g.localName}</span>
-                      <Badge variant="secondary">{g.users.length}</Badge>
-                    </div>
-                    <ChevronDown
-                      size={17}
-                      className={`text-[hsl(var(--muted-foreground))] transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}
-                    />
-                  </button>
-
-                  {/* Contenido expandible */}
-                  {isOpen && (
-                    <CardContent className="p-0">
-                      <table className="w-full text-sm">
-                        <thead>
-                          <tr className="text-left text-[hsl(var(--muted-foreground))] border-b border-[hsl(var(--border))]">
-                            <th className="py-2 px-5 font-medium">Nombre</th>
-                            <th className="py-2 px-5 font-medium">Correo</th>
-                            <th className="py-2 px-5 font-medium">Rol</th>
-                            <th className="py-2 px-5 font-medium text-right">Acción</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {g.users.map((u) => (
-                            <tr key={u.id} className="border-b border-[hsl(var(--border))] last:border-0 hover:bg-[hsl(var(--muted))]/30">
-                              <td className="py-2.5 px-5 font-medium text-[hsl(var(--foreground))]">{u.name || '—'}</td>
-                              <td className="py-2.5 px-5 text-[hsl(var(--muted-foreground))]">{u.email}</td>
-                              <td className="py-2.5 px-5">{roleBadge(u.role)}</td>
-                              <td className="py-2.5 px-5 text-right">
-                                {canDelete(u) && (
-                                  <Button variant="danger" size="sm" onClick={() => onDelete(u)}>
-                                    <Trash2 size={14} /> Eliminar
-                                  </Button>
-                                )}
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </CardContent>
-                  )}
-                </Card>
-              )
-            })}
-          </div>
+          <Card className="overflow-hidden">
+            <CardContent className="p-0 overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-left text-[hsl(var(--muted-foreground))] border-b border-[hsl(var(--border))] bg-[hsl(var(--muted))]/40">
+                    <th className="py-2.5 px-5 font-medium">Nombre</th>
+                    <th className="py-2.5 px-5 font-medium">Correo</th>
+                    <th className="py-2.5 px-5 font-medium">Rol</th>
+                    <th className="py-2.5 px-5 font-medium">Local</th>
+                    {puedeCrear && <th className="py-2.5 px-5 font-medium text-right">Acción</th>}
+                  </tr>
+                </thead>
+                <tbody>
+                  {visibles.map((u) => (
+                    <tr key={u.id} className="border-b border-[hsl(var(--border))] last:border-0 hover:bg-[hsl(var(--muted))]/30">
+                      <td className="py-2.5 px-5 font-medium text-[hsl(var(--foreground))]">{u.name || '—'}</td>
+                      <td className="py-2.5 px-5 text-[hsl(var(--muted-foreground))]">{u.email}</td>
+                      <td className="py-2.5 px-5">{roleBadge(u.role)}</td>
+                      <td className="py-2.5 px-5 text-[hsl(var(--muted-foreground))]">
+                        <span className="inline-flex items-center gap-1.5">
+                          {u.local_id
+                            ? <Store size={14} className="shrink-0 text-[hsl(var(--primary))]" />
+                            : <Shield size={14} className="shrink-0 text-violet-600" />}
+                          {nombreLocal(u.local_id)}
+                        </span>
+                      </td>
+                      {puedeCrear && (
+                        <td className="py-2.5 px-5 text-right">
+                          {canDelete(u) && (
+                            <Button variant="danger" size="sm" onClick={() => onDelete(u)}>
+                              <Trash2 size={14} /> Eliminar
+                            </Button>
+                          )}
+                        </td>
+                      )}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </CardContent>
+          </Card>
         )}
       </div>
 
-      {puedeCrearUsuarios(userRole) && (
+      {puedeCrear && (
         <CreateUserDrawer
+          key={localId || 'negocio'}
           isOpen={drawerOpen}
           onClose={() => setDrawerOpen(false)}
           onSuccess={loadUsers}
           locales={locales}
           localesLoading={localesLoading}
           userRole={userRole}
+          localIdPorDefecto={localId}
         />
       )}
     </div>
