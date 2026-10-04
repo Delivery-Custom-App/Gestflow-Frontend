@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext'
 import { useTheme } from '../context/ThemeContext'
 import { useCurrentBusiness } from '../hooks/useCurrentBusiness'
 import { changeMyPassword, updateMyAvatar } from '../lib/apiClient'
-import { displayNameFromEmail } from '../lib/v2SuperAdminAdapter'
+import { nombreVisible } from '../lib/altaUsuario'
 import { formatRoleLabel } from '../auth/roleLabel'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from './ui/card'
 import { Button } from './ui/button'
@@ -82,7 +82,7 @@ function AvatarSection() {
           <img src={user.avatar_url} alt="" className="h-full w-full object-cover" />
         ) : (
           <div className="h-full w-full flex items-center justify-center text-slate-400 text-2xl font-bold">
-            {displayNameFromEmail(user?.email).slice(0, 1).toUpperCase()}
+            {nombreVisible(user).slice(0, 1).toUpperCase()}
           </div>
         )}
         <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors flex items-center justify-center">
@@ -243,7 +243,7 @@ function ConfiguracionPage() {
             <div className="flex-1 w-full space-y-3">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-wide text-[hsl(var(--muted-foreground))]">Nombre</p>
-                <p className="text-sm font-medium text-[hsl(var(--foreground))]">{displayNameFromEmail(user?.email)}</p>
+                <p className="text-sm font-medium text-[hsl(var(--foreground))]">{nombreVisible(user)}</p>
               </div>
               <div>
                 <p className="text-xs font-semibold uppercase tracking-wide text-[hsl(var(--muted-foreground))]">Correo</p>

@@ -6,6 +6,10 @@ import { isSuperAdminRole } from '../auth/roleLabel'
 import { isInventoryAdminRole } from '../utils/inventoryAccess'
 import { useLocals } from '../hooks/useLocals'
 import { listUsers, deleteUser, createUser, getOptionalAuthContext } from '../lib/apiClient'
+import {
+  AVISO_VENDEDOR, LARGO_MINIMO_CONTRASENA, ROL_LABEL, datosDeAlta, formatearRut, pideRut,
+  puedeCrearUsuarios, rolConLocal, rolesAsignables, validarAlta,
+} from '../lib/altaUsuario'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -13,48 +17,31 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useNavigate } from 'react-router'
 
-// Roles ordenados Superadmin → Dueño → Admin → Trabajador
-const ROLES_SUPERADMIN = [
-  { value: 'SUPERADMIN', label: 'Super Administrador' },
-  { value: 'ADMIN_NEGOCIO', label: 'Dueño de Negocio' },
-  { value: 'ADMIN',      label: 'Administrador' },
-  { value: 'EMPLEADO',   label: 'Trabajador' },
-]
-// Dueño de negocio puede crear sub-admins y trabajadores de su franquicia
-const ROLES_OWNER = [
-  { value: 'ADMIN',    label: 'Administrador' },
-  { value: 'EMPLEADO', label: 'Trabajador' },
-]
-// Admin solo puede crear Trabajadores
-const ROLES_ADMIN = [
-  { value: 'EMPLEADO', label: 'Trabajador' },
-]
+const FORM_VACIO = { nombre: '', apellido: '', rut: '', email: '', password: '', role: 'EMPLEADO', local_id: '' }
 
 function roleBadge(role) {
   const r = String(role || '').toUpperCase()
-  if (r === 'SUPERADMIN') return <Badge>{role}</Badge>
-  if (r === 'ADMIN_NEGOCIO') return <Badge>{role}</Badge>
-  if (r === 'ADMIN')      return <Badge variant="info">{role}</Badge>
-  if (r === 'EMPLEADO')   return <Badge variant="secondary">{role}</Badge>
-  return <Badge variant="outline">{role}</Badge>
+  const label = ROL_LABEL[r] || role
+  if (r === 'SUPERADMIN') return <Badge>{label}</Badge>
+  if (r === 'ADMIN_NEGOCIO') return <Badge>{label}</Badge>
+  if (r === 'ADMIN')      return <Badge variant="info">{label}</Badge>
+  if (r === 'EMPLEADO')   return <Badge variant="secondary">{label}</Badge>
+  return <Badge variant="outline">{label}</Badge>
 }
 
 // ── Drawer crear usuario ─────────────────────────────────────────────────────
-function CreateUserDrawer({ isOpen, onClose, onSuccess, locales, localesLoading, userRole }) {
-  const [form, setForm]       = useState({ name: '', email: '', password: '', role: 'EMPLEADO', local_id: '' })
+export function CreateUserDrawer({ isOpen, onClose, onSuccess, locales, localesLoading, userRole }) {
+  const [form, setForm]       = useState(FORM_VACIO)
   const [loading, setLoading] = useState(false)
   const [err, setErr]         = useState('')
   const [showPwd, setShowPwd] = useState(false)
 
-  const availableRoles = isSuperAdminRole(userRole)
-    ? ROLES_SUPERADMIN
-    : String(userRole || '').toLowerCase().replace(/\s+/g, '') === 'adminnegocio'
-      ? ROLES_OWNER
-      : ROLES_ADMIN
+  const availableRoles = rolesAsignables(userRole)
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }))
+  const setRut = (e) => setForm((f) => ({ ...f, rut: formatearRut(e.target.value) }))
 
   const reset = () => {
-    setForm({ name: '', email: '', password: '', role: 'EMPLEADO', local_id: '' })
+    setForm(FORM_VACIO)
     setErr('')
     setShowPwd(false)
   }
@@ -64,20 +51,12 @@ function CreateUserDrawer({ isOpen, onClose, onSuccess, locales, localesLoading,
   const onSubmit = async (e) => {
     e.preventDefault()
     setErr('')
-    if (!form.name || !form.email || !form.password) { setErr('Completa nombre, correo y contraseña.'); return }
-    if (form.password.length < 8) { setErr('La contraseña debe tener al menos 8 caracteres.'); return }
-    if (form.role !== 'SUPERADMIN' && !form.local_id) { setErr('Selecciona el local al que pertenece este usuario.'); return }
+    const problema = validarAlta(form)
+    if (problema) { setErr(problema); return }
     setLoading(true)
     try {
       const local = locales.find((l) => String(l.id) === String(form.local_id))
-      await createUser({
-        name: form.name.trim(),
-        email: form.email.trim(),
-        password: form.password,
-        role: form.role,
-        local_id: form.local_id || null,
-        business_id: local?.business_id || null,
-      })
+      await createUser(datosDeAlta(form, local))
       reset()
       onSuccess()
       onClose()
@@ -117,10 +96,23 @@ function CreateUserDrawer({ isOpen, onClose, onSuccess, locales, localesLoading,
 
         {/* Form */}
         <form onSubmit={onSubmit} className="flex flex-col gap-5 px-6 py-6 flex-1 overflow-y-auto no-scrollbar">
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="u-name">Nombre <span className="text-red-500">*</span></Label>
-            <Input id="u-name" placeholder="Ingrese el nombre" value={form.name} onChange={set('name')} disabled={loading} />
+          <div className="grid grid-cols-2 gap-3">
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="u-name">Nombre <span className="text-red-500">*</span></Label>
+              <Input id="u-name" placeholder="Ej: Juan" value={form.nombre} onChange={set('nombre')} disabled={loading} />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="u-apellido">Apellido</Label>
+              <Input id="u-apellido" placeholder="Ej: Pérez" value={form.apellido} onChange={set('apellido')} disabled={loading} />
+            </div>
           </div>
+
+          {pideRut() && (
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="u-rut">RUT <span className="text-red-500">*</span></Label>
+              <Input id="u-rut" placeholder="12.345.678-5" value={form.rut} onChange={setRut} disabled={loading} inputMode="text" />
+            </div>
+          )}
 
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="u-email">Correo electrónico <span className="text-red-500">*</span></Label>
@@ -130,7 +122,7 @@ function CreateUserDrawer({ isOpen, onClose, onSuccess, locales, localesLoading,
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="u-pwd">Contraseña <span className="text-red-500">*</span></Label>
             <div className="relative">
-              <Input id="u-pwd" type={showPwd ? 'text' : 'password'} placeholder="Mínimo 6 caracteres" value={form.password} onChange={set('password')} disabled={loading} className="pr-9" />
+              <Input id="u-pwd" type={showPwd ? 'text' : 'password'} placeholder={`Mínimo ${LARGO_MINIMO_CONTRASENA} caracteres`} value={form.password} onChange={set('password')} disabled={loading} className="pr-9" />
               <button aria-label={showPwd ? 'Ocultar contraseña' : 'Mostrar contraseña'} type="button" onClick={() => setShowPwd((v) => !v)} className="absolute right-2.5 top-2.5 text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]">
                 {showPwd ? <EyeOff size={16} /> : <Eye size={16} />}
               </button>
@@ -146,11 +138,11 @@ function CreateUserDrawer({ isOpen, onClose, onSuccess, locales, localesLoading,
               disabled={loading}
               className="w-full rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3 py-2 text-sm text-[hsl(var(--foreground))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary))]/40"
             >
-              {availableRoles.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
+              {availableRoles.map((r) => <option key={r} value={r}>{ROL_LABEL[r]}</option>)}
             </select>
           </div>
 
-          {form.role !== 'SUPERADMIN' && (
+          {rolConLocal(form.role) && (
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="u-local">Local asignado <span className="text-red-500">*</span></Label>
               <select
@@ -165,6 +157,12 @@ function CreateUserDrawer({ isOpen, onClose, onSuccess, locales, localesLoading,
               </select>
               <p className="text-xs text-[hsl(var(--muted-foreground))]">El usuario solo tendrá acceso a este local.</p>
             </div>
+          )}
+
+          {form.role === 'EMPLEADO' && (
+            <p className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-800 dark:border-sky-800/50 dark:bg-sky-950/30 dark:text-sky-300">
+              {AVISO_VENDEDOR}
+            </p>
           )}
 
           {err && <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{err}</p>}
@@ -336,7 +334,7 @@ export default function UsersListPage() {
                   icon: Shield,
                   color: 'text-violet-600',
                   title: 'Roles',
-                  desc: 'Cada usuario tiene un rol: Super Administrador (acceso total), Administrador (gestiona su franquicia) o Trabajador (acceso operativo básico).',
+                  desc: 'Cada usuario tiene un rol: Dueño de negocio (todas sus franquicias), Encargado de local (gestiona su franquicia) o Vendedor (el punto de venta de su local).',
                 },
                 {
                   icon: Building2,
@@ -348,14 +346,14 @@ export default function UsersListPage() {
                   icon: UserPlus,
                   color: 'text-[hsl(var(--primary))]',
                   title: 'Crear usuario',
-                  desc: 'Registra un nuevo usuario asignándole nombre, correo, contraseña, rol y la franquicia a la que pertenece.',
+                  desc: 'Registra un nuevo usuario con su nombre, correo, contraseña, rol y la franquicia a la que pertenece.',
                   highlight: true,
                 },
                 {
                   icon: KeyRound,
                   color: 'text-amber-600',
                   title: 'Contraseña',
-                  desc: 'La contraseña se define al crear el usuario. Debe tener al menos 6 caracteres. El usuario puede cambiarla desde su perfil.',
+                  desc: `La contraseña se define al crear el usuario. Debe tener al menos ${LARGO_MINIMO_CONTRASENA} caracteres. Un vendedor la cambia en su primer ingreso; cualquiera puede cambiarla después desde Configuración.`,
                 },
               ].map(({ icon: Icon, color, title, desc, highlight }) => (
                 <div
@@ -397,9 +395,11 @@ export default function UsersListPage() {
             </div>
           </div>
           <div className="flex flex-col items-end gap-1.5">
-            <Button size="sm" onClick={() => setDrawerOpen(true)}>
-              <Plus size={16} /> Crear usuario
-            </Button>
+            {puedeCrearUsuarios(userRole) && (
+              <Button size="sm" onClick={() => setDrawerOpen(true)}>
+                <Plus size={16} /> Crear usuario
+              </Button>
+            )}
             <button
               onClick={() => setGuideOpen(true)}
               className="flex items-center gap-1.5 text-xs text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--primary))] transition-colors"
@@ -481,14 +481,16 @@ export default function UsersListPage() {
         )}
       </div>
 
-      <CreateUserDrawer
-        isOpen={drawerOpen}
-        onClose={() => setDrawerOpen(false)}
-        onSuccess={loadUsers}
-        locales={locales}
-        localesLoading={localesLoading}
-        userRole={userRole}
-      />
+      {puedeCrearUsuarios(userRole) && (
+        <CreateUserDrawer
+          isOpen={drawerOpen}
+          onClose={() => setDrawerOpen(false)}
+          onSuccess={loadUsers}
+          locales={locales}
+          localesLoading={localesLoading}
+          userRole={userRole}
+        />
+      )}
     </div>
     </>
   )

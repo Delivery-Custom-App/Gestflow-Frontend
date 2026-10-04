@@ -14,7 +14,7 @@ import {
   LogOut, Users, RotateCcw, MapPin, Building2, Settings,
 } from 'lucide-react'
 import AunaroSymbol from '@/assets/brand/AunaroSymbol'
-import { displayNameFromEmail } from '@/lib/v2SuperAdminAdapter'
+import { nombreVisible } from '@/lib/altaUsuario'
 
 const ROLE_BADGE_LABEL = {
   SUPERADMIN: 'Superadmin',
@@ -317,7 +317,7 @@ function Sidebar({ collapsed, onToggle, onClose }) {
             )}
           </div>
           <p className="font-marca text-base text-[hsl(var(--foreground))] truncate max-w-full">
-            {displayNameFromEmail(user?.email)}
+            {nombreVisible(user)}
           </p>
         </div>
       )}
