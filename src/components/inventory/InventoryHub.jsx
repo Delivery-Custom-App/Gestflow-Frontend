@@ -106,12 +106,15 @@ function InventoryHub() {
   const suppliersEnabled = isV2FeatureEnabled('suppliers')
   const purchasesEnabled = isV2FeatureEnabled('weeklyPurchases')
   const guideSections = [
-    'Stock (gestión detallada)',
+    'Menú (los productos del local)',
+    'Control de stock (gestión detallada)',
     ...(suppliersEnabled ? ['Proveedores (gestión de proveedores)'] : []),
-    'Recetas (fórmulas y costos)',
+    ...(isV2FeatureEnabled('recipes') ? ['Recetas (fórmulas y costos)'] : []),
     ...(purchasesEnabled ? ['Compras Semanales (órdenes de compra)'] : []),
   ]
-  const guideSectionsText = `${guideSections.slice(0, -1).join(', ')} y ${guideSections[guideSections.length - 1]}`
+  const guideSectionsText = guideSections.length > 1
+    ? `${guideSections.slice(0, -1).join(', ')} y ${guideSections[guideSections.length - 1]}`
+    : guideSections[0]
 
   const [kpis, setKpis]           = useState(null)
   const [kpisLoading, setKL]      = useState(true)

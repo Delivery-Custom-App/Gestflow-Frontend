@@ -30,12 +30,12 @@ const STEPS = {
     {
       target: 'nav-pos',
       title: 'POS Restaurante',
-      desc: 'Gestiona las mesas y las órdenes activas. La vista cocina avanza los pedidos en curso.',
+      desc: 'Gestiona las mesas y las órdenes activas. Desde cada mesa ves e imprimes su comanda.',
     },
     {
       target: 'nav-inventario',
       title: 'Inventario',
-      desc: 'Controla el stock de tus productos y gestiona las recetas del menú.',
+      desc: 'Controla el stock de tus productos y los productos de tu menú.',
     },
   ],
   admin: [
@@ -52,24 +52,19 @@ const STEPS = {
     {
       target: 'nav-pos',
       title: 'POS Restaurante',
-      desc: 'Gestiona las mesas y las órdenes activas. La vista cocina avanza los pedidos en curso.',
+      desc: 'Gestiona las mesas y las órdenes activas. Desde cada mesa ves e imprimes su comanda.',
     },
     {
       target: 'nav-inventario',
       title: 'Inventario',
-      desc: 'Controla el stock de tus productos y gestiona las recetas del menú.',
+      desc: 'Controla el stock de tus productos y los productos de tu menú.',
     },
   ],
   worker: [
     {
       target: 'pos-mesas-grid',
       title: 'Mesas del Local',
-      desc: 'Toca una mesa libre (verde) para crear una nueva orden y agregar los ítems del pedido.',
-    },
-    {
-      target: 'pos-kitchen-btn',
-      title: 'Vista Cocina',
-      desc: 'Aquí la cocina ve y avanza las órdenes en curso. Puedes consultarlo en cualquier momento.',
+      desc: 'Toca una mesa libre (verde) para crear una nueva orden y agregar los ítems del pedido. Desde la mesa ves e imprimes su comanda.',
     },
   ],
 }

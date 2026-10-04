@@ -17,6 +17,25 @@ export const V2_FEATURES = {
    * reaparecen.
    */
   hrModule: false,
+  /**
+   * Pantalla de Cocina (KDS: comandas en curso para avanzar de estado).
+   * Apagada por decisión de producto, no por falta de backend. Sin ella no
+   * hay ítem "Cocina" en el menú (AppShell.jsx, `pos-kitchen`) ni ruta
+   * `/local/:localId/pos/cocina`; la comanda se sigue viendo e imprimiendo
+   * desde la mesa (ComandaActions en MesaWorkspace). Para retomarla, poner
+   * esta bandera en true: el ítem y la ruta reaparecen.
+   */
+  kitchenView: false,
+  /**
+   * Recetas (inventario). Apagada por decisión de producto: el inventario se
+   * lleva por unidades. Sin ella no hay ítem "Recetas" (AppShell.jsx,
+   * `inv-recetas`) ni ruta `/local/:localId/inventario/recipes`. Las ventas no
+   * dependen de recetas: un producto que se prepara (RECIPE_BASED) se vende
+   * igual y el backend solo omite el descuento de ingredientes. El código de
+   * `components/inventory/recipes/` se conserva; para retomarla, poner esta
+   * bandera en true.
+   */
+  recipes: false,
   mercadopagoPoint: true,
   mpConfig: true,
   cajaMpPairing: true,

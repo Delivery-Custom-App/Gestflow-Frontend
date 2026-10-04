@@ -573,7 +573,7 @@ function MenuBuilderPage() {
               </Button>
               <div className="mt-auto rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] p-3 text-[11px] leading-relaxed text-[hsl(var(--muted-foreground))]">
                 Los platos con “En venta” son exactamente los que aparecen al tomar pedido en Mesas.
-                Stock y costos se gestionan en Control de stock / Recetas.
+                Stock y costos se gestionan en Control de stock.
               </div>
             </aside>
           </div>

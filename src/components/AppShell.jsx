@@ -82,7 +82,7 @@ const ACCORDIONS = [
     icon: Table2,
     items: [
       { key: 'pos-mesas',   label: 'Gestión de Mesas', icon: Table2  },
-      { key: 'pos-kitchen', label: 'Cocina',            icon: ChefHat },
+      { key: 'pos-kitchen', label: 'Cocina',            icon: ChefHat, feature: 'kitchenView' },
     ],
   },
   {
@@ -95,7 +95,7 @@ const ACCORDIONS = [
       { key: 'inv-stock',      label: 'Menú',              icon: UtensilsCrossed },
       { key: 'inv-stock-ctrl', label: 'Control de stock',  icon: Package      },
       { key: 'inv-compras',    label: 'Pedidos',           icon: ShoppingCart, feature: 'weeklyPurchases' },
-      { key: 'inv-recetas',    label: 'Recetas',           icon: BookMarked   },
+      { key: 'inv-recetas',    label: 'Recetas',           icon: BookMarked,   feature: 'recipes' },
     ],
   },
 ]

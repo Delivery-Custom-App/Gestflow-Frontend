@@ -8,6 +8,9 @@
  * Recursos Humanos está apagado (bandera `hrModule`): ningún rol lo ve, ni como
  * ítem deshabilitado ni como "pronto".
  *
+ * Cocina y Recetas están apagadas (banderas `kitchenView` y `recipes`): nadie
+ * las ve en el menú mientras sigan apagadas.
+ *
  * Inicio reemplaza a "Tus franquicias": es lo primero del menú del dueño y se
  * queda dentro de una franquicia para volver.
  */
@@ -66,12 +69,13 @@ describe('AppShell — menú de Inventario', () => {
     expect(V2_FEATURES.weeklyPurchases).toBe(false)
   })
 
-  it('en un local con mesas ofrece cuatro entradas y no Proveedores ni Pedidos', () => {
+  it('en un local con mesas ofrece tres entradas y no Proveedores, Pedidos ni Recetas', () => {
     renderShell('loc-mesas')
 
-    for (const name of ['Estado Inventario', 'Menú', 'Control de stock', 'Recetas']) {
+    for (const name of ['Estado Inventario', 'Menú', 'Control de stock']) {
       expect(screen.getByRole('button', { name })).toBeInTheDocument()
     }
+    expect(screen.queryByRole('button', { name: 'Recetas' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Proveedores' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Pedidos' })).not.toBeInTheDocument()
   })
@@ -155,12 +159,57 @@ describe('AppShell — menú del vendedor', () => {
     noSeVe(FUERA_DEL_MENU_DEL_VENDEDOR)
   })
 
-  it('el dueño del negocio conserva Cocina, Finanzas e Inventario', () => {
+  it('el dueño del negocio conserva Finanzas e Inventario', () => {
     renderShell('loc-mesas', 'pos')
 
-    expect(screen.getByRole('button', { name: 'Cocina' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Gestión de Mesas' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Administración' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Inventario' })).toBeInTheDocument()
+  })
+})
+
+describe('AppShell — Cocina y Recetas apagadas', () => {
+  it('las banderas kitchenView y recipes están apagadas', () => {
+    expect(V2_FEATURES.kitchenView).toBe(false)
+    expect(V2_FEATURES.recipes).toBe(false)
+  })
+
+  it.each([['el dueño', 'Admin Negocio'], ['el encargado', 'Admin']])(
+    '%s no ve Cocina ni Recetas',
+    (_quien, rol) => {
+      session.role = rol
+      // Cada acordeón se abre en su sección: Cocina bajo POS, Recetas bajo Inventario.
+      renderShell('loc-mesas', 'pos')
+      expect(screen.getByRole('button', { name: 'Gestión de Mesas' })).toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: 'Cocina' })).not.toBeInTheDocument()
+      cleanup()
+
+      renderShell('loc-mesas', 'inventario')
+      expect(screen.getByRole('button', { name: 'Control de stock' })).toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: 'Recetas' })).not.toBeInTheDocument()
+    },
+  )
+
+  it('al encender las banderas reaparecen para el dueño', () => {
+    V2_FEATURES.kitchenView = true
+    V2_FEATURES.recipes = true
+
+    renderShell('loc-mesas', 'pos')
+    expect(screen.getByRole('button', { name: 'Cocina' })).toBeInTheDocument()
+    cleanup()
+
+    renderShell('loc-mesas', 'inventario')
+    expect(screen.getByRole('button', { name: 'Recetas' })).toBeInTheDocument()
+  })
+
+  it('con las banderas encendidas el vendedor sigue sin verlas', () => {
+    V2_FEATURES.kitchenView = true
+    V2_FEATURES.recipes = true
+    session.role = 'Empleado'
+    renderShell('loc-mesas', 'pos')
+
+    expect(screen.queryByRole('button', { name: 'Cocina' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Recetas' })).not.toBeInTheDocument()
   })
 })
 

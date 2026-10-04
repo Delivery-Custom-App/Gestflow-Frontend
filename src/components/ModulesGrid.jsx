@@ -19,15 +19,15 @@ const modules = [
     title: 'POS Restaurante',
     subtitle: 'Sistema punto de venta para restaurante y bar',
     Icon: UtensilsCrossed,
-    features: ['Gestión de Mesas', 'Menú', 'Pantalla Bar', 'Pantalla Cocina', 'Toma de Pedidos'],
+    features: ['Gestión de Mesas', 'Menú', 'Pantalla Bar', 'Comanda', 'Toma de Pedidos'],
     disabled: false,
   },
   {
     id: 'inventario',
     title: 'Inventario',
-    subtitle: 'Recetas y stock de productos',
+    subtitle: 'Stock de productos',
     Icon: Package,
-    features: ['Recetas', 'Menú', 'Control de stock'],
+    features: ['Menú', 'Control de stock'],
     disabled: false,
   },
   {
