@@ -56,6 +56,24 @@ export const V2_FEATURES = {
    * revisa el rol, ver B-05), así que encenderla es decisión de producto.
    */
   cierreTurnoVendedor: false,
+  /**
+   * El vendedor elige su máquina de cobro al iniciar el turno. La pantalla está
+   * hecha (lista de máquinas, las ajenas "en uso", tomar una o seguir sin
+   * máquina) y espera al backend:
+   * - B-01: hoy `PATCH /pos-machines/{id}` responde 403 al vendedor; tiene que
+   *   poder asignarse una máquina libre (409 si ya es de otro, nunca dos).
+   * - B-02: al cerrar el turno, el backend tiene que soltar la máquina.
+   * - B-08: el vendedor no recibe el proveedor (`GET /payment-connections` le
+   *   responde 403): sin él la lista no dice si es Mercado Pago o Haulmer.
+   * - En locales con mesas el backend exige que cada máquina tenga mesero fijo
+   *   y el vendedor solo ve las suyas: el flujo de elegir aplica a comida al
+   *   paso, salvo que el backend cambie ese modelo.
+   * - La web cobra con tarjeta solo por MercadoPago Point; elegir una Haulmer
+   *   sirve recién cuando la web cobre con Haulmer.
+   * Mientras tanto, la barra del vendedor ya muestra la máquina que le asignó
+   * el encargado (o que no tiene ninguna, o que tiene más de una).
+   */
+  eleccionMaquinaVendedor: false,
   mercadopagoPoint: true,
   mpConfig: true,
   cajaMpPairing: true,

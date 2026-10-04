@@ -1,17 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Clock3, Store } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useAuth } from '../../context/AuthContext'
 import { TurnoVendedorContext } from '../../context/turnoVendedor'
 import { createCajaV2, getMiTurnoDeHoy } from '../../lib/salesApi'
 import { listarCajasFisicas } from '../../lib/administrativeApi'
-
-/** Acepta "50.000" o "50000"; lo que no sea dígito se descarta. */
-function montoDesdeTexto(texto) {
-  return Number(String(texto ?? '').replace(/[^\d]/g, '')) || 0
-}
+import { isV2FeatureEnabled } from '../../lib/v2Features'
+import ElegirMaquina from './ElegirMaquina'
 
 function Tarjeta({ titulo, subtitulo, children }) {
   return (
@@ -50,6 +46,10 @@ function Aviso({ children }) {
  * local; si el local tiene una sola, se elige sola. Si ya tiene uno abierto
  * hoy, entra directo. Cerrarlo es del encargado o del dueño (Caja y turnos).
  *
+ * No se le pide efectivo inicial: el dinero con que parte la caja lo registra
+ * el encargado o el dueño al abrir su turno de caja (Caja y turnos), y el
+ * arqueo del día lo suma por caja física. El turno del vendedor parte en 0.
+ *
  * Igual que el cambio de contraseña obligatorio, se muestra en lugar de la
  * aplicación sin tocar la URL: al abrir el turno, sigue donde iba.
  */
@@ -60,9 +60,9 @@ export default function InicioDeTurno({ localId, children }) {
   const [error, setError] = useState('')
   const [cajasFisicas, setCajasFisicas] = useState(null) // null = cargando
   const [cajaFisicaId, setCajaFisicaId] = useState('')
-  const [monto, setMonto] = useState('')
   const [abriendo, setAbriendo] = useState(false)
   const [intento, setIntento] = useState(0)
+  const [reingreso, setReingreso] = useState(false)
 
   // ¿Ya tiene su turno de hoy? Se vuelve a preguntar al reintentar o al cerrarse el turno.
   useEffect(() => {
@@ -71,7 +71,10 @@ export default function InicioDeTurno({ localId, children }) {
       .then((mio) => {
         if (ignore) return
         setTurno(mio)
-        setFase(mio ? 'listo' : 'pregunta')
+        // Con el turno ya abierto (volvió a entrar), elige máquina solo si no tiene una.
+        const conMaquina = isV2FeatureEnabled('eleccionMaquinaVendedor')
+        setReingreso(Boolean(mio))
+        setFase(!mio ? 'pregunta' : conMaquina ? 'maquina' : 'listo')
       })
       .catch((e) => {
         if (ignore) return
@@ -106,9 +109,12 @@ export default function InicioDeTurno({ localId, children }) {
     setError('')
     try {
       // Sin cashier_user_id explícito, el turno queda a nombre de quien lo abre.
-      const nuevo = await createCajaV2({ caja_fisica_id: cajaFisicaId, monto_apertura: montoDesdeTexto(monto) })
+      // En 0: el efectivo inicial no es del vendedor (lo registra el encargado).
+      const nuevo = await createCajaV2({ caja_fisica_id: cajaFisicaId, monto_apertura: 0 })
       setTurno(nuevo)
-      setFase('listo')
+      setReingreso(false)
+      // Con el turno abierto, elige su máquina de cobro (cuando el backend lo permita: B-01).
+      setFase(isV2FeatureEnabled('eleccionMaquinaVendedor') ? 'maquina' : 'listo')
     } catch (err) {
       const mensaje = String(err?.message || '')
       if (/409|ya existe una caja abierta/i.test(mensaje)) {
@@ -124,9 +130,10 @@ export default function InicioDeTurno({ localId, children }) {
 
   const alCerrar = useCallback(() => {
     setTurno(null)
-    setMonto('')
     setFase('pregunta')
   }, [])
+
+  const alElegirMaquina = useCallback(() => setFase('listo'), [])
 
   const valor = useMemo(() => ({ turno, alCerrar }), [turno, alCerrar])
 
@@ -158,6 +165,14 @@ export default function InicioDeTurno({ localId, children }) {
           {salir}
           <Button onClick={reintentar}>Reintentar</Button>
         </div>
+      </Tarjeta>
+    )
+  }
+
+  if (fase === 'maquina') {
+    return (
+      <Tarjeta titulo="Elige tu máquina de cobro" subtitulo={subtitulo}>
+        <ElegirMaquina localId={localId} userId={user?.id} saltarSiTiene={reingreso} onListo={alElegirMaquina} />
       </Tarjeta>
     )
   }
@@ -213,13 +228,6 @@ export default function InicioDeTurno({ localId, children }) {
                 {cajasFisicas.map((c) => <option key={c.id} value={c.id}>{c.name || 'Caja sin nombre'}</option>)}
               </select>
             )}
-          </div>
-
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="turno-vendedor-monto">Efectivo inicial</Label>
-            <Input id="turno-vendedor-monto" inputMode="numeric" placeholder="0" value={monto}
-              onChange={(e) => setMonto(e.target.value)} disabled={abriendo} />
-            <p className="text-xs text-[hsl(var(--muted-foreground))]">Lo que hay en la caja al empezar. Puede ser 0.</p>
           </div>
 
           <div className="flex items-center justify-between gap-2 pt-1">

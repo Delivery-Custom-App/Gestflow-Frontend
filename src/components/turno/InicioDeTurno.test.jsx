@@ -9,14 +9,24 @@ import InicioDeTurno from './InicioDeTurno'
 import { useTurnoVendedor } from '../../context/turnoVendedor'
 import { createCajaV2, getMiTurnoDeHoy } from '../../lib/salesApi'
 import { listarCajasFisicas } from '../../lib/administrativeApi'
+import { V2_FEATURES } from '../../lib/v2Features'
 
 const sesion = vi.hoisted(() => ({ logout: vi.fn() }))
 
 vi.mock('../../context/AuthContext', () => ({
-  useAuth: () => ({ user: { email: 'cajero@demo.gestflow.dev' }, logout: sesion.logout }),
+  useAuth: () => ({ user: { id: 'yo', email: 'cajero@demo.gestflow.dev' }, logout: sesion.logout }),
 }))
 vi.mock('../../lib/salesApi', () => ({ getMiTurnoDeHoy: vi.fn(), createCajaV2: vi.fn() }))
 vi.mock('../../lib/administrativeApi', () => ({ listarCajasFisicas: vi.fn() }))
+// La elección de máquina tiene sus propias pruebas: aquí solo importa cuándo aparece.
+// Muestra qué recibe, para comprobar que le llegan el local, el usuario y si es un reingreso.
+vi.mock('./ElegirMaquina', () => ({
+  default: ({ onListo, localId, userId, saltarSiTiene }) => (
+    <button type="button" onClick={() => onListo(null)}>
+      {`elegir máquina (simulado) · ${localId} · ${userId} · ${saltarSiTiene ? 'reingreso' : 'recién abierto'}`}
+    </button>
+  ),
+}))
 
 const TURNO = { id: 'turno-1', status: 'open', opened_at: '2026-10-04T12:00:00Z', cashier_user_id: 'yo' }
 const UNA_CAJA = [{ id: 'cf-1', name: 'Caja principal' }]
@@ -42,7 +52,7 @@ beforeEach(() => {
 })
 
 describe('InicioDeTurno', () => {
-  it('con su turno de hoy abierto entra directo a vender', async () => {
+  it('con su turno de hoy abierto entra directo a vender (bandera de máquina apagada)', async () => {
     getMiTurnoDeHoy.mockResolvedValue(TURNO)
     montar()
 
@@ -65,12 +75,21 @@ describe('InicioDeTurno', () => {
     await user.click(await screen.findByRole('button', { name: 'Iniciar turno' }))
     expect(await screen.findByText('Caja principal')).toBeInTheDocument()
     expect(screen.queryByRole('combobox')).not.toBeInTheDocument()
-    await user.type(screen.getByLabelText('Efectivo inicial'), '20.000')
     await user.click(screen.getByRole('button', { name: 'Abrir turno' }))
 
     expect(await screen.findByText('punto de venta · turno-1')).toBeInTheDocument()
     // Sin cashier_user_id: el turno queda a nombre de quien lo abre.
-    expect(createCajaV2).toHaveBeenCalledWith({ caja_fisica_id: 'cf-1', monto_apertura: 20000 })
+    expect(createCajaV2).toHaveBeenCalledWith({ caja_fisica_id: 'cf-1', monto_apertura: 0 })
+  })
+
+  it('no le pide efectivo inicial: eso lo registra el encargado al abrir la caja', async () => {
+    const user = userEvent.setup()
+    montar()
+
+    await user.click(await screen.findByRole('button', { name: 'Iniciar turno' }))
+    expect(await screen.findByRole('button', { name: 'Abrir turno' })).toBeInTheDocument()
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument()
+    expect(screen.queryByText(/efectivo|monto|dinero/i)).not.toBeInTheDocument()
   })
 
   it('con varias cajas físicas elige dónde trabajará antes de abrir', async () => {
@@ -139,6 +158,51 @@ describe('InicioDeTurno', () => {
     expect(await screen.findByText('sin conexión')).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Reintentar' }))
     expect(await screen.findByText('punto de venta · turno-1')).toBeInTheDocument()
+  })
+
+  it('con la bandera eleccionMaquinaVendedor apagada, al abrir el turno entra directo', async () => {
+    expect(V2_FEATURES.eleccionMaquinaVendedor).toBe(false)
+    const user = userEvent.setup()
+    montar()
+
+    await user.click(await screen.findByRole('button', { name: 'Iniciar turno' }))
+    await user.click(await screen.findByRole('button', { name: 'Abrir turno' }))
+
+    expect(await screen.findByText('punto de venta · turno-1')).toBeInTheDocument()
+    expect(screen.queryByText(/elegir máquina/)).not.toBeInTheDocument()
+  })
+
+  it('con la bandera encendida, después de abrir el turno elige su máquina y recién ahí vende', async () => {
+    V2_FEATURES.eleccionMaquinaVendedor = true
+    try {
+      const user = userEvent.setup()
+      montar()
+
+      await user.click(await screen.findByRole('button', { name: 'Iniciar turno' }))
+      await user.click(await screen.findByRole('button', { name: 'Abrir turno' }))
+      expect(await screen.findByRole('heading', { name: 'Elige tu máquina de cobro' })).toBeInTheDocument()
+      expect(screen.queryByText(/punto de venta/)).not.toBeInTheDocument()
+
+      await user.click(screen.getByRole('button', { name: 'elegir máquina (simulado) · loc-1 · yo · recién abierto' }))
+      expect(await screen.findByText('punto de venta · turno-1')).toBeInTheDocument()
+    } finally {
+      V2_FEATURES.eleccionMaquinaVendedor = false
+    }
+  })
+
+  it('con la bandera encendida, al volver a entrar con el turno abierto pasa por el selector como reingreso', async () => {
+    V2_FEATURES.eleccionMaquinaVendedor = true
+    try {
+      getMiTurnoDeHoy.mockResolvedValue(TURNO)
+      const user = userEvent.setup()
+      montar()
+
+      // El selector se salta solo si ya tiene su máquina (lo prueba ElegirMaquina).
+      await user.click(await screen.findByRole('button', { name: 'elegir máquina (simulado) · loc-1 · yo · reingreso' }))
+      expect(await screen.findByText('punto de venta · turno-1')).toBeInTheDocument()
+    } finally {
+      V2_FEATURES.eleccionMaquinaVendedor = false
+    }
   })
 
   it('puede cerrar sesión en vez de iniciar turno', async () => {
