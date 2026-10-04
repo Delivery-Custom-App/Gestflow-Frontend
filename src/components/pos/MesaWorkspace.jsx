@@ -16,6 +16,7 @@ import RecipeCustomizer from './menu-picker/RecipeCustomizer'
 import { calcItemPrice, isCompleto, productKey } from './menu-picker/menuPricing'
 import MultiPaymentModal from './MultiPaymentModal'
 import MercadoPagoModal from './MercadoPagoModal'
+import ComandaActions from './ComandaActions'
 import {
   STATUS_BADGE,
   STATUS_LABEL,
@@ -341,6 +342,12 @@ export default function MesaWorkspace({ mesa, localId, cajaId, onBack, onTableUp
           >
             <Printer size={18} />
           </Button>
+          {/* La comanda de cocina se ve e imprime desde la mesa: la pantalla de Cocina está apagada (`kitchenView`). */}
+          <ComandaActions
+            orderId={firstOrder?.id}
+            createdAt={firstOrder?.created_at}
+            className="h-11 rounded-xl"
+          />
           {isV2FeatureEnabled('splitPayments') && firstOrder?.id && (
             <Button
               onClick={() => setShowSplitModal(true)}

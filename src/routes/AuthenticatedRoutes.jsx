@@ -123,7 +123,8 @@ function localRoutes(assignedLocalId, guarded = false) {
     <>
       <Route path="/local/:localId/inventario/stock" element={wrap(<MenuBuilderPage />)} />
       <Route path="/local/:localId/inventario/stock-control" element={wrap(<StockControlDashboard />)} />
-      <Route path="/local/:localId/inventario/recipes" element={wrap(<RecipesPage />)} />
+      {/* Recetas y Cocina apagadas (`recipes`, `kitchenView`): sin la ruta, la dirección cae en el `*` de cada rol. */}
+      {isV2FeatureEnabled('recipes') && <Route path="/local/:localId/inventario/recipes" element={wrap(<RecipesPage />)} />}
       <Route path="/local/:localId/inventario/compras-semanales/:orderId" element={wrap(<WeeklyPurchaseDetailPage />)} />
       <Route path="/local/:localId/inventario/compras-semanales" element={wrap(<WeeklyPurchasesPage />)} />
       <Route path="/local/:localId/inventario/proveedores/compras-semanales/:orderId" element={wrap(<LegacyComprasDetailRedirect />)} />
@@ -134,7 +135,7 @@ function localRoutes(assignedLocalId, guarded = false) {
       {/* RRHH apagado con `hrModule`: sin la ruta, la dirección cae en el `*` de cada rol. */}
       {isV2FeatureEnabled('hrModule') && <Route path="/local/:localId/rrhh" element={wrap(<HrModule />)} />}
       <Route path="/local/:localId/pos" element={wrap(<RestaurantPosOrRedirect />)} />
-      <Route path="/local/:localId/pos/cocina" element={wrap(<POSModule />)} />
+      {isV2FeatureEnabled('kitchenView') && <Route path="/local/:localId/pos/cocina" element={wrap(<POSModule />)} />}
       <Route path="/local/:localId/pos/reportes" element={wrap(<ReportesPage />)} />
       <Route path="/local/:localId/pos/mesa/:mesaId" element={wrap(<MesaDetail />)} />
       <Route path="/local/:localId/pos/venta-directa" element={wrap(<VentaDirectaView />)} />

@@ -18,9 +18,13 @@ vi.mock('../../lib/salesApi', () => ({
 vi.mock('../../lib/apiClient', () => ({
   getSplitPaymentSummary: vi.fn().mockResolvedValue({ splits: [], is_fully_paid: false }),
 }))
-vi.mock('../../lib/v2Features', () => ({ isV2FeatureEnabled: () => false }))
+// Como en la app: la comanda encendida, el pago dividido apagado.
+vi.mock('../../lib/v2Features', () => ({ isV2FeatureEnabled: (k) => k === 'comandas' }))
 vi.mock('./MercadoPagoModal', () => ({ default: () => null }))
 vi.mock('./MultiPaymentModal', () => ({ default: () => null }))
+vi.mock('./TicketModal', () => ({
+  default: ({ tipo, orderId, createdAt }) => <p>{`${tipo} de ${orderId} (${createdAt})`}</p>,
+}))
 
 const mesa = { id: 'mesa-1', name: 'Mesa 1', zona: 'Salón' }
 
@@ -91,5 +95,23 @@ describe('MesaWorkspace', () => {
     ))
     expect(createOrder).not.toHaveBeenCalled()
     expect(refresh).toHaveBeenCalled()
+  })
+
+  // La pantalla de Cocina está apagada: la comanda se ve e imprime desde la mesa.
+  it('con una orden activa abre la comanda de esa orden', async () => {
+    const user = userEvent.setup()
+    setup({ activeOrders: [{ id: 'order-1', created_at: '2024-01-01T00:00:00Z', items: [] }] })
+    render(<MesaWorkspace mesa={mesa} localId="local1" cajaId="caja1" onBack={() => {}} onTableUpdated={() => {}} />)
+
+    await user.click(screen.getByRole('button', { name: 'Comanda' }))
+
+    expect(screen.getByText('comanda de order-1 (2024-01-01T00:00:00Z)')).toBeInTheDocument()
+  })
+
+  it('sin orden activa no hay comanda que abrir', () => {
+    setup({ activeOrders: [] })
+    render(<MesaWorkspace mesa={mesa} localId="local1" cajaId="caja1" onBack={() => {}} onTableUpdated={() => {}} />)
+
+    expect(screen.getByRole('button', { name: 'Comanda' })).toBeDisabled()
   })
 })

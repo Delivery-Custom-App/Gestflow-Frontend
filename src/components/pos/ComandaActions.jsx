@@ -13,14 +13,14 @@ import TicketModal from './TicketModal'
  * no hay historial de impresiones que repetir — volver a imprimir es abrir la
  * comanda otra vez.
  */
-export default function ComandaActions({ orderId, createdAt, size = 'sm', showLabel = true }) {
+export default function ComandaActions({ orderId, createdAt, size = 'sm', showLabel = true, className }) {
   const [abierta, setAbierta] = useState(false)
 
   if (!isV2FeatureEnabled('comandas')) return null
 
   return (
     <>
-      <Button size={size} variant="outline" onClick={() => setAbierta(true)} disabled={!orderId}>
+      <Button size={size} variant="outline" onClick={() => setAbierta(true)} disabled={!orderId} className={className} title="Ver e imprimir la comanda">
         <Printer className="h-4 w-4" />
         {showLabel ? 'Comanda' : null}
       </Button>
