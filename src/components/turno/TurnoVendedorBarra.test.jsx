@@ -10,12 +10,20 @@ import { toast } from 'sonner'
 import TurnoVendedorBarra from './TurnoVendedorBarra'
 import { TurnoVendedorContext } from '../../context/turnoVendedor'
 import { closeCaja } from '../../lib/salesApi'
+import { listarMaquinasDelVendedor } from '../../lib/maquinasCobro'
 import { V2_FEATURES } from '../../lib/v2Features'
 
 vi.mock('../../lib/salesApi', () => ({ closeCaja: vi.fn() }))
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
+vi.mock('../../context/AuthContext', () => ({ useAuth: () => ({ user: { id: 'yo' } }) }))
+vi.mock('../../lib/maquinasCobro', async (importOriginal) => ({
+  ...(await importOriginal()),
+  listarMaquinasDelVendedor: vi.fn(),
+}))
 
-const TURNO = { id: 'turno-1', opened_at: '2026-10-04T12:05:00' }
+const TURNO = { id: 'turno-1', local_id: 'loc-1', opened_at: '2026-10-04T12:05:00' }
+const MAQUINA_MIA = { id: 'm-1', nombre: 'Point Mostrador', proveedor: 'mercadopago', proveedorLabel: 'Mercado Pago', activa: true, estado: 'mia' }
+const MAQUINA_AJENA = { id: 'm-2', nombre: 'Haulmer 2', proveedor: 'haulmer', proveedorLabel: 'Haulmer', activa: true, estado: 'en_uso' }
 const original = { ...V2_FEATURES }
 
 function montar(valor) {
@@ -29,6 +37,7 @@ function montar(valor) {
 beforeEach(() => {
   vi.clearAllMocks()
   vi.spyOn(window, 'confirm').mockReturnValue(true)
+  listarMaquinasDelVendedor.mockResolvedValue([])
 })
 afterEach(() => {
   Object.assign(V2_FEATURES, original)
@@ -75,6 +84,87 @@ describe('TurnoVendedorBarra', () => {
 
     await user.click(screen.getByRole('button', { name: /Cerrar turno/ }))
     expect(closeCaja).not.toHaveBeenCalled()
+  })
+
+  it('muestra con qué máquina cobra y de qué proveedor es', async () => {
+    listarMaquinasDelVendedor.mockResolvedValue([MAQUINA_AJENA, MAQUINA_MIA])
+    montar({ turno: TURNO, alCerrar: vi.fn() })
+
+    expect(await screen.findByText(/Point Mostrador · Mercado Pago/)).toBeInTheDocument()
+    expect(listarMaquinasDelVendedor).toHaveBeenCalledWith('loc-1', 'yo')
+    expect(screen.queryByText(/Haulmer 2/)).not.toBeInTheDocument()
+  })
+
+  it('sin proveedor conocido muestra solo el nombre de la máquina', async () => {
+    listarMaquinasDelVendedor.mockResolvedValue([{ ...MAQUINA_MIA, proveedor: null, proveedorLabel: null }])
+    montar({ turno: TURNO, alCerrar: vi.fn() })
+
+    const chip = await screen.findByText(/Point Mostrador/)
+    expect(chip.textContent.trim()).toBe('Point Mostrador')
+  })
+
+  it('sin máquina asignada avisa que solo puede cobrar sin tarjeta (corto en el teléfono)', async () => {
+    listarMaquinasDelVendedor.mockResolvedValue([MAQUINA_AJENA])
+    montar({ turno: TURNO, alCerrar: vi.fn() })
+
+    expect(await screen.findByText('Sin máquina de cobro: solo cobros sin tarjeta')).toHaveClass('hidden', 'sm:inline')
+    expect(screen.getByText('Sin máquina')).toHaveClass('sm:hidden')
+  })
+
+  it('su máquina desactivada se muestra como suya: el backend cobra igual con ella', async () => {
+    listarMaquinasDelVendedor.mockResolvedValue([{ ...MAQUINA_MIA, activa: false }])
+    montar({ turno: TURNO, alCerrar: vi.fn() })
+
+    expect(await screen.findByText(/Point Mostrador · Mercado Pago \(desactivada\)/)).toBeInTheDocument()
+    expect(screen.queryByText(/Sin máquina/)).not.toBeInTheDocument()
+  })
+
+  it('con dos a su nombre avisa en vez de mostrar una cualquiera', async () => {
+    listarMaquinasDelVendedor.mockResolvedValue([MAQUINA_MIA, { ...MAQUINA_AJENA, estado: 'mia' }])
+    montar({ turno: TURNO, alCerrar: vi.fn() })
+
+    expect(await screen.findByText(/2 máquinas a tu nombre/)).toBeInTheDocument()
+    expect(screen.queryByText(/Point Mostrador/)).not.toBeInTheDocument()
+  })
+
+  it('con una Haulmer avisa que la web todavía no cobra con ese proveedor', async () => {
+    listarMaquinasDelVendedor.mockResolvedValue([{ ...MAQUINA_AJENA, estado: 'mia' }])
+    montar({ turno: TURNO, alCerrar: vi.fn() })
+
+    const chip = (await screen.findByText(/Haulmer 2 · Haulmer/)).closest('[title]')
+    expect(chip).toHaveAttribute('title', 'La web todavía no cobra con Haulmer.')
+  })
+
+  it('se actualiza sola durante el turno: refleja la máquina que el encargado le asigna', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    try {
+      listarMaquinasDelVendedor.mockResolvedValueOnce([]).mockResolvedValue([MAQUINA_MIA])
+      montar({ turno: TURNO, alCerrar: vi.fn() })
+      expect(await screen.findByText('Sin máquina')).toBeInTheDocument()
+
+      await vi.advanceTimersByTimeAsync(60_000)
+      expect(await screen.findByText(/Point Mostrador · Mercado Pago/)).toBeInTheDocument()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('y también al volver a la pestaña', async () => {
+    listarMaquinasDelVendedor.mockResolvedValueOnce([]).mockResolvedValue([MAQUINA_MIA])
+    montar({ turno: TURNO, alCerrar: vi.fn() })
+    expect(await screen.findByText('Sin máquina')).toBeInTheDocument()
+
+    window.dispatchEvent(new Event('focus'))
+    expect(await screen.findByText(/Point Mostrador · Mercado Pago/)).toBeInTheDocument()
+  })
+
+  it('si no se pueden consultar las máquinas, no afirma nada', async () => {
+    listarMaquinasDelVendedor.mockRejectedValue(new Error('sin conexión'))
+    montar({ turno: TURNO, alCerrar: vi.fn() })
+
+    await waitFor(() => expect(listarMaquinasDelVendedor).toHaveBeenCalled())
+    expect(screen.queryByText(/máquina de cobro/i)).not.toBeInTheDocument()
+    expect(screen.getByText(/Turno abierto/)).toBeInTheDocument()
   })
 
   it('con órdenes en curso (409) explica qué hacer y el turno sigue abierto', async () => {
