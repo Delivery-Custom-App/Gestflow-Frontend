@@ -36,6 +36,16 @@ export const V2_FEATURES = {
    * bandera en true.
    */
   recipes: false,
+  /**
+   * RUT del usuario. Backend V2 no tiene dónde guardarlo: `users` no tiene
+   * columna `rut` (solo `businesses`), y `POST /users` ignora en silencio los
+   * campos que no conoce. Pedir el RUT hoy sería pedir un dato que se pierde.
+   * Con la bandera apagada el alta de usuario no lo muestra ni lo envía; el
+   * campo y su validación (formato y dígito verificador) ya están hechos en
+   * `lib/altaUsuario.js`. Cuando el backend lo acepte (ticket B-04), poner esta
+   * bandera en true: el campo aparece, se exige y viaja como `rut`.
+   */
+  userRut: false,
   mercadopagoPoint: true,
   mpConfig: true,
   cajaMpPairing: true,
