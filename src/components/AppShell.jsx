@@ -7,7 +7,7 @@ import { useTheme } from '../context/ThemeContext'
 import { m, AnimatePresence } from 'framer-motion'
 import { cn } from '@/lib/utils'
 import {
-  LayoutDashboard, Store, ChevronDown, ChevronLeft, ChevronRight,
+  LayoutDashboard, House, ChevronDown, ChevronLeft, ChevronRight,
   DollarSign, FileText, BarChart3, Wallet,
   Table2, ChefHat, Moon, Sun, UserCircle2,
   Package, Truck, ShoppingCart, BookMarked, PackageOpen, UtensilsCrossed,
@@ -183,8 +183,10 @@ function Sidebar({ collapsed, onToggle, onClose }) {
     }
   }
 
+  // Inicio va primero y se queda también dentro de una franquicia: es la vuelta
+  // a la vista del negocio (franquicias y usuarios).
   const discoverItems = [
-    ...(isOwner ? [{ key: 'locales', label: 'Tus franquicias', icon: Store }] : []),
+    ...(isOwner ? [{ key: 'locales', label: 'Inicio', icon: House }] : []),
     ...(isSuperAdmin ? [{ key: 'gestor', label: 'Gestor de Negocios', icon: Building2 }] : []),
     ...(isSuperAdmin ? [{ key: 'gestor-resumen', label: 'Resumen Global', icon: LayoutDashboard }] : []),
     ...(isSuperAdmin ? [{ key: 'gestor-usuarios', label: 'Usuarios', icon: Users }] : []),

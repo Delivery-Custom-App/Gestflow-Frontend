@@ -23,6 +23,8 @@ function AdminDashboard() {
   // condicionarla a SUPERADMIN dejaba la sección inalcanzable.
   const puedeEliminarLocales =
     isSuperAdminRole(userRole) || isAdminNegocioRole(userRole)
+  // /usuarios solo está montado en las rutas del dueño.
+  const esDueno = isAdminNegocioRole(userRole)
 
   const [isDrawerOpen, setIsDrawerOpen] = useState(false)
   const [salesCounts, setSalesCounts]   = useState({})
@@ -156,6 +158,7 @@ function AdminDashboard() {
             locales={locales}
             onLocalSelect={(local) => navigate(`/local/${local.id}/dashboard`, { state: { local } })}
             onCreateLocal={() => setIsDrawerOpen(true)}
+            onShowUsers={esDueno ? () => navigate('/usuarios') : undefined}
             salesCounts={salesCounts}
             deltaCounts={deltaCounts}
             canDeleteLocals={puedeEliminarLocales}

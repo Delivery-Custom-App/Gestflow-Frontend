@@ -7,9 +7,13 @@
  *
  * Recursos Humanos está apagado (bandera `hrModule`): ningún rol lo ve, ni como
  * ítem deshabilitado ni como "pronto".
+ *
+ * Inicio reemplaza a "Tus franquicias": es lo primero del menú del dueño y se
+ * queda dentro de una franquicia para volver.
  */
 import { describe, it, expect, vi, afterEach } from 'vitest'
-import { render, screen, cleanup } from '@testing-library/react'
+import { render, screen, cleanup, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router'
 import AppShell from './AppShell'
 import { V2_FEATURES } from '../lib/v2Features'
@@ -186,7 +190,7 @@ describe('AppShell — Recursos Humanos apagado', () => {
   it('el gerente sin local elegido no ve el ítem deshabilitado ni "pronto"', () => {
     renderShellSinLocal()
 
-    expect(screen.getByRole('button', { name: 'Tus franquicias' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Inicio' })).toBeInTheDocument()
     noHayRrhh()
   })
 
@@ -226,5 +230,52 @@ describe('AppShell — Recursos Humanos apagado', () => {
     session.role = 'Admin Negocio'
     renderShellSinLocal()
     noHayRrhh()
+  })
+})
+
+function renderConInicio(path) {
+  return render(
+    <MemoryRouter initialEntries={[path]}>
+      <Routes>
+        <Route element={<AppShell />}>
+          <Route path="/admin" element={<p>pantalla de inicio</p>} />
+          <Route path="/local/:localId/*" element={<p>contenido del local</p>} />
+        </Route>
+      </Routes>
+    </MemoryRouter>,
+  )
+}
+
+function botonesDelMenu() {
+  return within(screen.getByRole('navigation')).getAllByRole('button')
+}
+
+describe('AppShell — Inicio del dueño', () => {
+  it('Inicio es lo primero del menú y "Tus franquicias" ya no aparece', () => {
+    renderConInicio('/admin')
+
+    expect(botonesDelMenu()[0]).toHaveAccessibleName('Inicio')
+    expect(screen.queryByRole('button', { name: 'Tus franquicias' })).not.toBeInTheDocument()
+  })
+
+  it('dentro de una franquicia Inicio sigue primero y lleva de vuelta', async () => {
+    const user = userEvent.setup()
+    renderConInicio('/local/loc-mesas/pos')
+
+    expect(botonesDelMenu()[0]).toHaveAccessibleName('Inicio')
+    await user.click(screen.getByRole('button', { name: 'Inicio' }))
+
+    expect(screen.getByText('pantalla de inicio')).toBeInTheDocument()
+  })
+
+  it('el encargado y el vendedor no tienen Inicio', () => {
+    session.role = 'Admin'
+    renderConInicio('/local/loc-mesas/pos')
+    expect(screen.queryByRole('button', { name: 'Inicio' })).not.toBeInTheDocument()
+    cleanup()
+
+    session.role = 'Empleado'
+    renderConInicio('/local/loc-mesas/pos')
+    expect(screen.queryByRole('button', { name: 'Inicio' })).not.toBeInTheDocument()
   })
 })
