@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { m, AnimatePresence } from 'framer-motion'
-import { Building2, MapPin, Plus, TrendingUp, TrendingDown, Settings, Search, ArrowUp, ChevronRight, ChevronDown, HelpCircle, X, RefreshCw } from 'lucide-react'
+import { Building2, MapPin, Plus, TrendingUp, TrendingDown, Settings, Search, ArrowUp, ChevronRight, ChevronDown, HelpCircle, X, RefreshCw, Users } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table'
 import OpcionesDrawer from './OpcionesDrawer'
@@ -48,7 +48,11 @@ function getFlowTrend(currentCount, delta, thresholds) {
 
 const NO_COUNTS = {}
 
-function LocalsGrid({ locales, onLocalSelect, onCreateLocal, salesCounts = NO_COUNTS, deltaCounts = NO_COUNTS, canDeleteLocals = false, onRefresh }) {
+/**
+ * Inicio del dueño: sus franquicias y, con `onShowUsers`, el acceso a los
+ * usuarios del negocio.
+ */
+function LocalsGrid({ locales, onLocalSelect, onCreateLocal, onShowUsers, salesCounts = NO_COUNTS, deltaCounts = NO_COUNTS, canDeleteLocals = false, onRefresh }) {
   const [thresholds,   setThresholds]   = useState(loadThresholds)
   const [showOpciones, setShowOpciones] = useState(false)
   const [search,       setSearch]       = useState('')
@@ -77,7 +81,7 @@ function LocalsGrid({ locales, onLocalSelect, onCreateLocal, salesCounts = NO_CO
 
   return (
     <>
-      {/* Guía de Tus Franquicias */}
+      {/* Guía del Inicio */}
       <AnimatePresence>
         {guideOpen && (
           <m.div
@@ -98,7 +102,7 @@ function LocalsGrid({ locales, onLocalSelect, onCreateLocal, salesCounts = NO_CO
               <div className="flex items-center justify-between px-5 py-4 border-b border-[hsl(var(--border))]">
                 <div className="flex items-center gap-2">
                   <HelpCircle size={16} className="text-[hsl(var(--primary))]" />
-                  <h3 className="text-sm font-bold text-[hsl(var(--foreground))]">Guía — Tus Franquicias</h3>
+                  <h3 className="text-sm font-bold text-[hsl(var(--foreground))]">Guía — Inicio</h3>
                 </div>
                 <button type="button" aria-label="Cerrar guía"
                   onClick={() => setGuideOpen(false)}
@@ -140,6 +144,12 @@ function LocalsGrid({ locales, onLocalSelect, onCreateLocal, salesCounts = NO_CO
                     desc: 'Registra una nueva sucursal en el sistema. Solo disponible para administradores.',
                     highlight: true,
                   },
+                  ...(onShowUsers ? [{
+                    icon: Users,
+                    color: 'text-sky-600',
+                    title: 'Usuarios del negocio',
+                    desc: 'Abre la lista de las personas que trabajan en tus franquicias, para revisarlas o crear una nueva.',
+                  }] : []),
                   {
                     icon: MapPin,
                     color: 'text-rose-600',
@@ -190,7 +200,7 @@ function LocalsGrid({ locales, onLocalSelect, onCreateLocal, salesCounts = NO_CO
                 AUNARO
               </div>
               <h1 className="font-marca text-3xl text-[hsl(var(--foreground))] tracking-tight">
-                Tus franquicias
+                Inicio
               </h1>
               <p className="mt-1.5 text-sm text-[hsl(var(--muted-foreground))] max-w-md">
                 {locales.length > 0
@@ -200,6 +210,12 @@ function LocalsGrid({ locales, onLocalSelect, onCreateLocal, salesCounts = NO_CO
             </div>
             <div className="flex flex-col items-end gap-2 shrink-0">
               <div className="flex items-center gap-2">
+                {onShowUsers && (
+                  <Button variant="outline" onClick={onShowUsers} className="gap-2 rounded-xl">
+                    <Users className="h-4 w-4" />
+                    Usuarios
+                  </Button>
+                )}
                 <Button variant="outline" onClick={() => setShowOpciones(true)} className="gap-2 rounded-xl">
                   <Settings className="h-4 w-4" />
                   Opciones
