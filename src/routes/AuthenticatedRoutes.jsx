@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate, useParams, useLocatio
 import AppShell from '../components/AppShell'
 import ErrorBoundary from '../components/ErrorBoundary'
 import CambioContrasenaObligatorio from '../components/CambioContrasenaObligatorio'
+import InicioDeTurno from '../components/turno/InicioDeTurno'
 import LoadingPage from '../components/LoadingPage'
 
 // Carga diferida (code-splitting): cada página se compila en su propio chunk y
@@ -292,16 +293,26 @@ export default function AuthenticatedApp() {
     routes = <AdminRoutes assignedLocalId={assignedLocalId} />
   }
 
-  return (
-    <ErrorBoundary>
-      <Router>
-        <OnboardingProvider>
-          {/* Suspense muestra el fallback mientras se descarga el chunk de la ruta. */}
-          <Suspense fallback={<LoadingPage />}>
-            {routes}
-          </Suspense>
-        </OnboardingProvider>
-      </Router>
-    </ErrorBoundary>
+  const app = (
+    <Router>
+      <OnboardingProvider>
+        {/* Suspense muestra el fallback mientras se descarga el chunk de la ruta. */}
+        <Suspense fallback={<LoadingPage />}>
+          {routes}
+        </Suspense>
+      </OnboardingProvider>
+    </Router>
   )
+
+  // El vendedor entra a vender con su turno de hoy abierto: si no lo tiene, se
+  // le pregunta "¿Iniciar turno?" antes de mostrarle el punto de venta.
+  if (WORKER_ROLES.includes(userRole) && assignedLocalId) {
+    return (
+      <ErrorBoundary>
+        <InicioDeTurno localId={assignedLocalId}>{app}</InicioDeTurno>
+      </ErrorBoundary>
+    )
+  }
+
+  return <ErrorBoundary>{app}</ErrorBoundary>
 }

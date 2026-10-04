@@ -86,3 +86,35 @@ describe('AuthenticatedApp — contraseña temporal', () => {
     expect(screen.queryByRole('heading', { name: /cambia tu contraseña/i })).not.toBeInTheDocument()
   })
 })
+
+/**
+ * El vendedor entra a vender con su turno de hoy abierto. La API simulada no
+ * devuelve turnos, así que al vendedor se le pregunta "¿Iniciar turno?".
+ */
+describe('AuthenticatedApp — turno del vendedor', () => {
+  const montar = (user, userRole) => render(
+    <AuthProvider user={user} userRole={userRole} logout={() => {}}>
+      <AuthenticatedApp />
+    </AuthProvider>,
+  )
+
+  it('al vendedor sin turno se le pregunta "¿Iniciar turno?" antes de vender', async () => {
+    montar({ id: 'u-1', email: 'cajero@demo.gestflow.dev', local_id: 'loc-1' }, 'Empleado')
+
+    expect(await screen.findByRole('heading', { name: '¿Iniciar turno?' })).toBeInTheDocument()
+  })
+
+  it('el cambio de contraseña va primero: sin él, ni siquiera se revisa el turno', () => {
+    montar({ id: 'u-1', email: 'cajero@demo.gestflow.dev', local_id: 'loc-1', must_change_password: true }, 'Empleado')
+
+    expect(screen.getByRole('heading', { name: /cambia tu contraseña/i })).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: '¿Iniciar turno?' })).not.toBeInTheDocument()
+  })
+
+  it('al encargado no se le pregunta: él abre y cierra turnos desde Caja y turnos', async () => {
+    montar({ id: 'u-2', email: 'centro.admin@demo.gestflow.dev', local_id: 'loc-1' }, 'Admin')
+
+    await new Promise((r) => setTimeout(r, 50))
+    expect(screen.queryByRole('heading', { name: '¿Iniciar turno?' })).not.toBeInTheDocument()
+  })
+})

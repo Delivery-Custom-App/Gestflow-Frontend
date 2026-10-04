@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { apiRequest, getOptionalAuthContext } from './apiClient'
-import { completeOrderMercadoPago, createCajaV2, getActiveCaja, getBoleta, todayIso } from './salesApi'
+import { completeOrderMercadoPago, createCajaV2, getActiveCaja, getBoleta, getMiTurnoDeHoy, todayIso } from './salesApi'
 
 vi.mock('./apiClient', () => ({
   apiRequest: vi.fn(),
@@ -48,6 +48,73 @@ describe('getActiveCaja — cierre de caja diario', () => {
 
   it('todayIso() refleja la fecha simulada', () => {
     expect(todayIso()).toBe('2026-09-01')
+  })
+
+  it('el vendedor sin turno propio no recibe el turno de otra persona', async () => {
+    getOptionalAuthContext.mockResolvedValue({ user: { id: 'u2', role: 'EMPLEADO' } })
+    apiRequest.mockResolvedValue([
+      { id: 'caja-otro', status: 'open', business_date: '2026-09-01', cashier_user_id: 'u1' },
+    ])
+    expect(await getActiveCaja('local-1')).toBeNull()
+  })
+
+  it('el vendedor con su turno de hoy vende en el suyo', async () => {
+    getOptionalAuthContext.mockResolvedValue({ user: { id: 'u2', role: 'EMPLEADO' } })
+    apiRequest.mockResolvedValue([
+      { id: 'caja-otro', status: 'open', business_date: '2026-09-01', cashier_user_id: 'u1' },
+      { id: 'caja-mia', status: 'open', business_date: '2026-09-01', cashier_user_id: 'u2' },
+    ])
+    expect((await getActiveCaja('local-1'))?.id).toBe('caja-mia')
+  })
+
+  it('el encargado sin turno propio sigue usando el abierto del local', async () => {
+    getOptionalAuthContext.mockResolvedValue({ user: { id: 'enc', role: 'ADMIN' } })
+    apiRequest.mockResolvedValue([
+      { id: 'caja-vendedor', status: 'open', business_date: '2026-09-01', cashier_user_id: 'u1' },
+    ])
+    expect((await getActiveCaja('local-1'))?.id).toBe('caja-vendedor')
+  })
+})
+
+describe('getMiTurnoDeHoy', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-09-01T15:00:00'))
+    getOptionalAuthContext.mockResolvedValue({ user: { id: 'u2', role: 'EMPLEADO' } })
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+    vi.clearAllMocks()
+  })
+
+  it('devuelve el turno abierto hoy de quien pregunta', async () => {
+    apiRequest.mockResolvedValue([
+      { id: 'caja-otro', status: 'open', business_date: '2026-09-01', cashier_user_id: 'u1' },
+      { id: 'caja-mia', status: 'open', business_date: '2026-09-01', cashier_user_id: 'u2' },
+    ])
+    expect((await getMiTurnoDeHoy('local-1'))?.id).toBe('caja-mia')
+    expect(apiRequest).toHaveBeenCalledWith('/cajas?local_id=local-1')
+  })
+
+  it('un turno propio de ayer que nadie cerró no cuenta', async () => {
+    apiRequest.mockResolvedValue([
+      { id: 'caja-ayer', status: 'open', business_date: '2026-08-31', cashier_user_id: 'u2' },
+    ])
+    expect(await getMiTurnoDeHoy('local-1')).toBeNull()
+  })
+
+  it('un turno propio ya cerrado no cuenta', async () => {
+    apiRequest.mockResolvedValue([
+      { id: 'caja-cerrada', status: 'closed', business_date: '2026-09-01', cashier_user_id: 'u2' },
+    ])
+    expect(await getMiTurnoDeHoy('local-1')).toBeNull()
+  })
+
+  it('sin sesión no hay turno propio', async () => {
+    getOptionalAuthContext.mockResolvedValue({ user: null })
+    apiRequest.mockResolvedValue([{ id: 'x', status: 'open', business_date: '2026-09-01', cashier_user_id: 'u2' }])
+    expect(await getMiTurnoDeHoy('local-1')).toBeNull()
   })
 })
 

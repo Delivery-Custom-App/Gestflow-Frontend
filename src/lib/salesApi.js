@@ -140,7 +140,23 @@ export async function getActiveCaja(localId) {
   const { user } = await getOptionalAuthContext()
   const uid = user?.id ? String(user.id) : null
   const mine = uid ? open.find((c) => String(c.cashier_user_id) === uid) : null
+  // El vendedor vende solo en su propio turno, nunca en el de otra persona: sin
+  // el suyo, no hay caja activa (el backend además solo le muestra los suyos).
+  if (String(user?.role || '').toUpperCase() === 'EMPLEADO') return mine ? mapCajaOut(mine) : null
   return mapCajaOut(mine || open[0])
+}
+
+/** Turno abierto hoy del usuario actual en el local, o null si no tiene. */
+export async function getMiTurnoDeHoy(localId) {
+  const rows = await apiRequest(`/cajas?local_id=${encodeURIComponent(String(localId))}`)
+  const { user } = await getOptionalAuthContext()
+  const uid = user?.id ? String(user.id) : null
+  if (!uid) return null
+  const today = todayIso()
+  const mio = (Array.isArray(rows) ? rows : []).find(
+    (c) => String(c.status) === 'open' && c.business_date === today && String(c.cashier_user_id) === uid,
+  )
+  return mio ? mapCajaOut(mio) : null
 }
 
 export async function listCajas(localId) {
