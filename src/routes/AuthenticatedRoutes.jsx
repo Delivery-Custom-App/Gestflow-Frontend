@@ -38,6 +38,7 @@ import { WORKER_ROLES } from '../constants/roles'
 import { isSuperAdminRole, isAdminNegocioRole } from '../auth/roleLabel'
 import { isDirectSaleDemoUser } from '../constants/demoMode'
 import { isAlPasoLocal } from '../lib/salesModel'
+import { isV2FeatureEnabled } from '../lib/v2Features'
 import { useAuth } from '../context/AuthContext'
 import { useLocals } from '../hooks/useLocals'
 
@@ -130,7 +131,8 @@ function localRoutes(assignedLocalId, guarded = false) {
       <Route path="/local/:localId/inventario/proveedores" element={wrap(<SuppliersKpisDashboard />)} />
       <Route path="/local/:localId/inventario" element={wrap(<InventoryHub />)} />
       <Route path="/local/:localId/administrativo/:sectionId?" element={wrap(<AdministrativeModule />)} />
-      <Route path="/local/:localId/rrhh" element={wrap(<HrModule />)} />
+      {/* RRHH apagado con `hrModule`: sin la ruta, la dirección cae en el `*` de cada rol. */}
+      {isV2FeatureEnabled('hrModule') && <Route path="/local/:localId/rrhh" element={wrap(<HrModule />)} />}
       <Route path="/local/:localId/pos" element={wrap(<RestaurantPosOrRedirect />)} />
       <Route path="/local/:localId/pos/cocina" element={wrap(<POSModule />)} />
       <Route path="/local/:localId/pos/reportes" element={wrap(<ReportesPage />)} />
@@ -162,7 +164,7 @@ function SuperadminRoutes() {
 }
 
 /** ADMIN_NEGOCIO (dueño de franquicia): Tus Locales + Usuarios + todos sus locales */
-function OwnerRoutes() {
+export function OwnerRoutes() {
   return (
     <Routes>
       <Route element={<AdminLayout />}>
@@ -179,7 +181,7 @@ function OwnerRoutes() {
 }
 
 /** ADMIN: acceso solo a SU local — sin Tus Locales, sin Usuarios */
-function AdminRoutes({ assignedLocalId }) {
+export function AdminRoutes({ assignedLocalId }) {
   // Si tiene local asignado, home es ese local; si no, muestra selector vacío
   const home = assignedLocalId
     ? `/local/${assignedLocalId}/dashboard`

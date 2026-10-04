@@ -67,7 +67,7 @@ Cambios clave: `src/lib/authClient.js`, `src/utils/jwt.js`, `NetworkErrorModal`.
 |---|---|
 | `hrApi.js` | employees, shifts, payroll-periods, leave-requests |
 | `HrModule.jsx` | `/local/:id/rrhh` — fichas, turnos, permisos |
-| Nav | Item **RRHH** (owners/admins; flag `hrModule`) |
+| Nav | Item **RRHH** (gerente/encargado; flag `hrModule`). **Apagado por ahora** (`hrModule: false`): sin ítem ni ruta para ningún rol; con `true` reaparecen |
 | Flujo usuario | Alta en `/usuarios` → ficha en RRHH con `user_id` |
 
 ### Gestor superadmin (`/gestor/*`)

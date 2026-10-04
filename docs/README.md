@@ -24,7 +24,7 @@ Cada documento sigue la misma estructura: descripción (objetivo/actores/precond
 Estilo manual de usuario (pasos concretos) con ficha técnica breve al final de cada pantalla. Cubren lo que hoy **no** tiene ninguna otra documentación:
 
 - **[manuales/MANUAL_GESTOR_NEGOCIOS.md](manuales/MANUAL_GESTOR_NEGOCIOS.md)** — las 6 pantallas exclusivas de Superadmin (`/gestor/*`): franquicias, resumen global, detalle de negocio, auditoría, usuarios globales, observabilidad.
-- **[manuales/MANUAL_RRHH.md](manuales/MANUAL_RRHH.md)** — módulo de Recursos Humanos (`/local/:localId/rrhh`): empleados, turnos, permisos — incluye quién puede hacer qué según el rol.
+- **[manuales/MANUAL_RRHH.md](manuales/MANUAL_RRHH.md)** — módulo de Recursos Humanos (`/local/:localId/rrhh`): empleados, turnos, permisos — incluye quién puede hacer qué según el rol. ⚠ Apagado por ahora (`hrModule: false`): sin menú ni ruta para ningún rol, código conservado para retomarlo.
 - **[manuales/MANUAL_POS_COMPLEMENTARIO.md](manuales/MANUAL_POS_COMPLEMENTARIO.md)** — Cocina (KDS), Reportes POS y Registrar producto rápido. Marca explícitamente qué pantallas están rotas hoy contra Backend V2.
 
 Pendiente (fuera de este pase, ya tienen cobertura razonable en `referencia/`): Administración de local, Inventario, Usuarios de Owner.

@@ -4,9 +4,12 @@
  * quedan fuera del menú mientras sus banderas de V2_FEATURES estén apagadas.
  *
  * Menú del vendedor: depende del tipo de local y es una sola entrada.
+ *
+ * Recursos Humanos está apagado (bandera `hrModule`): ningún rol lo ve, ni como
+ * ítem deshabilitado ni como "pronto".
  */
 import { describe, it, expect, vi, afterEach } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, cleanup } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router'
 import AppShell from './AppShell'
 import { V2_FEATURES } from '../lib/v2Features'
@@ -148,12 +151,80 @@ describe('AppShell — menú del vendedor', () => {
     noSeVe(FUERA_DEL_MENU_DEL_VENDEDOR)
   })
 
-  it('el dueño del negocio conserva RRHH, Finanzas e Inventario', () => {
+  it('el dueño del negocio conserva Cocina, Finanzas e Inventario', () => {
     renderShell('loc-mesas', 'pos')
 
-    expect(screen.getByRole('button', { name: 'RRHH' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Cocina' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Administración' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Inventario' })).toBeInTheDocument()
+  })
+})
+
+function renderShellSinLocal() {
+  return render(
+    <MemoryRouter initialEntries={['/admin']}>
+      <Routes>
+        <Route path="/admin" element={<AppShell />}>
+          <Route index element={<p>contenido</p>} />
+        </Route>
+      </Routes>
+    </MemoryRouter>,
+  )
+}
+
+function noHayRrhh() {
+  expect(screen.queryByRole('button', { name: /RRHH/ })).not.toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: /Recursos Humanos/ })).not.toBeInTheDocument()
+  expect(screen.queryByText(/pronto/i)).not.toBeInTheDocument()
+}
+
+describe('AppShell — Recursos Humanos apagado', () => {
+  it('la bandera hrModule está apagada', () => {
+    expect(V2_FEATURES.hrModule).toBe(false)
+  })
+
+  it('el gerente sin local elegido no ve el ítem deshabilitado ni "pronto"', () => {
+    renderShellSinLocal()
+
+    expect(screen.getByRole('button', { name: 'Tus franquicias' })).toBeInTheDocument()
+    noHayRrhh()
+  })
+
+  it('el gerente no ve RRHH dentro de un local', () => {
+    renderShell('loc-mesas', 'pos')
+    noHayRrhh()
+  })
+
+  it('el encargado no ve RRHH dentro de su local', () => {
+    session.role = 'Admin'
+    renderShell('loc-mesas', 'pos')
+
+    expect(screen.getByRole('button', { name: 'Dashboard' })).toBeInTheDocument()
+    noHayRrhh()
+  })
+
+  it('al encender la bandera RRHH reaparece para el gerente y el encargado', () => {
+    V2_FEATURES.hrModule = true
+
+    renderShell('loc-mesas', 'pos')
+    expect(screen.getByRole('button', { name: 'RRHH' })).toBeInTheDocument()
+    cleanup()
+
+    session.role = 'Admin'
+    renderShell('loc-mesas', 'pos')
+    expect(screen.getByRole('button', { name: 'RRHH' })).toBeInTheDocument()
+  })
+
+  it('con la bandera encendida el vendedor sigue sin verlo y no hay ítem deshabilitado', () => {
+    V2_FEATURES.hrModule = true
+
+    session.role = 'Empleado'
+    renderShell('loc-mesas', 'pos')
+    noHayRrhh()
+    cleanup()
+
+    session.role = 'Admin Negocio'
+    renderShellSinLocal()
+    noHayRrhh()
   })
 })

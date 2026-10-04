@@ -191,7 +191,7 @@ function Sidebar({ collapsed, onToggle, onClose }) {
     ...(isSuperAdmin ? [{ key: 'gestor-auditoria', label: 'Auditoría', icon: FileText }] : []),
     ...(isSuperAdmin ? [{ key: 'gestor-observabilidad', label: 'Observabilidad', icon: BarChart3 }] : []),
     ...(isOwner ? [{ key: 'usuarios', label: 'Usuarios', icon: Users }] : []),
-    ...(isOwner && isV2FeatureEnabled('hrModule') && !localId ? [{ key: 'hr-hub', label: 'Recursos Humanos', icon: Users, disabled: true }] : []),
+    // RRHH está apagado con `hrModule` (src/lib/v2Features.js): ningún rol lo ve.
     ...(isV2FeatureEnabled('hrModule') && localId && !isWorker ? [{ key: 'hr-hub', label: 'RRHH', icon: Users }] : []),
     ...(!isWorker && localId ? [{ key: 'dashboard', label: 'Dashboard', icon: LayoutDashboard }] : []),
   ]

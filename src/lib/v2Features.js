@@ -3,7 +3,20 @@
  * Lo que está en false se oculta o degrada en la UI (sin runtime legacy).
  */
 export const V2_FEATURES = {
-  hrModule: true,
+  /**
+   * Recursos Humanos (fichas, turnos y permisos). Apagado por decisión de
+   * producto —el módulo no se va a usar por ahora—, no por falta de backend:
+   * V2 sí expone `/employees`, `/shifts`, `/payroll-periods` y `/leave-requests`.
+   *
+   * Con la bandera apagada ningún rol tiene RRHH en el menú (AppShell.jsx,
+   * ítem `hr-hub`) y la ruta `/local/:localId/rrhh` no existe
+   * (AuthenticatedRoutes.jsx, `localRoutes`): quien llega por una dirección
+   * guardada cae en el inicio de su rol. El código de `components/hr/` y sus
+   * hooks se conserva. Para retomarlo basta con poner esta bandera en true:
+   * el ítem (gerente y encargado; el trabajador nunca lo ve) y la ruta
+   * reaparecen.
+   */
+  hrModule: false,
   mercadopagoPoint: true,
   mpConfig: true,
   cajaMpPairing: true,
