@@ -10,22 +10,7 @@ import { modoDeStock } from '../../lib/tipoProducto'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
 import { X, Package } from 'lucide-react'
-
-const UNITS = [
-  { value: 'unidad', label: 'Unidad' },
-  { value: 'kg',     label: 'kg'     },
-  { value: 'g',      label: 'g'      },
-  { value: 'L',      label: 'L'      },
-  { value: 'ml',     label: 'ml'     },
-]
 
 const numInputCls =
   'h-9 w-full rounded-md border border-[hsl(var(--border))] px-3 text-sm shadow-sm ' +
@@ -37,7 +22,6 @@ function NuevoProductoModal({ open, localId, onClose, onSuccess }) {
   const [error,            setError]            = useState('')
   const [productName,      setProductName]      = useState('')
   const [categoryName,     setCategoryName]     = useState('')
-  const [unit,             setUnit]             = useState('unidad')
   const [currentStock,     setCurrentStock]     = useState('0')
   const [minStock,         setMinStock]         = useState('0')
   const [maxStock,         setMaxStock]         = useState('0')
@@ -78,7 +62,6 @@ function NuevoProductoModal({ open, localId, onClose, onSuccess }) {
       await postInventoryNewProduct(localId, {
         productName: productName.trim(),
         category:    categoryName.trim(),
-        unit,
         // Si se prepara no lleva stock: las cantidades no se piden ni se envían.
         ...(prepara ? {} : {
           currentStock: Number(currentStock) || 0,
@@ -103,7 +86,6 @@ function NuevoProductoModal({ open, localId, onClose, onSuccess }) {
     setError('')
     setProductName('')
     setCategoryName('')
-    setUnit('unidad')
     setPrepara(false)
     setCurrentStock('0')
     setMinStock('0')
@@ -207,20 +189,13 @@ function NuevoProductoModal({ open, localId, onClose, onSuccess }) {
 
           <InterruptorSePrepara id="np-se-prepara" checked={prepara} onChange={setPrepara} disabled={submitting} />
 
-          {/* Formato + Costo unitario */}
+          {/* Formato + Costo unitario. El stock se lleva solo por unidades (sin kg, g, L ni ml). */}
           <div className="grid grid-cols-2 gap-4">
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="np-unit">Formato del Producto</Label>
-              <Select value={unit} onValueChange={setUnit} disabled={submitting}>
-                <SelectTrigger id="np-unit" className="h-9 text-sm">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent className="z-[600]">
-                  {UNITS.map((u) => (
-                    <SelectItem key={u.value} value={u.value}>{u.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <span className="text-sm font-medium text-[hsl(var(--foreground))]">Formato</span>
+              <p className="flex h-9 items-center rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--muted)/0.4)] px-3 text-sm text-[hsl(var(--foreground))]">
+                Unidad
+              </p>
             </div>
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="np-unit-cost">Costo unitario (CLP) <span className="text-red-500">*</span></Label>

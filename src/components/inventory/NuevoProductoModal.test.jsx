@@ -23,6 +23,14 @@ async function completarLoBasico(user) {
 beforeEach(() => vi.clearAllMocks())
 
 describe('NuevoProductoModal · "Este producto se prepara"', () => {
+  it('el formato es solo Unidad: no ofrece kg, g, L ni ml', () => {
+    render(<NuevoProductoModal open localId="l1" />)
+    expect(screen.getByText('Formato')).toBeInTheDocument()
+    expect(screen.getByText('Unidad')).toBeInTheDocument()
+    expect(screen.queryByRole('combobox')).not.toBeInTheDocument()
+    expect(screen.queryByText(/^(kg|g|L|ml)$/)).not.toBeInTheDocument()
+  })
+
   it('no pide proveedor: el módulo no existe en el backend', () => {
     render(<NuevoProductoModal open localId="l1" />)
     expect(screen.queryByLabelText('Proveedor')).not.toBeInTheDocument()
