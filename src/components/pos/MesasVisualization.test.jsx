@@ -118,3 +118,23 @@ describe('MesasVisualization — grupos de mesas', () => {
     expect(container).toBeTruthy()
   })
 })
+
+describe('MesasVisualization — quién atiende', () => {
+  const tarjeta = (nombre) => screen.getByText(nombre).closest('div.group')
+
+  it('una mesa en curso muestra quién la atiende; una libre, no', () => {
+    render(<MesasVisualization mesas={MESAS} atencionPorMesa={new Map([['m-3', { atiende: 'Ana Rojas', antes: null }]])} />)
+
+    expect(within(tarjeta('Mesa 3')).getByText('Atiende')).toBeInTheDocument()
+    expect(within(tarjeta('Mesa 3')).getByText('Ana Rojas')).toBeInTheDocument()
+    expect(within(tarjeta('Mesa 3')).queryByText(/antes:/)).not.toBeInTheDocument()
+    expect(within(tarjeta('Mesa 1')).queryByText('Atiende')).not.toBeInTheDocument()
+  })
+
+  it('si se traspasó, muestra quién la atiende ahora y quién antes', () => {
+    render(<MesasVisualization mesas={MESAS} atencionPorMesa={new Map([['m-3', { atiende: 'Beto Soto', antes: 'Ana Rojas' }]])} />)
+
+    expect(within(tarjeta('Mesa 3')).getByText('Beto Soto')).toBeInTheDocument()
+    expect(within(tarjeta('Mesa 3')).getByText('antes: Ana Rojas')).toBeInTheDocument()
+  })
+})

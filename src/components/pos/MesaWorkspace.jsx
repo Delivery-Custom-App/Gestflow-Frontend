@@ -29,7 +29,7 @@ import {
 
 const EMPTY_CUSTOMIZATION = { embutido: null, agregados: [] }
 
-export default function MesaWorkspace({ mesa, localId, cajaId, onBack, onTableUpdated }) {
+export default function MesaWorkspace({ mesa, atencion = null, localId, cajaId, onBack, onTableUpdated }) {
   const { detail, loading, error: mesaError, refresh } = useMesaDetail(mesa.id)
   const { updateOrderStatus } = useOrderManagement()
   const { data: menuData, loading: menuLoading, fetch: fetchMenu } = useMenuPOS(localId)
@@ -492,6 +492,12 @@ export default function MesaWorkspace({ mesa, localId, cajaId, onBack, onTableUp
                 <span className="hidden md:inline text-[hsl(var(--muted-foreground))]">·</span>
                 <span className="hidden md:inline text-xs text-[hsl(var(--muted-foreground))]">{mesa.zona}</span>
               </>
+            )}
+            {atencion && (
+              <span className="ml-auto truncate text-xs text-[hsl(var(--muted-foreground))]">
+                Atiende: <span className="font-semibold text-[hsl(var(--foreground))]">{atencion.atiende}</span>
+                {atencion.antes && <> · antes: {atencion.antes}</>}
+              </span>
             )}
           </div>
 

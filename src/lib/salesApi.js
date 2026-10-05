@@ -227,17 +227,28 @@ export async function listMesas(localId) {
  * local: una sola consulta filtrada por estado, no el histórico completo.
  */
 export async function listMesasConTotales(localId) {
-  const [mesas, abiertas] = await Promise.all([
+  const local = encodeURIComponent(String(localId))
+  // En curso = abierta, en preparación o lista: todavía no se cobra ni se cancela.
+  const [mesas, ...porEstado] = await Promise.all([
     listMesas(localId),
-    apiRequest(`/orders?local_id=${encodeURIComponent(String(localId))}&status=open`).catch(() => []),
+    ...['open', 'preparing', 'ready'].map((estado) => apiRequest(`/orders?local_id=${local}&status=${estado}`).catch(() => [])),
   ])
-  const totalPorMesa = new Map()
-  for (const orden of Array.isArray(abiertas) ? abiertas : []) {
+  const enCursoPorMesa = new Map()
+  for (const orden of porEstado.flatMap((filas) => (Array.isArray(filas) ? filas : []))) {
     if (!orden?.mesa_id) continue
     const clave = String(orden.mesa_id)
-    totalPorMesa.set(clave, (totalPorMesa.get(clave) || 0) + (Number(orden.total) || 0))
+    if (!enCursoPorMesa.has(clave)) enCursoPorMesa.set(clave, [])
+    enCursoPorMesa.get(clave).push(orden)
   }
-  return mesas.map((m) => ({ ...m, total: totalPorMesa.get(String(m.id)) ?? null }))
+  return mesas.map((m) => {
+    const ordenes = enCursoPorMesa.get(String(m.id)) || []
+    return {
+      ...m,
+      total: ordenes.length ? ordenes.reduce((s, o) => s + (Number(o.total) || 0), 0) : null,
+      // Con su mesero y su turno: para mostrar quién atiende y traspasarla.
+      ordenes_en_curso: ordenes,
+    }
+  })
 }
 
 export async function createMesa({ local_id, name, nombre, capacidad }) {
@@ -370,6 +381,12 @@ export async function createOrder(orderData = {}) {
     caja_id: cajaId,
     source: toV2Source(orderData.source || 'mostrador'),
     mesa_id: orderData.mesa_id || null,
+  }
+  // Al abrir una mesa queda registrado quién la atiende: quien la abre. El
+  // backend solo acepta mesero en locales con mesas, y las mesas solo existen ahí.
+  if (payload.mesa_id) {
+    const meseroId = orderData.waiter_user_id || (await getOptionalAuthContext()).user?.id
+    if (meseroId) payload.waiter_user_id = meseroId
   }
 
   const order = await apiRequest('/orders', { method: 'POST', body: payload })

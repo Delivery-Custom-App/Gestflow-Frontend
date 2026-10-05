@@ -1,5 +1,5 @@
 import { memo } from 'react'
-import { Pencil, Trash2, Users, DollarSign, Link2, Unlink, Check } from 'lucide-react'
+import { Pencil, Trash2, Users, DollarSign, Link2, Unlink, Check, UserRound } from 'lucide-react'
 import { formatCLP } from '../../lib/formatCLP'
 import { cn } from '@/lib/utils'
 
@@ -10,6 +10,7 @@ import { cn } from '@/lib/utils'
 function MesasVisualization({
   mesas = [], loading = false, onMesaSelect = null, onEditMesa = null, onDeleteMesa = null,
   gruposPorMesa = null, modoAgrupar = false, seleccionadas = null, onToggleSeleccion = null, onDeshacerGrupo = null,
+  atencionPorMesa = null,
 }) {
   if (loading) {
     return (
@@ -46,6 +47,7 @@ function MesasVisualization({
           seleccionada={Boolean(seleccionadas?.has(String(mesa.id)))}
           onToggleSeleccion={onToggleSeleccion}
           onDeshacerGrupo={onDeshacerGrupo}
+          atencion={atencionPorMesa?.get(String(mesa.id)) || null}
         />
       ))}
     </div>
@@ -254,6 +256,7 @@ function TableIllustration({ chairs = 4, className, stateKey = 'libre' }) {
 const MesaCard = memo(function MesaCard({
   mesa, index, onMesaSelect, onEditMesa, onDeleteMesa,
   grupo = null, modoAgrupar = false, seleccionada = false, onToggleSeleccion = null, onDeshacerGrupo = null,
+  atencion = null,
 }) {
   const stateKey = mesa.is_active === false ? 'inactiva' : (mesa.state || 'libre')
   const stateConfig = STATE_CONFIG[stateKey] || STATE_CONFIG.libre
@@ -388,6 +391,22 @@ const MesaCard = memo(function MesaCard({
               {total != null ? `$${formatCLP(total)}` : '—'}
             </span>
           </div>
+
+          {/* Quién atiende la mesa en curso (y quién la atendía, si se traspasó). */}
+          {atencion && (
+            <div className="flex items-center justify-between gap-2 rounded-lg bg-[hsl(var(--muted))]/30 px-3 py-2">
+              <div className="flex items-center gap-2 text-[hsl(var(--muted-foreground))]">
+                <UserRound size={14} />
+                <span className="text-xs font-medium">Atiende</span>
+              </div>
+              <span className="min-w-0 text-right">
+                <span className="block truncate text-sm font-bold text-[hsl(var(--foreground))]">{atencion.atiende}</span>
+                {atencion.antes && (
+                  <span className="block truncate text-[10px] text-[hsl(var(--muted-foreground))]">antes: {atencion.antes}</span>
+                )}
+              </span>
+            </div>
+          )}
         </div>
 
         {sizeLabel(capacidad) && (
