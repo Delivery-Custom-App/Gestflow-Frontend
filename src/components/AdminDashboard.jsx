@@ -42,7 +42,6 @@ function AdminDashboard() {
       const { desde, hasta } = rangoDelPeriodo(horas)
       const results = await Promise.all(
         locals.map((l) =>
-          )
           ordenesEntre(l.id, desde, hasta, token)
             .then((orders) => {
               if (!Array.isArray(orders)) return { id: l.id, count: 0 }
