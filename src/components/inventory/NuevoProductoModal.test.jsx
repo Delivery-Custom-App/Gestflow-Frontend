@@ -23,6 +23,12 @@ async function completarLoBasico(user) {
 beforeEach(() => vi.clearAllMocks())
 
 describe('NuevoProductoModal · "Este producto se prepara"', () => {
+  it('no pide proveedor: el módulo no existe en el backend', () => {
+    render(<NuevoProductoModal open localId="l1" />)
+    expect(screen.queryByLabelText('Proveedor')).not.toBeInTheDocument()
+    expect(screen.queryByText(/proveedor/i)).not.toBeInTheDocument()
+  })
+
   it('trae el switch apagado, con la línea que explica qué cambia, y pide el stock', () => {
     render(<NuevoProductoModal open localId="l1" />)
 

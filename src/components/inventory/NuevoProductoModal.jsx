@@ -32,10 +32,6 @@ const numInputCls =
   'focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary)/0.3)] ' +
   '[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none'
 
-const selectCls =
-  'h-9 w-full rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3 py-1 text-sm shadow-sm ' +
-  'focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary)/0.3)] disabled:cursor-not-allowed disabled:opacity-50'
-
 function NuevoProductoModal({ open, localId, onClose, onSuccess }) {
   const [submitting,       setSubmitting]       = useState(false)
   const [error,            setError]            = useState('')
@@ -288,17 +284,6 @@ function NuevoProductoModal({ open, localId, onClose, onSuccess }) {
             </div>
           </fieldset>
           )}
-
-          {/* Proveedor (opcional — módulo aún no disponible en Backend V2) */}
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="np-supplier">Proveedor</Label>
-            <select id="np-supplier" value="" disabled className={selectCls}>
-              <option value="">Proveedores no disponibles aún (Backend V2)</option>
-            </select>
-            <p className="text-xs text-[hsl(var(--muted-foreground))]">
-              El módulo de proveedores todavía no está disponible en Backend V2 — podés crear el producto sin asignarle uno.
-            </p>
-          </div>
 
         </form>
 

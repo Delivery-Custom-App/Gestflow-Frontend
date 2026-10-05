@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useParams } from 'react-router'
 import {
   deleteInventoryItem,
-  getInventoryKpisByLocal,
   getInventoryProductsPage,
   patchInventoryProductUnitCost,
   patchInventoryStock,
@@ -20,20 +19,21 @@ import CategoryFilterSelect from './CategoryFilterSelect'
 import { m, AnimatePresence } from 'framer-motion'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Search, Package, CheckCircle, TrendingDown, AlertTriangle, DollarSign, HelpCircle, X, Plus, Pencil } from 'lucide-react'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Search, Package, CheckCircle, AlertTriangle, DollarSign, HelpCircle, X, Plus, Pencil } from 'lucide-react'
 import PageTransition from '../PageTransition'
-import { formatCLPDisplay as formatMoney } from '../../lib/formatCLP'
 import { getCategoryTone } from '../../lib/categoryColor'
 
-const kpiContainerVariants = {
-  hidden: {},
-  visible: { transition: { staggerChildren: 0.08, delayChildren: 0.1 } },
-}
-
-const kpiItemVariants = {
-  hidden: { opacity: 0, y: 20, scale: 0.95 },
-  visible: { opacity: 1, y: 0, scale: 1, transition: { duration: 0.32, ease: [0.4, 0, 0.2, 1] } },
-}
+/**
+ * Filtro por estado de stock. Antes se activaba tocando las tarjetas de
+ * resumen, que se retiraron de esta pantalla (siguen en Estado Inventario).
+ */
+const TODOS_LOS_ESTADOS = '__TODOS__'
+const ESTADOS_DE_STOCK = [
+  { value: 'OPTIMO', label: 'Óptimo' },
+  { value: 'BAJO', label: 'Bajo' },
+  { value: 'CRITICO', label: 'Crítico' },
+]
 
 const sectionVariants = {
   hidden: { opacity: 0, y: 18 },
@@ -43,9 +43,6 @@ const sectionVariants = {
 function StockControlDashboard() {
   const { localId } = useParams()
 
-  const [data, setData] = useState(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
   const [modalOpen, setModalOpen] = useState(false)
   const [items, setItems] = useState([])
   const [totalCount, setTotalCount] = useState(0)
@@ -71,24 +68,6 @@ function StockControlDashboard() {
     const t = setTimeout(() => setDebouncedSearch(searchQuery.trim().toLowerCase()), 320)
     return () => clearTimeout(t)
   }, [searchQuery])
-
-  const load = useCallback(async () => {
-    if (!localId) {
-      setError('No se indicó un local.')
-      setLoading(false)
-      return
-    }
-    setError('')
-    try {
-      const payload = await getInventoryKpisByLocal(localId)
-      setData(payload)
-    } catch (e) {
-      setError(e?.message || 'No se pudieron cargar los KPIs de inventario.')
-      setData(null)
-    } finally {
-      setLoading(false)
-    }
-  }, [localId])
 
   /** Catálogo de categorías: listado completo del local (sin filtros) para llenar el selector (HU-47). */
   const loadCategoriesCatalog = useCallback(async () => {
@@ -146,10 +125,6 @@ function StockControlDashboard() {
   )
 
   useEffect(() => {
-    load()
-  }, [load])
-
-  useEffect(() => {
     loadCategoriesCatalog()
   }, [loadCategoriesCatalog])
 
@@ -180,14 +155,13 @@ function StockControlDashboard() {
       setActionError('')
       try {
         await patchInventoryStock(localId, row.inventory_id, body)
-        await load()
         await loadItems(currentFilters, currentPage)
       } catch (e) {
         setActionError(e?.message || 'No se pudo actualizar el stock.')
         throw e
       }
     },
-    [localId, load, loadItems, currentFilters, currentPage],
+    [localId, loadItems, currentFilters, currentPage],
   )
 
   const handlePatchUnitCost = useCallback(
@@ -196,14 +170,13 @@ function StockControlDashboard() {
       setActionError('')
       try {
         await patchInventoryProductUnitCost(localId, row.product_id, { unitCost: unitCostClp })
-        await load()
         await loadItems(currentFilters, currentPage)
       } catch (e) {
         setActionError(e?.message || 'No se pudo actualizar el costo.')
         throw e
       }
     },
-    [localId, load, loadItems, currentFilters, currentPage],
+    [localId, loadItems, currentFilters, currentPage],
   )
 
   const handlePatchProductName = useCallback(
@@ -211,14 +184,13 @@ function StockControlDashboard() {
       setActionError('')
       try {
         await patchProduct(row.product_id, { name: newName.trim() })
-        await load()
         await loadItems(currentFilters, currentPage)
       } catch (e) {
         setActionError(e?.message || 'No se pudo actualizar el nombre.')
         throw e
       }
     },
-    [load, loadItems, currentFilters, currentPage],
+    [loadItems, currentFilters, currentPage],
   )
 
   const handlePatchCategory = useCallback(
@@ -226,14 +198,13 @@ function StockControlDashboard() {
       setActionError('')
       try {
         await patchProduct(row.product_id, { category_id: categoryId })
-        await load()
         await loadItems(currentFilters, currentPage)
       } catch (e) {
         setActionError(e?.message || 'No se pudo actualizar la categoría.')
         throw e
       }
     },
-    [load, loadItems, currentFilters, currentPage],
+    [loadItems, currentFilters, currentPage],
   )
 
   const handleDeleteItem = useCallback(
@@ -242,7 +213,6 @@ function StockControlDashboard() {
       setActionError('')
       try {
         await deleteInventoryItem(localId, row.inventory_id)
-        await load()
         setCurrentPage(1)
         await loadItems(currentFilters, 1)
       } catch (e) {
@@ -250,7 +220,7 @@ function StockControlDashboard() {
         throw e
       }
     },
-    [localId, load, loadItems, currentFilters],
+    [localId, loadItems, currentFilters],
   )
 
   const handleCreateCategory = useCallback(async (event) => {
@@ -311,72 +281,6 @@ function StockControlDashboard() {
     }
   }, [loadCategoriesCatalog, loadItems, currentFilters, currentPage])
 
-  const handleKpiClick = (filterValue) => {
-    if (!filterValue) { setStatusFilters([]); return }
-    setStatusFilters((prev) => (prev.includes(filterValue) ? [] : [filterValue]))
-  }
-
-  const KPI_CARDS = data
-    ? [
-        {
-          icon: <Package size={22} />,
-          label: 'Total productos',
-          value: data.total_products ?? 0,
-          filterValue: null,
-          iconColorClass: 'text-[hsl(var(--primary))]',
-          iconBgClass: 'bg-emerald-50',
-          accentClass: 'border-l-emerald-700',
-          valueColorClass: 'text-[hsl(var(--foreground))]',
-          activeRing: '',
-        },
-        {
-          icon: <CheckCircle size={22} />,
-          label: 'Stock óptimo',
-          value: data.optimal_stock_count ?? 0,
-          filterValue: 'OPTIMO',
-          iconColorClass: 'text-emerald-600',
-          iconBgClass: 'bg-emerald-50',
-          accentClass: 'border-l-emerald-500',
-          valueColorClass: 'text-emerald-700',
-          activeRing: 'ring-2 ring-emerald-400',
-        },
-        {
-          icon: <TrendingDown size={22} />,
-          label: 'Stock bajo',
-          value: data.low_stock_count ?? 0,
-          filterValue: 'BAJO',
-          iconColorClass: 'text-amber-600',
-          iconBgClass: 'bg-amber-50',
-          accentClass: 'border-l-amber-500',
-          valueColorClass: 'text-amber-700',
-          activeRing: 'ring-2 ring-amber-400',
-        },
-        {
-          icon: <AlertTriangle size={22} />,
-          label: 'Stock crítico',
-          value: data.critical_stock_count ?? 0,
-          filterValue: 'CRITICO',
-          iconColorClass: 'text-red-600',
-          iconBgClass: 'bg-red-50',
-          accentClass: 'border-l-red-500',
-          valueColorClass: 'text-red-700',
-          activeRing: 'ring-2 ring-red-400',
-        },
-        {
-          icon: <DollarSign size={22} />,
-          label: 'Valor total',
-          value: formatMoney(data.total_value),
-          filterValue: null,
-          noClick: true,
-          iconColorClass: 'text-[hsl(var(--primary))]',
-          iconBgClass: 'bg-emerald-50',
-          accentClass: 'border-l-emerald-700',
-          valueColorClass: 'text-[hsl(var(--primary))]',
-          activeRing: '',
-        },
-      ]
-    : []
-
   return (
     <>
       <AnimatePresence>
@@ -401,9 +305,9 @@ function StockControlDashboard() {
               <div className="px-5 py-4 space-y-3">
                 {[
                   { icon: Package, color: 'text-[hsl(var(--primary))]', title: 'Lista de productos', desc: 'Tabla con todos los ingredientes y productos del inventario. Muestra nombre, cantidad actual, costo unitario y estado de stock.' },
-                  { icon: AlertTriangle, color: 'text-red-600', title: 'Alertas de stock', desc: 'Los indicadores superiores muestran cuántos productos están en stock crítico, bajo, o sin stock. Haz clic en cada indicador para filtrar la lista.' },
+                  { icon: AlertTriangle, color: 'text-red-600', title: 'Estado de stock', desc: 'Cada producto muestra si su stock está óptimo, bajo o crítico. Con el selector Estado ves solo los de un estado. El resumen con los totales está en Estado Inventario.' },
                   { icon: Search, color: 'text-indigo-600', title: 'Búsqueda y filtros', desc: 'Busca productos por nombre o filtra por categoría y estado de stock para encontrar rápidamente lo que necesitas reponer.' },
-                  { icon: DollarSign, color: 'text-emerald-600', title: 'Valor total', desc: 'Suma del valor monetario de todo el inventario actual, calculado con el costo unitario de cada producto.' },
+                  { icon: DollarSign, color: 'text-emerald-600', title: 'Valor de cada producto', desc: 'La columna Val. total multiplica el stock actual por el costo unitario.' },
                   { icon: CheckCircle, color: 'text-emerald-600', title: 'Agregar producto', highlight: true, desc: 'Registra un nuevo ingrediente o producto en el inventario con su nombre, categoría, cantidad inicial y costo.' },
                 ].map(({ icon: Icon, color, title, desc, highlight }) => (
                   <div key={title} className={`flex gap-3 rounded-xl p-3 ${highlight ? 'bg-[hsl(var(--primary)/0.08)] border border-[hsl(var(--primary)/0.2)]' : 'bg-[hsl(var(--muted)/0.4)]'}`}>
@@ -442,54 +346,6 @@ function StockControlDashboard() {
             </button>
           </div>
         </div>
-
-        {error ? (
-          <div className="rounded-md bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3">
-            {error}
-          </div>
-        ) : null}
-        {!error && loading && !data ? <LoadingSpinner message="Cargando indicadores..." /> : null}
-
-        {data ? (
-          <m.section
-            className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3"
-            aria-label="KPIs de inventario"
-            variants={kpiContainerVariants}
-            initial="hidden"
-            animate="visible"
-          >
-            {KPI_CARDS.map((kpi) => {
-              const isActive = kpi.filterValue && statusFilters.includes(kpi.filterValue)
-              const isClickable = !kpi.noClick
-              return (
-                <m.div
-                  key={kpi.label}
-                  variants={kpiItemVariants}
-                  whileHover={isClickable ? { scale: 1.04, y: -4, transition: { type: 'spring', stiffness: 380, damping: 22 } } : undefined}
-                  whileTap={isClickable ? { scale: 0.98 } : undefined}
-                  onClick={isClickable ? () => handleKpiClick(kpi.filterValue) : undefined}
-                  className={isClickable ? 'cursor-pointer' : undefined}
-                  title={isClickable ? (isActive ? 'Quitar filtro' : kpi.filterValue ? `Filtrar por ${kpi.label.toLowerCase()}` : 'Ver todos los productos') : undefined}
-                >
-                  <Card className={`border-l-4 ${kpi.accentClass} overflow-hidden h-full transition-shadow ${isActive ? kpi.activeRing : ''}`}>
-                    <CardContent className="flex items-center gap-2.5 p-3">
-                      <span
-                        className={`flex items-center justify-center w-9 h-9 rounded-full shrink-0 ${kpi.iconBgClass} ${kpi.iconColorClass}`}
-                        aria-hidden="true"
-                      >
-                        {kpi.icon}
-                      </span>
-                      <div className="min-w-0">
-                        <p className="text-xs text-[hsl(var(--muted-foreground))] leading-tight">{kpi.label}</p>
-                        <p className={`text-xl font-bold leading-tight mt-0.5 ${kpi.valueColorClass}`}>{kpi.value}</p>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </m.div>
-              )
-            })}
-          </m.section>
-        ) : null}
 
         <m.div variants={sectionVariants} initial="hidden" animate="visible">
         <Card>
@@ -599,6 +455,20 @@ function StockControlDashboard() {
                 />
               </div>
               <CategoryFilterSelect value={categoryFilter} onChange={setCategoryFilter} options={categoriesCatalog} />
+              <Select
+                value={statusFilters[0] || TODOS_LOS_ESTADOS}
+                onValueChange={(v) => setStatusFilters(v === TODOS_LOS_ESTADOS ? [] : [v])}
+              >
+                <SelectTrigger className="h-9 text-sm min-w-[160px]" aria-label="Filtrar por estado de stock">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={TODOS_LOS_ESTADOS}>Todos los estados</SelectItem>
+                  {ESTADOS_DE_STOCK.map(({ value, label }) => (
+                    <SelectItem key={value} value={value}>{label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </search>
 
             <ProductsTable
@@ -629,7 +499,6 @@ function StockControlDashboard() {
           onClose={() => setModalOpen(false)}
           onSuccess={() => {
             setCurrentPage(1)
-            load()
             loadCategoriesCatalog()
             loadItems(currentFilters, 1).catch(() => {})
           }}
