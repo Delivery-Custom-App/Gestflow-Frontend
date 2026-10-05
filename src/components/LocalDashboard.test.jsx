@@ -2,7 +2,7 @@
  * Dashboard del local sin "Ver detalles" (y su panel lateral) ni "Procesos
  * Recientes"; la guía tampoco los menciona.
  */
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, afterEach } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router'
@@ -26,6 +26,11 @@ vi.mock('recharts', async () => {
   return Object.fromEntries(nombres.map((n) => [n, caja]))
 })
 vi.mock('./charts/IncomeChart', () => ({ default: () => null }))
+const banderas = vi.hoisted(() => ({ fondoEmergencia: false }))
+vi.mock('../lib/v2Features', () => ({ isV2FeatureEnabled: (k) => Boolean(banderas[k]) }))
+vi.mock('./TarjetaFondoEmergencia', () => ({ default: ({ localId }) => <p>tarjeta-fondo {localId}</p> }))
+
+afterEach(() => { banderas.fondoEmergencia = false })
 
 function montar() {
   return render(
@@ -53,5 +58,24 @@ describe('LocalDashboard', () => {
     expect(screen.getByText('Tendencia de Ingresos', { selector: 'p' })).toBeInTheDocument()
     expect(screen.queryByText(/Ver detalles/)).not.toBeInTheDocument()
     expect(screen.queryByText(/Pedidos Recientes|Procesos Recientes/)).not.toBeInTheDocument()
+  })
+
+  it('sin la bandera no hay tarjeta del fondo ni entrada en la guía', async () => {
+    const user = userEvent.setup()
+    montar()
+    await screen.findByRole('heading', { name: 'Resumen Financiero' })
+    expect(screen.queryByText(/tarjeta-fondo/)).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: /Cómo leer este dashboard/ }))
+    expect(screen.queryByText('Fondo de emergencia')).not.toBeInTheDocument()
+  })
+
+  it('con la bandera muestra la tarjeta del fondo del local y la guía la explica', async () => {
+    banderas.fondoEmergencia = true
+    const user = userEvent.setup()
+    montar()
+    expect(await screen.findByText('tarjeta-fondo l1')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: /Cómo leer este dashboard/ }))
+    expect(screen.getByText('Fondo de emergencia', { selector: 'p' })).toBeInTheDocument()
+    expect(screen.getByText(/aportar, registrar un uso o ver el historial completo/)).toBeInTheDocument()
   })
 })

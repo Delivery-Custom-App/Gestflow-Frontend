@@ -11,6 +11,8 @@ import PageTransition from './PageTransition'
 import LoadingSpinner from './LoadingSpinner'
 import ChartSkeleton from './ui/ChartSkeleton'
 import IncomeChart from './charts/IncomeChart'
+import TarjetaFondoEmergencia from './TarjetaFondoEmergencia'
+import { isV2FeatureEnabled } from '../lib/v2Features'
 // recharts ya se carga bajo demanda: este modulo solo se importa desde paginas con React.lazy
 // (AuthenticatedRoutes) y el build lo deja en un chunk aparte, fuera del bundle inicial.
 // oxlint-disable-next-line react-doctor/prefer-dynamic-import
@@ -21,7 +23,7 @@ import {
 import {
   Package, CheckCircle, TrendingDown, AlertTriangle, DollarSign,
   TrendingUp, Wallet, Clock, CreditCard, X, BarChart2, HelpCircle,
-  LineChart as LineChartIcon, PieChart as PieChartIcon,
+  LineChart as LineChartIcon, PieChart as PieChartIcon, LifeBuoy,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import {
@@ -70,6 +72,7 @@ function KpiCard({ icon: Icon, label, value, iconColor, iconBg, accentColor, loa
 /* ── LocalDashboard ───────────────────────────────────────────── */
 function LocalDashboard() {
   const { localId } = useParams()
+  const conFondo = isV2FeatureEnabled('fondoEmergencia')
 
   const [trendRange, setTrendRange]       = useState('7d')
   const [trendData, setTrendData]         = useState(null)
@@ -301,6 +304,12 @@ function LocalDashboard() {
                         color: 'text-pink-600',
                         desc: 'Muestra la cantidad de pedidos en cada hora del día para identificar los momentos de mayor y menor demanda.',
                       },
+                      ...(conFondo ? [{
+                        title: 'Fondo de emergencia',
+                        icon: LifeBuoy,
+                        color: 'text-sky-600',
+                        desc: 'Plata apartada del local para imprevistos: saldo actual y los últimos aportes y usos con su motivo. Desde la tarjeta se va a Administración para aportar, registrar un uso o ver el historial completo; si el local no tiene fondo, ofrece crearlo.',
+                      }] : []),
                     ].map(({ title, icon: Icon, color, desc, highlight }) => (
                       <div
                         key={title}
@@ -345,6 +354,8 @@ function LocalDashboard() {
               ))}
             </m.div>
           </section>
+
+          {conFondo && <TarjetaFondoEmergencia localId={localId} />}
 
           {/* Charts row */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
