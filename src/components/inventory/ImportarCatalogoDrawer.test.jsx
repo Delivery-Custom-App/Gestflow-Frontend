@@ -100,6 +100,23 @@ describe('ImportarCatalogoDrawer', () => {
     expect(screen.getByText(/Agua mineral: Ítem de catálogo maestro no encontrado/)).toBeInTheDocument()
   })
 
+  it('si un producto quedó sin registro de stock, lo dice para ese producto', async () => {
+    importarItemAlLocal
+      .mockResolvedValueOnce({ id: 'p-9', name: 'Coca-Cola 500ml', avisoStock: 'se cayó' })
+      .mockResolvedValueOnce({ id: 'p-10', name: 'Agua mineral' })
+    const user = userEvent.setup()
+    montar()
+
+    await screen.findByText('Coca-Cola 500ml')
+    await user.click(screen.getAllByRole('checkbox')[0])
+    await user.click(screen.getAllByRole('checkbox')[1])
+    await user.click(screen.getByRole('button', { name: /importar 2/i }))
+
+    expect(await screen.findByText(/2 productos en el menú del local/i)).toBeInTheDocument()
+    expect(screen.getByText(/Coca-Cola 500ml: quedó en el menú, pero no se pudo crear su registro de stock \(se cayó\)/)).toBeInTheDocument()
+    expect(screen.queryByText(/Agua mineral: quedó en el menú/)).not.toBeInTheDocument()
+  })
+
   it('sin nada elegido no deja importar', async () => {
     montar()
 
