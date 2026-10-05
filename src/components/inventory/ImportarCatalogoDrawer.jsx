@@ -48,6 +48,7 @@ export default function ImportarCatalogoDrawer({ localId, salesModel, onClose, o
     if (seleccion.length === 0) return
     const { businessId } = await getAuthContext()
     const fallidos = []
+    const sinStock = []
     const categorias = new Set()
     let importados = 0
 
@@ -55,8 +56,9 @@ export default function ImportarCatalogoDrawer({ localId, salesModel, onClose, o
     setProgreso({ hechos: 0, total: seleccion.length })
     for (const [i, item] of seleccion.entries()) {
       try {
-        await importarItemAlLocal(item.id, { businessId, localId })
+        const producto = await importarItemAlLocal(item.id, { businessId, localId })
         importados += 1
+        if (producto?.avisoStock) sinStock.push({ nombre: item.name, motivo: producto.avisoStock })
         if (item.category_name) categorias.add(item.category_name)
       } catch (e) {
         fallidos.push({ nombre: item.name, motivo: e?.message || 'error desconocido' })
@@ -64,7 +66,7 @@ export default function ImportarCatalogoDrawer({ localId, salesModel, onClose, o
       setProgreso({ hechos: i + 1, total: seleccion.length })
     }
     setProgreso(null)
-    setResultado({ importados, fallidos, categorias: [...categorias] })
+    setResultado({ importados, fallidos, sinStock, categorias: [...categorias] })
     setElegidos(new Set())
     if (importados > 0) onImportado?.()
   }
@@ -112,6 +114,15 @@ export default function ImportarCatalogoDrawer({ localId, salesModel, onClose, o
                   Los encuentras en {resultado.categorias.length === 1 ? 'la categoría' : 'las categorías'}{' '}
                   <strong className="text-[hsl(var(--foreground))]">{resultado.categorias.join(', ')}</strong>.
                 </p>
+              )}
+              {resultado.sinStock?.length > 0 && (
+                <ul className="mt-2 space-y-1">
+                  {resultado.sinStock.map((f) => (
+                    <li key={f.nombre} className="text-xs text-amber-700 dark:text-amber-400">
+                      {f.nombre}: quedó en el menú, pero no se pudo crear su registro de stock ({f.motivo}), así que no aparece en Control de stock.
+                    </li>
+                  ))}
+                </ul>
               )}
               {resultado.fallidos.length > 0 && (
                 <ul className="mt-2 space-y-1">
