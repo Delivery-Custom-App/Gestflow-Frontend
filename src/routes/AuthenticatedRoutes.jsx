@@ -13,6 +13,7 @@ import LoadingPage from '../components/LoadingPage'
 const AdminDashboard = lazy(() => import('../components/AdminDashboard'))
 const LocalDashboard = lazy(() => import('../components/LocalDashboard'))
 const AdministrativeModule = lazy(() => import('../components/AdministrativeModule'))
+const MisTurnos = lazy(() => import('../components/turno/MisTurnos'))
 const InventoryHub = lazy(() => import('../components/inventory/InventoryHub'))
 const StockControlDashboard = lazy(() => import('../components/inventory/StockControlDashboard'))
 const MenuBuilderPage = lazy(() => import('../components/inventory/MenuBuilderPage'))
@@ -233,6 +234,8 @@ function workerLocalRoutes(wrap) {
       <Route path="/local/:localId/pos" element={wrap(<RestaurantPosOrRedirect />)} />
       <Route path="/local/:localId/pos/mesa/:mesaId" element={wrap(<WorkerSalesModelGate only="restaurant"><MesaDetail /></WorkerSalesModelGate>)} />
       <Route path="/local/:localId/pos/venta-directa" element={wrap(<WorkerSalesModelGate only="alPaso"><VentaDirectaView /></WorkerSalesModelGate>)} />
+      {/* "Mis turnos": el vendedor de cualquier tipo de local ve solo los suyos. */}
+      <Route path="/local/:localId/pos/mis-turnos" element={wrap(<MisTurnos />)} />
     </>
   )
 }

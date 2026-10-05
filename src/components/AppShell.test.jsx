@@ -131,6 +131,22 @@ describe('AppShell — menú del vendedor', () => {
     noSeVe(FUERA_DEL_MENU_DEL_VENDEDOR)
   })
 
+  it.each([['con mesas', 'loc-mesas', 'pos'], ['de comida al paso', 'loc-paso', 'pos/venta-directa']])(
+    'en un local %s también tiene "Mis turnos", y lo lleva a sus turnos',
+    async (_tipo, local, ruta) => {
+      session.role = 'Empleado'
+      renderShell(local, ruta)
+
+      await userEvent.setup().click(screen.getByRole('button', { name: 'Mis turnos' }))
+      expect(screen.getByRole('button', { name: 'Mis turnos' })).toHaveClass('bg-[hsl(var(--accent))]')
+    },
+  )
+
+  it('"Mis turnos" es del vendedor: el dueño y el encargado ven los turnos en Caja y turnos', () => {
+    renderShell('loc-mesas', 'pos')
+    expect(screen.queryByRole('button', { name: 'Mis turnos' })).not.toBeInTheDocument()
+  })
+
   it('el rol Cajero tiene el mismo menú que el Empleado', () => {
     session.role = 'Cajero'
     renderShell('loc-paso', 'pos/venta-directa')

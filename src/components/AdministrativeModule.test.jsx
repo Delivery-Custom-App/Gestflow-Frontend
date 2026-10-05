@@ -4,12 +4,17 @@ import { MemoryRouter, Route, Routes } from 'react-router'
 import AdministrativeModule from './AdministrativeModule'
 import userEvent from '@testing-library/user-event'
 import { AuthProvider } from '../context/AuthContext'
+import { listUsers } from '../lib/apiClient'
 import { createCaja, getCajasByLocal, getCajasFisicasByLocal, getOrdersByLocal, getResumenDiario, getVentasIndicadores, listarCajasFisicas } from '../lib/administrativeApi'
 
 vi.mock('../lib/apiClient', async (importOriginal) => ({
   ...(await importOriginal()),
   getAuthContext: vi.fn(() => Promise.resolve({ token: 'test-token' })),
   apiRequest: vi.fn(() => Promise.resolve([])),
+  listUsers: vi.fn(() => Promise.resolve([
+    { id: 'u-ana', first_name: 'Ana', last_name: 'Rojas' },
+    { id: 'u-beto', first_name: 'Beto', last_name: 'Soto' },
+  ])),
 }))
 
 vi.mock('../lib/inventoryApi', async (importOriginal) => ({
@@ -44,8 +49,8 @@ const mockOrders = [
 ]
 
 const mockCajas = [
-  { id: 'caja-1', name: 'Turno 1', caja_fisica_id: 'cf-1', business_date: '2026-09-13', is_active: true, mp: null },
-  { id: 'caja-2', name: 'Turno 2', caja_fisica_id: 'cf-2', business_date: '2026-09-12', is_active: false, status: 'closed', mp: null },
+  { id: 'caja-1', name: 'Turno 1', caja_fisica_id: 'cf-1', cashier_user_id: 'u-ana', business_date: '2026-09-13', is_active: true, mp: null },
+  { id: 'caja-2', name: 'Turno 2', caja_fisica_id: 'cf-2', cashier_user_id: 'u-beto', business_date: '2026-09-12', is_active: false, status: 'closed', mp: null },
 ]
 
 const mockIndicadores = {
@@ -406,6 +411,52 @@ describe('AdministrativeModule', () => {
 
     const panel = (await screen.findByRole('heading', { name: 'Turnos de caja' })).closest('article')
     expect(within(panel).getByText('Caja principal')).toBeInTheDocument()
+  })
+
+  it.each(['Admin', 'Admin Negocio'])('%s ve de quién es cada turno y lo filtra por vendedor y fecha', async (rol) => {
+    const user = userEvent.setup()
+    renderAdmin('flujo-caja', rol)
+
+    const panel = (await screen.findByRole('heading', { name: 'Turnos de caja' })).closest('article')
+    const tabla = () => within(panel).getByRole('table')
+    const filas = () => within(tabla()).getAllByRole('row').slice(1)
+    expect(await within(tabla()).findByText('Ana Rojas')).toBeInTheDocument()
+    expect(within(tabla()).getByText('Beto Soto')).toBeInTheDocument()
+    expect(filas()).toHaveLength(2)
+
+    await user.selectOptions(within(panel).getByLabelText('Vendedor'), 'u-beto')
+    expect(filas()).toHaveLength(1)
+    expect(within(filas()[0]).getByText('Beto Soto')).toBeInTheDocument()
+
+    await user.selectOptions(within(panel).getByLabelText('Vendedor'), '')
+    await user.type(within(panel).getByLabelText('Fecha'), '2026-09-13')
+    expect(filas()).toHaveLength(1)
+    expect(within(filas()[0]).getByText('Ana Rojas')).toBeInTheDocument()
+  })
+
+  it('al abrir un turno ve su resumen: ventas, ingresos, egresos y el arqueo para cerrarlo', async () => {
+    const user = userEvent.setup()
+    renderAdmin('flujo-caja', 'Admin')
+
+    const panel = (await screen.findByRole('heading', { name: 'Turnos de caja' })).closest('article')
+    const filaAna = (await within(within(panel).getByRole('table')).findByText('Ana Rojas')).closest('tr')
+    await user.click(within(filaAna).getByRole('button', { name: 'Ver resumen' }))
+
+    // El panel lateral: lo que rodea al título del resumen.
+    const lateral = (await screen.findByRole('heading', { name: 'Resumen del turno' })).closest('.fixed')
+    expect(within(lateral).getByText(/Ana Rojas · 13\/09\/2026 · Abierto/)).toBeInTheDocument()
+    for (const cifra of ['Ventas', 'Ingresos', 'Egresos', 'Apertura', 'Total esperado']) {
+      expect(await within(lateral).findByText(cifra)).toBeInTheDocument()
+    }
+    expect(within(lateral).getByRole('button', { name: /Cerrar turno \(arqueo del día\)/ })).toBeInTheDocument()
+  })
+
+  it('si no se pueden leer los nombres, la tabla igual distingue a cada vendedor', async () => {
+    listUsers.mockRejectedValueOnce(new Error('403'))
+    renderAdmin('flujo-caja', 'Admin')
+
+    const panel = (await screen.findByRole('heading', { name: 'Turnos de caja' })).closest('article')
+    expect(await within(within(panel).getByRole('table')).findByText('Usuario u-ana')).toBeInTheDocument()
   })
 
 })
