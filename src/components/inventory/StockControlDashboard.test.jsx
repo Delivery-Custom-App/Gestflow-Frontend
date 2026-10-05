@@ -3,12 +3,12 @@
  * resumen, con el filtro por estado en un selector.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router'
 import StockControlDashboard from './StockControlDashboard'
 import { AuthProvider } from '../../context/AuthContext'
-import { getInventoryProductsPage } from '../../lib/inventoryApi'
+import { getInventoryProductsPage, sumarUnidades } from '../../lib/inventoryApi'
 
 vi.mock('../../lib/apiClient', () => ({
   getAuthContext: vi.fn(() => Promise.resolve({ token: 'test-token' })),
@@ -20,6 +20,9 @@ vi.mock('../../lib/inventoryApi', () => ({
   getCategoriesForLocal: vi.fn(() => Promise.resolve([])),
   patchInventoryProductUnitCost: vi.fn(),
   patchInventoryStock: vi.fn(),
+  sumarUnidades: vi.fn(() => Promise.resolve({})),
+  corregirConteo: vi.fn(() => Promise.resolve({})),
+  empezarAControlarStock: vi.fn(() => Promise.resolve({})),
 }))
 
 // El Select de Radix necesita APIs del navegador que jsdom no tiene: aquí basta
@@ -85,5 +88,30 @@ describe('StockControlDashboard', () => {
 
     await user.selectOptions(selector, 'Todos los estados')
     await waitFor(() => expect(ultimoFiltro().status).toBeUndefined())
+  })
+
+  it('pide también los productos sin stock registrado', async () => {
+    renderStock()
+    await waitFor(() => expect(getInventoryProductsPage).toHaveBeenCalled())
+    expect(ultimoFiltro().incluirSinRegistro).toBe(true)
+  })
+
+  it('sumar unidades: guarda lo que llegó y recarga la tabla', async () => {
+    getInventoryProductsPage.mockResolvedValue({
+      items: [{ inventory_id: 'inv-1', product_id: 'p1', product_name: 'Bebida lata', stock_current: 20, stock_min: 5, stock_status: 'OPTIMO' }],
+      total: 1,
+    })
+    const user = userEvent.setup()
+    renderStock()
+
+    await user.click(await screen.findByRole('button', { name: 'Sumar unidades a Bebida lata' }))
+    const llamadasAntes = getInventoryProductsPage.mock.calls.length
+    const dialogo = screen.getByRole('dialog', { name: 'Sumar unidades' })
+    await user.type(within(dialogo).getByLabelText('¿Cuántas unidades llegaron?'), '24')
+    await user.click(within(dialogo).getByRole('button', { name: 'Guardar' }))
+
+    await waitFor(() => expect(sumarUnidades).toHaveBeenCalledWith('inv-1', 24))
+    await waitFor(() => expect(getInventoryProductsPage.mock.calls.length).toBeGreaterThan(llamadasAntes))
+    expect(screen.queryByRole('dialog', { name: 'Sumar unidades' })).not.toBeInTheDocument()
   })
 })

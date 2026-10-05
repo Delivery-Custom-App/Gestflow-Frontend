@@ -355,9 +355,49 @@ export async function patchInventoryStock(_localId, inventoryId, body) {
   if (body.stock_min != null) patch.stock_min = body.stock_min
   if (body.max_stock != null) patch.stock_max = body.max_stock
   if (body.stock_max != null) patch.stock_max = body.stock_max
+  if (body.critical_stock != null) patch.stock_critical = body.critical_stock
+  if (body.stock_critical != null) patch.stock_critical = body.stock_critical
   return apiRequest(`/inventory/${encodeURIComponent(String(inventoryId))}`, {
     method: 'PATCH',
     body: patch,
+  })
+}
+
+/**
+ * Suma unidades (por ejemplo, llegó mercadería). No hay endpoint de ingreso:
+ * se lee el stock actual recién consultado, se le suma y se guarda.
+ */
+export async function sumarUnidades(inventoryId, cantidad) {
+  const n = Number(cantidad)
+  if (!Number.isFinite(n) || n <= 0) throw new Error('Indica cuántas unidades llegaron.')
+  const ruta = `/inventory/${encodeURIComponent(String(inventoryId))}`
+  const fila = await apiRequest(ruta)
+  const actual = Number(fila?.stock_actual) || 0
+  return apiRequest(ruta, { method: 'PATCH', body: { stock_actual: actual + n } })
+}
+
+/** Corrige el conteo: el stock pasa a ser lo que se contó. */
+export async function corregirConteo(inventoryId, contado) {
+  const n = Number(contado)
+  if (!Number.isFinite(n) || n < 0) throw new Error('Indica cuántas unidades contaste.')
+  return apiRequest(`/inventory/${encodeURIComponent(String(inventoryId))}`, {
+    method: 'PATCH',
+    body: { stock_actual: n },
+  })
+}
+
+/** Empieza a controlar el stock de un producto que todavía no lo tiene en el local. */
+export async function empezarAControlarStock(localId, productId, { stockActual = 0, stockMin = 0, stockCritical = null } = {}) {
+  return apiRequest('/inventory', {
+    method: 'POST',
+    body: {
+      local_id: localId,
+      product_id: productId,
+      stock_actual: Number(stockActual) || 0,
+      stock_min: Number(stockMin) || 0,
+      stock_max: null,
+      ...(stockCritical != null && stockCritical !== '' ? { stock_critical: Number(stockCritical) } : {}),
+    },
   })
 }
 

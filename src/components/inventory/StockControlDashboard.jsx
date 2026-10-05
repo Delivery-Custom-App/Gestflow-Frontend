@@ -10,7 +10,11 @@ import {
   patchCategory,
   postCategory,
   deleteCategory,
+  sumarUnidades,
+  corregirConteo,
+  empezarAControlarStock,
 } from '../../lib/inventoryApi'
+import RegistrarStockModal from './RegistrarStockModal'
 import InventoryShell from './InventoryShell'
 import LoadingSpinner from '../LoadingSpinner'
 import NuevoProductoModal from './NuevoProductoModal'
@@ -91,6 +95,8 @@ function StockControlDashboard() {
       category: categoryFilter || undefined,
       search: debouncedSearch || undefined,
       status: statusFilters.length ? statusFilters : undefined,
+      // Los productos por unidades sin stock registrado, para "Empezar a controlar stock".
+      incluirSinRegistro: true,
     }),
     [categoryFilter, debouncedSearch, statusFilters],
   )
@@ -205,6 +211,20 @@ function StockControlDashboard() {
       }
     },
     [loadItems, currentFilters, currentPage],
+  )
+
+  // Registrar stock por unidades: sumar lo que llegó, corregir el conteo o empezar a controlarlo.
+  const [registrando, setRegistrando] = useState(null) // { row, modo }
+  const guardarRegistro = useCallback(
+    async (datos) => {
+      const { row, modo } = registrando
+      if (modo === 'sumar') await sumarUnidades(row.inventory_id, datos.cantidad)
+      else if (modo === 'corregir') await corregirConteo(row.inventory_id, datos.cantidad)
+      else await empezarAControlarStock(localId, row.product_id, datos)
+      setRegistrando(null)
+      await loadItems(currentFilters, currentPage)
+    },
+    [registrando, localId, loadItems, currentFilters, currentPage],
   )
 
   const handleDeleteItem = useCallback(
@@ -486,12 +506,22 @@ function StockControlDashboard() {
               onPatchProductName={handlePatchProductName}
               onPatchCategory={handlePatchCategory}
               onDeleteItem={handleDeleteItem}
+              onRegistrar={(row, modo) => setRegistrando({ row, modo })}
               statusFilters={statusFilters}
               categoriesCatalog={categoriesCatalog}
             />
           </CardContent>
         </Card>
         </m.div>
+
+        {registrando && (
+          <RegistrarStockModal
+            modo={registrando.modo}
+            row={registrando.row}
+            onGuardar={guardarRegistro}
+            onClose={() => setRegistrando(null)}
+          />
+        )}
 
         <NuevoProductoModal
           open={modalOpen}

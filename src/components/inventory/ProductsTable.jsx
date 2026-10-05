@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import { m, AnimatePresence } from 'framer-motion'
-import { Pencil } from 'lucide-react'
+import { Pencil, PackagePlus, ClipboardCheck, PlayCircle } from 'lucide-react'
 import StockStatusBadge from './StockStatusBadge'
-import { stockLevelFromRow } from './stockAlertUtils'
+import { getStockAlertLevel } from './stockAlertUtils'
 
 const ROW_CLASS =
   'border-b border-[hsl(var(--border))] transition-colors hover:bg-[hsl(var(--muted)/0.5)] data-[state=selected]:bg-[hsl(var(--accent))]'
@@ -46,6 +46,7 @@ function ProductsTable({
   onPatchProductName,
   onPatchCategory,
   onDeleteItem,
+  onRegistrar,
   statusFilters = [],
   categoriesCatalog = [],
 }) {
@@ -53,6 +54,7 @@ function ProductsTable({
   const [nameDraft, setNameDraft] = useState('')
   const [maxStockDraft, setMaxStockDraft] = useState('')
   const [minStockDraft, setMinStockDraft] = useState('')
+  const [criticalStockDraft, setCriticalStockDraft] = useState('')
   const [costDraft, setCostDraft] = useState('')
   const [categoryDraft, setCategoryDraft] = useState(NO_CATEGORY_VALUE)
   const [formError, setFormError] = useState('')
@@ -68,6 +70,7 @@ function ProductsTable({
     setNameDraft('')
     setMaxStockDraft('')
     setMinStockDraft('')
+    setCriticalStockDraft('')
     setCostDraft('')
     setCategoryDraft(NO_CATEGORY_VALUE)
     setFormError('')
@@ -79,6 +82,7 @@ function ProductsTable({
     setNameDraft(row.product_name || row.name || '')
     setMaxStockDraft(row.stock_max != null ? String(row.stock_max) : '')
     setMinStockDraft(String(row.stock_min ?? 0))
+    setCriticalStockDraft(row.stock_critical != null ? String(row.stock_critical) : '')
     setCostDraft(String(Math.round(Number(row.unit_cost_clp ?? 0))))
     setCategoryDraft(row.category_id ? String(row.category_id) : NO_CATEGORY_VALUE)
     setFormError('')
@@ -90,6 +94,7 @@ function ProductsTable({
     const newName      = nameDraft.trim()
     const maxStockValue = maxStockDraft.trim() === '' ? null : Number(maxStockDraft)
     const minStockValue = Number(minStockDraft)
+    const criticalStockValue = criticalStockDraft.trim() === '' ? null : Number(criticalStockDraft)
     const unitCostValue = Number(costDraft)
 
     if (!newName) { setFormError('El nombre no puede estar vacío.'); return }
@@ -98,6 +103,16 @@ function ProductsTable({
     }
     if (!Number.isFinite(minStockValue) || minStockValue < 0) {
       setFormError('El stock mínimo debe ser un número válido mayor o igual a 0.'); return
+    }
+    if (criticalStockValue !== null && (!Number.isFinite(criticalStockValue) || criticalStockValue < 0)) {
+      setFormError('El nivel crítico debe ser un número válido mayor o igual a 0.'); return
+    }
+    // El backend exige crítico ≤ mínimo (y la base, máximo ≥ mínimo).
+    if (criticalStockValue !== null && criticalStockValue > minStockValue) {
+      setFormError('El nivel crítico no puede ser mayor que el mínimo.'); return
+    }
+    if (maxStockValue !== null && maxStockValue > 0 && maxStockValue < minStockValue) {
+      setFormError('El stock máximo no puede ser menor que el mínimo.'); return
     }
     if (!Number.isFinite(unitCostValue) || unitCostValue <= 0) {
       setFormError('El costo unitario debe ser un número válido mayor a 0.'); return
@@ -121,6 +136,10 @@ function ProductsTable({
       const stockPatchBody = {}
       if (nextMaxStock !== null && nextMaxStock !== currentMaxStock) stockPatchBody.max_stock = nextMaxStock
       if (nextMinStock !== currentMinStock) stockPatchBody.min_stock = nextMinStock
+      const currentCriticalStock = editingRow.stock_critical != null ? Number(editingRow.stock_critical) : null
+      if (criticalStockValue !== null && Math.floor(criticalStockValue) !== currentCriticalStock) {
+        stockPatchBody.critical_stock = Math.floor(criticalStockValue)
+      }
       if (onPatchStock && Object.keys(stockPatchBody).length > 0) {
         await onPatchStock(editingRow, stockPatchBody)
       }
@@ -158,21 +177,22 @@ function ProductsTable({
         <Table className="w-full table-fixed text-xs">
           <TableHeader>
             <TableRow className="bg-[hsl(var(--muted)/0.4)]">
-              <TableHead className="w-[20%] font-semibold">Producto</TableHead>
-              <TableHead className="w-[16%] font-semibold">Categoría</TableHead>
-              <TableHead className="w-[8%] font-semibold text-right text-emerald-700">Actual</TableHead>
-              <TableHead className="w-[7%] font-semibold text-right text-amber-600">Mín.</TableHead>
-              <TableHead className="w-[7%] font-semibold text-right text-sky-600">Máx.</TableHead>
-              <TableHead className="w-[10%] font-semibold text-right">Costo (CLP)</TableHead>
-              <TableHead className="w-[11%] font-semibold text-right">Val. total</TableHead>
+              <TableHead className="w-[15%] font-semibold">Producto</TableHead>
+              <TableHead className="w-[11%] font-semibold">Categoría</TableHead>
+              <TableHead className="w-[7%] font-semibold text-right text-emerald-700">Actual</TableHead>
+              <TableHead className="w-[6%] font-semibold text-right text-amber-600">Mín.</TableHead>
+              <TableHead className="w-[6%] font-semibold text-right text-red-600">Crítico</TableHead>
+              <TableHead className="w-[6%] font-semibold text-right text-sky-600">Máx.</TableHead>
+              <TableHead className="w-[8%] font-semibold text-right">Costo (CLP)</TableHead>
+              <TableHead className="w-[8%] font-semibold text-right">Val. total</TableHead>
               <TableHead className="w-[9%] font-semibold">Estado</TableHead>
-              <TableHead className="w-[12%] font-semibold">Gestionar</TableHead>
+              <TableHead className="w-[24%] font-semibold">Gestionar</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {error ? (
               <TableRow>
-                <TableCell colSpan={9} className="text-center text-[hsl(var(--destructive))] py-8">
+                <TableCell colSpan={10} className="text-center text-[hsl(var(--destructive))] py-8">
                   {error}
                 </TableCell>
               </TableRow>
@@ -180,7 +200,7 @@ function ProductsTable({
             {!error && loading
               ? Array.from({ length: 5 }).map((_, i) => (
                   <TableRow key={`skel-${i}`}>
-                    {Array.from({ length: 9 }).map((_, j) => (
+                    {Array.from({ length: 10 }).map((_, j) => (
                       <TableCell key={j}>
                         <Skeleton className="h-4 w-full" />
                       </TableCell>
@@ -190,7 +210,7 @@ function ProductsTable({
               : null}
             {!error && !loading && items.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={9} className="py-12">
+                <TableCell colSpan={10} className="py-12">
                   {statusFilters.length > 0 ? (
                     <div className="flex flex-col items-center gap-1 text-center">
                       <p className="font-semibold text-[hsl(var(--foreground))]">
@@ -229,7 +249,10 @@ function ProductsTable({
                       : stockCurrent * unitCost
                   const stockMin = row.stock_min == null ? '—' : String(row.stock_min)
                   const stockMax = row.stock_max == null ? '—' : String(row.stock_max)
-                  const level = stockLevelFromRow(row)
+                  const stockCritical = row.stock_critical == null ? '—' : String(row.stock_critical)
+                  const sinRegistro = row.sin_registro === true
+                  // El color del número sigue al mismo estado que la insignia.
+                  const level = getStockAlertLevel(row)
                   const actualCls = level === 'critical' ? 'text-red-600 font-bold' : level === 'low' ? 'text-amber-600 font-semibold' : 'text-emerald-600 font-semibold'
                   const categoryTone = getCategoryTone({ id: row.category_id, name: row.category_name })
                   return (
@@ -255,25 +278,54 @@ function ProductsTable({
                           </span>
                         ) : '—'}
                       </TableCell>
-                      <TableCell className={`text-right tabular-nums ${actualCls}`}>{stockCurrent}</TableCell>
+                      <TableCell className={`text-right tabular-nums ${sinRegistro ? 'text-[hsl(var(--muted-foreground))]' : actualCls}`}>{sinRegistro ? '—' : stockCurrent}</TableCell>
                       <TableCell className="text-right tabular-nums text-amber-600 font-medium">{stockMin}</TableCell>
+                      <TableCell className="text-right tabular-nums text-red-600 font-medium">{stockCritical}</TableCell>
                       <TableCell className="text-right tabular-nums text-sky-600 font-medium">{stockMax}</TableCell>
                       <TableCell className="text-right tabular-nums">{formatClp(unitCost)}</TableCell>
-                      <TableCell className="text-right tabular-nums">{formatClp(total)}</TableCell>
+                      <TableCell className="text-right tabular-nums">{sinRegistro ? '—' : formatClp(total)}</TableCell>
                       <TableCell>
-                        <StockStatusBadge row={row} />
+                        {sinRegistro
+                          ? <span className="text-[11px] font-medium text-[hsl(var(--muted-foreground))]">Sin stock registrado</span>
+                          : <StockStatusBadge row={row} />}
                       </TableCell>
                       <TableCell>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => openEditModal(row)}
-                          className="h-7 px-2 text-xs gap-1 text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--primary))]"
-                        >
-                          <Pencil size={12} />
-                          Editar
-                        </Button>
+                        {sinRegistro ? (
+                          <Button type="button" variant="outline" size="sm" onClick={() => onRegistrar?.(row, 'empezar')}
+                            className="h-7 px-2 text-xs gap-1">
+                            <PlayCircle size={12} />
+                            Empezar a controlar stock
+                          </Button>
+                        ) : (
+                          <div className="flex flex-wrap items-center gap-1">
+                            {onRegistrar && (
+                              <>
+                                <Button type="button" variant="ghost" size="sm" onClick={() => onRegistrar(row, 'sumar')}
+                                  aria-label={`Sumar unidades a ${display}`} title="Llegó mercadería: sumar unidades"
+                                  className="h-7 px-2 text-xs gap-1 text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--primary))]">
+                                  <PackagePlus size={12} />
+                                  Sumar
+                                </Button>
+                                <Button type="button" variant="ghost" size="sm" onClick={() => onRegistrar(row, 'corregir')}
+                                  aria-label={`Corregir conteo de ${display}`} title="El conteo físico no coincide: corregir"
+                                  className="h-7 px-2 text-xs gap-1 text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--primary))]">
+                                  <ClipboardCheck size={12} />
+                                  Corregir
+                                </Button>
+                              </>
+                            )}
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => openEditModal(row)}
+                              className="h-7 px-2 text-xs gap-1 text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--primary))]"
+                            >
+                              <Pencil size={12} />
+                              Editar
+                            </Button>
+                          </div>
+                        )}
                       </TableCell>
                     </m.tr>
                   )
@@ -360,7 +412,20 @@ function ProductsTable({
             ) : null}
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-3 gap-4">
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="edit-critical-stock" className="text-sm font-semibold">Nivel crítico</Label>
+              <Input
+                id="edit-critical-stock"
+                type="number"
+                min={0}
+                placeholder="Sin definir"
+                value={criticalStockDraft}
+                onChange={(e) => setCriticalStockDraft(e.target.value)}
+                disabled={saving}
+                className="h-10"
+              />
+            </div>
             <div className="flex flex-col gap-2">
               <Label htmlFor="edit-min-stock" className="text-sm font-semibold">Stock Mínimo</Label>
               <Input
@@ -386,6 +451,9 @@ function ProductsTable({
                 className="h-10"
               />
             </div>
+            <p className="col-span-3 -mt-2 text-xs text-[hsl(var(--muted-foreground))]">
+              En el mínimo el producto queda en estado bajo; en el nivel crítico, en crítico. El crítico no puede ser mayor que el mínimo.
+            </p>
           </div>
 
           <div className="flex flex-col gap-2">
