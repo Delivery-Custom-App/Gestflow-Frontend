@@ -429,6 +429,7 @@ function StockControlDashboard() {
             <div>
               <h1 className="text-xl font-bold text-[hsl(var(--foreground))]">Control de stock</h1>
               <p className="text-sm text-[hsl(var(--muted-foreground))]">Gestiona existencias y costos para decisiones de reposición</p>
+              <p className="text-xs text-[hsl(var(--muted-foreground))]">Los productos que se preparan no llevan stock por unidades y no aparecen aquí.</p>
             </div>
           </header>
           <div className="flex flex-col items-end gap-1">

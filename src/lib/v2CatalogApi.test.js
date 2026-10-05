@@ -174,6 +174,19 @@ describe('fetchEnrichedInventoryForLocal', () => {
     expect(rows[0].product_id).toBe('p1')
   })
 
+  it('un producto que se prepara no se lista aunque conserve su fila de inventario', async () => {
+    mockPlatform()
+    const original = apiRequest.getMockImplementation()
+    apiRequest.mockImplementation((path) => (path === '/products'
+      ? Promise.resolve([
+        { id: 'p1', name: 'Café', cost: 100, stock_deduction_mode: 'DIRECT_STOCK' },
+        { id: 'p2', name: 'Lomo a lo pobre', cost: 50, stock_deduction_mode: 'RECIPE_BASED' },
+      ])
+      : original(path)))
+    const { rows } = await fetchEnrichedInventoryForLocal('l1')
+    expect(rows.map((r) => r.product_id)).toEqual(['p1'])
+  })
+
   it('filters.status filtra por estado de stock', async () => {
     mockPlatform()
     const { rows } = await fetchEnrichedInventoryForLocal('l1', { status: ['critico'] })
@@ -247,7 +260,23 @@ describe('createProductWithInventory', () => {
     expect(res.inventory).toEqual({ id: 'inv1' })
     expect(apiRequest).toHaveBeenCalledWith('/products', expect.objectContaining({
       method: 'POST',
-      body: expect.objectContaining({ name: 'Té', price: 100, cost: 40 }),
+      body: expect.objectContaining({ name: 'Té', price: 100, cost: 40, stock_deduction_mode: 'DIRECT_STOCK' }),
     }))
+  })
+
+  it('un producto que se prepara se crea sin fila de inventario (el backend la rechazaría)', async () => {
+    apiRequest.mockImplementation((path) => {
+      if (path === '/locals/l1') return Promise.resolve({ id: 'l1', business_id: 'b1' })
+      if (path === '/products') return Promise.resolve({ id: 'p9' })
+      return Promise.resolve({ ok: true })
+    })
+    const res = await createProductWithInventory('l1', { name: 'Lomo a lo pobre', stock_deduction_mode: 'RECIPE_BASED' })
+
+    expect(res.inventory).toBeNull()
+    expect(apiRequest).toHaveBeenCalledWith('/products', expect.objectContaining({
+      body: expect.objectContaining({ stock_deduction_mode: 'RECIPE_BASED' }),
+    }))
+    expect(apiRequest).toHaveBeenCalledWith('/local-products', expect.anything())
+    expect(apiRequest).not.toHaveBeenCalledWith('/inventory', expect.anything())
   })
 })

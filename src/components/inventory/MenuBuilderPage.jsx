@@ -12,6 +12,8 @@ import { apiRequest } from '../../lib/apiClient'
 import { formatCLPCurrency as formatMoney } from '../../lib/formatCLP'
 import InventoryShell from './InventoryShell'
 import NuevoProductoModal from './NuevoProductoModal'
+import EditarProductoModal from './EditarProductoModal'
+import { sePrepara } from '../../lib/tipoProducto'
 import ImportarCatalogoDrawer from './ImportarCatalogoDrawer'
 import LoadingSpinner from '../LoadingSpinner'
 import { Button } from '@/components/ui/button'
@@ -42,6 +44,7 @@ function MenuBuilderPage() {
   const [categorySaving, setCategorySaving] = useState(false)
   const [togglingId, setTogglingId] = useState('')
   const [modalOpen, setModalOpen] = useState(false)
+  const [editando, setEditando] = useState(null)
 
   const load = useCallback(async () => {
     if (!localId) {
@@ -476,8 +479,13 @@ function MenuBuilderPage() {
                           <UtensilsCrossed className="h-5 w-5" />
                         </div>
                         <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-bold text-[hsl(var(--foreground))]">
-                            {item.product_name || item.name}
+                          <p className="flex min-w-0 items-center gap-2 text-sm font-bold text-[hsl(var(--foreground))]">
+                            <span className="truncate">{item.product_name || item.name}</span>
+                            {sePrepara(item) && (
+                              <span className="shrink-0 rounded-full bg-[hsl(var(--primary)/0.12)] px-2 py-0.5 text-[10px] font-semibold text-[hsl(var(--primary))]">
+                                Se prepara
+                              </span>
+                            )}
                           </p>
                           <p className="mt-0.5 line-clamp-1 text-xs text-[hsl(var(--muted-foreground))]">
                             {item.is_active ? 'Disponible en mesas' : 'Oculto en mesas'}
@@ -513,7 +521,8 @@ function MenuBuilderPage() {
                             <button
                               type="button"
                               className="text-xs font-semibold text-[hsl(var(--primary))] hover:underline"
-                              onClick={() => toast.info('Edición rápida de plato próximamente. Usa inventario para costos/stock.')}
+                              aria-label={`Editar ${item.product_name || item.name}`}
+                              onClick={() => setEditando(item)}
                             >
                               Editar
                             </button>
@@ -587,6 +596,22 @@ function MenuBuilderPage() {
           yaEnElMenu={products.map((p) => p.name)}
           onClose={() => setImportarAbierto(false)}
           onImportado={load}
+        />
+      )}
+
+      {editando && (
+        <EditarProductoModal
+          localId={localId}
+          producto={editando}
+          onClose={() => setEditando(null)}
+          onSaved={(actualizado) => {
+            setEditando(null)
+            setProducts((prev) => prev.map((p) =>
+              String(p.product_id || p.id) === String(actualizado.product_id || actualizado.id)
+                ? { ...p, stock_deduction_mode: actualizado.stock_deduction_mode }
+                : p))
+            toast.success('Producto actualizado')
+          }}
         />
       )}
 
