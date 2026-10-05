@@ -9,7 +9,7 @@ import { cn } from '@/lib/utils'
 import {
   LayoutDashboard, House, ChevronDown, ChevronLeft, ChevronRight,
   DollarSign, FileText, BarChart3, Wallet,
-  Table2, ChefHat, Moon, Sun,
+  Table2, ChefHat, Moon, Sun, LifeBuoy,
   Package, Truck, ShoppingCart, BookMarked, PackageOpen, UtensilsCrossed,
   LogOut, Users, RotateCcw, MapPin, Building2, Settings, History,
 } from 'lucide-react'
@@ -35,7 +35,7 @@ import { isV2FeatureEnabled } from '../lib/v2Features'
 import { isAlPasoLocal, normalizeSalesModel } from '../lib/salesModel'
 
 /* ── key sets for accordion auto-open ──────────────────────────── */
-const ADMIN_KEYS = new Set(['administracion', 'ventas', 'flujo-caja'])
+const ADMIN_KEYS = new Set(['administracion', 'ventas', 'flujo-caja', 'fondo-emergencia'])
 const POS_KEYS   = new Set(['pos', 'pos-mesas', 'pos-kitchen', 'pos-venta-directa', 'pos-mis-turnos'])
 const INV_KEYS   = new Set(['inv-hub', 'inv-prov', 'inv-stock', 'inv-stock-ctrl', 'inv-compras', 'inv-recetas'])
 
@@ -53,6 +53,7 @@ function deriveActiveKey(pathname) {
   if (pathname.includes('/pos'))                          return 'pos-mesas'
   if (pathname.includes('/administrativo/ventas'))        return 'ventas'
   if (pathname.includes('/administrativo/flujo-caja'))    return 'flujo-caja'
+  if (pathname.includes('/administrativo/fondo-emergencia')) return 'fondo-emergencia'
   if (pathname.includes('/administrativo'))               return 'administracion'
   if (pathname.includes('/rrhh'))                         return 'hr-hub'
   if (pathname.includes('/usuarios'))                    return 'usuarios'
@@ -77,6 +78,7 @@ const ACCORDIONS = [
     items: [
       { key: 'ventas',      label: 'Ventas',        icon: DollarSign },
       { key: 'flujo-caja',  label: 'Caja y turnos', icon: Wallet     },
+      { key: 'fondo-emergencia', label: 'Fondo de emergencia', icon: LifeBuoy, feature: 'fondoEmergencia' },
     ],
   },
   {

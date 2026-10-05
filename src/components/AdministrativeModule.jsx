@@ -23,6 +23,7 @@ import { mensajeCierreTurno } from '../lib/turnos'
 import { filtrarTurnos, nombreDeVendedor, opcionesDeVendedor } from '../lib/registroTurnos'
 import DetalleTurno from './turno/DetalleTurno'
 import TablaTurnos from './turno/TablaTurnos'
+import FondoEmergencia from './FondoEmergencia'
 import FiltrosTurnos from './turno/FiltrosTurnos'
 import { useAuth } from '../context/AuthContext'
 import { normalizeRoleKey } from '../auth/roleLabel'
@@ -31,7 +32,7 @@ import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 import { formatCLPCurrency as formatMoney } from '../lib/formatCLP'
 import { m, AnimatePresence } from 'framer-motion'
-import { MapPin, X, ChevronUp, ChevronRight, ShoppingCart, HelpCircle, CreditCard, ArrowLeftRight, Lock } from 'lucide-react'
+import { MapPin, X, ChevronUp, ChevronRight, ShoppingCart, HelpCircle, CreditCard, ArrowLeftRight, Lock, LifeBuoy } from 'lucide-react'
 
 /**
  * Las cajas físicas son supervisorias: el backend restringe su estado de
@@ -42,9 +43,14 @@ import { MapPin, X, ChevronUp, ChevronRight, ShoppingCart, HelpCircle, CreditCar
  */
 const ROLES_CAJAS_FISICAS = new Set(['ADMIN', 'ADMINNEGOCIO', 'SUPERADMIN'])
 
-const sections = [
+/** Secciones visibles: se calculan al renderizar porque dependen de las banderas. */
+const getSections = () => [
   { id: 'ventas',        label: 'Ventas',        subtitle: 'Totales de hoy, tendencia, productos más vendidos e histórico' },
   { id: 'flujo-caja',    label: 'Caja y turnos', subtitle: 'Turnos de caja, movimientos y arqueo del día' },
+  // T-26: espera al backend (B-09). Con la bandera apagada la sección no existe y su dirección lleva a Ventas.
+  ...(isV2FeatureEnabled('fondoEmergencia')
+    ? [{ id: 'fondo-emergencia', label: 'Fondo de emergencia', subtitle: 'Plata apartada para imprevistos: saldo, aportes y usos' }]
+    : []),
   { id: 'configuracion', label: 'Configuración', subtitle: 'Dispositivos POS y ajustes del local' },
 ]
 
@@ -1037,6 +1043,8 @@ function renderSectionContent(activeSection, payload) {
   switch (activeSection) {
     case 'flujo-caja':
       return <FlujoCajaContent dashboard={payload.dashboard} cajas={payload.cajas} cajasFisicas={payload.cajasFisicas} usuarios={payload.usuarios} resumenDiario={payload.resumenDiario} loading={payload.loading} error={payload.error} onManagePairing={payload.onManagePairing} onViewMovimientos={payload.onViewMovimientos} onGestionarCajaFisica={payload.onGestionarCajaFisica} />
+    case 'fondo-emergencia':
+      return <FondoEmergencia localId={payload.localId} />
     case 'configuracion':
       return <ConfiguracionContent localId={payload.localId} />
     case 'ventas':
@@ -1084,6 +1092,7 @@ function AdministrativeModule() {
 
 
   // Sin sección o con una que ya no existe (rendiciones, reportes, alertas, bonos, dashboard) → Ventas.
+  const sections = getSections()
   const isKnownSection = sections.some((s) => s.id === sectionId)
   const activeSection = isKnownSection ? sectionId : 'ventas'
   const activeSectionMeta = sections.find((s) => s.id === activeSection) || sections[0]
@@ -1206,6 +1215,7 @@ function AdministrativeModule() {
                 {[
                   { icon: ShoppingCart, color: 'text-emerald-600', title: 'Ventas', desc: 'Ventas de las últimas 24 horas por método de pago, tendencia de los últimos 7 días, productos más vendidos e histórico consolidado por semana, mes o año.' },
                   { icon: CreditCard, color: 'text-amber-600', title: 'Caja y turnos', desc: 'Turnos de caja: resumen del día, movimientos de cada turno y cierre del arqueo diario. Y las cajas físicas del local, el puesto permanente al que se vincula la terminal MercadoPago.' },
+                  ...(isV2FeatureEnabled('fondoEmergencia') ? [{ icon: LifeBuoy, color: 'text-rose-600', title: 'Fondo de emergencia', desc: 'Plata apartada para imprevistos del local: su saldo, los aportes y cada uso con su motivo. No forma parte del arqueo de los turnos de caja.' }] : []),
                 ].map(({ icon: Icon, color, title, desc, highlight }) => (
                   <div key={title} className={`flex gap-3 rounded-xl p-3 ${highlight ? 'bg-[hsl(var(--primary)/0.08)] border border-[hsl(var(--primary)/0.2)]' : 'bg-[hsl(var(--muted)/0.4)]'}`}>
                     <div className={`mt-0.5 shrink-0 ${color}`}><Icon size={15} /></div>
