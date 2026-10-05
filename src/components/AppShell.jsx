@@ -11,7 +11,7 @@ import {
   DollarSign, FileText, BarChart3, Wallet,
   Table2, ChefHat, Moon, Sun, UserCircle2,
   Package, Truck, ShoppingCart, BookMarked, PackageOpen, UtensilsCrossed,
-  LogOut, Users, RotateCcw, MapPin, Building2, Settings,
+  LogOut, Users, RotateCcw, MapPin, Building2, Settings, History,
 } from 'lucide-react'
 import AunaroSymbol from '@/assets/brand/AunaroSymbol'
 import { nombreVisible } from '@/lib/altaUsuario'
@@ -35,7 +35,7 @@ import { isAlPasoLocal, normalizeSalesModel } from '../lib/salesModel'
 
 /* ── key sets for accordion auto-open ──────────────────────────── */
 const ADMIN_KEYS = new Set(['administracion', 'ventas', 'flujo-caja'])
-const POS_KEYS   = new Set(['pos', 'pos-mesas', 'pos-kitchen', 'pos-venta-directa'])
+const POS_KEYS   = new Set(['pos', 'pos-mesas', 'pos-kitchen', 'pos-venta-directa', 'pos-mis-turnos'])
 const INV_KEYS   = new Set(['inv-hub', 'inv-prov', 'inv-stock', 'inv-stock-ctrl', 'inv-compras', 'inv-recetas'])
 
 /* ── active-key derived from pathname ──────────────────────────── */
@@ -47,6 +47,7 @@ function deriveActiveKey(pathname) {
   if (pathname.includes('/inventario/recipes'))           return 'inv-recetas'
   if (pathname.includes('/inventario'))                   return 'inv-hub'
   if (pathname.includes('/pos/venta-directa'))            return 'pos-venta-directa'
+  if (pathname.includes('/pos/mis-turnos'))               return 'pos-mis-turnos'
   if (pathname.includes('/pos/cocina'))                   return 'pos-kitchen'
   if (pathname.includes('/pos'))                          return 'pos-mesas'
   if (pathname.includes('/administrativo/ventas'))        return 'ventas'
@@ -174,6 +175,7 @@ function Sidebar({ collapsed, onToggle, onClose }) {
       case 'pos-mesas':     if (localId) navigate(`/local/${localId}/pos`, { state: navState }); break
       case 'pos-kitchen':   if (localId) navigate(`/local/${localId}/pos/cocina`, { state: navState }); break
       case 'pos-venta-directa': if (localId) navigate(`/local/${localId}/pos/venta-directa`, { state: navState }); break
+      case 'pos-mis-turnos':    if (localId) navigate(`/local/${localId}/pos/mis-turnos`, { state: navState }); break
       case 'inv-hub':       if (localId) navigate(`/local/${localId}/inventario`, { state: navState }); break
       case 'inv-prov':      if (localId) navigate(`/local/${localId}/inventario/proveedores`, { state: navState }); break
       case 'inv-stock':     if (localId) navigate(`/local/${localId}/inventario/stock`, { state: navState }); break
@@ -212,14 +214,16 @@ function Sidebar({ collapsed, onToggle, onClose }) {
     ...s,
     items: s.items.filter((i) => !i.feature || isV2FeatureEnabled(i.feature)),
   }))
-  // Vendedor: una sola entrada según el tipo de local (Venta directa si es al
-  // paso, Gestión de Mesas si tiene mesas). Sin Finanzas, Inventario, RRHH ni Cocina.
+  // Vendedor: una entrada para vender según el tipo de local (Venta directa si
+  // es al paso, Gestión de Mesas si tiene mesas) y "Mis turnos". Sin Finanzas,
+  // Inventario, RRHH ni Cocina.
   const posAccordion = availableAccordions.find((s) => s.key === 'pos')
+  const MIS_TURNOS = { key: 'pos-mis-turnos', label: 'Mis turnos', icon: History }
   const workerAccordions = !localKindKnown
     ? []
     : isAlPaso
-      ? [{ ...posAccordion, label: 'Punto de venta', items: AL_PASO_POS_ITEMS }]
-      : [{ ...posAccordion, items: posAccordion.items.filter((i) => i.key === 'pos-mesas') }]
+      ? [{ ...posAccordion, label: 'Punto de venta', items: [...AL_PASO_POS_ITEMS, MIS_TURNOS] }]
+      : [{ ...posAccordion, items: [...posAccordion.items.filter((i) => i.key === 'pos-mesas'), MIS_TURNOS] }]
   const visibleAccordions = isWorker
     ? workerAccordions
     : isAlPaso

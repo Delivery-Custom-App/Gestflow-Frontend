@@ -29,6 +29,7 @@ vi.mock('../components/AdministrativeModule', () => ({ default: () => <p>pantall
 vi.mock('../components/hr/HrModule', () => ({ default: () => <p>pantalla-rrhh</p> }))
 vi.mock('../components/inventory/InventoryHub', () => ({ default: () => <p>pantalla-inventario</p> }))
 vi.mock('../components/ConfiguracionPage', () => ({ default: () => <p>pantalla-configuracion</p> }))
+vi.mock('../components/turno/MisTurnos', () => ({ default: () => <p>pantalla-mis-turnos</p> }))
 
 const LOCALES = [
   { id: LOCAL_MESAS, name: 'Sucursal Centro', sales_model: 'RESTAURANT' },
@@ -119,6 +120,19 @@ describe('WorkerRoutes — local de comida al paso', () => {
     state.email = 'rustik.demo@gestflow.dev'
     abrir(LOCAL_MESAS, `/local/${LOCAL_MESAS}/administrativo/ventas`)
     expect(await screen.findByText('pantalla-venta-directa')).toBeInTheDocument()
+  })
+})
+
+describe('WorkerRoutes — Mis turnos', () => {
+  it.each([[LOCAL_MESAS], [LOCAL_PASO]])('en su local (%s) llega a sus turnos', async (local) => {
+    abrir(local, `/local/${local}/pos/mis-turnos`)
+    expect(await screen.findByText('pantalla-mis-turnos')).toBeInTheDocument()
+  })
+
+  it('los de otro local no se alcanzan', async () => {
+    abrir(LOCAL_MESAS, `/local/${LOCAL_PASO}/pos/mis-turnos`)
+    expect(await screen.findByText('pantalla-mesas')).toBeInTheDocument()
+    expect(screen.queryByText('pantalla-mis-turnos')).not.toBeInTheDocument()
   })
 })
 
