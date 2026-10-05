@@ -40,11 +40,6 @@ const STEPS = {
   ],
   admin: [
     {
-      target: 'dashboard-ventas-card',
-      title: 'Ventas del Día',
-      desc: 'Ingresos del día en tiempo real. Incluye ticket promedio y tasa de cancelación.',
-    },
-    {
       target: 'nav-administracion',
       title: 'Administración',
       desc: 'Revisa las ventas y la caja virtual de tu local.',
@@ -81,12 +76,12 @@ const getSuperadminArrivalRoute = (step, localId) => {
   return map[step] ?? null
 }
 
-// Admin: los pasos 1-3 del sidebar necesitan dashboard base (accordion cerrado)
+// Admin: los pasos del sidebar (0-2) necesitan dashboard base (accordion cerrado)
 const getAdminArrivalRoute = (step, localId) => {
   const map = {
+    0: localId ? `/local/${localId}/dashboard` : null,
     1: localId ? `/local/${localId}/dashboard` : null,
     2: localId ? `/local/${localId}/dashboard` : null,
-    3: localId ? `/local/${localId}/dashboard` : null,
   }
   return map[step] ?? null
 }

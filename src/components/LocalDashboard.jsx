@@ -338,8 +338,8 @@ function LocalDashboard() {
               className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3"
               variants={STAGGER} initial="hidden" animate="visible"
             >
-              {finCards.map((k, idx) => (
-                <m.div key={k.label} variants={ITEM} data-onboarding={idx === 0 ? 'dashboard-ventas-card' : undefined}>
+              {finCards.map((k) => (
+                <m.div key={k.label} variants={ITEM}>
                   <KpiCard {...k} loading={dashLoading} />
                 </m.div>
               ))}

@@ -156,12 +156,22 @@ describe('AdministrativeModule', () => {
 
     const boton = await screen.findByRole('button', { name: 'Cargar detalle de órdenes' })
     expect(getOrdersByLocal).not.toHaveBeenCalled()
-    expect(screen.queryByRole('heading', { name: 'Ventas del Día' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Histórico y Consolidados' })).not.toBeInTheDocument()
 
     await user.click(boton)
 
     await waitFor(() => expect(getOrdersByLocal).toHaveBeenCalledWith('loc-1', 'test-token'))
-    expect(await screen.findByRole('heading', { name: 'Ventas del Día' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Histórico y Consolidados' })).toBeInTheDocument()
+  })
+
+  it('el panel "Ventas del Día" ya no se muestra al cargar el detalle', async () => {
+    const user = userEvent.setup()
+    renderAdmin('ventas')
+
+    await user.click(await screen.findByRole('button', { name: 'Cargar detalle de órdenes' }))
+    expect(await screen.findByRole('heading', { name: 'Histórico y Consolidados' })).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Ventas del Día' })).not.toBeInTheDocument()
+    expect(screen.queryByText(/últimas 24 h/)).not.toBeInTheDocument()
   })
 
   it('Caja y turnos vincula MercadoPago desde las cajas físicas, no desde los turnos', async () => {
@@ -281,11 +291,14 @@ describe('AdministrativeModule', () => {
     expect(getCajasByLocal).toHaveBeenCalledWith('loc-1', 'test-token')
   })
 
-  it('cada venta del día ofrece ver su boleta', async () => {
+  it('la boleta de cada venta se ve desde el detalle de órdenes del histórico', async () => {
     const user = userEvent.setup()
     renderAdmin('ventas')
 
     await user.click(await screen.findByRole('button', { name: 'Cargar detalle de órdenes' }))
+    // Sin desplegar un período no hay órdenes a la vista.
+    expect(screen.queryByRole('button', { name: 'Boleta' })).not.toBeInTheDocument()
+    await user.click(await screen.findByRole('button', { name: /2 ventas/ }))
     const botones = await screen.findAllByRole('button', { name: 'Boleta' })
     expect(botones).toHaveLength(mockOrders.length)
 
