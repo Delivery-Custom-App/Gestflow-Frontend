@@ -43,7 +43,7 @@ import { MapPin, X, ChevronUp, ChevronRight, ShoppingCart, HelpCircle, CreditCar
 const ROLES_CAJAS_FISICAS = new Set(['ADMIN', 'ADMINNEGOCIO', 'SUPERADMIN'])
 
 const sections = [
-  { id: 'ventas',        label: 'Ventas',        subtitle: 'Ventas del día, tendencia, productos más vendidos e histórico' },
+  { id: 'ventas',        label: 'Ventas',        subtitle: 'Totales de hoy, tendencia, productos más vendidos e histórico' },
   { id: 'flujo-caja',    label: 'Caja y turnos', subtitle: 'Turnos de caja, movimientos y arqueo del día' },
   { id: 'configuracion', label: 'Configuración', subtitle: 'Dispositivos POS y ajustes del local' },
 ]
@@ -315,14 +315,6 @@ function VentasContent({ indicadores, orders, loading, error, onCargarDetalle, d
   const [granularity, setGranularity] = useState('month')
   const [expandedKey, setExpandedKey] = useState(null)
 
-  // Últimas 24 horas (ventana rodante)
-  const [cutoff24h] = useState(() => new Date(Date.now() - 24 * 60 * 60 * 1000))
-  const last24h = all.filter((o) => {
-    if (!o.created_at) return false
-    if (_normalizeOrderStatus(o.status) === 'cancelled') return false
-    return new Date(o.created_at) >= cutoff24h
-  })
-
   // ── Histórico consolidado por período ──
   const buckets = useMemo(() => {
     const map = new Map()
@@ -408,31 +400,6 @@ function VentasContent({ indicadores, orders, loading, error, onCargarDetalle, d
 
       {detalleCargado && (
       <>
-      <Panel title="Ventas del Día" sub="Órdenes no canceladas de las últimas 24 h">
-        {last24h.length === 0 ? (
-          <p className="text-sm text-[hsl(var(--muted-foreground))]">
-            No hay ventas en las últimas 24 horas.
-          </p>
-        ) : (
-          <div className="space-y-2">
-            {last24h.slice(0, 20).map((order) => (
-              <RowCard
-                key={order.id}
-                title={formatMoney(getOrderAmount(order))}
-                sub={`#${String(order.id || '').slice(0, 8)} — ${normalizePaymentMethod(order.payment_method)} — ${formatDateTime(order.created_at)}`}
-                meta={`Estado: ${order.status || '—'} · Fuente: ${order.source || '—'}`}
-                pill={normalizePaymentMethod(order.payment_method)}
-                action={isV2FeatureEnabled('receiptPrint') && (
-                  <Button size="sm" variant="outline" onClick={() => onVerBoleta(order)}>
-                    Boleta
-                  </Button>
-                )}
-              />
-            ))}
-          </div>
-        )}
-      </Panel>
-
       <Panel title="Histórico y Consolidados" sub="Registros consolidados por período. Excluye órdenes canceladas.">
         <div className="mb-5 inline-flex rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--muted))] p-1">
           {PERIOD_OPTIONS.map((opt) => (
@@ -493,6 +460,11 @@ function VentasContent({ indicadores, orders, loading, error, onCargarDetalle, d
                           sub={`#${String(order.id || '').slice(0, 8)} — ${normalizePaymentMethod(order.payment_method)} — ${formatDateTime(order.created_at)}`}
                           meta={`Estado: ${order.status || '—'} · Fuente: ${order.source || '—'}`}
                           pill={normalizePaymentMethod(order.payment_method)}
+                          action={isV2FeatureEnabled('receiptPrint') && (
+                            <Button size="sm" variant="outline" onClick={() => onVerBoleta(order)}>
+                              Boleta
+                            </Button>
+                          )}
                         />
                       ))}
                     </div>
