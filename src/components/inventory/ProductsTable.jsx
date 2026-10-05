@@ -1,6 +1,6 @@
-import { useState, useMemo } from 'react'
+import { useState } from 'react'
 import { m, AnimatePresence } from 'framer-motion'
-import { Pencil, ChevronRight, ChevronDown } from 'lucide-react'
+import { Pencil } from 'lucide-react'
 import StockStatusBadge from './StockStatusBadge'
 import { stockLevelFromRow } from './stockAlertUtils'
 
@@ -59,36 +59,6 @@ function ProductsTable({
   const [saving, setSaving] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [deleting, setDeleting] = useState(false)
-  const [expandedGroups, setExpandedGroups] = useState(new Set())
-
-  // Group items by product name; groups with 1 row render as-is, >1 render as expandable
-  const groupedItems = useMemo(() => {
-    const map = new Map()
-    for (const row of items) {
-      const raw = (row.product_name || row.name || '').trim()
-      const display = raw ? raw.charAt(0).toUpperCase() + raw.slice(1).toLowerCase() : ''
-      const key = raw.toLowerCase()
-      if (!map.has(key)) map.set(key, { key, display, rows: [] })
-      map.get(key).rows.push(row)
-    }
-    return Array.from(map.values())
-  }, [items])
-
-  // Nuevos items => grupos colapsados (ajuste durante el render, sin efecto).
-  const [prevItems, setPrevItems] = useState(items)
-  if (items !== prevItems) {
-    setPrevItems(items)
-    setExpandedGroups(new Set())
-  }
-
-  const toggleGroup = (key) => {
-    setExpandedGroups((prev) => {
-      const next = new Set(prev)
-      if (next.has(key)) next.delete(key)
-      else next.add(key)
-      return next
-    })
-  }
 
   const showPagination = !error && !loading && totalPages > 1
   const showCount = !error && !loading && totalCount > 0
@@ -188,9 +158,8 @@ function ProductsTable({
         <Table className="w-full table-fixed text-xs">
           <TableHeader>
             <TableRow className="bg-[hsl(var(--muted)/0.4)]">
-              <TableHead className="w-[14%] font-semibold">Producto</TableHead>
-              <TableHead className="w-[10%] font-semibold">Categoría</TableHead>
-              <TableHead className="w-[12%] font-semibold">Proveedor</TableHead>
+              <TableHead className="w-[20%] font-semibold">Producto</TableHead>
+              <TableHead className="w-[16%] font-semibold">Categoría</TableHead>
               <TableHead className="w-[8%] font-semibold text-right text-emerald-700">Actual</TableHead>
               <TableHead className="w-[7%] font-semibold text-right text-amber-600">Mín.</TableHead>
               <TableHead className="w-[7%] font-semibold text-right text-sky-600">Máx.</TableHead>
@@ -203,7 +172,7 @@ function ProductsTable({
           <TableBody>
             {error ? (
               <TableRow>
-                <TableCell colSpan={10} className="text-center text-[hsl(var(--destructive))] py-8">
+                <TableCell colSpan={9} className="text-center text-[hsl(var(--destructive))] py-8">
                   {error}
                 </TableCell>
               </TableRow>
@@ -211,7 +180,7 @@ function ProductsTable({
             {!error && loading
               ? Array.from({ length: 5 }).map((_, i) => (
                   <TableRow key={`skel-${i}`}>
-                    {Array.from({ length: 10 }).map((_, j) => (
+                    {Array.from({ length: 9 }).map((_, j) => (
                       <TableCell key={j}>
                         <Skeleton className="h-4 w-full" />
                       </TableCell>
@@ -221,7 +190,7 @@ function ProductsTable({
               : null}
             {!error && !loading && items.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={10} className="py-12">
+                <TableCell colSpan={9} className="py-12">
                   {statusFilters.length > 0 ? (
                     <div className="flex flex-col items-center gap-1 text-center">
                       <p className="font-semibold text-[hsl(var(--foreground))]">
@@ -249,145 +218,65 @@ function ProductsTable({
             ) : null}
             <AnimatePresence initial={false}>
             {!error && !loading
-              ? groupedItems.flatMap(({ key, display, rows }, gIdx) => {
-                  const isMulti = rows.length > 1
-                  const isExpanded = expandedGroups.has(key)
-
-                  const renderDataRow = (row, index, isSubRow = false) => {
-                    const stockCurrent = Number(row.stock_current ?? 0)
-                    const unitCost = Number(row.unit_cost_clp ?? 0)
-                    const total =
-                      row.total_value != null && row.total_value !== ''
-                        ? Number(row.total_value)
-                        : stockCurrent * unitCost
-                    const stockMin = row.stock_min == null ? '—' : String(row.stock_min)
-                    const stockMax = row.stock_max == null ? '—' : String(row.stock_max)
-                    const level = stockLevelFromRow(row)
-                    const actualCls = level === 'critical' ? 'text-red-600 font-bold' : level === 'low' ? 'text-amber-600 font-semibold' : 'text-emerald-600 font-semibold'
-                    const categoryTone = getCategoryTone({ id: row.category_id, name: row.category_name })
-                    return (
-                      <m.tr
-                        key={row.inventory_id ?? row.product_id}
-                        className={`${ROW_CLASS} ${isSubRow ? 'bg-[hsl(var(--muted)/0.15)]' : ''}`}
-                        style={{ boxShadow: `inset 3px 0 0 ${categoryTone.rail}` }}
-                        initial={{ opacity: 0, y: isSubRow ? -4 : 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, x: -10 }}
-                        transition={{ delay: index * 0.03, duration: 0.2, ease: 'easeOut' }}
-                      >
-                        <TableCell>
-                          {isSubRow ? (
-                            <div className="pl-4 flex items-center gap-1 truncate">
-                              <span className="text-[hsl(var(--muted-foreground))] select-none shrink-0">└</span>
-                              <span className="font-medium truncate">{display}</span>
-                            </div>
-                          ) : (
-                            <div className="font-bold truncate">{display || '—'}</div>
-                          )}
-                        </TableCell>
-                        <TableCell className="truncate">
-                          {row.category_name ? (
-                            <span
-                              className="inline-flex max-w-full items-center rounded-full border px-2 py-1 text-[11px] font-semibold leading-none"
-                              style={{ backgroundColor: categoryTone.bg, borderColor: categoryTone.border, color: categoryTone.text }}
-                            >
-                              <span className="truncate">{row.category_name}</span>
-                            </span>
-                          ) : '—'}
-                        </TableCell>
-                        <TableCell className="truncate font-medium">
-                          {row.supplier_name?.trim() || '—'}
-                        </TableCell>
-                        <TableCell className={`text-right tabular-nums ${actualCls}`}>{stockCurrent}</TableCell>
-                        <TableCell className="text-right tabular-nums text-amber-600 font-medium">{stockMin}</TableCell>
-                        <TableCell className="text-right tabular-nums text-sky-600 font-medium">{stockMax}</TableCell>
-                        <TableCell className="text-right tabular-nums">{formatClp(unitCost)}</TableCell>
-                        <TableCell className="text-right tabular-nums">{formatClp(total)}</TableCell>
-                        <TableCell>
-                          <StockStatusBadge row={row} />
-                        </TableCell>
-                        <TableCell>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => openEditModal(row)}
-                            className="h-7 px-2 text-xs gap-1 text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--primary))]"
-                          >
-                            <Pencil size={12} />
-                            Editar
-                          </Button>
-                        </TableCell>
-                      </m.tr>
-                    )
-                  }
-
-                  if (!isMulti) {
-                    return [renderDataRow(rows[0], gIdx)]
-                  }
-
-                  // Multi-supplier group: aggregate header + expandable sub-rows
-                  const totalStock = rows.reduce((s, r) => s + Number(r.stock_current ?? 0), 0)
-                  const totalValue = rows.reduce((s, r) => {
-                    const sc = Number(r.stock_current ?? 0)
-                    const uc = Number(r.unit_cost_clp ?? 0)
-                    return s + (r.total_value != null && r.total_value !== '' ? Number(r.total_value) : sc * uc)
-                  }, 0)
-
-                  const headerRow = (
-                    (() => {
-                      const categoryTone = getCategoryTone({ id: rows[0].category_id, name: rows[0].category_name })
-                      return (
+              ? items.map((row, index) => {
+                  const raw = (row.product_name || row.name || '').trim()
+                  const display = raw ? raw.charAt(0).toUpperCase() + raw.slice(1).toLowerCase() : ''
+                  const stockCurrent = Number(row.stock_current ?? 0)
+                  const unitCost = Number(row.unit_cost_clp ?? 0)
+                  const total =
+                    row.total_value != null && row.total_value !== ''
+                      ? Number(row.total_value)
+                      : stockCurrent * unitCost
+                  const stockMin = row.stock_min == null ? '—' : String(row.stock_min)
+                  const stockMax = row.stock_max == null ? '—' : String(row.stock_max)
+                  const level = stockLevelFromRow(row)
+                  const actualCls = level === 'critical' ? 'text-red-600 font-bold' : level === 'low' ? 'text-amber-600 font-semibold' : 'text-emerald-600 font-semibold'
+                  const categoryTone = getCategoryTone({ id: row.category_id, name: row.category_name })
+                  return (
                     <m.tr
-                      key={`grp-${key}`}
-                      className={`${ROW_CLASS} cursor-pointer select-none`}
+                      key={row.inventory_id ?? row.product_id}
+                      className={ROW_CLASS}
                       style={{ boxShadow: `inset 3px 0 0 ${categoryTone.rail}` }}
-                      onClick={() => toggleGroup(key)}
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0, x: -10 }}
-                      transition={{ delay: gIdx * 0.04, duration: 0.22, ease: 'easeOut' }}
+                      transition={{ delay: index * 0.03, duration: 0.2, ease: 'easeOut' }}
                     >
                       <TableCell>
-                        <div className="flex items-center gap-2 font-bold">
-                          {isExpanded
-                            ? <ChevronDown size={14} className="shrink-0 text-[hsl(var(--muted-foreground))]" />
-                            : <ChevronRight size={14} className="shrink-0 text-[hsl(var(--muted-foreground))]" />
-                          }
-                          {display || '—'}
-                          <span className="text-[10px] font-semibold bg-[hsl(var(--muted))] text-[hsl(var(--muted-foreground))] rounded px-1.5 py-0.5 ml-0.5">
-                            {rows.length} proveedores
-                          </span>
-                        </div>
+                        <div className="font-bold truncate">{display || '—'}</div>
                       </TableCell>
                       <TableCell className="truncate">
-                        {rows[0].category_name ? (
+                        {row.category_name ? (
                           <span
                             className="inline-flex max-w-full items-center rounded-full border px-2 py-1 text-[11px] font-semibold leading-none"
                             style={{ backgroundColor: categoryTone.bg, borderColor: categoryTone.border, color: categoryTone.text }}
                           >
-                            <span className="truncate">{rows[0].category_name}</span>
+                            <span className="truncate">{row.category_name}</span>
                           </span>
                         ) : '—'}
                       </TableCell>
-                      <TableCell className="text-[hsl(var(--muted-foreground))] italic">Varios</TableCell>
-                      <TableCell className="text-right tabular-nums">{totalStock}</TableCell>
-                      <TableCell className="text-right text-[hsl(var(--muted-foreground))]">—</TableCell>
-                      <TableCell className="text-right text-[hsl(var(--muted-foreground))]">—</TableCell>
-                      <TableCell className="text-right text-[hsl(var(--muted-foreground))]">—</TableCell>
-                      <TableCell className="text-right tabular-nums">{formatClp(totalValue)}</TableCell>
-                      <TableCell className="text-[hsl(var(--muted-foreground))]">—</TableCell>
-                      <TableCell />
+                      <TableCell className={`text-right tabular-nums ${actualCls}`}>{stockCurrent}</TableCell>
+                      <TableCell className="text-right tabular-nums text-amber-600 font-medium">{stockMin}</TableCell>
+                      <TableCell className="text-right tabular-nums text-sky-600 font-medium">{stockMax}</TableCell>
+                      <TableCell className="text-right tabular-nums">{formatClp(unitCost)}</TableCell>
+                      <TableCell className="text-right tabular-nums">{formatClp(total)}</TableCell>
+                      <TableCell>
+                        <StockStatusBadge row={row} />
+                      </TableCell>
+                      <TableCell>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => openEditModal(row)}
+                          className="h-7 px-2 text-xs gap-1 text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--primary))]"
+                        >
+                          <Pencil size={12} />
+                          Editar
+                        </Button>
+                      </TableCell>
                     </m.tr>
-                      )
-                    })()
                   )
-
-                  const subRows = isExpanded
-                    ? rows.map((row, i) => renderDataRow(row, i, true))
-                    : []
-
-                  return [headerRow, ...subRows]
                 })
               : null}
             </AnimatePresence>

@@ -8,7 +8,22 @@ describe('ProductsTable', () => {
       <ProductsTable items={[]} loading error="" currentPage={1} totalPages={1} onPageChange={vi.fn()} />,
     )
 
-    expect(container.querySelectorAll('[data-slot="skeleton"]')).toHaveLength(50)
+    // 5 filas de 9 columnas (sin Proveedor).
+    expect(container.querySelectorAll('[data-slot="skeleton"]')).toHaveLength(45)
+  })
+
+  it('no tiene columna Proveedor ni agrupa por proveedor: cada producto es una fila', () => {
+    const items = [
+      { inventory_id: 'inv-1', product_name: 'Tomate', stock_current: 5, unit_cost_clp: 500, supplier_name: 'Proveedor A' },
+      { inventory_id: 'inv-2', product_name: 'Tomate', stock_current: 3, unit_cost_clp: 450, supplier_name: 'Proveedor B' },
+    ]
+    render(<ProductsTable items={items} loading={false} error="" currentPage={1} totalPages={1} onPageChange={vi.fn()} />)
+
+    expect(screen.queryByRole('columnheader', { name: 'Proveedor' })).not.toBeInTheDocument()
+    expect(screen.queryByText(/proveedores/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/Proveedor [AB]/)).not.toBeInTheDocument()
+    expect(screen.getAllByText('Tomate')).toHaveLength(2)
+    expect(screen.getAllByRole('button', { name: /Editar/ })).toHaveLength(2)
   })
 
   it('muestra estado vacio y permite accion para crear primer producto', () => {
