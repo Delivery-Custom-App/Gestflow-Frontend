@@ -18,10 +18,15 @@ import MPConfigDrawer from './MPConfigDrawer'
 import { useAuth } from '../../context/AuthContext'
 import { useCajaActiva } from '../../hooks/useCajaActiva'
 import { isV2FeatureEnabled } from '../../lib/v2Features'
-import { CreditCard, PlusCircle, Printer } from 'lucide-react'
+import {
+  atencionDeMesa, fueTraspasada, nombreDePersona, useDatosDeAtencion, vendedoresDelLocal,
+} from '../../lib/atencionMesas'
+import TraspasarMesasModal from './TraspasarMesasModal'
+import { toast } from 'sonner'
+import { ArrowRightLeft, CreditCard, PlusCircle, Printer } from 'lucide-react'
 
 export default function POSModule() {
-  const { isWorker } = useAuth()
+  const { isWorker, user } = useAuth()
   const { pathname } = useLocation()
   const { localId } = useParams()
   const { cajaId } = useCajaActiva(localId)
@@ -40,6 +45,29 @@ export default function POSModule() {
   const [selectedMesa, setSelectedMesa] = useState(null)
   const [showPrinterConfig, setShowPrinterConfig] = useState(false)
   const [showMPConfig, setShowMPConfig] = useState(false)
+
+  // ── Quién atiende cada mesa, y traspasar mesas (encargado y dueño) ───────
+  const { usuarios, usuariosPorId, duenoDeTurno, recargar: recargarAtencion } = useDatosDeAtencion(localId, { esVendedor: isWorker })
+  const [traspasando, setTraspasando] = useState(false)
+  const nombre = useCallback(
+    (id) => nombreDePersona(id, { yoId: user?.id, usuariosPorId }),
+    [user?.id, usuariosPorId],
+  )
+  const mesasEnCurso = useMemo(
+    () => mesas.map((m) => atencionDeMesa(m, duenoDeTurno)).filter(Boolean),
+    [mesas, duenoDeTurno],
+  )
+  const atencionPorMesa = useMemo(() => new Map(mesasEnCurso.map((info) => [String(info.mesa.id), {
+    atiende: info.atiendeId ? nombre(info.atiendeId) : 'Sin registrar',
+    antes: fueTraspasada(info) ? nombre(info.abrioId) : null,
+  }])), [mesasEnCurso, nombre])
+
+  const handleTraspasoHecho = useCallback(({ cantidad, a }) => {
+    setTraspasando(false)
+    toast.success(`${cantidad} mesa${cantidad === 1 ? '' : 's'} traspasada${cantidad === 1 ? '' : 's'} a ${a}`)
+    refreshMesas()
+    recargarAtencion()
+  }, [refreshMesas, recargarAtencion])
 
   // ── Agrupar mesas ───────────────────────────────────────────────────
   const { porMesa: gruposPorMesa, crear: crearGrupo, deshacer: deshacerGrupo } = useGruposDeMesas(localId)
@@ -217,6 +245,7 @@ export default function POSModule() {
         {selectedMesa ? (
           <MesaWorkspace
             mesa={selectedMesa}
+            atencion={atencionPorMesa.get(String(selectedMesa.id)) || null}
             localId={localId}
             cajaId={cajaId}
             onBack={handleWorkspaceBack}
@@ -285,7 +314,20 @@ export default function POSModule() {
                     </div>
                   </div>
                 ) : (
-                  <div className="flex justify-end">
+                  <div className="flex flex-wrap justify-end gap-2">
+                    {/* Solo encargado y dueño: el vendedor no puede ver a sus compañeros para elegir a quién. */}
+                    {!isWorker && (
+                      <button
+                        type="button"
+                        onClick={() => setTraspasando(true)}
+                        disabled={mesasEnCurso.length === 0}
+                        title={mesasEnCurso.length === 0 ? 'No hay mesas en curso' : undefined}
+                        className="inline-flex items-center gap-2 rounded-lg border border-[hsl(var(--border))] px-3 py-1.5 text-sm text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--primary))] hover:border-[hsl(var(--primary))] transition-colors disabled:opacity-40 disabled:hover:text-[hsl(var(--muted-foreground))] disabled:hover:border-[hsl(var(--border))]"
+                      >
+                        <ArrowRightLeft size={14} />
+                        Traspasar mesas
+                      </button>
+                    )}
                     <button
                       type="button"
                       onClick={() => setModoAgrupar(true)}
@@ -317,6 +359,7 @@ export default function POSModule() {
                   seleccionadas={seleccionadas}
                   onToggleSeleccion={handleToggleSeleccion}
                   onDeshacerGrupo={handleDeshacerGrupo}
+                  atencionPorMesa={atencionPorMesa}
                 />
               </section>
             )}
@@ -325,6 +368,16 @@ export default function POSModule() {
           <KitchenDisplay localId={localId} mesas={mesas} />
         )}
       </main>
+
+      {traspasando && (
+        <TraspasarMesasModal
+          mesas={mesasEnCurso}
+          vendedores={vendedoresDelLocal(usuarios, localId)}
+          nombre={nombre}
+          onClose={() => setTraspasando(false)}
+          onDone={handleTraspasoHecho}
+        />
+      )}
 
       {showModal && (
         <CreateMesaModal
