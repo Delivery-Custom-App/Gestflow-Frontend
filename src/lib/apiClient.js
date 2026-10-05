@@ -281,13 +281,6 @@ export async function changeMyPassword({ current_password, new_password }) {
   })
 }
 
-export async function updateMyAvatar(avatar_url) {
-  return apiRequest('/auth/me', {
-    method: 'PATCH',
-    body: { avatar_url },
-  })
-}
-
 // ─── Printers (OP-02) ─────────────────────────────────────────────────────────
 // Ninguna de estas rutas existe en Backend V2. Se conservan, sin uso, detrás
 // de la bandera `printers`, para cuando exista un servicio de impresión.
