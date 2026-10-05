@@ -63,6 +63,29 @@ afterEach(() => {
   })
 })
 
+describe('AppShell — fondo de emergencia', () => {
+  it('con la bandera apagada no aparece en Administración', () => {
+    renderShell('loc-mesas', 'administrativo/ventas')
+    expect(screen.getByRole('button', { name: 'Caja y turnos' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Fondo de emergencia' })).not.toBeInTheDocument()
+  })
+
+  it.each([['el dueño', 'Admin Negocio'], ['el encargado', 'Admin']])('con la bandera encendida, %s lo tiene en Administración', (_quien, rol) => {
+    V2_FEATURES.fondoEmergencia = true
+    session.role = rol
+    renderShell('loc-mesas', 'administrativo/fondo-emergencia')
+    const item = screen.getByRole('button', { name: 'Fondo de emergencia' })
+    expect(item).toHaveClass('bg-[hsl(var(--accent))]')
+  })
+
+  it('el vendedor no lo ve aunque la bandera esté encendida', () => {
+    V2_FEATURES.fondoEmergencia = true
+    session.role = 'Empleado'
+    renderShell('loc-mesas', 'pos')
+    expect(screen.queryByRole('button', { name: 'Fondo de emergencia' })).not.toBeInTheDocument()
+  })
+})
+
 describe('AppShell — perfil en el menú', () => {
   it('sin foto: muestra las iniciales aunque haya una foto guardada', () => {
     session.perfil = { first_name: 'Ana', last_name: 'Rojas', avatar_url: 'data:image/jpeg;base64,xxx' }

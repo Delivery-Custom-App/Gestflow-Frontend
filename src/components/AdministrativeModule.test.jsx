@@ -5,6 +5,7 @@ import AdministrativeModule from './AdministrativeModule'
 import userEvent from '@testing-library/user-event'
 import { AuthProvider } from '../context/AuthContext'
 import { listUsers } from '../lib/apiClient'
+import { V2_FEATURES } from '../lib/v2Features'
 import { createCaja, getCajasByLocal, getCajasFisicasByLocal, getOrdersByLocal, getResumenDiario, getVentasIndicadores, listarCajasFisicas } from '../lib/administrativeApi'
 
 vi.mock('../lib/apiClient', async (importOriginal) => ({
@@ -117,6 +118,24 @@ function renderAdmin(section, userRole = 'Admin Negocio') {
 describe('AdministrativeModule', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+  })
+
+  it('con la bandera fondoEmergencia apagada, la sección no existe y su dirección lleva a Ventas', async () => {
+    expect(V2_FEATURES.fondoEmergencia).toBe(false)
+    renderAdmin('fondo-emergencia')
+    expect(await screen.findByRole('heading', { name: 'Ventas' })).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Fondo de emergencia' })).not.toBeInTheDocument()
+  })
+
+  it('con la bandera encendida, Administración tiene la sección "Fondo de emergencia"', async () => {
+    V2_FEATURES.fondoEmergencia = true
+    try {
+      renderAdmin('fondo-emergencia', 'Admin')
+      expect(await screen.findByRole('heading', { name: 'Fondo de emergencia' })).toBeInTheDocument()
+      expect(await screen.findByText(/todavía no tiene fondo de emergencia/)).toBeInTheDocument()
+    } finally {
+      V2_FEATURES.fondoEmergencia = false
+    }
   })
 
   it.each(['rendiciones', 'reportes', 'alertas', 'bonos', 'dashboard'])(

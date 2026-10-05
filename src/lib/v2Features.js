@@ -74,6 +74,15 @@ export const V2_FEATURES = {
    * el encargado (o que no tiene ninguna, o que tiene más de una).
    */
   eleccionMaquinaVendedor: false,
+  /**
+   * Fondo de emergencia del local (T-26): saldo, aportes y usos con motivo,
+   * en Administración. Lo manejan el dueño y el encargado; el vendedor no lo
+   * ve. La pantalla está hecha y espera al backend (B-09): hoy no existen
+   * `/emergency-funds` ni sus movimientos. Con la bandera apagada no hay ítem
+   * en el menú ni sección; para encenderla, que el backend exponga esos
+   * endpoints (o ajustar los nombres en `lib/fondoEmergencia.js`).
+   */
+  fondoEmergencia: false,
   mercadopagoPoint: true,
   mpConfig: true,
   cajaMpPairing: true,

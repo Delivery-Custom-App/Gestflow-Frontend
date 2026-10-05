@@ -74,6 +74,7 @@ describe('WorkerRoutes — local con mesas', () => {
     `/local/${LOCAL_MESAS}/inventario/stock`,
     `/local/${LOCAL_MESAS}/inventario/recipes`,
     `/local/${LOCAL_MESAS}/administrativo/flujo-caja`,
+    `/local/${LOCAL_MESAS}/administrativo/fondo-emergencia`,
     `/local/${LOCAL_MESAS}/dashboard`,
     `/local/${LOCAL_MESAS}/pos/reportes`,
     `/local/${LOCAL_MESAS}/pos/cocina`,
