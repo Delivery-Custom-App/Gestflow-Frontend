@@ -60,4 +60,32 @@ describe('LocalsGrid — Inicio del dueño', () => {
     expect(screen.getByText('Usuarios del negocio')).toBeInTheDocument()
     expect(screen.queryByText(/Guía — Tus Franquicias/i)).not.toBeInTheDocument()
   })
+
+  it('"Umbral de flujo" es un botón propio, fuera de Opciones, y guarda el nuevo umbral', async () => {
+    const onGuardarUmbral = vi.fn()
+    const user = userEvent.setup()
+    montar({ umbral: { horas: 2, medium: 5, high: 15 }, onGuardarUmbral })
+
+    expect(screen.getByText(/Flujo de las últimas 2 horas/)).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Umbral de flujo' }))
+    const panel = screen.getByRole('dialog', { name: 'Umbral de flujo' })
+    expect(panel).toHaveTextContent(/las últimas 2 horas/)
+
+    await user.click(screen.getByRole('button', { name: 'Guardar' }))
+    expect(onGuardarUmbral).toHaveBeenCalledWith({ horas: 2, medium: 5, high: 15 })
+    expect(screen.queryByRole('dialog', { name: 'Umbral de flujo' })).not.toBeInTheDocument()
+  })
+
+  it('Opciones queda solo para eliminar franquicias: sin permiso, no aparece', () => {
+    montar()
+    expect(screen.getByRole('button', { name: 'Umbral de flujo' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Opciones' })).not.toBeInTheDocument()
+  })
+
+  it('el color de cada franquicia sale del umbral recibido', () => {
+    montar({ umbral: { horas: 1, medium: 2, high: 4 }, salesCounts: { 'loc-1': 4, 'loc-2': 1 } })
+    const fila = (nombre) => screen.getAllByRole('row').find((r) => r.textContent.includes(nombre))
+    expect(fila('Sucursal Centro')).toHaveTextContent(/Alto/)
+    expect(fila('Mostrador Express')).toHaveTextContent(/Bajo/)
+  })
 })

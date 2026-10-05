@@ -1,50 +1,14 @@
 import { useMemo, useState } from 'react'
 import { m, AnimatePresence } from 'framer-motion'
-import { Building2, MapPin, Plus, TrendingUp, TrendingDown, Settings, Search, ArrowUp, ChevronRight, ChevronDown, HelpCircle, X, RefreshCw, Users } from 'lucide-react'
+import { Building2, MapPin, Plus, TrendingUp, TrendingDown, Settings, Search, ArrowUp, ChevronRight, ChevronDown, HelpCircle, X, RefreshCw, Users, Gauge } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table'
 import OpcionesDrawer from './OpcionesDrawer'
+import UmbralFlujoDrawer from './UmbralFlujoDrawer'
 import FranchisesMap from './FranchisesMap'
 import FranchiseSalesCharts from './FranchiseSalesCharts'
 import { SALES_MODEL_SHORT_LABEL } from '@/lib/salesModel'
-
-const THRESHOLDS_KEY = 'gestflow_flow_thresholds'
-const DEFAULT_THRESHOLDS = { medium: 20, high: 50, salesDays: 7 }
-
-function loadThresholds() {
-  try {
-    const stored = localStorage.getItem(THRESHOLDS_KEY)
-    if (stored) {
-      const parsed = JSON.parse(stored)
-      if (typeof parsed.medium === 'number' && typeof parsed.high === 'number') {
-        return { ...DEFAULT_THRESHOLDS, ...parsed }
-      }
-    }
-  } catch { /* ignore */ }
-  return DEFAULT_THRESHOLDS
-}
-
-const TIER_ORDER = { 'Bajo': 0, 'Medio': 1, 'Alto': 2 }
-
-function getSalesFlow(count, thresholds) {
-  if (count === undefined || count === null) return null
-  if (count >= thresholds.high)
-    return { label: 'Alto',  dotColor: 'bg-red-500',    bg: 'bg-red-50',    text: 'text-red-700',    border: 'border-red-200' }
-  if (count >= thresholds.medium)
-    return { label: 'Medio', dotColor: 'bg-yellow-500', bg: 'bg-yellow-50', text: 'text-yellow-700', border: 'border-yellow-200' }
-  return   { label: 'Bajo',  dotColor: 'bg-green-500',  bg: 'bg-green-50',  text: 'text-green-700',  border: 'border-green-200' }
-}
-
-// Compara tier actual vs tier hace 1h. Retorna 'up' | 'down' | null
-function getFlowTrend(currentCount, delta, thresholds) {
-  if (!delta || currentCount == null) return null
-  const prevCount = currentCount - delta.current + delta.prev
-  const currFlow = getSalesFlow(currentCount, thresholds)
-  const prevFlow = getSalesFlow(prevCount, thresholds)
-  if (!currFlow || !prevFlow || currFlow.label === prevFlow.label) return null
-  return TIER_ORDER[currFlow.label] > TIER_ORDER[prevFlow.label] ? 'up' : 'down'
-}
-
+import { UMBRAL_POR_DEFECTO, getFlowTrend, getSalesFlow, textoDelPeriodo } from '../lib/umbralFlujo'
 
 const NO_COUNTS = {}
 
@@ -52,18 +16,20 @@ const NO_COUNTS = {}
  * Inicio del dueño: sus franquicias y, con `onShowUsers`, el acceso a los
  * usuarios del negocio.
  */
-function LocalsGrid({ locales, onLocalSelect, onCreateLocal, onShowUsers, salesCounts = NO_COUNTS, deltaCounts = NO_COUNTS, canDeleteLocals = false, onRefresh }) {
-  const [thresholds,   setThresholds]   = useState(loadThresholds)
+function LocalsGrid({
+  locales, onLocalSelect, onCreateLocal, onShowUsers, salesCounts = NO_COUNTS, deltaCounts = NO_COUNTS,
+  umbral: thresholds = UMBRAL_POR_DEFECTO, onGuardarUmbral, canDeleteLocals = false, onRefresh,
+}) {
   const [showOpciones, setShowOpciones] = useState(false)
+  const [showUmbral,   setShowUmbral]   = useState(false)
   const [search,       setSearch]       = useState('')
   const [filterFlow,   setFilterFlow]   = useState('')
   const [guideOpen,    setGuideOpen]    = useState(false)
   const [mapOpen,      setMapOpen]      = useState(true)
 
-  const handleSaveThresholds = (newThresholds) => {
-    setThresholds({ ...DEFAULT_THRESHOLDS, ...newThresholds })
-    localStorage.setItem(THRESHOLDS_KEY, JSON.stringify({ ...DEFAULT_THRESHOLDS, ...newThresholds }))
-    onRefresh?.()
+  const handleGuardarUmbral = (nuevo) => {
+    onGuardarUmbral?.(nuevo)
+    setShowUmbral(false)
   }
 
   const rows = useMemo(() => {
@@ -123,7 +89,7 @@ function LocalsGrid({ locales, onLocalSelect, onCreateLocal, onShowUsers, salesC
                     icon: TrendingUp,
                     color: 'text-amber-600',
                     title: 'Flujo de actividad',
-                    desc: 'Nivel de pedidos de cada franquicia en las últimas 24 horas. Verde = Bajo (pocos pedidos), Amarillo = Medio, Rojo = Alto (mucha actividad).',
+                    desc: `Ventas de cada franquicia en ${textoDelPeriodo(thresholds.horas)}. Verde = Bajo (pocas ventas), Amarillo = Medio, Rojo = Alto (mucha actividad). Se actualiza solo cada minuto.`,
                   },
                   {
                     icon: ArrowUp,
@@ -132,10 +98,16 @@ function LocalsGrid({ locales, onLocalSelect, onCreateLocal, onShowUsers, salesC
                     desc: 'Compara la actividad de la última hora con la hora anterior. Flecha verde ↑ = aumentó de nivel, flecha roja ↓ = bajó de nivel. Si no cambia de nivel, no aparece flecha.',
                   },
                   {
+                    icon: Gauge,
+                    color: 'text-slate-600',
+                    title: 'Botón Umbral de flujo',
+                    desc: 'Explica cómo se lee el flujo y permite elegir el período (en horas) y desde cuántas ventas es medio o alto.',
+                  },
+                  {
                     icon: Settings,
                     color: 'text-slate-600',
                     title: 'Botón Opciones',
-                    desc: 'Configura los umbrales que definen cuándo el flujo es Bajo, Medio o Alto. También puedes ajustar el período de análisis.',
+                    desc: 'Eliminar una franquicia.',
                   },
                   {
                     icon: Plus,
@@ -204,7 +176,7 @@ function LocalsGrid({ locales, onLocalSelect, onCreateLocal, onShowUsers, salesC
               </h1>
               <p className="mt-1.5 text-sm text-[hsl(var(--muted-foreground))] max-w-md">
                 {locales.length > 0
-                  ? `${locales.length} franquicia${locales.length !== 1 ? 's' : ''} · Período: últimas 24 horas`
+                  ? `${locales.length} franquicia${locales.length !== 1 ? 's' : ''} · Flujo de ${textoDelPeriodo(thresholds.horas)}`
                   : 'Crea tu primera franquicia para comenzar a operar.'}
               </p>
             </div>
@@ -216,10 +188,17 @@ function LocalsGrid({ locales, onLocalSelect, onCreateLocal, onShowUsers, salesC
                     Usuarios
                   </Button>
                 )}
-                <Button variant="outline" onClick={() => setShowOpciones(true)} className="gap-2 rounded-xl">
-                  <Settings className="h-4 w-4" />
-                  Opciones
+                <Button variant="outline" onClick={() => setShowUmbral(true)} className="gap-2 rounded-xl">
+                  <Gauge className="h-4 w-4" />
+                  Umbral de flujo
                 </Button>
+                {/* Opciones: eliminar franquicias (solo quien puede hacerlo). */}
+                {canDeleteLocals && (
+                  <Button variant="outline" onClick={() => setShowOpciones(true)} className="gap-2 rounded-xl">
+                    <Settings className="h-4 w-4" />
+                    Opciones
+                  </Button>
+                )}
                 <Button onClick={onCreateLocal} className="gap-2 rounded-xl px-5">
                   <Plus className="h-4 w-4" />
                   Crear Franquicia
@@ -418,15 +397,18 @@ function LocalsGrid({ locales, onLocalSelect, onCreateLocal, onShowUsers, salesC
         </div>
       </div>
 
-      <OpcionesDrawer
-        isOpen={showOpciones}
-        onClose={() => setShowOpciones(false)}
-        locales={locales}
-        thresholds={thresholds}
-        onSaveThresholds={handleSaveThresholds}
-        canDeleteLocals={canDeleteLocals}
-        onDeleteDone={() => { setShowOpciones(false); onRefresh?.() }}
-      />
+      {canDeleteLocals && (
+        <OpcionesDrawer
+          isOpen={showOpciones}
+          onClose={() => setShowOpciones(false)}
+          locales={locales}
+          onDeleteDone={() => { setShowOpciones(false); onRefresh?.() }}
+        />
+      )}
+
+      {showUmbral && (
+        <UmbralFlujoDrawer umbral={thresholds} onGuardar={handleGuardarUmbral} onClose={() => setShowUmbral(false)} />
+      )}
     </>
   )
 }
