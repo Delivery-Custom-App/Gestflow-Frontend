@@ -63,6 +63,9 @@ export async function fetchEnrichedInventoryForLocal(localId, filters = {}) {
   }
   const rows = (Array.isArray(inventory) ? inventory : [])
     .filter((row) => String(row.local_id) === String(localId))
+    // Un producto que pasó a "se prepara" conserva su fila (V2 no borra
+    // inventario), pero ya no lleva stock por unidades: no se lista.
+    .filter((row) => productsMap.get(String(row.product_id))?.stock_deduction_mode !== 'RECIPE_BASED')
     .map((row) => {
       const product = productsMap.get(String(row.product_id)) || {}
       const stockActual = Number(row.stock_actual) || 0
@@ -138,6 +141,7 @@ export async function createProductWithInventory(localId, body) {
   const stockActual = Number(body.stock_actual ?? body.stock ?? 0)
   const stockMin = Number(body.stock_min ?? 0)
 
+  const stockDeductionMode = body.stock_deduction_mode || 'DIRECT_STOCK'
   const product = await apiRequest('/products', {
     method: 'POST',
     body: {
@@ -146,7 +150,7 @@ export async function createProductWithInventory(localId, body) {
       category_id: body.category_id || null,
       price,
       cost,
-      stock_deduction_mode: body.stock_deduction_mode || 'DIRECT_STOCK',
+      stock_deduction_mode: stockDeductionMode,
       is_active: body.is_active !== false,
     },
   })
@@ -159,6 +163,9 @@ export async function createProductWithInventory(localId, body) {
       is_active: true,
     },
   })
+
+  // Un producto que se prepara no lleva stock: el backend rechaza su fila de inventario.
+  if (stockDeductionMode === 'RECIPE_BASED') return { product, inventory: null, local }
 
   const inventory = await apiRequest('/inventory', {
     method: 'POST',

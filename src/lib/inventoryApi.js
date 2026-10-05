@@ -314,6 +314,37 @@ export async function postInventoryNewProduct(localId, body) {
   return result.inventory
 }
 
+/** La fila de inventario del producto en el local, o null si no tiene. */
+export async function getInventarioDelProducto(localId, productId) {
+  const rows = await apiRequest('/inventory')
+  return (Array.isArray(rows) ? rows : []).find(
+    (r) => String(r.local_id) === String(localId) && String(r.product_id) === String(productId),
+  ) || null
+}
+
+/**
+ * "Este producto se prepara" al editar. Encendido: el producto pasa a
+ * RECIPE_BASED (su fila de inventario, si tenía, queda sin uso: V2 no la
+ * borra). Apagado: pasa a DIRECT_STOCK con el stock actual y el mínimo en
+ * este local (se actualiza su fila o se crea).
+ */
+export async function cambiarSiSePrepara(localId, productId, { prepara, stockActual = 0, stockMin = 0 }) {
+  await apiRequest(`/products/${encodeURIComponent(String(productId))}`, {
+    method: 'PATCH',
+    body: { stock_deduction_mode: prepara ? 'RECIPE_BASED' : 'DIRECT_STOCK' },
+  })
+  if (prepara) return null
+  const fila = await getInventarioDelProducto(localId, productId)
+  const stock = { stock_actual: Number(stockActual) || 0, stock_min: Number(stockMin) || 0 }
+  if (fila) {
+    return apiRequest(`/inventory/${encodeURIComponent(String(fila.id))}`, { method: 'PATCH', body: stock })
+  }
+  return apiRequest('/inventory', {
+    method: 'POST',
+    body: { local_id: localId, product_id: productId, ...stock, stock_max: null },
+  })
+}
+
 /** Actualiza stock/mín/máx vía PATCH /inventory/{id}. */
 export async function patchInventoryStock(_localId, inventoryId, body) {
   const patch = {}

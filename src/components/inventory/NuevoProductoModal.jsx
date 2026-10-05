@@ -5,6 +5,8 @@ import {
   postInventoryNewProduct,
 } from '../../lib/inventoryApi'
 import CategoryTypeaheadField from './CategoryTypeaheadField'
+import InterruptorSePrepara from './InterruptorSePrepara'
+import { modoDeStock } from '../../lib/tipoProducto'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
@@ -44,6 +46,7 @@ function NuevoProductoModal({ open, localId, onClose, onSuccess }) {
   const [minStock,         setMinStock]         = useState('0')
   const [maxStock,         setMaxStock]         = useState('0')
   const [unitCost,         setUnitCost]         = useState('')
+  const [prepara,          setPrepara]          = useState(false)
   const [categories,       setCategories]       = useState([])
   const [catsLoading,      setCatsLoading]      = useState(false)
 
@@ -67,6 +70,12 @@ function NuevoProductoModal({ open, localId, onClose, onSuccess }) {
     if (!productName.trim())                    { setError('Ingresa el nombre del producto.'); return }
     if (!categoryName.trim())                   { setError('Escribe la categoría y pulsa Enter para confirmarla.'); return }
     if (!Number.isFinite(cost) || cost <= 0)    { setError('El costo unitario debe ser mayor que 0.'); return }
+    // Máximo en 0 = sin máximo. Uno menor que el mínimo lo rechaza la base (antes salía como "Sin conexión").
+    const maximo = Number(maxStock) || 0
+    if (!prepara && maximo > 0 && maximo < (Number(minStock) || 0)) {
+      setError('El stock máximo no puede ser menor que el mínimo. Déjalo en 0 si no tiene máximo.')
+      return
+    }
 
     setSubmitting(true)
     try {
@@ -74,10 +83,14 @@ function NuevoProductoModal({ open, localId, onClose, onSuccess }) {
         productName: productName.trim(),
         category:    categoryName.trim(),
         unit,
-        currentStock: Number(currentStock) || 0,
-        minStock:     Number(minStock)     || 0,
-        maxStock:     Number(maxStock)     || 0,
+        // Si se prepara no lleva stock: las cantidades no se piden ni se envían.
+        ...(prepara ? {} : {
+          currentStock: Number(currentStock) || 0,
+          minStock:     Number(minStock)     || 0,
+          maxStock:     Number(maxStock)     || null,
+        }),
         unitCost:     Math.round(cost),
+        stock_deduction_mode: modoDeStock(prepara),
       })
       onSuccess?.()
       resetForm()
@@ -95,6 +108,7 @@ function NuevoProductoModal({ open, localId, onClose, onSuccess }) {
     setProductName('')
     setCategoryName('')
     setUnit('unidad')
+    setPrepara(false)
     setCurrentStock('0')
     setMinStock('0')
     setMaxStock('0')
@@ -195,6 +209,8 @@ function NuevoProductoModal({ open, localId, onClose, onSuccess }) {
             </div>
           </div>
 
+          <InterruptorSePrepara id="np-se-prepara" checked={prepara} onChange={setPrepara} disabled={submitting} />
+
           {/* Formato + Costo unitario */}
           <div className="grid grid-cols-2 gap-4">
             <div className="flex flex-col gap-1.5">
@@ -226,7 +242,8 @@ function NuevoProductoModal({ open, localId, onClose, onSuccess }) {
             </div>
           </div>
 
-          {/* Niveles de stock */}
+          {/* Niveles de stock: solo para lo que se cuenta por unidades. */}
+          {!prepara && (
           <fieldset className="border border-[hsl(var(--border))] rounded-lg px-4 pb-4 pt-2">
             <legend className="text-xs font-semibold text-[hsl(var(--muted-foreground))] uppercase tracking-wide px-1">
               Niveles de stock actuales
@@ -270,6 +287,7 @@ function NuevoProductoModal({ open, localId, onClose, onSuccess }) {
               </div>
             </div>
           </fieldset>
+          )}
 
           {/* Proveedor (opcional — módulo aún no disponible en Backend V2) */}
           <div className="flex flex-col gap-1.5">
