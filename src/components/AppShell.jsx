@@ -9,13 +9,14 @@ import { cn } from '@/lib/utils'
 import {
   LayoutDashboard, House, ChevronDown, ChevronLeft, ChevronRight,
   DollarSign, FileText, BarChart3, Wallet,
-  Table2, ChefHat, Moon, Sun, UserCircle2,
+  Table2, ChefHat, Moon, Sun,
   Package, Truck, ShoppingCart, BookMarked, PackageOpen, UtensilsCrossed,
   LogOut, Users, RotateCcw, MapPin, Building2, Settings, History,
 } from 'lucide-react'
 import AunaroSymbol from '@/assets/brand/AunaroSymbol'
 import { nombreVisible } from '@/lib/altaUsuario'
 import TurnoVendedorBarra from './turno/TurnoVendedorBarra'
+import InicialesPerfil from './InicialesPerfil'
 
 const ROLE_BADGE_LABEL = {
   SUPERADMIN: 'Superadmin',
@@ -318,13 +319,8 @@ function Sidebar({ collapsed, onToggle, onClose }) {
               </span>
             )}
           </div>
-          <div className="h-16 w-16 rounded-full overflow-hidden flex items-center justify-center mb-2.5 shrink-0" style={{ backgroundColor: '#fff' }}>
-            {user?.avatar_url ? (
-              <img src={user.avatar_url} alt="" className="h-full w-full object-cover" />
-            ) : (
-              <UserCircle2 className="h-11 w-11 text-slate-700" strokeWidth={1.5} />
-            )}
-          </div>
+          {/* Sin foto de perfil: las iniciales de la persona. */}
+          <InicialesPerfil user={user} className="h-16 w-16 mb-2.5 text-xl" />
           <p className="font-marca text-base text-[hsl(var(--foreground))] truncate max-w-full">
             {nombreVisible(user)}
           </p>

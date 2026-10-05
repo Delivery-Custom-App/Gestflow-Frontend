@@ -34,7 +34,7 @@ const session = vi.hoisted(() => ({
 }))
 
 vi.mock('../context/AuthContext', () => ({
-  useAuth: () => ({ user: { email: session.email }, userRole: session.role, logout: vi.fn() }),
+  useAuth: () => ({ user: { email: session.email, ...session.perfil }, userRole: session.role, logout: vi.fn() }),
 }))
 vi.mock('../hooks/useLocals', () => ({
   useLocals: () => ({ locales: session.locales ?? mockLocales, loading: session.loading }),
@@ -59,7 +59,17 @@ const original = { ...V2_FEATURES }
 afterEach(() => {
   Object.assign(V2_FEATURES, original)
   Object.assign(session, {
-    email: 'admin@demo.gestflow.dev', role: 'Admin Negocio', locales: null, loading: false,
+    email: 'admin@demo.gestflow.dev', role: 'Admin Negocio', locales: null, loading: false, perfil: undefined,
+  })
+})
+
+describe('AppShell — perfil en el menú', () => {
+  it('sin foto: muestra las iniciales aunque haya una foto guardada', () => {
+    session.perfil = { first_name: 'Ana', last_name: 'Rojas', avatar_url: 'data:image/jpeg;base64,xxx' }
+    const { container } = renderShell('loc-mesas', 'pos')
+    expect(screen.getByTestId('iniciales-perfil')).toHaveTextContent('AR')
+    // La única imagen que queda es el logo: la foto guardada ya no se muestra.
+    expect(container.querySelector('img[src^="data:image"]')).toBeNull()
   })
 })
 
