@@ -76,10 +76,21 @@ describe('LocalsGrid — Inicio del dueño', () => {
     expect(screen.queryByRole('dialog', { name: 'Umbral de flujo' })).not.toBeInTheDocument()
   })
 
-  it('Opciones queda solo para eliminar franquicias: sin permiso, no aparece', () => {
+  it('"Eliminar franquicia": sin permiso, no aparece', () => {
     montar()
     expect(screen.getByRole('button', { name: 'Umbral de flujo' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Eliminar franquicia' })).not.toBeInTheDocument()
+  })
+
+  it('con permiso, el botón se llama "Eliminar franquicia" (antes "Opciones")', () => {
+    montar({ canDeleteLocals: true })
+    expect(screen.getByRole('button', { name: 'Eliminar franquicia' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Opciones' })).not.toBeInTheDocument()
+  })
+
+  it('"Mis franquicias" titula la lista, después de las ventas generales', () => {
+    montar()
+    expect(screen.getByRole('heading', { name: 'Mis franquicias' })).toBeInTheDocument()
   })
 
   it('el color de cada franquicia sale del umbral recibido', () => {
