@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { m, AnimatePresence } from 'framer-motion'
-import { Building2, MapPin, Plus, TrendingUp, TrendingDown, Settings, Search, ArrowUp, ChevronRight, ChevronDown, HelpCircle, X, RefreshCw, Users, Gauge } from 'lucide-react'
+import { Building2, MapPin, Plus, TrendingUp, TrendingDown, Trash2, Search, ArrowUp, ChevronRight, ChevronDown, HelpCircle, X, RefreshCw, Users, Gauge } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table'
 import OpcionesDrawer from './OpcionesDrawer'
@@ -104,10 +104,10 @@ function LocalsGrid({
                     desc: 'Explica cómo se lee el flujo y permite elegir el período (en horas) y desde cuántas ventas es medio o alto.',
                   },
                   {
-                    icon: Settings,
+                    icon: Trash2,
                     color: 'text-slate-600',
-                    title: 'Botón Opciones',
-                    desc: 'Eliminar una franquicia.',
+                    title: 'Botón Eliminar franquicia',
+                    desc: 'Elige una franquicia y elimínala de forma permanente.',
                   },
                   {
                     icon: Plus,
@@ -192,11 +192,11 @@ function LocalsGrid({
                   <Gauge className="h-4 w-4" />
                   Umbral de flujo
                 </Button>
-                {/* Opciones: eliminar franquicias (solo quien puede hacerlo). */}
+                {/* Eliminar franquicias (solo quien puede hacerlo). */}
                 {canDeleteLocals && (
                   <Button variant="outline" onClick={() => setShowOpciones(true)} className="gap-2 rounded-xl">
-                    <Settings className="h-4 w-4" />
-                    Opciones
+                    <Trash2 className="h-4 w-4" />
+                    Eliminar franquicia
                   </Button>
                 )}
                 <Button onClick={onCreateLocal} className="gap-2 rounded-xl px-5">
@@ -217,6 +217,9 @@ function LocalsGrid({
 
         <div className="px-6 pb-6 flex flex-col gap-4">
           {locales.length > 0 && <FranchiseSalesCharts locales={locales} />}
+          {locales.length > 0 && (
+            <h2 className="mt-2 text-base font-bold text-[hsl(var(--foreground))]">Mis franquicias</h2>
+          )}
           {locales.length === 0 ? (
             <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-[hsl(var(--border))] bg-[hsl(var(--card))] py-24 text-center">
               <div className="mb-5 flex h-20 w-20 items-center justify-center rounded-2xl bg-[hsl(var(--primary)/0.08)]">
