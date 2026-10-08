@@ -8,7 +8,8 @@ import AdminDashboard from './AdminDashboard'
 import { apiRequest } from '../lib/apiClient'
 
 vi.mock('react-router', () => ({ useNavigate: () => vi.fn(), useLocation: () => ({ pathname: '/admin', state: null }) }))
-vi.mock('../context/AuthContext', () => ({ useAuth: () => ({ userRole: 'Admin Negocio' }) }))
+const sesion = vi.hoisted(() => ({ userRole: 'Admin Negocio' }))
+vi.mock('../context/AuthContext', () => ({ useAuth: () => sesion }))
 // El mismo arreglo en cada render, como el hook real (si cambiara, el conteo se repetiría sin fin).
 const datosLocales = vi.hoisted(() => ({ locales: [{ id: 'loc-1', name: 'Sucursal Centro' }], loading: false, error: null, refetch: () => {} }))
 vi.mock('../hooks/useLocals', () => ({ useLocals: () => datosLocales }))
@@ -19,7 +20,12 @@ vi.mock('../lib/apiClient', () => ({
 vi.mock('./CreateLocalDrawer', () => ({ default: () => null }))
 // Lo que importa es qué recibe la grilla.
 vi.mock('./LocalsGrid', () => ({
-  default: ({ salesCounts, umbral }) => <p>ventas {salesCounts['loc-1'] ?? '-'} · período {umbral.horas} h</p>,
+  default: ({ salesCounts, umbral, canDeleteLocals }) => (
+    <>
+      <p>ventas {salesCounts['loc-1'] ?? '-'} · período {umbral.horas} h</p>
+      <p>{canDeleteLocals ? 'puede eliminar franquicias' : 'no puede eliminar franquicias'}</p>
+    </>
+  ),
 }))
 
 const AHORA = new Date('2026-10-05T15:00:00Z')
@@ -29,6 +35,7 @@ beforeEach(() => {
   vi.useFakeTimers({ shouldAdvanceTime: true })
   vi.setSystemTime(AHORA)
   localStorage.clear()
+  sesion.userRole = 'Admin Negocio'
   apiRequest.mockResolvedValue([
     { id: 'o1', status: 'completed', created_at: '2026-10-05T14:30:00Z' },
     { id: 'o2', status: 'open', created_at: '2026-10-05T14:50:00Z' },
@@ -69,5 +76,18 @@ describe('AdminDashboard · flujo', () => {
 
     await act(async () => { window.dispatchEvent(new Event('focus')) })
     await waitFor(() => expect(apiRequest.mock.calls.length).toBeGreaterThan(antes))
+  })
+})
+
+describe('AdminDashboard · eliminar franquicias', () => {
+  it('el dueño ya no puede eliminar franquicias desde Inicio', async () => {
+    render(<AdminDashboard />)
+    expect(await screen.findByText('no puede eliminar franquicias')).toBeInTheDocument()
+  })
+
+  it('el superadmin conserva la opción', async () => {
+    sesion.userRole = 'Superadmin'
+    render(<AdminDashboard />)
+    expect(await screen.findByText('puede eliminar franquicias')).toBeInTheDocument()
   })
 })

@@ -18,11 +18,9 @@ function AdminDashboard() {
   const navigate   = useNavigate()
   const location   = useLocation()
   const { userRole } = useAuth()
-  // El backend autoriza el borrado de locales a SUPERADMIN y a ADMIN_NEGOCIO
-  // (solo los de su propio negocio). Esta pantalla la ve el dueño del negocio:
-  // condicionarla a SUPERADMIN dejaba la sección inalcanzable.
-  const puedeEliminarLocales =
-    isSuperAdminRole(userRole) || isAdminNegocioRole(userRole)
+  // El dueño ya no elimina franquicias desde Inicio: queda reservado al
+  // superadmin (soporte de la empresa). El código de borrado se conserva.
+  const puedeEliminarLocales = isSuperAdminRole(userRole)
   // /usuarios solo está montado en las rutas del dueño.
   const esDueno = isAdminNegocioRole(userRole)
 

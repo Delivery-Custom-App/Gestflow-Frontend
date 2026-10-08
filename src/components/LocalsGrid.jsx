@@ -103,12 +103,12 @@ function LocalsGrid({
                     title: 'Botón Umbral de flujo',
                     desc: 'Explica cómo se lee el flujo y permite elegir el período (en horas) y desde cuántas ventas es medio o alto.',
                   },
-                  {
+                  ...(canDeleteLocals ? [{
                     icon: Settings,
                     color: 'text-slate-600',
                     title: 'Botón Opciones',
                     desc: 'Eliminar una franquicia.',
-                  },
+                  }] : []),
                   {
                     icon: Plus,
                     color: 'text-[hsl(var(--primary))]',

@@ -82,6 +82,27 @@ describe('LocalsGrid — Inicio del dueño', () => {
     expect(screen.queryByRole('button', { name: 'Opciones' })).not.toBeInTheDocument()
   })
 
+  it('sin permiso para eliminar, la guía no menciona el botón Opciones', async () => {
+    const user = userEvent.setup()
+    montar()
+
+    await user.click(screen.getByRole('button', { name: /cómo funciona esta pantalla/i }))
+
+    expect(screen.getByText('Botón Umbral de flujo')).toBeInTheDocument()
+    expect(screen.queryByText('Botón Opciones')).not.toBeInTheDocument()
+  })
+
+  it('con permiso, Opciones sigue ofreciendo eliminar franquicias y la guía lo explica', async () => {
+    const user = userEvent.setup()
+    montar({ canDeleteLocals: true })
+
+    expect(screen.getByRole('button', { name: 'Opciones' })).toBeInTheDocument()
+    expect(screen.getByText('Selecciona la franquicia que deseas eliminar permanentemente.')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: /cómo funciona esta pantalla/i }))
+    expect(screen.getByText('Botón Opciones')).toBeInTheDocument()
+  })
+
   it('el color de cada franquicia sale del umbral recibido', () => {
     montar({ umbral: { horas: 1, medium: 2, high: 4 }, salesCounts: { 'loc-1': 4, 'loc-2': 1 } })
     const fila = (nombre) => screen.getAllByRole('row').find((r) => r.textContent.includes(nombre))

@@ -10,7 +10,7 @@ const STEPS = {
     {
       target: 'locales-grid',
       title: 'Inicio',
-      desc: 'Tu punto de partida: aquí están tus franquicias y el acceso a los usuarios del negocio. Usa "Crear Franquicia" para agregar una nueva u "Opciones" para configurar umbrales de flujo y eliminar locales.',
+      desc: 'Tu punto de partida: aquí están tus franquicias y el acceso a los usuarios del negocio. Usa "Crear Franquicia" para agregar una nueva o "Umbral de flujo" para elegir el período y desde cuántas ventas el flujo es medio o alto.',
     },
     {
       target: 'nav-dashboard',
