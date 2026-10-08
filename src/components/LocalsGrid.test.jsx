@@ -76,31 +76,40 @@ describe('LocalsGrid — Inicio del dueño', () => {
     expect(screen.queryByRole('dialog', { name: 'Umbral de flujo' })).not.toBeInTheDocument()
   })
 
-  it('Opciones queda solo para eliminar franquicias: sin permiso, no aparece', () => {
+  it('"Eliminar franquicia": sin permiso, no aparece', () => {
     montar()
     expect(screen.getByRole('button', { name: 'Umbral de flujo' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Eliminar franquicia' })).not.toBeInTheDocument()
+  })
+
+  it('con permiso, el botón se llama "Eliminar franquicia" (antes "Opciones")', () => {
+    montar({ canDeleteLocals: true })
+    expect(screen.getByRole('button', { name: 'Eliminar franquicia' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Opciones' })).not.toBeInTheDocument()
   })
 
-  it('sin permiso para eliminar, la guía no menciona el botón Opciones', async () => {
+  it('sin permiso para eliminar, la guía no menciona el botón Eliminar franquicia', async () => {
     const user = userEvent.setup()
     montar()
 
     await user.click(screen.getByRole('button', { name: /cómo funciona esta pantalla/i }))
 
     expect(screen.getByText('Botón Umbral de flujo')).toBeInTheDocument()
-    expect(screen.queryByText('Botón Opciones')).not.toBeInTheDocument()
+    expect(screen.queryByText('Botón Eliminar franquicia')).not.toBeInTheDocument()
   })
 
-  it('con permiso, Opciones sigue ofreciendo eliminar franquicias y la guía lo explica', async () => {
+  it('con permiso para eliminar, la guía explica el botón Eliminar franquicia', async () => {
     const user = userEvent.setup()
     montar({ canDeleteLocals: true })
 
-    expect(screen.getByRole('button', { name: 'Opciones' })).toBeInTheDocument()
-    expect(screen.getByText('Selecciona la franquicia que deseas eliminar permanentemente.')).toBeInTheDocument()
-
     await user.click(screen.getByRole('button', { name: /cómo funciona esta pantalla/i }))
-    expect(screen.getByText('Botón Opciones')).toBeInTheDocument()
+
+    expect(screen.getByText('Botón Eliminar franquicia')).toBeInTheDocument()
+  })
+
+  it('"Mis franquicias" titula la lista, después de las ventas generales', () => {
+    montar()
+    expect(screen.getByRole('heading', { name: 'Mis franquicias' })).toBeInTheDocument()
   })
 
   it('el color de cada franquicia sale del umbral recibido', () => {
