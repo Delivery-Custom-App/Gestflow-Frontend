@@ -9,8 +9,8 @@ const STEPS = {
   superadmin: [
     {
       target: 'locales-grid',
-      title: 'Tus Franquicias',
-      desc: 'Gestiona todas tus franquicias. Usa "Crear Franquicia" para agregar una nueva o "Opciones" para configurar umbrales de flujo y eliminar locales.',
+      title: 'Inicio',
+      desc: 'Tu punto de partida: aquí están tus franquicias y el acceso a los usuarios del negocio. Usa "Crear Franquicia" para agregar una nueva o "Umbral de flujo" para elegir el período y desde cuántas ventas el flujo es medio o alto.',
     },
     {
       target: 'nav-dashboard',
@@ -30,20 +30,15 @@ const STEPS = {
     {
       target: 'nav-pos',
       title: 'POS Restaurante',
-      desc: 'Gestiona las mesas y las órdenes activas. La vista cocina avanza los pedidos en curso.',
+      desc: 'Gestiona las mesas y las órdenes activas. Desde cada mesa ves e imprimes su comanda.',
     },
     {
       target: 'nav-inventario',
       title: 'Inventario',
-      desc: 'Controla stock, proveedores, pedidos de insumos y gestiona las recetas del menú.',
+      desc: 'Controla el stock de tus productos y los productos de tu menú.',
     },
   ],
   admin: [
-    {
-      target: 'dashboard-ventas-card',
-      title: 'Ventas del Día',
-      desc: 'Ingresos del día en tiempo real. Incluye ticket promedio y tasa de cancelación.',
-    },
     {
       target: 'nav-administracion',
       title: 'Administración',
@@ -52,24 +47,19 @@ const STEPS = {
     {
       target: 'nav-pos',
       title: 'POS Restaurante',
-      desc: 'Gestiona las mesas y las órdenes activas. La vista cocina avanza los pedidos en curso.',
+      desc: 'Gestiona las mesas y las órdenes activas. Desde cada mesa ves e imprimes su comanda.',
     },
     {
       target: 'nav-inventario',
       title: 'Inventario',
-      desc: 'Controla stock, proveedores, pedidos de insumos y gestiona las recetas del menú.',
+      desc: 'Controla el stock de tus productos y los productos de tu menú.',
     },
   ],
   worker: [
     {
       target: 'pos-mesas-grid',
       title: 'Mesas del Local',
-      desc: 'Toca una mesa libre (verde) para crear una nueva orden y agregar los ítems del pedido.',
-    },
-    {
-      target: 'pos-kitchen-btn',
-      title: 'Vista Cocina',
-      desc: 'Aquí la cocina ve y avanza las órdenes en curso. Puedes consultarlo en cualquier momento.',
+      desc: 'Toca una mesa libre (verde) para crear una nueva orden y agregar los ítems del pedido. Desde la mesa ves e imprimes su comanda.',
     },
   ],
 }
@@ -86,12 +76,12 @@ const getSuperadminArrivalRoute = (step, localId) => {
   return map[step] ?? null
 }
 
-// Admin: los pasos 1-3 del sidebar necesitan dashboard base (accordion cerrado)
+// Admin: los pasos del sidebar (0-2) necesitan dashboard base (accordion cerrado)
 const getAdminArrivalRoute = (step, localId) => {
   const map = {
+    0: localId ? `/local/${localId}/dashboard` : null,
     1: localId ? `/local/${localId}/dashboard` : null,
     2: localId ? `/local/${localId}/dashboard` : null,
-    3: localId ? `/local/${localId}/dashboard` : null,
   }
   return map[step] ?? null
 }

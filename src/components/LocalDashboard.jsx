@@ -11,6 +11,8 @@ import PageTransition from './PageTransition'
 import LoadingSpinner from './LoadingSpinner'
 import ChartSkeleton from './ui/ChartSkeleton'
 import IncomeChart from './charts/IncomeChart'
+import TarjetaFondoEmergencia from './TarjetaFondoEmergencia'
+import { isV2FeatureEnabled } from '../lib/v2Features'
 // recharts ya se carga bajo demanda: este modulo solo se importa desde paginas con React.lazy
 // (AuthenticatedRoutes) y el build lo deja en un chunk aparte, fuera del bundle inicial.
 // oxlint-disable-next-line react-doctor/prefer-dynamic-import
@@ -21,17 +23,15 @@ import {
 import {
   Package, CheckCircle, TrendingDown, AlertTriangle, DollarSign,
   TrendingUp, Wallet, Clock, CreditCard, X, BarChart2, HelpCircle,
-  LineChart as LineChartIcon, PieChart as PieChartIcon,
+  LineChart as LineChartIcon, PieChart as PieChartIcon, LifeBuoy,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import {
-  chileHourFromIso, formatChileHour, formatChileTime, formatPaymentPct,
-  paymentMethodLabel, CHILE_TZ, parseApiDate,
+  formatPaymentPct, paymentMethodLabel, CHILE_TZ, parseApiDate,
 } from '../utils/chileDateTime'
 
 const PIE_COLORS = ['#3BBF7A', '#F2A623', '#E8394A']
 const PAY_CHART_COLORS = ['var(--chart-cat-1)', 'var(--chart-cat-2)', 'var(--chart-cat-3)', 'var(--chart-cat-4)', 'var(--chart-cat-5)']
-const RECENT_ORDERS_PAGE_SIZE = 8
 
 const STAGGER = {
   hidden: {},
@@ -40,18 +40,6 @@ const STAGGER = {
 const ITEM = {
   hidden: { opacity: 0, y: 16 },
   visible: { opacity: 1, y: 0, transition: { duration: 0.28 } },
-}
-
-const STATUS_CFG = {
-  pending:   { label: 'Pendiente',  cls: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' },
-  preparing: { label: 'Preparando', cls: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' },
-  ready:     { label: 'Listo',      cls: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' },
-  completed: { label: 'Completado', cls: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300' },
-  cancelled: { label: 'Cancelado',  cls: 'bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400' },
-}
-
-function formatHourAMPM(hour) {
-  return formatChileHour(hour)
 }
 
 /** Agrupa método de pago en efectivo | mercadopago | null. */
@@ -81,202 +69,10 @@ function KpiCard({ icon: Icon, label, value, iconColor, iconBg, accentColor, loa
   )
 }
 
-function DrawerSection({ title, children }) {
-  return (
-    <div className="rounded-xl border border-[hsl(var(--border))] overflow-hidden">
-      <div className="px-4 py-2.5 bg-[hsl(var(--muted)/0.5)] border-b border-[hsl(var(--border))]">
-        <p className="text-[11px] font-bold text-[hsl(var(--muted-foreground))] uppercase tracking-wider">{title}</p>
-      </div>
-      <div className="px-4 py-3">{children}</div>
-    </div>
-  )
-}
-
-/* ── Drawer lateral derecho con detalle real por KPI ─────────── */
-function KpiDetailDrawer({ open, onClose, orders, dashLoading }) {
-  const [visible, setVisible] = useState(false)
-
-  // Monta cerrado y activa la transición en el siguiente frame; al cerrar se revierte.
-  useEffect(() => {
-    if (!open) return
-    const frame = requestAnimationFrame(() => setVisible(true))
-    return () => {
-      cancelAnimationFrame(frame)
-      setVisible(false)
-    }
-  }, [open])
-
-  /* Ventas por hora HOY */
-  const salesByHourToday = useMemo(() => {
-    const today = new Date(); today.setHours(0, 0, 0, 0)
-    const counts = Array.from({ length: 24 }, (_, h) => ({ hora: h, label: formatHourAMPM(h), total: 0 }))
-    for (const o of orders) {
-      if (!o.created_at || String(o.status || '').toLowerCase() === 'cancelled') continue
-      const d = parseApiDate(o.created_at)
-      if (!d || d < today) continue
-      const chileHour = chileHourFromIso(o.created_at)
-      if (chileHour == null) continue
-      counts[chileHour].total += Number(o.total ?? 0)
-    }
-    return counts.filter((d) => d.total > 0)
-  }, [orders])
-
-  /* Ventas diarias últimos 7 días */
-  const salesLast7 = useMemo(() => {
-    const result = []
-    const now = new Date(); now.setHours(23, 59, 59, 999)
-    for (let i = 6; i >= 0; i--) {
-      const day = new Date(now); day.setDate(now.getDate() - i); day.setHours(0, 0, 0, 0)
-      const dayEnd = new Date(day); dayEnd.setHours(23, 59, 59, 999)
-      const label = day.toLocaleDateString('es-CL', { day: '2-digit', month: '2-digit' })
-      const total = orders
-        .filter((o) => {
-          if (!o.created_at || String(o.status || '').toLowerCase() === 'cancelled') return false
-          const t = new Date(o.created_at)
-          return t >= day && t <= dayEnd
-        })
-        .reduce((s, o) => s + Number(o.total ?? 0), 0)
-      result.push({ label, total })
-    }
-    return result
-  }, [orders])
-
-  /* Top mesas por cantidad de pedidos */
-  const topMesas = useMemo(() => {
-    const map = {}
-    for (const o of orders) {
-      if (String(o.status || '').toLowerCase() === 'cancelled') continue
-      const key = o.mesa_id ? String(o.mesa_id).slice(0, 6) : 'Sin mesa'
-      map[key] = (map[key] || 0) + 1
-    }
-    return Object.entries(map)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 5)
-      .map(([mesa, pedidos]) => ({ mesa: `Mesa ${mesa}…`, pedidos }))
-  }, [orders])
-
-  /* Distribución de pedidos por estado (este mes) */
-  const statusDist = useMemo(() => {
-    const now = new Date()
-    const map = { pending: 0, preparing: 0, ready: 0, completed: 0, cancelled: 0 }
-    for (const o of orders) {
-      const d = new Date(o.created_at)
-      if (d.getMonth() !== now.getMonth() || d.getFullYear() !== now.getFullYear()) continue
-      const s = String(o.status || '').toLowerCase()
-      if (s in map) map[s] += 1
-    }
-    const COLORS = { pending: 'hsl(var(--warning))', preparing: 'hsl(var(--info-foreground))', ready: 'hsl(var(--success))', completed: '#64748b', cancelled: 'hsl(var(--destructive))' }
-    const LABELS = { pending: 'Pendiente', preparing: 'Preparando', ready: 'Listo', completed: 'Completado', cancelled: 'Cancelado' }
-    return Object.entries(map)
-      .filter(([, v]) => v > 0)
-      .map(([k, v]) => ({ name: LABELS[k], value: v, fill: COLORS[k] }))
-  }, [orders])
-
-  if (!open) return null
-
-  return (
-    <div className="fixed inset-0 z-50">
-      <div role="presentation" className="absolute inset-0 bg-black/50" onClick={onClose} />
-      <div
-        className={cn(
-          'absolute inset-y-0 right-0 w-full max-w-md flex flex-col shadow-2xl bg-[hsl(var(--card))] border-l border-[hsl(var(--border))] transition-transform duration-300 ease-out overflow-y-auto no-scrollbar',
-          visible ? 'translate-x-0' : 'translate-x-full',
-        )}
-      >
-        {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-[hsl(var(--border))] shrink-0 sticky top-0 bg-[hsl(var(--card))] z-10">
-          <div className="flex items-center gap-2">
-            <BarChart2 size={18} className="text-[hsl(var(--primary))]" />
-            <h2 className="text-base font-bold text-[hsl(var(--foreground))]">Ver detalles</h2>
-          </div>
-          <button type="button" aria-label="Cerrar" onClick={onClose} className="flex items-center justify-center w-8 h-8 rounded-lg hover:bg-[hsl(var(--muted))] transition-colors text-[hsl(var(--muted-foreground))]">
-            <X size={16} />
-          </button>
-        </div>
-
-        <div className="flex-1 px-4 py-4 space-y-4">
-          {dashLoading ? <LoadingSpinner message="Cargando..." /> : (
-            <>
-              {/* 2. Ventas hoy por hora */}
-              <DrawerSection title="Ventas de hoy por hora">
-                {salesByHourToday.length > 0 ? (
-                  <ResponsiveContainer width="100%" height={160}>
-                    <BarChart data={salesByHourToday} margin={{ top: 4, right: 8, left: -8, bottom: 0 }}>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
-                      <XAxis dataKey="label" tick={{ fontSize: 9, fill: 'hsl(var(--muted-foreground))' }} tickLine={false} axisLine={false} interval={0} angle={-35} textAnchor="end" height={40} />
-                      <YAxis tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} tick={{ fontSize: 9, fill: 'hsl(var(--muted-foreground))' }} tickLine={false} axisLine={false} width={36} />
-                      <Tooltip formatter={(v) => [formatMoney(v), 'Ventas']} cursor={{ fill: 'hsl(var(--accent))' }} contentStyle={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: 8, fontSize: 11 }} />
-                      <Bar dataKey="total" fill="var(--chart-brand)" radius={[3, 3, 0, 0]} maxBarSize={36} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                ) : <p className="text-xs text-[hsl(var(--muted-foreground))] text-center py-3">Sin ventas hoy aún.</p>}
-              </DrawerSection>
-
-              {/* 3. Tendencia últimos 7 días */}
-              <DrawerSection title="Tendencia de ventas — últimos 7 días">
-                {salesLast7.some((d) => d.total > 0) ? (
-                  <ResponsiveContainer width="100%" height={150}>
-                    <BarChart data={salesLast7} margin={{ top: 4, right: 8, left: -8, bottom: 0 }}>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
-                      <XAxis dataKey="label" tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} tickLine={false} axisLine={false} />
-                      <YAxis tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`} tick={{ fontSize: 9, fill: 'hsl(var(--muted-foreground))' }} tickLine={false} axisLine={false} width={36} />
-                      <Tooltip formatter={(v) => [formatMoney(v), 'Ventas']} cursor={{ fill: 'hsl(var(--accent))' }} contentStyle={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: 8, fontSize: 11 }} />
-                      <Bar dataKey="total" fill="var(--chart-brand)" radius={[3, 3, 0, 0]} maxBarSize={40} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                ) : <p className="text-xs text-[hsl(var(--muted-foreground))] text-center py-3">Sin ventas en los últimos 7 días.</p>}
-              </DrawerSection>
-
-              {/* 4. Top mesas */}
-              {topMesas.length > 0 && (
-                <DrawerSection title="Top 5 mesas por pedidos">
-                  <ResponsiveContainer width="100%" height={topMesas.length * 36 + 16}>
-                    <BarChart data={topMesas} layout="vertical" margin={{ top: 2, right: 32, left: 4, bottom: 2 }}>
-                      <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="hsl(var(--border))" />
-                      <XAxis type="number" allowDecimals={false} tick={{ fontSize: 9, fill: 'hsl(var(--muted-foreground))' }} tickLine={false} axisLine={false} />
-                      <YAxis type="category" dataKey="mesa" width={76} tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} tickLine={false} axisLine={false} />
-                      <Tooltip formatter={(v) => [`${v} pedidos`]} cursor={{ fill: 'hsl(var(--accent))' }} contentStyle={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: 8, fontSize: 11 }} />
-                      <Bar dataKey="pedidos" fill="hsl(var(--primary))" radius={[0, 3, 3, 0]} barSize={18}
-                        label={({ x, y, width, height, value }) => (
-                          <text x={x + width + 5} y={y + height / 2} dominantBaseline="middle" fontSize={11} fontWeight={700} fill="hsl(var(--primary))">{value}</text>
-                        )}
-                      />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </DrawerSection>
-              )}
-
-              {/* 5. Distribución por estado este mes */}
-              {statusDist.length > 0 && (
-                <DrawerSection title="Pedidos por estado — este mes">
-                  <div className="space-y-2">
-                    {statusDist.map((s) => {
-                      const total = statusDist.reduce((a, b) => a + b.value, 0)
-                      const pct   = total > 0 ? Math.round(s.value / total * 100) : 0
-                      return (
-                        <div key={s.name} className="flex items-center gap-2">
-                          <span className="text-xs w-20 shrink-0 text-[hsl(var(--foreground))]">{s.name}</span>
-                          <div className="flex-1 h-2.5 rounded-full bg-[hsl(var(--muted))] overflow-hidden">
-                            <div className="h-full rounded-full transition-[width]" style={{ width: `${pct}%`, backgroundColor: s.fill }} />
-                          </div>
-                          <span className="text-xs font-bold w-8 text-right" style={{ color: s.fill }}>{s.value}</span>
-                        </div>
-                      )
-                    })}
-                  </div>
-                </DrawerSection>
-              )}
-            </>
-          )}
-        </div>
-      </div>
-    </div>
-  )
-}
-
 /* ── LocalDashboard ───────────────────────────────────────────── */
 function LocalDashboard() {
   const { localId } = useParams()
+  const conFondo = isV2FeatureEnabled('fondoEmergencia')
 
   const [trendRange, setTrendRange]       = useState('7d')
   const [trendData, setTrendData]         = useState(null)
@@ -287,11 +83,9 @@ function LocalDashboard() {
   const [dashLoading, setDashLoading]     = useState(true)
   const [orders, setOrders]               = useState([])
   const [ordersLoading, setOrdersLoading] = useState(true)
-  const [drawerOpen, setDrawerOpen]       = useState(false)
   const [payChartView, setPayChartView]   = useState('line')
   const [ordersRefreshTick, setOrdersRefreshTick] = useState(0)
   const [guideOpen, setGuideOpen]         = useState(false)
-  const [recentPage, setRecentPage]       = useState(1)
 
   useEffect(() => {
     if (!localId) return
@@ -365,26 +159,6 @@ function LocalDashboard() {
     ].filter((d) => d.value > 0)
   }, [invKpis])
 
-  /* Procesos recientes */
-  const recentOrders = useMemo(() =>
-    [...orders]
-      .sort((a, b) => {
-        const da = parseApiDate(a.created_at)?.getTime() ?? 0
-        const db = parseApiDate(b.created_at)?.getTime() ?? 0
-        return db - da
-      })
-  , [orders])
-
-  const recentPageCount = Math.max(1, Math.ceil(recentOrders.length / RECENT_ORDERS_PAGE_SIZE))
-  const paginatedRecentOrders = useMemo(() => {
-    const start = (recentPage - 1) * RECENT_ORDERS_PAGE_SIZE
-    return recentOrders.slice(start, start + RECENT_ORDERS_PAGE_SIZE)
-  }, [recentOrders, recentPage])
-
-  useEffect(() => {
-    setRecentPage((page) => Math.min(page, recentPageCount))
-  }, [recentPageCount])
-
   /** Monto recaudado por método de pago (CLP). */
   const payAmountData = useMemo(() => {
     const rows = dashboard?.payment_breakdown
@@ -454,14 +228,6 @@ function LocalDashboard() {
 
   return (
     <>
-      <KpiDetailDrawer
-        open={drawerOpen}
-        onClose={() => setDrawerOpen(false)}
-        dashboard={dashboard}
-        orders={orders}
-        dashLoading={dashLoading}
-      />
-
       <div className="flex-1 overflow-y-auto no-scrollbar">
         <PageTransition className="flex flex-col gap-6 p-3 sm:p-6 pb-10">
 
@@ -538,19 +304,12 @@ function LocalDashboard() {
                         color: 'text-pink-600',
                         desc: 'Muestra la cantidad de pedidos en cada hora del día para identificar los momentos de mayor y menor demanda.',
                       },
-                      {
-                        title: 'Pedidos Recientes',
-                        icon: CreditCard,
-                        color: 'text-teal-600',
-                        desc: 'Listado de los últimos pedidos con su estado actual. Permite un seguimiento rápido del flujo de operaciones en tiempo real.',
-                      },
-                      {
-                        title: 'Botón "Ver detalles"',
-                        icon: BarChart2,
-                        color: 'text-[hsl(var(--primary))]',
-                        desc: 'Abre un panel lateral con el desglose completo de los indicadores financieros: ventas por producto, distribución de ingresos, estado de cajas y cifras avanzadas del período seleccionado.',
-                        highlight: true,
-                      },
+                      ...(conFondo ? [{
+                        title: 'Fondo de emergencia',
+                        icon: LifeBuoy,
+                        color: 'text-sky-600',
+                        desc: 'Plata apartada del local para imprevistos: saldo actual y los últimos aportes y usos con su motivo. Desde la tarjeta se va a Administración para aportar, registrar un uso o ver el historial completo; si el local no tiene fondo, ofrece crearlo.',
+                      }] : []),
                     ].map(({ title, icon: Icon, color, desc, highlight }) => (
                       <div
                         key={title}
@@ -583,25 +342,20 @@ function LocalDashboard() {
                 <h2 className="text-sm font-bold text-[hsl(var(--foreground))]">Resumen Financiero</h2>
                 <p className="text-xs text-[hsl(var(--muted-foreground))]">Actividad del local</p>
               </div>
-              <button
-                onClick={() => setDrawerOpen(true)}
-                className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold bg-[hsl(var(--primary))] text-white hover:opacity-90 transition-opacity shadow-sm"
-              >
-                <BarChart2 size={14} />
-                Ver detalles
-              </button>
             </div>
             <m.div
               className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3"
               variants={STAGGER} initial="hidden" animate="visible"
             >
-              {finCards.map((k, idx) => (
-                <m.div key={k.label} variants={ITEM} data-onboarding={idx === 0 ? 'dashboard-ventas-card' : undefined}>
+              {finCards.map((k) => (
+                <m.div key={k.label} variants={ITEM}>
                   <KpiCard {...k} loading={dashLoading} />
                 </m.div>
               ))}
             </m.div>
           </section>
+
+          {conFondo && <TarjetaFondoEmergencia localId={localId} />}
 
           {/* Charts row */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
@@ -673,91 +427,6 @@ function LocalDashboard() {
               </CardContent>
             </Card>
           </div>
-
-          {/* Procesos Recientes */}
-          <section>
-            <div className="mb-3 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
-              <div>
-                <h2 className="text-sm font-bold text-[hsl(var(--foreground))]">Procesos Recientes</h2>
-                <p className="text-xs text-[hsl(var(--muted-foreground))]">Últimas órdenes del local, incluidas canceladas</p>
-              </div>
-              {!ordersLoading && recentOrders.length > 0 && (
-                <p className="text-xs font-semibold text-[hsl(var(--muted-foreground))]">
-                  {recentOrders.length} orden{recentOrders.length === 1 ? '' : 'es'} cargada{recentOrders.length === 1 ? '' : 's'}
-                </p>
-              )}
-            </div>
-            <Card>
-              <CardContent className="pt-4 pb-2 px-0">
-                {ordersLoading ? (
-                  <LoadingSpinner message="Cargando órdenes..." />
-                ) : recentOrders.length === 0 ? (
-                  <p className="text-sm text-[hsl(var(--muted-foreground))] py-4 text-center">No hay órdenes recientes.</p>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="border-b border-[hsl(var(--border))]">
-                          <th className="text-left text-xs font-semibold text-[hsl(var(--muted-foreground))] px-5 pb-2">Hora</th>
-                          <th className="text-left text-xs font-semibold text-[hsl(var(--muted-foreground))] px-3 pb-2">ID Orden</th>
-                          <th className="text-left text-xs font-semibold text-[hsl(var(--muted-foreground))] px-3 pb-2">Estado</th>
-                          <th className="text-left text-xs font-semibold text-[hsl(var(--muted-foreground))] px-3 pb-2">Pago</th>
-                          <th className="text-right text-xs font-semibold text-[hsl(var(--muted-foreground))] px-5 pb-2">Total</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {paginatedRecentOrders.map((order, idx) => {
-                          const status   = String(order.status || '').toLowerCase()
-                          const cfg      = STATUS_CFG[status] || STATUS_CFG.pending
-                          const hora     = formatChileTime(order.created_at)
-                          const orderNum = recentOrders.length - ((recentPage - 1) * RECENT_ORDERS_PAGE_SIZE) - idx
-                          const payLabel = paymentMethodLabel(order.payment_method)
-                          return (
-                            <tr key={order.id} className="border-b border-[hsl(var(--border))] last:border-0 hover:bg-[hsl(var(--muted)/0.4)] transition-colors">
-                              <td className="px-5 py-3 text-[hsl(var(--muted-foreground))] text-xs">{hora}</td>
-                              <td className="px-3 py-3 text-xs font-semibold text-[hsl(var(--foreground))]">{orderNum}</td>
-                              <td className="px-3 py-3">
-                                <span className={cn('inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide', cfg.cls)}>
-                                  {cfg.label}
-                                </span>
-                              </td>
-                              <td className="px-3 py-3 text-xs text-[hsl(var(--muted-foreground))]">{payLabel}</td>
-                              <td className="px-5 py-3 text-right font-semibold text-[hsl(var(--foreground))]">{formatMoney(order.total)}</td>
-                            </tr>
-                          )
-                        })}
-                      </tbody>
-                    </table>
-                    {recentOrders.length > RECENT_ORDERS_PAGE_SIZE && (
-                      <div className="flex flex-col gap-2 border-t border-[hsl(var(--border))] px-5 py-3 sm:flex-row sm:items-center sm:justify-between">
-                        <p className="text-xs text-[hsl(var(--muted-foreground))]">
-                          Página {recentPage} de {recentPageCount}
-                        </p>
-                        <div className="flex items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={() => setRecentPage((page) => Math.max(1, page - 1))}
-                            disabled={recentPage <= 1}
-                            className="h-9 rounded-lg border border-[hsl(var(--border))] px-3 text-xs font-bold text-[hsl(var(--foreground))] transition hover:bg-[hsl(var(--muted))] disabled:cursor-not-allowed disabled:opacity-45"
-                          >
-                            Anterior
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setRecentPage((page) => Math.min(recentPageCount, page + 1))}
-                            disabled={recentPage >= recentPageCount}
-                            className="h-9 rounded-lg border border-[hsl(var(--border))] px-3 text-xs font-bold text-[hsl(var(--foreground))] transition hover:bg-[hsl(var(--muted))] disabled:cursor-not-allowed disabled:opacity-45"
-                          >
-                            Siguiente
-                          </button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </section>
 
           {/* Comparativo semanal + distribución por pago */}
           {dashLoading ? (

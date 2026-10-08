@@ -2,24 +2,28 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router'
 import { UserPlus, ArrowLeft, RefreshCw, Eye, EyeOff } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
-import { isSuperAdminRole } from '../auth/roleLabel'
-import { isInventoryAdminRole } from '../utils/inventoryAccess'
 import { useLocals } from '../hooks/useLocals'
 import { createUser } from '../lib/apiClient'
+import {
+  AVISO_VENDEDOR, LARGO_MINIMO_CONTRASENA, ROL_LABEL, datosDeAlta, formatearRut, pideRut,
+  puedeCrearUsuarios, rolConLocal, rolesAsignables, validarAlta,
+} from '../lib/altaUsuario'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 
-const ROLES = [
-  { value: 'EMPLEADO',   label: 'Empleado — solo POS' },
-  { value: 'ADMIN',      label: 'Admin — su local (inventario, etc.)' },
-  { value: 'ADMIN_NEGOCIO', label: 'Dueño de negocio — toda la franquicia' },
-  { value: 'SUPERADMIN', label: 'Superadmin — acceso total' },
-]
+const ROL_DESCRIPCION = {
+  EMPLEADO:      'el punto de venta de su local',
+  ADMIN:         'su local (inventario, ventas, caja)',
+  ADMIN_NEGOCIO: 'todas sus franquicias',
+  SUPERADMIN:    'acceso total',
+}
+
+const FORM_VACIO = { nombre: '', apellido: '', rut: '', email: '', password: '', role: 'EMPLEADO', local_id: '' }
 
 const HIGH_ROLES = new Set(['ADMIN', 'ADMIN_NEGOCIO', 'SUPERADMIN'])
 
 const ROLE_WARNING = {
-  ADMIN:      'Este usuario podrá administrar inventario, proveedores y reportes de su local.',
+  ADMIN:      'Este usuario podrá administrar el inventario, las ventas y la caja de su local.',
   ADMIN_NEGOCIO: 'Este usuario será el dueño de la franquicia y podrá crear sub-administradores y ver toda su red.',
   SUPERADMIN: 'Este usuario tendrá acceso total al sistema, incluyendo todos los locales y configuraciones críticas.',
 }
@@ -39,22 +43,19 @@ export default function UserManagementPage() {
   const { userRole } = useAuth()
   const navigate = useNavigate()
   const { locales, loading: localesLoading } = useLocals()
-  const [form, setForm] = useState({ name: '', email: '', password: '', role: 'EMPLEADO', local_id: '' })
+  const [form, setForm] = useState(FORM_VACIO)
   const [showPassword, setShowPassword] = useState(false)
   const [roleConfirmed, setRoleConfirmed] = useState(false)
   const [loading, setLoading] = useState(false)
   const [ok, setOk] = useState('')
   const [err, setErr] = useState('')
 
-  const isOwnerRole = String(userRole || '').toLowerCase().replace(/[\s_-]+/g, '') === 'adminnegocio'
-  const availableRoles = isSuperAdminRole(userRole)
-    ? ROLES
-    : isOwnerRole
-      ? ROLES.filter((r) => r.value === 'ADMIN' || r.value === 'EMPLEADO')
-      : ROLES.filter((r) => r.value === 'EMPLEADO')
+  // Del vendedor al más alto, como se ofrecían antes.
+  const availableRoles = [...rolesAsignables(userRole)].reverse()
   const needsConfirm = HIGH_ROLES.has(form.role)
 
-  if (!isInventoryAdminRole(userRole)) {
+  // En el backend solo el superadmin y el dueño crean usuarios.
+  if (!puedeCrearUsuarios(userRole)) {
     return (
       <div className="flex-1 flex items-center justify-center bg-[hsl(var(--background))]">
         <Card className="max-w-md text-center">
@@ -69,7 +70,7 @@ export default function UserManagementPage() {
   }
 
   const set = (k) => (e) => {
-    const val = e.target.value
+    const val = k === 'rut' ? formatearRut(e.target.value) : e.target.value
     setForm((f) => ({ ...f, [k]: val }))
     if (k === 'role') setRoleConfirmed(false)
   }
@@ -83,21 +84,16 @@ export default function UserManagementPage() {
   const onSubmit = async (e) => {
     e.preventDefault()
     setOk(''); setErr('')
-    if (!form.name || !form.email || !form.password) { setErr('Completa nombre, correo y contraseña.'); return }
-    if (form.password.length < 8) { setErr('La contraseña debe tener al menos 8 caracteres.'); return }
-    if (!['SUPERADMIN', 'ADMIN_NEGOCIO'].includes(form.role) && !form.local_id) { setErr('Selecciona el local al que pertenece este usuario.'); return }
+    const problema = validarAlta(form)
+    if (problema) { setErr(problema); return }
     if (needsConfirm && !roleConfirmed) { setErr('Debes confirmar la asignación de este rol antes de continuar.'); return }
     setLoading(true)
     try {
       const local = locales.find((l) => String(l.id) === String(form.local_id))
-      await createUser({
-        name: form.name.trim(), email: form.email.trim(), password: form.password,
-        role: form.role, local_id: form.local_id || null,
-        business_id: local?.business_id || null,
-      })
-      const localName = local?.name
-      setOk(`Usuario "${form.email.trim()}" creado como ${form.role}${localName ? ` en "${localName}"` : ''}.`)
-      setForm({ name: '', email: '', password: '', role: 'EMPLEADO', local_id: '' })
+      await createUser(datosDeAlta(form, local))
+      const localName = rolConLocal(form.role) ? local?.name : null
+      setOk(`Usuario "${form.email.trim()}" creado como ${ROL_LABEL[form.role]}${localName ? ` en "${localName}"` : ''}.`)
+      setForm(FORM_VACIO)
       setRoleConfirmed(false)
       setShowPassword(false)
     } catch (e2) {
@@ -128,8 +124,18 @@ export default function UserManagementPage() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label htmlFor="user-management-page-nombre" className={labelCls}>Nombre</label>
-                  <input id="user-management-page-nombre" className={inputCls} value={form.name} onChange={set('name')} placeholder="Juan Pérez" />
+                  <input id="user-management-page-nombre" className={inputCls} value={form.nombre} onChange={set('nombre')} placeholder="Juan" />
                 </div>
+                <div>
+                  <label htmlFor="user-management-page-apellido" className={labelCls}>Apellido</label>
+                  <input id="user-management-page-apellido" className={inputCls} value={form.apellido} onChange={set('apellido')} placeholder="Pérez" />
+                </div>
+                {pideRut() && (
+                  <div>
+                    <label htmlFor="user-management-page-rut" className={labelCls}>RUT</label>
+                    <input id="user-management-page-rut" className={inputCls} value={form.rut} onChange={set('rut')} placeholder="12.345.678-5" />
+                  </div>
+                )}
                 <div>
                   <label htmlFor="user-management-page-correo" className={labelCls}>Correo</label>
                   <input id="user-management-page-correo" className={inputCls} type="email" value={form.email} onChange={set('email')} placeholder="juan@correo.com" />
@@ -146,7 +152,7 @@ export default function UserManagementPage() {
                         type={showPassword ? 'text' : 'password'}
                         value={form.password}
                         onChange={set('password')}
-                        placeholder="Mínimo 6 caracteres"
+                        placeholder={`Mínimo ${LARGO_MINIMO_CONTRASENA} caracteres`}
                       />
                       <button aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
                         type="button"
@@ -168,12 +174,12 @@ export default function UserManagementPage() {
                 <div className="sm:col-span-2">
                   <label htmlFor="user-management-page-rol" className={labelCls}>Rol</label>
                   <select id="user-management-page-rol" className={inputCls} value={form.role} onChange={set('role')}>
-                    {availableRoles.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
+                    {availableRoles.map((r) => <option key={r} value={r}>{`${ROL_LABEL[r]} — ${ROL_DESCRIPCION[r]}`}</option>)}
                   </select>
                 </div>
               </div>
 
-              {!['SUPERADMIN', 'ADMIN_NEGOCIO'].includes(form.role) && (
+              {rolConLocal(form.role) && (
                 <div>
                   <label htmlFor="user-management-page-local-asignado" className={labelCls}>Local asignado</label>
                   <select id="user-management-page-local-asignado" className={inputCls} value={form.local_id} onChange={set('local_id')} disabled={localesLoading}>
@@ -182,6 +188,10 @@ export default function UserManagementPage() {
                   </select>
                   <p className="text-xs text-[hsl(var(--muted-foreground))] mt-1">El usuario solo tendrá acceso a este local.</p>
                 </div>
+              )}
+
+              {form.role === 'EMPLEADO' && (
+                <p className="rounded-lg border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-800">{AVISO_VENDEDOR}</p>
               )}
 
               {/* Doble verificación para roles elevados */}
@@ -194,7 +204,7 @@ export default function UserManagementPage() {
                     className="mt-0.5 h-4 w-4 accent-amber-600 shrink-0"
                   />
                   <span className="text-sm text-amber-800">
-                    <span className="font-semibold">Confirmo la asignación de rol {form.role}. </span>
+                    <span className="font-semibold">Confirmo la asignación del rol {ROL_LABEL[form.role]}. </span>
                     {ROLE_WARNING[form.role]}
                   </span>
                 </label>

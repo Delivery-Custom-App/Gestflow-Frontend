@@ -314,6 +314,37 @@ export async function postInventoryNewProduct(localId, body) {
   return result.inventory
 }
 
+/** La fila de inventario del producto en el local, o null si no tiene. */
+export async function getInventarioDelProducto(localId, productId) {
+  const rows = await apiRequest('/inventory')
+  return (Array.isArray(rows) ? rows : []).find(
+    (r) => String(r.local_id) === String(localId) && String(r.product_id) === String(productId),
+  ) || null
+}
+
+/**
+ * "Este producto se prepara" al editar. Encendido: el producto pasa a
+ * RECIPE_BASED (su fila de inventario, si tenía, queda sin uso: V2 no la
+ * borra). Apagado: pasa a DIRECT_STOCK con el stock actual y el mínimo en
+ * este local (se actualiza su fila o se crea).
+ */
+export async function cambiarSiSePrepara(localId, productId, { prepara, stockActual = 0, stockMin = 0 }) {
+  await apiRequest(`/products/${encodeURIComponent(String(productId))}`, {
+    method: 'PATCH',
+    body: { stock_deduction_mode: prepara ? 'RECIPE_BASED' : 'DIRECT_STOCK' },
+  })
+  if (prepara) return null
+  const fila = await getInventarioDelProducto(localId, productId)
+  const stock = { stock_actual: Number(stockActual) || 0, stock_min: Number(stockMin) || 0 }
+  if (fila) {
+    return apiRequest(`/inventory/${encodeURIComponent(String(fila.id))}`, { method: 'PATCH', body: stock })
+  }
+  return apiRequest('/inventory', {
+    method: 'POST',
+    body: { local_id: localId, product_id: productId, ...stock, stock_max: null },
+  })
+}
+
 /** Actualiza stock/mín/máx vía PATCH /inventory/{id}. */
 export async function patchInventoryStock(_localId, inventoryId, body) {
   const patch = {}
@@ -324,9 +355,49 @@ export async function patchInventoryStock(_localId, inventoryId, body) {
   if (body.stock_min != null) patch.stock_min = body.stock_min
   if (body.max_stock != null) patch.stock_max = body.max_stock
   if (body.stock_max != null) patch.stock_max = body.stock_max
+  if (body.critical_stock != null) patch.stock_critical = body.critical_stock
+  if (body.stock_critical != null) patch.stock_critical = body.stock_critical
   return apiRequest(`/inventory/${encodeURIComponent(String(inventoryId))}`, {
     method: 'PATCH',
     body: patch,
+  })
+}
+
+/**
+ * Suma unidades (por ejemplo, llegó mercadería). No hay endpoint de ingreso:
+ * se lee el stock actual recién consultado, se le suma y se guarda.
+ */
+export async function sumarUnidades(inventoryId, cantidad) {
+  const n = Number(cantidad)
+  if (!Number.isFinite(n) || n <= 0) throw new Error('Indica cuántas unidades llegaron.')
+  const ruta = `/inventory/${encodeURIComponent(String(inventoryId))}`
+  const fila = await apiRequest(ruta)
+  const actual = Number(fila?.stock_actual) || 0
+  return apiRequest(ruta, { method: 'PATCH', body: { stock_actual: actual + n } })
+}
+
+/** Corrige el conteo: el stock pasa a ser lo que se contó. */
+export async function corregirConteo(inventoryId, contado) {
+  const n = Number(contado)
+  if (!Number.isFinite(n) || n < 0) throw new Error('Indica cuántas unidades contaste.')
+  return apiRequest(`/inventory/${encodeURIComponent(String(inventoryId))}`, {
+    method: 'PATCH',
+    body: { stock_actual: n },
+  })
+}
+
+/** Empieza a controlar el stock de un producto que todavía no lo tiene en el local. */
+export async function empezarAControlarStock(localId, productId, { stockActual = 0, stockMin = 0, stockCritical = null } = {}) {
+  return apiRequest('/inventory', {
+    method: 'POST',
+    body: {
+      local_id: localId,
+      product_id: productId,
+      stock_actual: Number(stockActual) || 0,
+      stock_min: Number(stockMin) || 0,
+      stock_max: null,
+      ...(stockCritical != null && stockCritical !== '' ? { stock_critical: Number(stockCritical) } : {}),
+    },
   })
 }
 

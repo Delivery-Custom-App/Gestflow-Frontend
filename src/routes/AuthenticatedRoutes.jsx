@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate, useParams, useLocatio
 import AppShell from '../components/AppShell'
 import ErrorBoundary from '../components/ErrorBoundary'
 import CambioContrasenaObligatorio from '../components/CambioContrasenaObligatorio'
+import InicioDeTurno from '../components/turno/InicioDeTurno'
 import LoadingPage from '../components/LoadingPage'
 
 // Carga diferida (code-splitting): cada página se compila en su propio chunk y
@@ -12,6 +13,7 @@ import LoadingPage from '../components/LoadingPage'
 const AdminDashboard = lazy(() => import('../components/AdminDashboard'))
 const LocalDashboard = lazy(() => import('../components/LocalDashboard'))
 const AdministrativeModule = lazy(() => import('../components/AdministrativeModule'))
+const MisTurnos = lazy(() => import('../components/turno/MisTurnos'))
 const InventoryHub = lazy(() => import('../components/inventory/InventoryHub'))
 const StockControlDashboard = lazy(() => import('../components/inventory/StockControlDashboard'))
 const MenuBuilderPage = lazy(() => import('../components/inventory/MenuBuilderPage'))
@@ -38,6 +40,7 @@ import { WORKER_ROLES } from '../constants/roles'
 import { isSuperAdminRole, isAdminNegocioRole } from '../auth/roleLabel'
 import { isDirectSaleDemoUser } from '../constants/demoMode'
 import { isAlPasoLocal } from '../lib/salesModel'
+import { isV2FeatureEnabled } from '../lib/v2Features'
 import { useAuth } from '../context/AuthContext'
 import { useLocals } from '../hooks/useLocals'
 
@@ -45,22 +48,40 @@ function AdminLayout() {
   return <AppShell />
 }
 
+/**
+ * Tipo de local. El tipo llega de /locals: hasta entonces `ready` es false y
+ * `alPaso` no es confiable (un local al paso se vería como restaurante).
+ */
 function useLocalIsAlPaso(localId) {
   const { user } = useAuth()
-  const { locales } = useLocals()
+  const { locales, loading } = useLocals()
   return useMemo(() => {
-    if (isDirectSaleDemoUser(user?.email)) return true
+    if (isDirectSaleDemoUser(user?.email)) return { alPaso: true, ready: true }
     const local = locales.find((l) => String(l.id) === String(localId))
-    return isAlPasoLocal(local)
-  }, [locales, localId, user?.email])
+    return { alPaso: isAlPasoLocal(local), ready: local != null || !loading }
+  }, [locales, loading, localId, user?.email])
 }
 
 /** Si el local es comida al paso, /pos (mesas) redirige a venta directa. */
 function RestaurantPosOrRedirect() {
   const { localId } = useParams()
-  const alPaso = useLocalIsAlPaso(localId)
+  const { alPaso, ready } = useLocalIsAlPaso(localId)
+  if (!ready) return <LoadingPage />
   if (alPaso) return <Navigate to={`/local/${localId}/pos/venta-directa`} replace />
   return <POSModule />
+}
+
+/**
+ * Vendedor: cada tipo de local tiene una sola pantalla de venta. `only` es la
+ * pantalla que le corresponde; la del otro tipo redirige a la suya.
+ */
+function WorkerSalesModelGate({ only, children }) {
+  const { localId } = useParams()
+  const { alPaso, ready } = useLocalIsAlPaso(localId)
+  if (!ready) return <LoadingPage />
+  if (only === 'alPaso' && !alPaso) return <Navigate to={`/local/${localId}/pos`} replace />
+  if (only === 'restaurant' && alPaso) return <Navigate to={`/local/${localId}/pos/venta-directa`} replace />
+  return children
 }
 
 function LocalModulesHomeRedirect() {
@@ -104,7 +125,8 @@ function localRoutes(assignedLocalId, guarded = false) {
     <>
       <Route path="/local/:localId/inventario/stock" element={wrap(<MenuBuilderPage />)} />
       <Route path="/local/:localId/inventario/stock-control" element={wrap(<StockControlDashboard />)} />
-      <Route path="/local/:localId/inventario/recipes" element={wrap(<RecipesPage />)} />
+      {/* Recetas y Cocina apagadas (`recipes`, `kitchenView`): sin la ruta, la dirección cae en el `*` de cada rol. */}
+      {isV2FeatureEnabled('recipes') && <Route path="/local/:localId/inventario/recipes" element={wrap(<RecipesPage />)} />}
       <Route path="/local/:localId/inventario/compras-semanales/:orderId" element={wrap(<WeeklyPurchaseDetailPage />)} />
       <Route path="/local/:localId/inventario/compras-semanales" element={wrap(<WeeklyPurchasesPage />)} />
       <Route path="/local/:localId/inventario/proveedores/compras-semanales/:orderId" element={wrap(<LegacyComprasDetailRedirect />)} />
@@ -112,9 +134,12 @@ function localRoutes(assignedLocalId, guarded = false) {
       <Route path="/local/:localId/inventario/proveedores" element={wrap(<SuppliersKpisDashboard />)} />
       <Route path="/local/:localId/inventario" element={wrap(<InventoryHub />)} />
       <Route path="/local/:localId/administrativo/:sectionId?" element={wrap(<AdministrativeModule />)} />
-      <Route path="/local/:localId/rrhh" element={wrap(<HrModule />)} />
+      {/* Usuarios de un local sin salir de él (el encargado, solo el suyo: LocalIdGuard). */}
+      <Route path="/local/:localId/usuarios" element={wrap(<UsersListPage />)} />
+      {/* RRHH apagado con `hrModule`: sin la ruta, la dirección cae en el `*` de cada rol. */}
+      {isV2FeatureEnabled('hrModule') && <Route path="/local/:localId/rrhh" element={wrap(<HrModule />)} />}
       <Route path="/local/:localId/pos" element={wrap(<RestaurantPosOrRedirect />)} />
-      <Route path="/local/:localId/pos/cocina" element={wrap(<POSModule />)} />
+      {isV2FeatureEnabled('kitchenView') && <Route path="/local/:localId/pos/cocina" element={wrap(<POSModule />)} />}
       <Route path="/local/:localId/pos/reportes" element={wrap(<ReportesPage />)} />
       <Route path="/local/:localId/pos/mesa/:mesaId" element={wrap(<MesaDetail />)} />
       <Route path="/local/:localId/pos/venta-directa" element={wrap(<VentaDirectaView />)} />
@@ -144,7 +169,7 @@ function SuperadminRoutes() {
 }
 
 /** ADMIN_NEGOCIO (dueño de franquicia): Tus Locales + Usuarios + todos sus locales */
-function OwnerRoutes() {
+export function OwnerRoutes() {
   return (
     <Routes>
       <Route element={<AdminLayout />}>
@@ -160,12 +185,17 @@ function OwnerRoutes() {
   )
 }
 
-/** ADMIN: acceso solo a SU local — sin Tus Locales, sin Usuarios */
-function AdminRoutes({ assignedLocalId }) {
+/**
+ * ADMIN (encargado): acceso solo a SU local. Ve a los usuarios de su local
+ * (`/usuarios` lo lleva a los de su local) pero no crea usuarios: el backend
+ * se lo rechaza, así que `/usuarios/crear` sigue cerrado.
+ */
+export function AdminRoutes({ assignedLocalId }) {
   // Si tiene local asignado, home es ese local; si no, muestra selector vacío
   const home = assignedLocalId
     ? `/local/${assignedLocalId}/dashboard`
     : '/admin'
+  const usuariosDeSuLocal = assignedLocalId ? `/local/${assignedLocalId}/usuarios` : home
 
   return (
     <Routes>
@@ -173,8 +203,7 @@ function AdminRoutes({ assignedLocalId }) {
         <Route path="/" element={<Navigate to={home} replace />} />
         {/* /admin redirige siempre a su local */}
         <Route path="/admin" element={<Navigate to={home} replace />} />
-        {/* Bloquea /usuarios */}
-        <Route path="/usuarios" element={<Navigate to={home} replace />} />
+        <Route path="/usuarios" element={<Navigate to={usuariosDeSuLocal} replace />} />
         <Route path="/usuarios/crear" element={<Navigate to={home} replace />} />
         <Route path="/configuracion" element={<ConfiguracionPage />} />
         {localRoutes(assignedLocalId, true)}
@@ -184,16 +213,34 @@ function AdminRoutes({ assignedLocalId }) {
   )
 }
 
-/** TRABAJADOR: solo POS de su local asignado */
+/**
+ * TRABAJADOR: solo la pantalla de venta de su local — Gestión de Mesas (con
+ * mesas) o Venta directa (al paso). Finanzas, Inventario, RRHH y Cocina no
+ * tienen ruta: caen en el `*` y vuelven a su inicio.
+ */
 function WorkerPosHomeRedirect({ assignedLocalId }) {
-  const alPaso = useLocalIsAlPaso(assignedLocalId)
+  const { alPaso, ready } = useLocalIsAlPaso(assignedLocalId)
+  if (assignedLocalId && !ready) return <LoadingPage />
   const home = assignedLocalId
     ? `/local/${assignedLocalId}/pos${alPaso ? '/venta-directa' : ''}`
     : '/'
   return <Navigate to={home} replace />
 }
 
-function WorkerRoutes({ assignedLocalId }) {
+/** Devuelve los <Route> de venta del trabajador (mismo motivo que `localRoutes`: no es un componente). */
+function workerLocalRoutes(wrap) {
+  return (
+    <>
+      <Route path="/local/:localId/pos" element={wrap(<RestaurantPosOrRedirect />)} />
+      <Route path="/local/:localId/pos/mesa/:mesaId" element={wrap(<WorkerSalesModelGate only="restaurant"><MesaDetail /></WorkerSalesModelGate>)} />
+      <Route path="/local/:localId/pos/venta-directa" element={wrap(<WorkerSalesModelGate only="alPaso"><VentaDirectaView /></WorkerSalesModelGate>)} />
+      {/* "Mis turnos": el vendedor de cualquier tipo de local ve solo los suyos. */}
+      <Route path="/local/:localId/pos/mis-turnos" element={wrap(<MisTurnos />)} />
+    </>
+  )
+}
+
+export function WorkerRoutes({ assignedLocalId }) {
   const wrap = (element) => <LocalIdGuard assignedLocalId={assignedLocalId}>{element}</LocalIdGuard>
 
   if (assignedLocalId) {
@@ -201,12 +248,7 @@ function WorkerRoutes({ assignedLocalId }) {
       <Routes>
         <Route element={<AdminLayout />}>
           <Route path="/" element={<WorkerPosHomeRedirect assignedLocalId={assignedLocalId} />} />
-          <Route path="/local/:localId/pos" element={wrap(<RestaurantPosOrRedirect />)} />
-          <Route path="/local/:localId/pos/cocina" element={wrap(<POSModule />)} />
-          <Route path="/local/:localId/pos/mesa/:mesaId" element={wrap(<MesaDetail />)} />
-          <Route path="/local/:localId/pos/venta-directa" element={wrap(<VentaDirectaView />)} />
-          <Route path="/local/:localId/administrativo/:sectionId?" element={wrap(<AdministrativeModule />)} />
-          <Route path="/local/:localId/rrhh" element={wrap(<HrModule />)} />
+          {workerLocalRoutes(wrap)}
           <Route path="/configuracion" element={<ConfiguracionPage />} />
           <Route path="*" element={<WorkerPosHomeRedirect assignedLocalId={assignedLocalId} />} />
         </Route>
@@ -221,12 +263,7 @@ function WorkerRoutes({ assignedLocalId }) {
       <Route element={<AdminLayout />}>
         <Route path="/" element={<Navigate to="/admin" replace />} />
         <Route path="/admin" element={<AdminDashboard />} />
-        <Route path="/local/:localId/pos" element={wrap(<RestaurantPosOrRedirect />)} />
-        <Route path="/local/:localId/pos/cocina" element={wrap(<POSModule />)} />
-        <Route path="/local/:localId/pos/mesa/:mesaId" element={wrap(<MesaDetail />)} />
-        <Route path="/local/:localId/pos/venta-directa" element={wrap(<VentaDirectaView />)} />
-        <Route path="/local/:localId/administrativo/:sectionId?" element={wrap(<AdministrativeModule />)} />
-        <Route path="/local/:localId/rrhh" element={wrap(<HrModule />)} />
+        {workerLocalRoutes(wrap)}
         <Route path="/configuracion" element={<ConfiguracionPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
@@ -259,16 +296,26 @@ export default function AuthenticatedApp() {
     routes = <AdminRoutes assignedLocalId={assignedLocalId} />
   }
 
-  return (
-    <ErrorBoundary>
-      <Router>
-        <OnboardingProvider>
-          {/* Suspense muestra el fallback mientras se descarga el chunk de la ruta. */}
-          <Suspense fallback={<LoadingPage />}>
-            {routes}
-          </Suspense>
-        </OnboardingProvider>
-      </Router>
-    </ErrorBoundary>
+  const app = (
+    <Router>
+      <OnboardingProvider>
+        {/* Suspense muestra el fallback mientras se descarga el chunk de la ruta. */}
+        <Suspense fallback={<LoadingPage />}>
+          {routes}
+        </Suspense>
+      </OnboardingProvider>
+    </Router>
   )
+
+  // El vendedor entra a vender con su turno de hoy abierto: si no lo tiene, se
+  // le pregunta "¿Iniciar turno?" antes de mostrarle el punto de venta.
+  if (WORKER_ROLES.includes(userRole) && assignedLocalId) {
+    return (
+      <ErrorBoundary>
+        <InicioDeTurno localId={assignedLocalId}>{app}</InicioDeTurno>
+      </ErrorBoundary>
+    )
+  }
+
+  return <ErrorBoundary>{app}</ErrorBoundary>
 }

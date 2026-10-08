@@ -7,14 +7,16 @@ import { useTheme } from '../context/ThemeContext'
 import { m, AnimatePresence } from 'framer-motion'
 import { cn } from '@/lib/utils'
 import {
-  LayoutDashboard, Store, ChevronDown, ChevronLeft, ChevronRight,
+  LayoutDashboard, House, ChevronDown, ChevronLeft, ChevronRight,
   DollarSign, FileText, BarChart3, Wallet,
-  Table2, ChefHat, Moon, Sun, UserCircle2,
+  Table2, ChefHat, Moon, Sun, LifeBuoy,
   Package, Truck, ShoppingCart, BookMarked, PackageOpen, UtensilsCrossed,
-  LogOut, Users, RotateCcw, MapPin, Building2, Settings,
+  LogOut, Users, RotateCcw, MapPin, Building2, Settings, History,
 } from 'lucide-react'
 import AunaroSymbol from '@/assets/brand/AunaroSymbol'
-import { displayNameFromEmail } from '@/lib/v2SuperAdminAdapter'
+import { nombreVisible } from '@/lib/altaUsuario'
+import TurnoVendedorBarra from './turno/TurnoVendedorBarra'
+import InicialesPerfil from './InicialesPerfil'
 
 const ROLE_BADGE_LABEL = {
   SUPERADMIN: 'Superadmin',
@@ -30,11 +32,11 @@ import { WORKER_ROLES } from '../constants/roles'
 import { isDirectSaleDemoUser } from '../constants/demoMode'
 import { formatShortAddress } from '../lib/formatAddress'
 import { isV2FeatureEnabled } from '../lib/v2Features'
-import { isAlPasoLocal } from '../lib/salesModel'
+import { isAlPasoLocal, normalizeSalesModel } from '../lib/salesModel'
 
 /* ── key sets for accordion auto-open ──────────────────────────── */
-const ADMIN_KEYS = new Set(['administracion', 'ventas', 'flujo-caja'])
-const POS_KEYS   = new Set(['pos', 'pos-mesas', 'pos-kitchen', 'pos-venta-directa'])
+const ADMIN_KEYS = new Set(['administracion', 'ventas', 'flujo-caja', 'fondo-emergencia'])
+const POS_KEYS   = new Set(['pos', 'pos-mesas', 'pos-kitchen', 'pos-venta-directa', 'pos-mis-turnos'])
 const INV_KEYS   = new Set(['inv-hub', 'inv-prov', 'inv-stock', 'inv-stock-ctrl', 'inv-compras', 'inv-recetas'])
 
 /* ── active-key derived from pathname ──────────────────────────── */
@@ -46,10 +48,12 @@ function deriveActiveKey(pathname) {
   if (pathname.includes('/inventario/recipes'))           return 'inv-recetas'
   if (pathname.includes('/inventario'))                   return 'inv-hub'
   if (pathname.includes('/pos/venta-directa'))            return 'pos-venta-directa'
+  if (pathname.includes('/pos/mis-turnos'))               return 'pos-mis-turnos'
   if (pathname.includes('/pos/cocina'))                   return 'pos-kitchen'
   if (pathname.includes('/pos'))                          return 'pos-mesas'
   if (pathname.includes('/administrativo/ventas'))        return 'ventas'
   if (pathname.includes('/administrativo/flujo-caja'))    return 'flujo-caja'
+  if (pathname.includes('/administrativo/fondo-emergencia')) return 'fondo-emergencia'
   if (pathname.includes('/administrativo'))               return 'administracion'
   if (pathname.includes('/rrhh'))                         return 'hr-hub'
   if (pathname.includes('/usuarios'))                    return 'usuarios'
@@ -64,6 +68,8 @@ function deriveActiveKey(pathname) {
 }
 
 /* ── nav config ─────────────────────────────────────────────────── */
+// Un ítem con `feature` solo se ofrece si esa bandera de V2_FEATURES está
+// encendida (src/lib/v2Features.js): no se muestra lo que el backend no tiene.
 const ACCORDIONS = [
   {
     key: 'administracion',
@@ -72,6 +78,7 @@ const ACCORDIONS = [
     items: [
       { key: 'ventas',      label: 'Ventas',        icon: DollarSign },
       { key: 'flujo-caja',  label: 'Caja y turnos', icon: Wallet     },
+      { key: 'fondo-emergencia', label: 'Fondo de emergencia', icon: LifeBuoy, feature: 'fondoEmergencia' },
     ],
   },
   {
@@ -80,7 +87,7 @@ const ACCORDIONS = [
     icon: Table2,
     items: [
       { key: 'pos-mesas',   label: 'Gestión de Mesas', icon: Table2  },
-      { key: 'pos-kitchen', label: 'Cocina',            icon: ChefHat },
+      { key: 'pos-kitchen', label: 'Cocina',            icon: ChefHat, feature: 'kitchenView' },
     ],
   },
   {
@@ -89,24 +96,25 @@ const ACCORDIONS = [
     icon: PackageOpen,
     items: [
       { key: 'inv-hub',        label: 'Estado Inventario', icon: PackageOpen  },
-      { key: 'inv-prov',       label: 'Proveedores',       icon: Truck        },
+      { key: 'inv-prov',       label: 'Proveedores',       icon: Truck,        feature: 'suppliers' },
       { key: 'inv-stock',      label: 'Menú',              icon: UtensilsCrossed },
       { key: 'inv-stock-ctrl', label: 'Control de stock',  icon: Package      },
-      { key: 'inv-compras',    label: 'Pedidos',           icon: ShoppingCart },
-      { key: 'inv-recetas',    label: 'Recetas',           icon: BookMarked   },
+      { key: 'inv-compras',    label: 'Pedidos',           icon: ShoppingCart, feature: 'weeklyPurchases' },
+      { key: 'inv-recetas',    label: 'Recetas',           icon: BookMarked,   feature: 'recipes' },
     ],
   },
 ]
 
 /* ── Sidebar ────────────────────────────────────────────────────── */
 function Sidebar({ collapsed, onToggle, onClose }) {
-  const { user, userRole, logout } = useAuth()
+  const { user, userRole, logout, assignedLocalId } = useAuth()
   const { business } = useCurrentBusiness()
   const isSuperAdmin = isSuperAdminRole(userRole)
   const isOwner = isAdminNegocioRole(userRole)
   const isWorker = WORKER_ROLES.includes(userRole)
+  const isEncargado = normalizeRoleKey(userRole) === 'ADMIN'
   const isDemoUser = isDirectSaleDemoUser(user?.email)
-  const { locales } = useLocals()
+  const { locales, loading: localesLoading } = useLocals()
   const navigate = useNavigate()
   const { pathname, state: locState } = useLocation()
 
@@ -117,6 +125,8 @@ function Sidebar({ collapsed, onToggle, onClose }) {
     [locales, localId, locState],
   )
   const isAlPaso = isAlPasoLocal(currentLocal) || isDemoUser
+  // El tipo de local llega de /locals: hasta entonces no se sabe qué menú le toca al vendedor.
+  const localKindKnown = isDemoUser || normalizeSalesModel(currentLocal?.sales_model) !== null || !localesLoading
   const activeKey = deriveActiveKey(pathname)
   const navState  = locState?.local ? { local: locState.local } : localId ? { local: { id: localId } } : {}
 
@@ -156,7 +166,8 @@ function Sidebar({ collapsed, onToggle, onClose }) {
     onClose?.()
     switch (item.key) {
       case 'locales':   navigate('/admin'); break
-      case 'usuarios':  navigate('/usuarios'); break
+      // Dentro de una franquicia, los usuarios de ese local sin salir de ella.
+      case 'usuarios':  navigate(localId ? `/local/${localId}/usuarios` : '/usuarios', { state: navState }); break
       case 'gestor':    navigate('/gestor'); break
       case 'gestor-resumen':       navigate('/gestor/resumen'); break
       case 'gestor-auditoria':     navigate('/gestor/auditoria'); break
@@ -167,6 +178,7 @@ function Sidebar({ collapsed, onToggle, onClose }) {
       case 'pos-mesas':     if (localId) navigate(`/local/${localId}/pos`, { state: navState }); break
       case 'pos-kitchen':   if (localId) navigate(`/local/${localId}/pos/cocina`, { state: navState }); break
       case 'pos-venta-directa': if (localId) navigate(`/local/${localId}/pos/venta-directa`, { state: navState }); break
+      case 'pos-mis-turnos':    if (localId) navigate(`/local/${localId}/pos/mis-turnos`, { state: navState }); break
       case 'inv-hub':       if (localId) navigate(`/local/${localId}/inventario`, { state: navState }); break
       case 'inv-prov':      if (localId) navigate(`/local/${localId}/inventario/proveedores`, { state: navState }); break
       case 'inv-stock':     if (localId) navigate(`/local/${localId}/inventario/stock`, { state: navState }); break
@@ -179,16 +191,20 @@ function Sidebar({ collapsed, onToggle, onClose }) {
     }
   }
 
+  // Inicio va primero y se queda también dentro de una franquicia: es la vuelta
+  // a la vista del negocio (franquicias y usuarios).
   const discoverItems = [
-    ...(isOwner ? [{ key: 'locales', label: 'Tus franquicias', icon: Store }] : []),
+    ...(isOwner ? [{ key: 'locales', label: 'Inicio', icon: House }] : []),
     ...(isSuperAdmin ? [{ key: 'gestor', label: 'Gestor de Negocios', icon: Building2 }] : []),
     ...(isSuperAdmin ? [{ key: 'gestor-resumen', label: 'Resumen Global', icon: LayoutDashboard }] : []),
     ...(isSuperAdmin ? [{ key: 'gestor-usuarios', label: 'Usuarios', icon: Users }] : []),
     ...(isSuperAdmin ? [{ key: 'gestor-auditoria', label: 'Auditoría', icon: FileText }] : []),
     ...(isSuperAdmin ? [{ key: 'gestor-observabilidad', label: 'Observabilidad', icon: BarChart3 }] : []),
-    ...(isOwner ? [{ key: 'usuarios', label: 'Usuarios', icon: Users }] : []),
-    ...(isOwner && isV2FeatureEnabled('hrModule') && !localId ? [{ key: 'hr-hub', label: 'Recursos Humanos', icon: Users, disabled: true }] : []),
-    ...(isV2FeatureEnabled('hrModule') && localId ? [{ key: 'hr-hub', label: 'RRHH', icon: Users }] : []),
+    // El dueño ve a los de todos sus locales; el encargado, a los del suyo
+    // (sin local asignado no hay usuarios que mostrarle: el ítem no se ofrece).
+    ...(isOwner || (isEncargado && (assignedLocalId || localId)) ? [{ key: 'usuarios', label: 'Usuarios', icon: Users }] : []),
+    // RRHH está apagado con `hrModule` (src/lib/v2Features.js): ningún rol lo ve.
+    ...(isV2FeatureEnabled('hrModule') && localId && !isWorker ? [{ key: 'hr-hub', label: 'RRHH', icon: Users }] : []),
     ...(!isWorker && localId ? [{ key: 'dashboard', label: 'Dashboard', icon: LayoutDashboard }] : []),
   ]
 
@@ -197,17 +213,24 @@ function Sidebar({ collapsed, onToggle, onClose }) {
   const AL_PASO_POS_ITEMS = [
     { key: 'pos-venta-directa', label: 'Venta directa', icon: DollarSign },
   ]
-  const WORKER_FINANCE_ITEM_KEYS = new Set(['ventas'])
-  const visibleAccordions = isWorker
-    ? (isAlPaso
-        ? ACCORDIONS
-            .filter((s) => s.key === 'pos' || s.key === 'administracion')
-            .map((s) => s.key === 'pos'
-              ? { ...s, label: 'Punto de venta', items: AL_PASO_POS_ITEMS }
-              : { ...s, label: 'Finanzas', items: s.items.filter((i) => WORKER_FINANCE_ITEM_KEYS.has(i.key)) })
-        : ACCORDIONS.filter((s) => s.key === 'pos'))
+  const availableAccordions = ACCORDIONS.map((s) => ({
+    ...s,
+    items: s.items.filter((i) => !i.feature || isV2FeatureEnabled(i.feature)),
+  }))
+  // Vendedor: una entrada para vender según el tipo de local (Venta directa si
+  // es al paso, Gestión de Mesas si tiene mesas) y "Mis turnos". Sin Finanzas,
+  // Inventario, RRHH ni Cocina.
+  const posAccordion = availableAccordions.find((s) => s.key === 'pos')
+  const MIS_TURNOS = { key: 'pos-mis-turnos', label: 'Mis turnos', icon: History }
+  const workerAccordions = !localKindKnown
+    ? []
     : isAlPaso
-      ? ACCORDIONS.map((s) => {
+      ? [{ ...posAccordion, label: 'Punto de venta', items: [...AL_PASO_POS_ITEMS, MIS_TURNOS] }]
+      : [{ ...posAccordion, items: [...posAccordion.items.filter((i) => i.key === 'pos-mesas'), MIS_TURNOS] }]
+  const visibleAccordions = isWorker
+    ? workerAccordions
+    : isAlPaso
+      ? availableAccordions.map((s) => {
           if (s.key === 'pos') return { ...s, label: 'Punto de venta', items: AL_PASO_POS_ITEMS }
           if (s.key === 'inventario') {
             return {
@@ -217,7 +240,7 @@ function Sidebar({ collapsed, onToggle, onClose }) {
           }
           return s
         })
-      : ACCORDIONS
+      : availableAccordions
 
   const navBtn = (item, small = false, hideIcon = false) => {
     const isActive = activeKey === item.key
@@ -298,15 +321,10 @@ function Sidebar({ collapsed, onToggle, onClose }) {
               </span>
             )}
           </div>
-          <div className="h-16 w-16 rounded-full overflow-hidden flex items-center justify-center mb-2.5 shrink-0" style={{ backgroundColor: '#fff' }}>
-            {user?.avatar_url ? (
-              <img src={user.avatar_url} alt="" className="h-full w-full object-cover" />
-            ) : (
-              <UserCircle2 className="h-11 w-11 text-slate-700" strokeWidth={1.5} />
-            )}
-          </div>
+          {/* Sin foto de perfil: las iniciales de la persona. */}
+          <InicialesPerfil user={user} className="h-16 w-16 mb-2.5 text-xl" />
           <p className="font-marca text-base text-[hsl(var(--foreground))] truncate max-w-full">
-            {displayNameFromEmail(user?.email)}
+            {nombreVisible(user)}
           </p>
         </div>
       )}
@@ -326,31 +344,12 @@ function Sidebar({ collapsed, onToggle, onClose }) {
             )}
           </AnimatePresence>
 
-          <div className={cn('rounded-xl border border-[hsl(var(--border))] flex flex-col gap-0.5', collapsed ? 'p-1' : 'p-1.5')}>
-            {discoverItems.map((item) => navBtn(item, false, true))}
-
-            {/* Configuración */}
-            <button
-              onClick={() => { onClose?.(); navigate('/configuracion') }}
-              title={collapsed ? 'Configuración' : undefined}
-              className={cn(
-                'w-full flex items-center gap-2.5 px-3 rounded-lg font-medium transition-colors text-left py-2.5 text-sm',
-                pathname === '/configuracion'
-                  ? 'bg-[hsl(var(--accent))] text-[hsl(var(--foreground))]'
-                  : 'text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--accent))] hover:text-[hsl(var(--foreground))]',
-                collapsed ? 'justify-center px-0' : null,
-              )}
-            >
-              {collapsed && <Settings size={16} className="shrink-0" />}
-              <AnimatePresence>
-                {!collapsed && (
-                  <m.span initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="flex-1 text-left">
-                    Configuración
-                  </m.span>
-                )}
-              </AnimatePresence>
-            </button>
-          </div>
+          {/* Configuración vive en la barra superior, junto al cambio de tema (TopBar). */}
+          {discoverItems.length > 0 && (
+            <div className={cn('rounded-xl border border-[hsl(var(--border))] flex flex-col gap-0.5', collapsed ? 'p-1' : 'p-1.5')}>
+              {discoverItems.map((item) => navBtn(item, false, true))}
+            </div>
+          )}
         </div>
 
         {/* Accordions: menú + submenú expansible */}
@@ -470,7 +469,9 @@ function TopBar({ localId }) {
   const { locales } = useLocals()
   const { business } = useCurrentBusiness()
   const { darkMode, setDarkMode } = useTheme()
-  const { state: locState } = useLocation()
+  const { state: locState, pathname } = useLocation()
+  const navigate = useNavigate()
+  const enConfiguracion = pathname === '/configuracion'
 
   const toggleDarkMode = () => {
     const next = !darkMode
@@ -510,8 +511,24 @@ function TopBar({ localId }) {
         )}
       </div>
 
-      {/* Right: dark mode toggle */}
+      {/* Right: el turno del vendedor (solo en su vista) y los ajustes personales */}
       <div className="shrink-0 flex items-center gap-2">
+        <TurnoVendedorBarra />
+        <button
+          type="button"
+          onClick={() => navigate('/configuracion')}
+          aria-label="Configuración"
+          aria-current={enConfiguracion ? 'page' : undefined}
+          title="Configuración"
+          className={cn(
+            'w-9 h-9 flex items-center justify-center rounded-full transition-colors',
+            enConfiguracion
+              ? 'bg-[hsl(var(--accent))] text-[hsl(var(--foreground))]'
+              : 'text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--accent))] hover:text-[hsl(var(--foreground))]',
+          )}
+        >
+          <Settings size={17} />
+        </button>
         <button
           type="button"
           onClick={toggleDarkMode}

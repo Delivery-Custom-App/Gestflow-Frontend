@@ -8,7 +8,9 @@ import { apiRequest } from './apiClient'
  * Importar un ítem crea el producto en el negocio con precio 0 e inactivo —así
  * lo define el backend, para que el negocio le ponga su precio— y después hay
  * que sumarlo al menú del local (`/local-products`), que es lo que la carta
- * lee. Las dos cosas se hacen aquí para que no queden pasos manuales sueltos.
+ * lee. También se le crea su registro de stock en el local (0 unidades), igual
+ * que al crear un producto a mano, para que aparezca en Control de stock. Todo
+ * se hace aquí para que no queden pasos manuales sueltos.
  */
 
 export async function listarCatalogoMaestro({ salesModel } = {}) {
@@ -18,9 +20,11 @@ export async function listarCatalogoMaestro({ salesModel } = {}) {
 }
 
 /**
- * Trae un ítem al menú del local. Devuelve el producto creado.
+ * Trae un ítem al menú del local y le crea su registro de stock. Devuelve el
+ * producto creado; si quedó en el menú pero sin registro de stock, trae
+ * `avisoStock` con el motivo (no es un error: el producto sí se importó).
  * `localId` es opcional: sin él, el producto queda en el negocio pero fuera de
- * la carta de ese local.
+ * la carta y del inventario de ese local.
  */
 export async function importarItemAlLocal(itemId, { businessId, localId } = {}) {
   const qs = businessId ? `?business_id=${encodeURIComponent(String(businessId))}` : ''
@@ -43,6 +47,19 @@ export async function importarItemAlLocal(itemId, { businessId, localId } = {}) 
       // El producto ya existe en el negocio; lo que falló es sumarlo a la
       // carta, y eso es lo que el usuario vino a hacer: se dice tal cual.
       throw new Error(`${producto.name}: se creó el producto pero no se pudo sumar al menú (${limpiar(error, 'error desconocido')})`)
+    }
+
+    // El catálogo siempre importa con DIRECT_STOCK, así que lleva stock.
+    try {
+      await apiRequest('/inventory', {
+        method: 'POST',
+        body: { local_id: localId, product_id: producto.id, stock_actual: 0, stock_min: 0 },
+      })
+    } catch (error) {
+      // 409: ya tenía su registro de stock, que es lo que se buscaba.
+      if (!/^409\b/.test(String(error?.message || ''))) {
+        return { ...producto, avisoStock: limpiar(error, 'error desconocido') }
+      }
     }
   }
   return producto

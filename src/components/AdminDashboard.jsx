@@ -7,47 +7,45 @@ import CreateLocalDrawer from './CreateLocalDrawer'
 import LocalsGrid from './LocalsGrid'
 import LoadingSpinner from './LoadingSpinner'
 import { apiRequest, getOptionalAuthContext } from '../lib/apiClient'
+import { REFRESCO_FLUJO_MS, cargarUmbral, esVenta, guardarUmbral, rangoDelPeriodo } from '../lib/umbralFlujo'
 
-function getDateRange() {
-  const now    = new Date()
-  const h24ago = new Date(now.getTime() - 24 * 60 * 60 * 1000)
-  return { dateFrom: h24ago.toISOString(), dateTo: now.toISOString() }
-}
+const ordenesEntre = (localId, desde, hasta, token) => apiRequest(
+  `/orders?local_id=${localId}&date_from=${encodeURIComponent(desde.toISOString())}&date_to=${encodeURIComponent(hasta.toISOString())}`,
+  { token },
+)
 
 function AdminDashboard() {
   const navigate   = useNavigate()
   const location   = useLocation()
   const { userRole } = useAuth()
-  // El backend autoriza el borrado de locales a SUPERADMIN y a ADMIN_NEGOCIO
-  // (solo los de su propio negocio). Esta pantalla la ve el dueño del negocio:
-  // condicionarla a SUPERADMIN dejaba la sección inalcanzable.
-  const puedeEliminarLocales =
-    isSuperAdminRole(userRole) || isAdminNegocioRole(userRole)
+  // El dueño ya no elimina franquicias desde Inicio: queda reservado al
+  // superadmin (soporte de la empresa). El código de borrado se conserva.
+  const puedeEliminarLocales = isSuperAdminRole(userRole)
+  // /usuarios solo está montado en las rutas del dueño.
+  const esDueno = isAdminNegocioRole(userRole)
 
   const [isDrawerOpen, setIsDrawerOpen] = useState(false)
   const [salesCounts, setSalesCounts]   = useState({})
   const [deltaCounts, setDeltaCounts]   = useState({})
+  // Umbral de flujo: uno solo para todos los locales, guardado en este navegador (B-07).
+  const [umbral, setUmbral]             = useState(cargarUmbral)
   const { locales, loading, error, refetch } = useLocals()
 
-  const fetchSalesCounts = useCallback(async (locals) => {
+  /** Ventas (órdenes no canceladas) de cada local en el período del umbral. */
+  const fetchSalesCounts = useCallback(async (locals, horas) => {
     if (!locals.length) return
     try {
       const { token } = await getOptionalAuthContext()
       if (!token) return
-      const { dateFrom, dateTo } = getDateRange()
-      const from = new Date(dateFrom)
-      const to   = new Date(dateTo)
+      const { desde, hasta } = rangoDelPeriodo(horas)
       const results = await Promise.all(
         locals.map((l) =>
-          apiRequest(
-            `/orders?local_id=${l.id}&date_from=${encodeURIComponent(dateFrom)}&date_to=${encodeURIComponent(dateTo)}`,
-            { token }
-          )
+          ordenesEntre(l.id, desde, hasta, token)
             .then((orders) => {
               if (!Array.isArray(orders)) return { id: l.id, count: 0 }
               const count = orders.filter((o) => {
                 const d = new Date(o.created_at)
-                return d >= from && d <= to
+                return esVenta(o) && d >= desde && d <= hasta
               }).length
               return { id: l.id, count }
             })
@@ -62,6 +60,7 @@ function AdminDashboard() {
     }
   }, [])
 
+  /** Para la flecha: ventas de la última hora y de la hora anterior. */
   const fetchDeltaCounts = useCallback(async (locals) => {
     if (!locals.length) return
     try {
@@ -72,14 +71,12 @@ function AdminDashboard() {
       const h2ago = new Date(now.getTime() - 120 * 60 * 1000)
       const results = await Promise.all(
         locals.map((l) =>
-          apiRequest(
-            `/orders?local_id=${l.id}&date_from=${encodeURIComponent(h2ago.toISOString())}&date_to=${encodeURIComponent(now.toISOString())}`,
-            { token }
-          )
+          ordenesEntre(l.id, h2ago, now, token)
             .then((orders) => {
               if (!Array.isArray(orders)) return { id: l.id, current: 0, prev: 0 }
-              const current = orders.filter((o) => new Date(o.created_at) >= h1ago).length
-              const prev    = orders.filter((o) => new Date(o.created_at) <  h1ago).length
+              const ventas  = orders.filter(esVenta)
+              const current = ventas.filter((o) => new Date(o.created_at) >= h1ago).length
+              const prev    = ventas.filter((o) => new Date(o.created_at) <  h1ago).length
               return { id: l.id, current, prev }
             })
             .catch(() => ({ id: l.id, current: 0, prev: 0 }))
@@ -93,13 +90,22 @@ function AdminDashboard() {
     }
   }, [])
 
+  // Cuenta al entrar, al cambiar el período, cada minuto y al volver a la pestaña.
   useEffect(() => {
-    if (!loading && locales.length) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- fetch async, setState ocurre tras el await (Promise.all), no sincrónico en el efecto
-      fetchSalesCounts(locales)
+    if (loading || !locales.length) return undefined
+    const contar = () => {
+      fetchSalesCounts(locales, umbral.horas)
       fetchDeltaCounts(locales)
     }
-  }, [loading, locales, fetchSalesCounts, fetchDeltaCounts])
+    contar()
+    const intervalo = setInterval(contar, REFRESCO_FLUJO_MS)
+    window.addEventListener('focus', contar)
+    return () => { clearInterval(intervalo); window.removeEventListener('focus', contar) }
+  }, [loading, locales, umbral.horas, fetchSalesCounts, fetchDeltaCounts])
+
+  const handleGuardarUmbral = useCallback((nuevo) => {
+    setUmbral(guardarUmbral(nuevo))
+  }, [])
 
   useEffect(() => {
     if (loading) return
@@ -145,7 +151,7 @@ function AdminDashboard() {
 
   const handleRefresh = () => {
     refetch()
-    fetchSalesCounts(locales)
+    fetchSalesCounts(locales, umbral.horas)
     fetchDeltaCounts(locales)
   }
 
@@ -156,8 +162,11 @@ function AdminDashboard() {
             locales={locales}
             onLocalSelect={(local) => navigate(`/local/${local.id}/dashboard`, { state: { local } })}
             onCreateLocal={() => setIsDrawerOpen(true)}
+            onShowUsers={esDueno ? () => navigate('/usuarios') : undefined}
             salesCounts={salesCounts}
             deltaCounts={deltaCounts}
+            umbral={umbral}
+            onGuardarUmbral={handleGuardarUmbral}
             canDeleteLocals={puedeEliminarLocales}
             onRefresh={handleRefresh}
           />

@@ -16,6 +16,7 @@ import RecipeCustomizer from './menu-picker/RecipeCustomizer'
 import { calcItemPrice, isCompleto, productKey } from './menu-picker/menuPricing'
 import MultiPaymentModal from './MultiPaymentModal'
 import MercadoPagoModal from './MercadoPagoModal'
+import ComandaActions from './ComandaActions'
 import {
   STATUS_BADGE,
   STATUS_LABEL,
@@ -28,7 +29,7 @@ import {
 
 const EMPTY_CUSTOMIZATION = { embutido: null, agregados: [] }
 
-export default function MesaWorkspace({ mesa, localId, cajaId, onBack, onTableUpdated }) {
+export default function MesaWorkspace({ mesa, atencion = null, localId, cajaId, onBack, onTableUpdated }) {
   const { detail, loading, error: mesaError, refresh } = useMesaDetail(mesa.id)
   const { updateOrderStatus } = useOrderManagement()
   const { data: menuData, loading: menuLoading, fetch: fetchMenu } = useMenuPOS(localId)
@@ -341,6 +342,12 @@ export default function MesaWorkspace({ mesa, localId, cajaId, onBack, onTableUp
           >
             <Printer size={18} />
           </Button>
+          {/* La comanda de cocina se ve e imprime desde la mesa: la pantalla de Cocina está apagada (`kitchenView`). */}
+          <ComandaActions
+            orderId={firstOrder?.id}
+            createdAt={firstOrder?.created_at}
+            className="h-11 rounded-xl"
+          />
           {isV2FeatureEnabled('splitPayments') && firstOrder?.id && (
             <Button
               onClick={() => setShowSplitModal(true)}
@@ -485,6 +492,12 @@ export default function MesaWorkspace({ mesa, localId, cajaId, onBack, onTableUp
                 <span className="hidden md:inline text-[hsl(var(--muted-foreground))]">·</span>
                 <span className="hidden md:inline text-xs text-[hsl(var(--muted-foreground))]">{mesa.zona}</span>
               </>
+            )}
+            {atencion && (
+              <span className="ml-auto truncate text-xs text-[hsl(var(--muted-foreground))]">
+                Atiende: <span className="font-semibold text-[hsl(var(--foreground))]">{atencion.atiende}</span>
+                {atencion.antes && <> · antes: {atencion.antes}</>}
+              </span>
             )}
           </div>
 

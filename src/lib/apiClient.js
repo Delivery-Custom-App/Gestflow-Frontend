@@ -220,14 +220,22 @@ function mapRoleToV2(role) {
 }
 
 function displayNameFromUser(u) {
+  const completo = [u?.first_name, u?.last_name].map((s) => String(s || '').trim()).filter(Boolean).join(' ')
+  if (completo) return completo
   if (u?.name) return u.name
+  // Sin nombre cargado: el mismo que muestran Configuración y el menú ("centro.admin" → "Centro Admin").
   const email = String(u?.email || '')
-  const local = email.split('@')[0]
-  return local || '—'
+  if (!email) return '—'
+  const local = email.split('@')[0] || ''
+  return local.replace(/[._-]+/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()).trim() || email
 }
 
-/** V2: POST /users (sin name/phone). */
-export async function createUser({ name: _name, email, password, role, local_id, business_id }) {
+/**
+ * V2: POST /users. El nombre viaja como first_name/last_name (antes se
+ * descartaba y el usuario quedaba sin nombre). `rut` solo se envía si viene:
+ * el alta lo agrega cuando la bandera `userRut` está encendida (ver B-04).
+ */
+export async function createUser({ first_name, last_name, rut, email, password, role, local_id, business_id }) {
   let resolvedBusinessId = business_id || null
   if (!resolvedBusinessId && local_id) {
     const local = await apiRequest(`/locals/${local_id}`)
@@ -241,6 +249,9 @@ export async function createUser({ name: _name, email, password, role, local_id,
       role: mapRoleToV2(role),
       local_id: local_id || null,
       business_id: resolvedBusinessId,
+      first_name: first_name || null,
+      last_name: last_name || null,
+      ...(rut ? { rut } : {}),
     },
   })
 }
@@ -267,13 +278,6 @@ export async function changeMyPassword({ current_password, new_password }) {
   return apiRequest('/auth/change-password', {
     method: 'POST',
     body: { current_password, new_password },
-  })
-}
-
-export async function updateMyAvatar(avatar_url) {
-  return apiRequest('/auth/me', {
-    method: 'PATCH',
-    body: { avatar_url },
   })
 }
 

@@ -1,6 +1,6 @@
 /**
  * Agregados de venta a nivel negocio (todas las franquicias) para los cards
- * de "venta semanal" y "comparativa mensual" del resumen de Tus Franquicias.
+ * de "venta semanal" y "comparativa mensual" del resumen del Inicio del dueño.
  * Reutiliza /orders por local (mismo endpoint que el indicador de Flujo),
  * sumando `total` de pedidos con status COMPLETED.
  */

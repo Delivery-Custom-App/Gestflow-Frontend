@@ -1,8 +1,8 @@
-import { useState, useMemo } from 'react'
+import { useState } from 'react'
 import { m, AnimatePresence } from 'framer-motion'
-import { Pencil, ChevronRight, ChevronDown } from 'lucide-react'
+import { Pencil, PackagePlus, ClipboardCheck, PlayCircle } from 'lucide-react'
 import StockStatusBadge from './StockStatusBadge'
-import { stockLevelFromRow } from './stockAlertUtils'
+import { getStockAlertLevel } from './stockAlertUtils'
 
 const ROW_CLASS =
   'border-b border-[hsl(var(--border))] transition-colors hover:bg-[hsl(var(--muted)/0.5)] data-[state=selected]:bg-[hsl(var(--accent))]'
@@ -46,6 +46,7 @@ function ProductsTable({
   onPatchProductName,
   onPatchCategory,
   onDeleteItem,
+  onRegistrar,
   statusFilters = [],
   categoriesCatalog = [],
 }) {
@@ -53,42 +54,13 @@ function ProductsTable({
   const [nameDraft, setNameDraft] = useState('')
   const [maxStockDraft, setMaxStockDraft] = useState('')
   const [minStockDraft, setMinStockDraft] = useState('')
+  const [criticalStockDraft, setCriticalStockDraft] = useState('')
   const [costDraft, setCostDraft] = useState('')
   const [categoryDraft, setCategoryDraft] = useState(NO_CATEGORY_VALUE)
   const [formError, setFormError] = useState('')
   const [saving, setSaving] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [deleting, setDeleting] = useState(false)
-  const [expandedGroups, setExpandedGroups] = useState(new Set())
-
-  // Group items by product name; groups with 1 row render as-is, >1 render as expandable
-  const groupedItems = useMemo(() => {
-    const map = new Map()
-    for (const row of items) {
-      const raw = (row.product_name || row.name || '').trim()
-      const display = raw ? raw.charAt(0).toUpperCase() + raw.slice(1).toLowerCase() : ''
-      const key = raw.toLowerCase()
-      if (!map.has(key)) map.set(key, { key, display, rows: [] })
-      map.get(key).rows.push(row)
-    }
-    return Array.from(map.values())
-  }, [items])
-
-  // Nuevos items => grupos colapsados (ajuste durante el render, sin efecto).
-  const [prevItems, setPrevItems] = useState(items)
-  if (items !== prevItems) {
-    setPrevItems(items)
-    setExpandedGroups(new Set())
-  }
-
-  const toggleGroup = (key) => {
-    setExpandedGroups((prev) => {
-      const next = new Set(prev)
-      if (next.has(key)) next.delete(key)
-      else next.add(key)
-      return next
-    })
-  }
 
   const showPagination = !error && !loading && totalPages > 1
   const showCount = !error && !loading && totalCount > 0
@@ -98,6 +70,7 @@ function ProductsTable({
     setNameDraft('')
     setMaxStockDraft('')
     setMinStockDraft('')
+    setCriticalStockDraft('')
     setCostDraft('')
     setCategoryDraft(NO_CATEGORY_VALUE)
     setFormError('')
@@ -109,6 +82,7 @@ function ProductsTable({
     setNameDraft(row.product_name || row.name || '')
     setMaxStockDraft(row.stock_max != null ? String(row.stock_max) : '')
     setMinStockDraft(String(row.stock_min ?? 0))
+    setCriticalStockDraft(row.stock_critical != null ? String(row.stock_critical) : '')
     setCostDraft(String(Math.round(Number(row.unit_cost_clp ?? 0))))
     setCategoryDraft(row.category_id ? String(row.category_id) : NO_CATEGORY_VALUE)
     setFormError('')
@@ -120,6 +94,7 @@ function ProductsTable({
     const newName      = nameDraft.trim()
     const maxStockValue = maxStockDraft.trim() === '' ? null : Number(maxStockDraft)
     const minStockValue = Number(minStockDraft)
+    const criticalStockValue = criticalStockDraft.trim() === '' ? null : Number(criticalStockDraft)
     const unitCostValue = Number(costDraft)
 
     if (!newName) { setFormError('El nombre no puede estar vacío.'); return }
@@ -128,6 +103,16 @@ function ProductsTable({
     }
     if (!Number.isFinite(minStockValue) || minStockValue < 0) {
       setFormError('El stock mínimo debe ser un número válido mayor o igual a 0.'); return
+    }
+    if (criticalStockValue !== null && (!Number.isFinite(criticalStockValue) || criticalStockValue < 0)) {
+      setFormError('El nivel crítico debe ser un número válido mayor o igual a 0.'); return
+    }
+    // El backend exige crítico ≤ mínimo (y la base, máximo ≥ mínimo).
+    if (criticalStockValue !== null && criticalStockValue > minStockValue) {
+      setFormError('El nivel crítico no puede ser mayor que el mínimo.'); return
+    }
+    if (maxStockValue !== null && maxStockValue > 0 && maxStockValue < minStockValue) {
+      setFormError('El stock máximo no puede ser menor que el mínimo.'); return
     }
     if (!Number.isFinite(unitCostValue) || unitCostValue <= 0) {
       setFormError('El costo unitario debe ser un número válido mayor a 0.'); return
@@ -151,6 +136,10 @@ function ProductsTable({
       const stockPatchBody = {}
       if (nextMaxStock !== null && nextMaxStock !== currentMaxStock) stockPatchBody.max_stock = nextMaxStock
       if (nextMinStock !== currentMinStock) stockPatchBody.min_stock = nextMinStock
+      const currentCriticalStock = editingRow.stock_critical != null ? Number(editingRow.stock_critical) : null
+      if (criticalStockValue !== null && Math.floor(criticalStockValue) !== currentCriticalStock) {
+        stockPatchBody.critical_stock = Math.floor(criticalStockValue)
+      }
       if (onPatchStock && Object.keys(stockPatchBody).length > 0) {
         await onPatchStock(editingRow, stockPatchBody)
       }
@@ -188,16 +177,16 @@ function ProductsTable({
         <Table className="w-full table-fixed text-xs">
           <TableHeader>
             <TableRow className="bg-[hsl(var(--muted)/0.4)]">
-              <TableHead className="w-[14%] font-semibold">Producto</TableHead>
-              <TableHead className="w-[10%] font-semibold">Categoría</TableHead>
-              <TableHead className="w-[12%] font-semibold">Proveedor</TableHead>
-              <TableHead className="w-[8%] font-semibold text-right text-emerald-700">Actual</TableHead>
-              <TableHead className="w-[7%] font-semibold text-right text-amber-600">Mín.</TableHead>
-              <TableHead className="w-[7%] font-semibold text-right text-sky-600">Máx.</TableHead>
-              <TableHead className="w-[10%] font-semibold text-right">Costo (CLP)</TableHead>
-              <TableHead className="w-[11%] font-semibold text-right">Val. total</TableHead>
+              <TableHead className="w-[15%] font-semibold">Producto</TableHead>
+              <TableHead className="w-[11%] font-semibold">Categoría</TableHead>
+              <TableHead className="w-[7%] font-semibold text-right text-emerald-700">Actual</TableHead>
+              <TableHead className="w-[6%] font-semibold text-right text-amber-600">Mín.</TableHead>
+              <TableHead className="w-[6%] font-semibold text-right text-red-600">Crítico</TableHead>
+              <TableHead className="w-[6%] font-semibold text-right text-sky-600">Máx.</TableHead>
+              <TableHead className="w-[8%] font-semibold text-right">Costo (CLP)</TableHead>
+              <TableHead className="w-[8%] font-semibold text-right">Val. total</TableHead>
               <TableHead className="w-[9%] font-semibold">Estado</TableHead>
-              <TableHead className="w-[12%] font-semibold">Gestionar</TableHead>
+              <TableHead className="w-[24%] font-semibold">Gestionar</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -249,145 +238,97 @@ function ProductsTable({
             ) : null}
             <AnimatePresence initial={false}>
             {!error && !loading
-              ? groupedItems.flatMap(({ key, display, rows }, gIdx) => {
-                  const isMulti = rows.length > 1
-                  const isExpanded = expandedGroups.has(key)
-
-                  const renderDataRow = (row, index, isSubRow = false) => {
-                    const stockCurrent = Number(row.stock_current ?? 0)
-                    const unitCost = Number(row.unit_cost_clp ?? 0)
-                    const total =
-                      row.total_value != null && row.total_value !== ''
-                        ? Number(row.total_value)
-                        : stockCurrent * unitCost
-                    const stockMin = row.stock_min == null ? '—' : String(row.stock_min)
-                    const stockMax = row.stock_max == null ? '—' : String(row.stock_max)
-                    const level = stockLevelFromRow(row)
-                    const actualCls = level === 'critical' ? 'text-red-600 font-bold' : level === 'low' ? 'text-amber-600 font-semibold' : 'text-emerald-600 font-semibold'
-                    const categoryTone = getCategoryTone({ id: row.category_id, name: row.category_name })
-                    return (
-                      <m.tr
-                        key={row.inventory_id ?? row.product_id}
-                        className={`${ROW_CLASS} ${isSubRow ? 'bg-[hsl(var(--muted)/0.15)]' : ''}`}
-                        style={{ boxShadow: `inset 3px 0 0 ${categoryTone.rail}` }}
-                        initial={{ opacity: 0, y: isSubRow ? -4 : 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, x: -10 }}
-                        transition={{ delay: index * 0.03, duration: 0.2, ease: 'easeOut' }}
-                      >
-                        <TableCell>
-                          {isSubRow ? (
-                            <div className="pl-4 flex items-center gap-1 truncate">
-                              <span className="text-[hsl(var(--muted-foreground))] select-none shrink-0">└</span>
-                              <span className="font-medium truncate">{display}</span>
-                            </div>
-                          ) : (
-                            <div className="font-bold truncate">{display || '—'}</div>
-                          )}
-                        </TableCell>
-                        <TableCell className="truncate">
-                          {row.category_name ? (
-                            <span
-                              className="inline-flex max-w-full items-center rounded-full border px-2 py-1 text-[11px] font-semibold leading-none"
-                              style={{ backgroundColor: categoryTone.bg, borderColor: categoryTone.border, color: categoryTone.text }}
-                            >
-                              <span className="truncate">{row.category_name}</span>
-                            </span>
-                          ) : '—'}
-                        </TableCell>
-                        <TableCell className="truncate font-medium">
-                          {row.supplier_name?.trim() || '—'}
-                        </TableCell>
-                        <TableCell className={`text-right tabular-nums ${actualCls}`}>{stockCurrent}</TableCell>
-                        <TableCell className="text-right tabular-nums text-amber-600 font-medium">{stockMin}</TableCell>
-                        <TableCell className="text-right tabular-nums text-sky-600 font-medium">{stockMax}</TableCell>
-                        <TableCell className="text-right tabular-nums">{formatClp(unitCost)}</TableCell>
-                        <TableCell className="text-right tabular-nums">{formatClp(total)}</TableCell>
-                        <TableCell>
-                          <StockStatusBadge row={row} />
-                        </TableCell>
-                        <TableCell>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => openEditModal(row)}
-                            className="h-7 px-2 text-xs gap-1 text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--primary))]"
-                          >
-                            <Pencil size={12} />
-                            Editar
-                          </Button>
-                        </TableCell>
-                      </m.tr>
-                    )
-                  }
-
-                  if (!isMulti) {
-                    return [renderDataRow(rows[0], gIdx)]
-                  }
-
-                  // Multi-supplier group: aggregate header + expandable sub-rows
-                  const totalStock = rows.reduce((s, r) => s + Number(r.stock_current ?? 0), 0)
-                  const totalValue = rows.reduce((s, r) => {
-                    const sc = Number(r.stock_current ?? 0)
-                    const uc = Number(r.unit_cost_clp ?? 0)
-                    return s + (r.total_value != null && r.total_value !== '' ? Number(r.total_value) : sc * uc)
-                  }, 0)
-
-                  const headerRow = (
-                    (() => {
-                      const categoryTone = getCategoryTone({ id: rows[0].category_id, name: rows[0].category_name })
-                      return (
+              ? items.map((row, index) => {
+                  const raw = (row.product_name || row.name || '').trim()
+                  const display = raw ? raw.charAt(0).toUpperCase() + raw.slice(1).toLowerCase() : ''
+                  const stockCurrent = Number(row.stock_current ?? 0)
+                  const unitCost = Number(row.unit_cost_clp ?? 0)
+                  const total =
+                    row.total_value != null && row.total_value !== ''
+                      ? Number(row.total_value)
+                      : stockCurrent * unitCost
+                  const stockMin = row.stock_min == null ? '—' : String(row.stock_min)
+                  const stockMax = row.stock_max == null ? '—' : String(row.stock_max)
+                  const stockCritical = row.stock_critical == null ? '—' : String(row.stock_critical)
+                  const sinRegistro = row.sin_registro === true
+                  // El color del número sigue al mismo estado que la insignia.
+                  const level = getStockAlertLevel(row)
+                  const actualCls = level === 'critical' ? 'text-red-600 font-bold' : level === 'low' ? 'text-amber-600 font-semibold' : 'text-emerald-600 font-semibold'
+                  const categoryTone = getCategoryTone({ id: row.category_id, name: row.category_name })
+                  return (
                     <m.tr
-                      key={`grp-${key}`}
-                      className={`${ROW_CLASS} cursor-pointer select-none`}
+                      key={row.inventory_id ?? row.product_id}
+                      className={ROW_CLASS}
                       style={{ boxShadow: `inset 3px 0 0 ${categoryTone.rail}` }}
-                      onClick={() => toggleGroup(key)}
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0, x: -10 }}
-                      transition={{ delay: gIdx * 0.04, duration: 0.22, ease: 'easeOut' }}
+                      transition={{ delay: index * 0.03, duration: 0.2, ease: 'easeOut' }}
                     >
                       <TableCell>
-                        <div className="flex items-center gap-2 font-bold">
-                          {isExpanded
-                            ? <ChevronDown size={14} className="shrink-0 text-[hsl(var(--muted-foreground))]" />
-                            : <ChevronRight size={14} className="shrink-0 text-[hsl(var(--muted-foreground))]" />
-                          }
-                          {display || '—'}
-                          <span className="text-[10px] font-semibold bg-[hsl(var(--muted))] text-[hsl(var(--muted-foreground))] rounded px-1.5 py-0.5 ml-0.5">
-                            {rows.length} proveedores
-                          </span>
-                        </div>
+                        <div className="font-bold truncate">{display || '—'}</div>
                       </TableCell>
                       <TableCell className="truncate">
-                        {rows[0].category_name ? (
+                        {row.category_name ? (
                           <span
                             className="inline-flex max-w-full items-center rounded-full border px-2 py-1 text-[11px] font-semibold leading-none"
                             style={{ backgroundColor: categoryTone.bg, borderColor: categoryTone.border, color: categoryTone.text }}
                           >
-                            <span className="truncate">{rows[0].category_name}</span>
+                            <span className="truncate">{row.category_name}</span>
                           </span>
                         ) : '—'}
                       </TableCell>
-                      <TableCell className="text-[hsl(var(--muted-foreground))] italic">Varios</TableCell>
-                      <TableCell className="text-right tabular-nums">{totalStock}</TableCell>
-                      <TableCell className="text-right text-[hsl(var(--muted-foreground))]">—</TableCell>
-                      <TableCell className="text-right text-[hsl(var(--muted-foreground))]">—</TableCell>
-                      <TableCell className="text-right text-[hsl(var(--muted-foreground))]">—</TableCell>
-                      <TableCell className="text-right tabular-nums">{formatClp(totalValue)}</TableCell>
-                      <TableCell className="text-[hsl(var(--muted-foreground))]">—</TableCell>
-                      <TableCell />
+                      <TableCell className={`text-right tabular-nums ${sinRegistro ? 'text-[hsl(var(--muted-foreground))]' : actualCls}`}>{sinRegistro ? '—' : stockCurrent}</TableCell>
+                      <TableCell className="text-right tabular-nums text-amber-600 font-medium">{stockMin}</TableCell>
+                      <TableCell className="text-right tabular-nums text-red-600 font-medium">{stockCritical}</TableCell>
+                      <TableCell className="text-right tabular-nums text-sky-600 font-medium">{stockMax}</TableCell>
+                      <TableCell className="text-right tabular-nums">{formatClp(unitCost)}</TableCell>
+                      <TableCell className="text-right tabular-nums">{sinRegistro ? '—' : formatClp(total)}</TableCell>
+                      <TableCell>
+                        {sinRegistro
+                          ? <span className="text-[11px] font-medium text-[hsl(var(--muted-foreground))]">Sin stock registrado</span>
+                          : <StockStatusBadge row={row} />}
+                      </TableCell>
+                      <TableCell>
+                        {sinRegistro ? (
+                          <Button type="button" variant="outline" size="sm" onClick={() => onRegistrar?.(row, 'empezar')}
+                            className="h-7 px-2 text-xs gap-1">
+                            <PlayCircle size={12} />
+                            Empezar a controlar stock
+                          </Button>
+                        ) : (
+                          <div className="flex flex-wrap items-center gap-1">
+                            {onRegistrar && (
+                              <>
+                                <Button type="button" variant="ghost" size="sm" onClick={() => onRegistrar(row, 'sumar')}
+                                  aria-label={`Sumar unidades a ${display}`} title="Llegó mercadería: sumar unidades"
+                                  className="h-7 px-2 text-xs gap-1 text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--primary))]">
+                                  <PackagePlus size={12} />
+                                  Sumar
+                                </Button>
+                                <Button type="button" variant="ghost" size="sm" onClick={() => onRegistrar(row, 'corregir')}
+                                  aria-label={`Corregir conteo de ${display}`} title="El conteo físico no coincide: corregir"
+                                  className="h-7 px-2 text-xs gap-1 text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--primary))]">
+                                  <ClipboardCheck size={12} />
+                                  Corregir
+                                </Button>
+                              </>
+                            )}
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => openEditModal(row)}
+                              className="h-7 px-2 text-xs gap-1 text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--primary))]"
+                            >
+                              <Pencil size={12} />
+                              Editar
+                            </Button>
+                          </div>
+                        )}
+                      </TableCell>
                     </m.tr>
-                      )
-                    })()
                   )
-
-                  const subRows = isExpanded
-                    ? rows.map((row, i) => renderDataRow(row, i, true))
-                    : []
-
-                  return [headerRow, ...subRows]
                 })
               : null}
             </AnimatePresence>
@@ -471,7 +412,20 @@ function ProductsTable({
             ) : null}
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-3 gap-4">
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="edit-critical-stock" className="text-sm font-semibold">Nivel crítico</Label>
+              <Input
+                id="edit-critical-stock"
+                type="number"
+                min={0}
+                placeholder="Sin definir"
+                value={criticalStockDraft}
+                onChange={(e) => setCriticalStockDraft(e.target.value)}
+                disabled={saving}
+                className="h-10"
+              />
+            </div>
             <div className="flex flex-col gap-2">
               <Label htmlFor="edit-min-stock" className="text-sm font-semibold">Stock Mínimo</Label>
               <Input
@@ -497,6 +451,9 @@ function ProductsTable({
                 className="h-10"
               />
             </div>
+            <p className="col-span-3 -mt-2 text-xs text-[hsl(var(--muted-foreground))]">
+              En el mínimo el producto queda en estado bajo; en el nivel crítico, en crítico. El crítico no puede ser mayor que el mínimo.
+            </p>
           </div>
 
           <div className="flex flex-col gap-2">

@@ -4,12 +4,18 @@ import { MemoryRouter, Route, Routes } from 'react-router'
 import AdministrativeModule from './AdministrativeModule'
 import userEvent from '@testing-library/user-event'
 import { AuthProvider } from '../context/AuthContext'
+import { listUsers } from '../lib/apiClient'
+import { V2_FEATURES } from '../lib/v2Features'
 import { createCaja, getCajasByLocal, getCajasFisicasByLocal, getOrdersByLocal, getResumenDiario, getVentasIndicadores, listarCajasFisicas } from '../lib/administrativeApi'
 
 vi.mock('../lib/apiClient', async (importOriginal) => ({
   ...(await importOriginal()),
   getAuthContext: vi.fn(() => Promise.resolve({ token: 'test-token' })),
   apiRequest: vi.fn(() => Promise.resolve([])),
+  listUsers: vi.fn(() => Promise.resolve([
+    { id: 'u-ana', first_name: 'Ana', last_name: 'Rojas' },
+    { id: 'u-beto', first_name: 'Beto', last_name: 'Soto' },
+  ])),
 }))
 
 vi.mock('../lib/inventoryApi', async (importOriginal) => ({
@@ -44,8 +50,8 @@ const mockOrders = [
 ]
 
 const mockCajas = [
-  { id: 'caja-1', name: 'Turno 1', caja_fisica_id: 'cf-1', business_date: '2026-09-13', is_active: true, mp: null },
-  { id: 'caja-2', name: 'Turno 2', caja_fisica_id: 'cf-2', business_date: '2026-09-12', is_active: false, status: 'closed', mp: null },
+  { id: 'caja-1', name: 'Turno 1', caja_fisica_id: 'cf-1', cashier_user_id: 'u-ana', business_date: '2026-09-13', is_active: true, mp: null },
+  { id: 'caja-2', name: 'Turno 2', caja_fisica_id: 'cf-2', cashier_user_id: 'u-beto', business_date: '2026-09-12', is_active: false, status: 'closed', mp: null },
 ]
 
 const mockIndicadores = {
@@ -114,6 +120,24 @@ describe('AdministrativeModule', () => {
     vi.clearAllMocks()
   })
 
+  it('con la bandera fondoEmergencia apagada, la sección no existe y su dirección lleva a Ventas', async () => {
+    expect(V2_FEATURES.fondoEmergencia).toBe(false)
+    renderAdmin('fondo-emergencia')
+    expect(await screen.findByRole('heading', { name: 'Ventas' })).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Fondo de emergencia' })).not.toBeInTheDocument()
+  })
+
+  it('con la bandera encendida, Administración tiene la sección "Fondo de emergencia"', async () => {
+    V2_FEATURES.fondoEmergencia = true
+    try {
+      renderAdmin('fondo-emergencia', 'Admin')
+      expect(await screen.findByRole('heading', { name: 'Fondo de emergencia' })).toBeInTheDocument()
+      expect(await screen.findByText(/todavía no tiene fondo de emergencia/)).toBeInTheDocument()
+    } finally {
+      V2_FEATURES.fondoEmergencia = false
+    }
+  })
+
   it.each(['rendiciones', 'reportes', 'alertas', 'bonos', 'dashboard'])(
     'redirige la sección eliminada "%s" a Ventas',
     async (section) => {
@@ -151,12 +175,22 @@ describe('AdministrativeModule', () => {
 
     const boton = await screen.findByRole('button', { name: 'Cargar detalle de órdenes' })
     expect(getOrdersByLocal).not.toHaveBeenCalled()
-    expect(screen.queryByRole('heading', { name: 'Ventas del Día' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Histórico y Consolidados' })).not.toBeInTheDocument()
 
     await user.click(boton)
 
     await waitFor(() => expect(getOrdersByLocal).toHaveBeenCalledWith('loc-1', 'test-token'))
-    expect(await screen.findByRole('heading', { name: 'Ventas del Día' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Histórico y Consolidados' })).toBeInTheDocument()
+  })
+
+  it('el panel "Ventas del Día" ya no se muestra al cargar el detalle', async () => {
+    const user = userEvent.setup()
+    renderAdmin('ventas')
+
+    await user.click(await screen.findByRole('button', { name: 'Cargar detalle de órdenes' }))
+    expect(await screen.findByRole('heading', { name: 'Histórico y Consolidados' })).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Ventas del Día' })).not.toBeInTheDocument()
+    expect(screen.queryByText(/últimas 24 h/)).not.toBeInTheDocument()
   })
 
   it('Caja y turnos vincula MercadoPago desde las cajas físicas, no desde los turnos', async () => {
@@ -276,11 +310,14 @@ describe('AdministrativeModule', () => {
     expect(getCajasByLocal).toHaveBeenCalledWith('loc-1', 'test-token')
   })
 
-  it('cada venta del día ofrece ver su boleta', async () => {
+  it('la boleta de cada venta se ve desde el detalle de órdenes del histórico', async () => {
     const user = userEvent.setup()
     renderAdmin('ventas')
 
     await user.click(await screen.findByRole('button', { name: 'Cargar detalle de órdenes' }))
+    // Sin desplegar un período no hay órdenes a la vista.
+    expect(screen.queryByRole('button', { name: 'Boleta' })).not.toBeInTheDocument()
+    await user.click(await screen.findByRole('button', { name: /2 ventas/ }))
     const botones = await screen.findAllByRole('button', { name: 'Boleta' })
     expect(botones).toHaveLength(mockOrders.length)
 
@@ -406,6 +443,52 @@ describe('AdministrativeModule', () => {
 
     const panel = (await screen.findByRole('heading', { name: 'Turnos de caja' })).closest('article')
     expect(within(panel).getByText('Caja principal')).toBeInTheDocument()
+  })
+
+  it.each(['Admin', 'Admin Negocio'])('%s ve de quién es cada turno y lo filtra por vendedor y fecha', async (rol) => {
+    const user = userEvent.setup()
+    renderAdmin('flujo-caja', rol)
+
+    const panel = (await screen.findByRole('heading', { name: 'Turnos de caja' })).closest('article')
+    const tabla = () => within(panel).getByRole('table')
+    const filas = () => within(tabla()).getAllByRole('row').slice(1)
+    expect(await within(tabla()).findByText('Ana Rojas')).toBeInTheDocument()
+    expect(within(tabla()).getByText('Beto Soto')).toBeInTheDocument()
+    expect(filas()).toHaveLength(2)
+
+    await user.selectOptions(within(panel).getByLabelText('Vendedor'), 'u-beto')
+    expect(filas()).toHaveLength(1)
+    expect(within(filas()[0]).getByText('Beto Soto')).toBeInTheDocument()
+
+    await user.selectOptions(within(panel).getByLabelText('Vendedor'), '')
+    await user.type(within(panel).getByLabelText('Fecha'), '2026-09-13')
+    expect(filas()).toHaveLength(1)
+    expect(within(filas()[0]).getByText('Ana Rojas')).toBeInTheDocument()
+  })
+
+  it('al abrir un turno ve su resumen: ventas, ingresos, egresos y el arqueo para cerrarlo', async () => {
+    const user = userEvent.setup()
+    renderAdmin('flujo-caja', 'Admin')
+
+    const panel = (await screen.findByRole('heading', { name: 'Turnos de caja' })).closest('article')
+    const filaAna = (await within(within(panel).getByRole('table')).findByText('Ana Rojas')).closest('tr')
+    await user.click(within(filaAna).getByRole('button', { name: 'Ver resumen' }))
+
+    // El panel lateral: lo que rodea al título del resumen.
+    const lateral = (await screen.findByRole('heading', { name: 'Resumen del turno' })).closest('.fixed')
+    expect(within(lateral).getByText(/Ana Rojas · 13\/09\/2026 · Abierto/)).toBeInTheDocument()
+    for (const cifra of ['Ventas', 'Ingresos', 'Egresos', 'Apertura', 'Total esperado']) {
+      expect(await within(lateral).findByText(cifra)).toBeInTheDocument()
+    }
+    expect(within(lateral).getByRole('button', { name: /Cerrar turno \(arqueo del día\)/ })).toBeInTheDocument()
+  })
+
+  it('si no se pueden leer los nombres, la tabla igual distingue a cada vendedor', async () => {
+    listUsers.mockRejectedValueOnce(new Error('403'))
+    renderAdmin('flujo-caja', 'Admin')
+
+    const panel = (await screen.findByRole('heading', { name: 'Turnos de caja' })).closest('article')
+    expect(await within(within(panel).getByRole('table')).findByText('Usuario u-ana')).toBeInTheDocument()
   })
 
 })

@@ -1,6 +1,6 @@
 /**
  * Recorte temporal de frontend para la demo del local "Rustik" (al paso):
- * solo venta directa (sin mesas/recetas) + finanzas. Scoped por email para
+ * solo venta directa (sin mesas/recetas ni finanzas). Scoped por email para
  * no afectar a otros Cajero/Empleado reales de otros negocios.
  */
 export const DIRECT_SALE_EMAILS = ['rustik.demo@gestflow.dev']

@@ -39,10 +39,11 @@ describe('listarCatalogoMaestro', () => {
 describe('importarItemAlLocal', () => {
   beforeEach(() => vi.clearAllMocks())
 
-  it('importa al negocio y lo suma al menú del local, sin pasos manuales', async () => {
+  it('importa al negocio, lo suma al menú y le crea su stock en 0, sin pasos manuales', async () => {
     apiRequest
       .mockResolvedValueOnce({ id: 'p-9', name: 'Coca-Cola 500ml' })  // import
       .mockResolvedValueOnce({ id: 'lp-9' })                          // local-product
+      .mockResolvedValueOnce({ id: 'inv-9' })                         // inventory
 
     const producto = await importarItemAlLocal('i-1', { businessId: 'b-1', localId: 'loc-1' })
 
@@ -51,7 +52,33 @@ describe('importarItemAlLocal', () => {
       method: 'POST',
       body: { local_id: 'loc-1', product_id: 'p-9', is_active: true },
     })
-    expect(producto.id).toBe('p-9')
+    expect(apiRequest).toHaveBeenNthCalledWith(3, '/inventory', {
+      method: 'POST',
+      body: { local_id: 'loc-1', product_id: 'p-9', stock_actual: 0, stock_min: 0 },
+    })
+    expect(producto).toEqual({ id: 'p-9', name: 'Coca-Cola 500ml' })
+  })
+
+  it('si ya tenía registro de stock (409) no es un error', async () => {
+    apiRequest
+      .mockResolvedValueOnce({ id: 'p-9', name: 'Coca-Cola 500ml' })
+      .mockResolvedValueOnce({ id: 'lp-9' })
+      .mockRejectedValueOnce(new Error('409: Inventario ya existe para este local y producto'))
+
+    const producto = await importarItemAlLocal('i-1', { localId: 'loc-1' })
+
+    expect(producto.avisoStock).toBeUndefined()
+  })
+
+  it('si el registro de stock no se pudo crear, lo avisa sin deshacer la importación', async () => {
+    apiRequest
+      .mockResolvedValueOnce({ id: 'p-9', name: 'Coca-Cola 500ml' })
+      .mockResolvedValueOnce({ id: 'lp-9' })
+      .mockRejectedValueOnce(new Error('500: se cayó'))
+
+    const producto = await importarItemAlLocal('i-1', { localId: 'loc-1' })
+
+    expect(producto).toEqual({ id: 'p-9', name: 'Coca-Cola 500ml', avisoStock: 'se cayó' })
   })
 
   it('sin local solo lo trae al negocio', async () => {

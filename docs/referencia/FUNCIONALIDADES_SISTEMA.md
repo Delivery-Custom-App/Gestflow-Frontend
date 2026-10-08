@@ -29,8 +29,8 @@ El sistema cuenta con autenticación segura vía backend local y cuatro niveles 
 |---|---|
 | **SUPERADMIN** | Acceso total al sistema. Gestiona locales, usuarios y todos los módulos. |
 | **ADMIN** | Acceso completo al local asignado: dashboard, POS, inventario y administración. |
-| **EMPLEADO** | Acceso al POS de su local (mesas, órdenes y vista cocina). |
-| **CAJERO** | Igual que EMPLEADO, con acceso adicional a registrar gastos y transferencias. |
+| **EMPLEADO** | Solo la pantalla de venta de su local: Gestión de Mesas (local con mesas) o Venta directa (comida al paso). No ve Finanzas, Inventario, RRHH ni Cocina. |
+| **CAJERO** | Igual que EMPLEADO. |
 
 **El usuario puede:**
 - Iniciar y cerrar sesión con email y contraseña
@@ -110,7 +110,7 @@ Módulo principal de operación del restaurante.
 
 ## 5. Vista Cocina
 
-> Disponible para: **SUPERADMIN, ADMIN, EMPLEADO, CAJERO**
+> Disponible para: **SUPERADMIN, ADMIN**
 
 Panel de visualización pensado para el equipo de cocina (KDS — Kitchen Display System).
 
@@ -273,10 +273,10 @@ Al ingresar por primera vez, el sistema activa automáticamente un tour interact
 | Selección y gestión de locales | ✅ | — | — | — |
 | Dashboard con métricas | ✅ | ✅ | — | — |
 | POS: mesas y órdenes | ✅ | ✅ | ✅ | ✅ |
-| Vista cocina | ✅ | ✅ | ✅ | ✅ |
+| Vista cocina | ✅ | ✅ | — | — |
 | Inventario completo | ✅ | ✅ | — | — |
 | Reportes de ventas | ✅ | ✅ | — | — |
-| Flujo de caja y rendiciones | ✅ | ✅ | — | ✅ (parcial) |
+| Flujo de caja y rendiciones | ✅ | ✅ | — | — |
 | Alertas administrativas | ✅ | ✅ | — | — |
 | Metas y bonos | ✅ | ✅ | — | — |
 | Gestión de usuarios | ✅ | — | — | — |
