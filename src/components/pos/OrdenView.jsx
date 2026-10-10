@@ -10,7 +10,7 @@ import MesaDetailModal from './MesaDetailModal'
 import MultiPaymentModal from './MultiPaymentModal'
 import MercadoPagoModal from './MercadoPagoModal'
 import { Button } from '@/components/ui/button'
-import { cn } from '@/lib/utils'
+import { cn, formatCantidad } from '@/lib/utils'
 import {
   STATUS_BADGE,
   STATUS_LABEL,
@@ -421,7 +421,7 @@ function OrdenView({ mesa, localId, onBack, onTableUpdated }) {
                         {allItems.map((item) => (
                           <tr key={item.id} className="border-b border-[hsl(var(--border))] last:border-0">
                             <td className="px-3 py-2.5 font-medium text-[hsl(var(--foreground))]">
-                              {item.quantity}
+                              {formatCantidad(item.quantity)}
                             </td>
                             <td className="px-3 py-2.5 text-[hsl(var(--foreground))]">
                               <div className="space-y-0.5">
@@ -450,7 +450,7 @@ function OrdenView({ mesa, localId, onBack, onTableUpdated }) {
                     <h4 className="text-sm font-semibold text-[hsl(var(--foreground))] mb-3">Facturación</h4>
                     <div className="grid grid-cols-3 gap-4">
                       <div>
-                        <p className="text-xs text-[hsl(var(--muted-foreground))] mb-0.5">Subtotal</p>
+                        <p className="text-xs text-[hsl(var(--muted-foreground))] mb-0.5">Subtotal (neto)</p>
                         <p className="text-sm font-medium text-[hsl(var(--foreground))]">
                           ${subtotal.toLocaleString('es-CL')}
                         </p>
