@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import MesaWorkspace from './MesaWorkspace'
 import { useMesaDetail } from '../../hooks/useMesaDetail'
@@ -57,6 +57,22 @@ describe('MesaWorkspace', () => {
     setup({ activeOrders: [{ id: 'order-1', created_at: '2024-01-01T00:00:00Z', items: [] }] })
     render(<MesaWorkspace mesa={mesa} localId="local1" cajaId="caja1" onBack={() => {}} onTableUpdated={() => {}} />)
     expect(screen.getByRole('button', { name: /cobrar/i })).not.toBeDisabled()
+  })
+
+  it('la cantidad decimal del backend se muestra como cantidad ("1.000" -> 1)', () => {
+    setup({ activeOrders: [{
+      id: 'order-1',
+      created_at: '2024-01-01T00:00:00Z',
+      items: [
+        { id: 'i1', item_name: 'Café Americano', quantity: '1.000', unit_price: 2500, total_price: 2500 },
+        { id: 'i2', item_name: 'Queso', quantity: '0.500', unit_price: 1000, total_price: 500 },
+      ],
+    }] })
+    render(<MesaWorkspace mesa={mesa} localId="local1" cajaId="caja1" onBack={() => {}} onTableUpdated={() => {}} />)
+    const fila = (nombre) => screen.getAllByText(nombre)[0].closest('tr')
+    expect(within(fila('Café Americano')).getByText('1')).toBeInTheDocument()
+    expect(within(fila('Queso')).getByText('0,5')).toBeInTheDocument()
+    expect(screen.queryByText('1.000')).not.toBeInTheDocument()
   })
 
   it('agregar producto sin orden previa crea la orden (createOrder), no addOrderItem', async () => {

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { completeOrderMercadoPago, getBoleta } from '../lib/salesApi'
+import { formatCantidad } from '../lib/utils'
 
 function printComandaMP({ orderId, items, total }) {
   const now = new Date()
@@ -9,7 +10,7 @@ function printComandaMP({ orderId, items, total }) {
 
   const itemsHTML = (items || []).map(item => `
     <tr>
-      <td class="qty">${item.quantity}x</td>
+      <td class="qty">${formatCantidad(item.quantity)}x</td>
       <td>${item.item_name || item.product_name || '—'}</td>
       <td class="right">$${(item.total_price || 0).toLocaleString('es-CL')}</td>
     </tr>
