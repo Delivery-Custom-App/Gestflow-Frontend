@@ -7,9 +7,11 @@ import { useMemo } from 'react'
 export function useOrderTotals(detail) {
   return useMemo(() => {
     const allItems = (detail?.active_orders || []).flatMap(o => o.items || [])
-    const subtotal = allItems.reduce((s, item) => s + (item.total_price || 0), 0)
-    const iva = Math.round(subtotal * 0.19)
-    const total = subtotal + iva
+    // Los precios ya incluyen IVA (backend: _split_iva_incluido): `total` es lo que
+    // se cobra; `subtotal` es el neto y `iva` el resto, así subtotal + iva === total.
+    const total = allItems.reduce((s, item) => s + (item.total_price || 0), 0)
+    const subtotal = Math.round(total / 1.19)
+    const iva = total - subtotal
     const firstOrder = detail?.active_orders?.[0]
     return { allItems, subtotal, iva, total, firstOrder }
   }, [detail])

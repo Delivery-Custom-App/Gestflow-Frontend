@@ -1,3 +1,5 @@
+import { formatCantidad } from '../../../lib/utils'
+import { formatCLP } from '../../../lib/formatCLP'
 import { formatChileTime } from '../../../utils/chileDateTime'
 
 export const STATUS_BADGE = {
@@ -56,10 +58,10 @@ export function openPrintWindow({ mesa, firstOrder, allItems, subtotal, iva, tot
 
   const itemsHTML = allItems.map(item => `
     <tr>
-      <td>${item.quantity}</td>
+      <td>${formatCantidad(item.quantity)}</td>
       <td>${item.item_name || item.product_name || '—'}</td>
-      <td class="right">$${(item.unit_price || 0).toLocaleString('es-CL')}</td>
-      <td class="right">$${(item.total_price || 0).toLocaleString('es-CL')}</td>
+      <td class="right">$${formatCLP(item.unit_price)}</td>
+      <td class="right">$${formatCLP(item.total_price)}</td>
     </tr>
   `).join('')
 
@@ -105,9 +107,9 @@ export function openPrintWindow({ mesa, firstOrder, allItems, subtotal, iva, tot
     <tbody>${itemsHTML}</tbody>
   </table>
   <hr/>
-  <div class="row"><span>Subtotal:</span><span>$ ${subtotal.toLocaleString('es-CL')}</span></div>
-  <div class="row"><span>IVA 19%:</span><span>$ ${iva.toLocaleString('es-CL')}</span></div>
-  <div class="row total"><span>TOTAL:</span><span>$ ${total.toLocaleString('es-CL')}</span></div>
+  <div class="row"><span>Subtotal (neto):</span><span>$ ${formatCLP(subtotal)}</span></div>
+  <div class="row"><span>IVA 19%:</span><span>$ ${formatCLP(iva)}</span></div>
+  <div class="row total"><span>TOTAL:</span><span>$ ${formatCLP(total)}</span></div>
   <p class="small">Fecha: ${dateStr} ${timeStr}</p>
 </body>
 </html>`

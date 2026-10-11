@@ -7,6 +7,7 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
+import { formatCantidad } from '@/lib/utils'
 import { Separator } from '@/components/ui/separator'
 
 /** Modal de detalle: descripción, añadidos parseados desde el texto y precios. */
@@ -61,7 +62,7 @@ export default function ProductDetailModal({ product, onClose }) {
             {product.quantity > 1 && (
               <div className="flex items-center justify-between text-sm">
                 <span className="text-[hsl(var(--muted-foreground))]">Cantidad</span>
-                <span className="font-medium">×{product.quantity}</span>
+                <span className="font-medium">×{formatCantidad(product.quantity)}</span>
               </div>
             )}
             <div className="flex items-center justify-between text-sm font-semibold">

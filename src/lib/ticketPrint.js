@@ -10,15 +10,14 @@
  * El ancho de 72 mm es el del rollo térmico habitual en punto de venta.
  */
 
+import { formatCantidad } from './utils'
+import { formatCLP } from './formatCLP'
+
 const ANCHO_TICKET_MM = 72
 
-const money = (valor) => `$${Number(valor || 0).toLocaleString('es-CL', { maximumFractionDigits: 0 })}`
+const money = (valor) => `$${formatCLP(valor)}`
 
-/** Las cantidades vienen como decimal: 2 se ve "2" y 0.5 se ve "0,5". */
-export function formatCantidad(cantidad) {
-  const n = Number(cantidad || 0)
-  return Number.isInteger(n) ? String(n) : n.toLocaleString('es-CL')
-}
+export { formatCantidad }
 
 export function formatFechaTicket(iso) {
   if (!iso) return ''

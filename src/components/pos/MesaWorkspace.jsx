@@ -17,6 +17,7 @@ import { calcItemPrice, isCompleto, productKey } from './menu-picker/menuPricing
 import MultiPaymentModal from './MultiPaymentModal'
 import MercadoPagoModal from './MercadoPagoModal'
 import ComandaActions from './ComandaActions'
+import { formatCantidad } from '@/lib/utils'
 import {
   STATUS_BADGE,
   STATUS_LABEL,
@@ -422,7 +423,7 @@ export default function MesaWorkspace({ mesa, atencion = null, localId, cajaId, 
               <tbody>
                 {allItems.map((item) => (
                   <tr key={item.id} className="border-b border-[hsl(var(--border))] last:border-0">
-                    <td className="px-2 py-2 font-medium text-[hsl(var(--foreground))]">{item.quantity}</td>
+                    <td className="px-2 py-2 font-medium text-[hsl(var(--foreground))]">{formatCantidad(item.quantity)}</td>
                     <td className="px-2 py-2 text-[hsl(var(--foreground))]">{formatItemName(item)}</td>
                     <td className="px-2 py-2 text-right font-medium text-[hsl(var(--foreground))]">${(item.total_price || 0).toLocaleString('es-CL')}</td>
                   </tr>
@@ -436,7 +437,7 @@ export default function MesaWorkspace({ mesa, atencion = null, localId, cajaId, 
       <div className="shrink-0 px-4 lg:px-5 py-4 border-t border-[hsl(var(--border))] bg-[hsl(var(--card))]">
         <div className="grid grid-cols-3 gap-3 text-sm mb-2">
           <div>
-            <p className="text-xs text-[hsl(var(--muted-foreground))]">Subtotal</p>
+            <p className="text-xs text-[hsl(var(--muted-foreground))]">Subtotal (neto)</p>
             <p className="font-medium text-[hsl(var(--foreground))]">${subtotal.toLocaleString('es-CL')}</p>
           </div>
           <div>

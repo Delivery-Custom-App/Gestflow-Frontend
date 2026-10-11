@@ -4,7 +4,7 @@ import { formatCLP } from '../../lib/formatCLP'
 import ProductDetailModal from './ProductDetailModal'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { cn } from '@/lib/utils'
+import { cn, formatCantidad } from '@/lib/utils'
 
 /** Validación pura de un producto. A nivel de módulo para no recrearla por render. */
 function validateProduct(product) {
@@ -40,8 +40,8 @@ function ProductList({ products = NO_PRODUCTS, orderId = null, onProductsChanged
 
   const handleEditStart = useCallback((product) => {
     setEditingId(product.id)
-    setEditQuantity(product.quantity.toString())
-    setEditPrice(product.unit_price.toString())
+    setEditQuantity(String(Number(product.quantity)))
+    setEditPrice(String(Number(product.unit_price)))
     setLocalError(null)
   }, [])
 
@@ -142,7 +142,7 @@ function ProductList({ products = NO_PRODUCTS, orderId = null, onProductsChanged
                   />
                 ) : (
                   <span className={cn('text-xs', !validation.hasQuantity && 'text-orange-500')}>
-                    {validation.hasQuantity ? `x${product.quantity}` : '—'}
+                    {validation.hasQuantity ? `x${formatCantidad(product.quantity)}` : '—'}
                   </span>
                 )}
               </div>
@@ -152,8 +152,8 @@ function ProductList({ products = NO_PRODUCTS, orderId = null, onProductsChanged
                 {isEditing ? (
                   <Input
                     type="number"
-                    step="0.01"
-                    min="0.01"
+                    step="1"
+                    min="1"
                     value={editPrice}
                     onChange={(e) => setEditPrice(e.target.value)}
                     className="w-20 h-6 text-xs text-right"

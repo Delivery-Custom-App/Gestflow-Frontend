@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import TicketModal from './TicketModal'
+import { formatCantidad } from '@/lib/utils'
 import { Search, UtensilsCrossed, Clock } from 'lucide-react'
 import { useKitchenOrders } from '../../hooks/useKitchenOrders'
 
@@ -169,7 +170,7 @@ function OrderCard({ order, mesaMap, onUpdateStatus, tokenIndex }) {
                   </span>
                 </div>
                 <span className="text-xs text-[hsl(var(--muted-foreground))] shrink-0 font-medium">
-                  ×{item.quantity}
+                  ×{formatCantidad(item.quantity)}
                 </span>
               </div>
               {item.notes && (

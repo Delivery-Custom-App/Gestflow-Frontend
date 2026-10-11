@@ -16,6 +16,9 @@ function enrichItemsWithProducts(items, productsMap) {
     const name = product?.name || null
     return {
       ...item,
+      quantity: Number(item.quantity),
+      unit_price: Number(item.unit_price) || 0,
+      ...(item.subtotal != null && { subtotal: Number(item.subtotal) }),
       product_name: name,
       item_name: name,
       total_price: Number(item.subtotal ?? Number(item.quantity) * Number(item.unit_price)) || 0,
