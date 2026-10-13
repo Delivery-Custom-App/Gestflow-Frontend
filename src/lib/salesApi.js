@@ -172,7 +172,7 @@ export async function listCajas(localId) {
  * al local: el backend deriva el local de ella. Mandar `local_id` en vez de
  * `caja_fisica_id` era el contrato anterior y hoy responde 422.
  */
-export async function createCajaV2({ caja_fisica_id, cashier_user_id, monto_apertura = 0 }) {
+export async function createCajaV2({ caja_fisica_id, cashier_user_id, monto_apertura = 0, apertura_desglose }) {
   if (!caja_fisica_id) throw new Error('Elige la caja física donde se abre el turno')
   let cashierId = cashier_user_id
   if (!cashierId) {
@@ -186,6 +186,8 @@ export async function createCajaV2({ caja_fisica_id, cashier_user_id, monto_aper
       caja_fisica_id: String(caja_fisica_id),
       cashier_user_id: cashierId,
       monto_apertura: Number(monto_apertura) || 0,
+      // Billetes y monedas contados (T-40), solo si vienen: lo guarda el B-28.
+      ...(Array.isArray(apertura_desglose) && apertura_desglose.length > 0 ? { apertura_desglose } : {}),
     },
   })
   return mapCajaOut(row)

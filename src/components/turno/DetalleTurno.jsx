@@ -5,6 +5,7 @@ import { parseApiDate } from '../../utils/chileDateTime'
 import { formatCLPCurrency as formatMoney } from '../../lib/formatCLP'
 import { getCajaResumen } from '../../lib/salesApi'
 import { movimientosDelTurno, totalesDelTurno } from '../../lib/registroTurnos'
+import { etiquetaDenominacion, filasDelDesglose } from '../../lib/efectivo'
 
 // Canal del pedido (mesa, mostrador, delivery…), no cómo pagó el cliente.
 const MOVIMIENTO_SOURCE_LABEL = {
@@ -75,6 +76,8 @@ export default function DetalleTurno({ caja, conArqueo = false }) {
 
   const { ventas, egresos } = totalesDelTurno(movimientos)
   const porMetodo = Array.isArray(resumen?.por_metodo) ? resumen.por_metodo : []
+  // Billetes y monedas de la apertura (T-40): llegan cuando el backend los guarde (B-28).
+  const desglose = filasDelDesglose(resumen?.apertura_desglose ?? caja?.apertura_desglose)
 
   return (
     <div className="flex flex-col gap-5">
@@ -91,6 +94,20 @@ export default function DetalleTurno({ caja, conArqueo = false }) {
           </>
         )}
       </div>
+
+      {conArqueo && desglose.length > 0 && (
+        <div>
+          <h3 className="mb-2 text-xs font-bold uppercase tracking-wide text-[hsl(var(--muted-foreground))]">Efectivo de apertura</h3>
+          <ul className="flex flex-col gap-1" aria-label="Efectivo de apertura">
+            {desglose.map((d) => (
+              <li key={d.valor} className="flex justify-between text-sm text-[hsl(var(--foreground))]">
+                <span>{d.cantidad} × {etiquetaDenominacion(d.valor)} <span className="text-xs text-[hsl(var(--muted-foreground))]">({d.tipo})</span></span>
+                <span className="font-semibold">{formatMoney(d.subtotal)}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {porMetodo.length > 0 && (
         <div>

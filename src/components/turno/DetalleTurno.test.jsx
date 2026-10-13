@@ -55,6 +55,36 @@ describe('DetalleTurno', () => {
     expect(cifra('Total esperado')).toHaveTextContent('$29.500')
   })
 
+  it('con el desglose de apertura (B-28), el encargado ve los billetes y monedas', async () => {
+    getCajaResumen.mockResolvedValue({
+      ...RESUMEN,
+      apertura_desglose: [
+        { denominacion: 100, tipo: 'moneda', cantidad: 50 },
+        { denominacion: 5000, tipo: 'billete', cantidad: 3 },
+      ],
+    })
+    render(<DetalleTurno caja={{ id: 't-1' }} conArqueo />)
+
+    const lista = await screen.findByRole('list', { name: 'Efectivo de apertura' })
+    const filas = lista.querySelectorAll('li')
+    expect(filas[0]).toHaveTextContent('3 × $5.000')
+    expect(filas[0]).toHaveTextContent('$15.000')
+    expect(filas[1]).toHaveTextContent('50 × $100')
+    expect(filas[1]).toHaveTextContent('$5.000')
+  })
+
+  it('sin desglose (o para el vendedor) no muestra la lista de billetes', async () => {
+    const { unmount } = render(<DetalleTurno caja={{ id: 't-1' }} conArqueo />)
+    await screen.findByText('Ventas')
+    expect(screen.queryByText('Efectivo de apertura')).not.toBeInTheDocument()
+    unmount()
+
+    getCajaResumen.mockResolvedValue({ ...RESUMEN, apertura_desglose: [{ denominacion: 1000, tipo: 'billete', cantidad: 2 }] })
+    render(<DetalleTurno caja={{ id: 't-1' }} />)
+    await screen.findByText('Ventas')
+    expect(screen.queryByText('Efectivo de apertura')).not.toBeInTheDocument()
+  })
+
   it('sin movimientos lo dice', async () => {
     getMovimientosCaja.mockResolvedValue([])
     render(<DetalleTurno caja={{ id: 't-1' }} />)

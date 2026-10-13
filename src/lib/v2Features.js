@@ -83,6 +83,13 @@ export const V2_FEATURES = {
    * endpoints (o ajustar los nombres en `lib/fondoEmergencia.js`).
    */
   fondoEmergencia: false,
+  /**
+   * Desglose del efectivo de apertura (T-40). La pantalla ya cuenta billetes
+   * y monedas y manda el total como `monto_apertura`; con esta bandera además
+   * envía `apertura_desglose` ([{ denominacion, tipo, cantidad }]). Hoy el
+   * backend lo descartaría en silencio: encenderla cuando exista el B-28.
+   */
+  desgloseEfectivo: false,
   mercadopagoPoint: true,
   mpConfig: true,
   cajaMpPairing: true,
