@@ -209,6 +209,15 @@ describe('createCajaV2 — apertura de turno (contrato del ticket #40)', () => {
     expect(apiRequest.mock.calls[0][1].body.monto_apertura).toBe(0)
   })
 
+  it('manda el desglose de billetes y monedas solo si viene (T-40 / B-28)', async () => {
+    const desglose = [{ denominacion: 1000, tipo: 'billete', cantidad: 2 }]
+    await createCajaV2({ caja_fisica_id: 'cf-2', monto_apertura: 2000, apertura_desglose: desglose })
+    expect(apiRequest.mock.calls[0][1].body.apertura_desglose).toEqual(desglose)
+
+    await createCajaV2({ caja_fisica_id: 'cf-2', monto_apertura: 0, apertura_desglose: [] })
+    expect(apiRequest.mock.calls[1][1].body).not.toHaveProperty('apertura_desglose')
+  })
+
   it('sin usuario en sesión no intenta abrir el turno', async () => {
     getOptionalAuthContext.mockResolvedValue({ user: null })
 
