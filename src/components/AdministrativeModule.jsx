@@ -1098,6 +1098,7 @@ function CajaMovimientosModal({ caja, onClose, onClosed, puedeRegistrarMovimient
             {cerrandoTurno ? (
               <CerrarTurno
                 cajaId={caja.id}
+                localId={caja.local_id}
                 onCancelar={() => setCerrandoTurno(false)}
                 onCerrado={() => { onClosed?.(); handleClose() }}
               />

@@ -110,7 +110,7 @@ describe('TurnoVendedorBarra', () => {
     await user.click(screen.getByRole('button', { name: /Cerrar turno/ }))
 
     await waitFor(() => expect(toast.error).toHaveBeenCalledWith(
-      'No se puede cerrar el turno: todavía hay órdenes en curso. Cóbralas o cancélalas primero.',
+      expect.stringMatching(/pedido de mostrador reciente o un cobro con tarjeta en curso/),
     ))
     expect(alCerrar).not.toHaveBeenCalled()
   })

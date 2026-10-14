@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
+import { Link } from 'react-router'
 import { Lock } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { formatCLPCurrency as formatMoney } from '../../lib/formatCLP'
 import { montoDesdeTexto } from '../../lib/fondoEmergencia'
-import { closeCaja, getCajaResumen } from '../../lib/salesApi'
-import { mensajeCierreTurno } from '../../lib/turnos'
+import { closeCaja, getCajaResumen, listMesas, listOrdenesDelTurno } from '../../lib/salesApi'
+import { mensajeCierreTurno, pendientesAlCerrar } from '../../lib/turnos'
 import { diferenciaDe, monto, textoDiferencia } from '../../lib/arqueo'
 import { totalesDelConteo } from '../../lib/efectivo'
 import { isV2FeatureEnabled } from '../../lib/v2Features'
@@ -24,7 +25,7 @@ export const NOTA_CIERRE_MAX = 300
  * Con la bandera `desgloseEfectivo`, el conteo por billetes y monedas llena el
  * campo (el backend guarda solo el total).
  */
-export default function CerrarTurno({ cajaId, onCerrado, onCancelar }) {
+export default function CerrarTurno({ cajaId, localId = null, onCerrado, onCancelar }) {
   const [esperado, setEsperado] = useState(undefined) // undefined = cargando, null = sin dato
   const [contadoTexto, setContadoTexto] = useState('')
   const [nota, setNota] = useState('')
@@ -37,6 +38,21 @@ export default function CerrarTurno({ cajaId, onCerrado, onCancelar }) {
   const [enfocarNota, setEnfocarNota] = useState(0)
   useEffect(() => { if (enfocarNota) notaRef.current?.focus() }, [enfocarNota])
   const desgloseDisponible = isV2FeatureEnabled('desgloseEfectivo')
+  // T-45: lo que sigue abierto al cerrar (las mesas quedan «no cobradas»).
+  const [pendientes, setPendientes] = useState(null)
+  const [cerradoConMesas, setCerradoConMesas] = useState(false)
+
+  useEffect(() => {
+    let ignore = false
+    Promise.all([listOrdenesDelTurno(cajaId), localId ? listMesas(localId).catch(() => []) : []])
+      .then(([ordenes, mesas]) => {
+        if (ignore) return
+        const nombres = new Map((mesas || []).map((m) => [String(m.id), m.name || m.nombre]))
+        setPendientes(pendientesAlCerrar(ordenes, (id) => nombres.get(String(id))))
+      })
+      .catch(() => { if (!ignore) setPendientes(null) })
+    return () => { ignore = true }
+  }, [cajaId, localId])
 
   useEffect(() => {
     let ignore = false
@@ -62,7 +78,9 @@ export default function CerrarTurno({ cajaId, onCerrado, onCancelar }) {
     setError('')
     try {
       await closeCaja(cajaId, { montoCierreDeclarado: contado, notaCierre: nota })
-      onCerrado()
+      // Si quedaron mesas sin cobrar, se ofrece ir a verlas antes de salir.
+      if (pendientes?.mesas.length && localId) setCerradoConMesas(true)
+      else onCerrado()
     } catch (err) {
       const texto = String(err?.detail || err?.message || '')
       if (/nota_cierre/i.test(texto)) {
@@ -76,11 +94,45 @@ export default function CerrarTurno({ cajaId, onCerrado, onCancelar }) {
     }
   }
 
+  if (cerradoConMesas) {
+    return (
+      <div role="status" className="flex flex-col gap-3">
+        <p className="text-sm text-[hsl(var(--foreground))]">
+          Turno cerrado. {pendientes.mesas.length === 1 ? 'Una mesa quedó' : `${pendientes.mesas.length} mesas quedaron`} como «no cobrada» por {formatMoney(pendientes.totalMesas)}.
+        </p>
+        <div className="flex justify-end gap-2">
+          <Link to={`/local/${localId}/administrativo/no-cobradas`} onClick={() => onCerrado()}
+            className="inline-flex items-center rounded-md border border-[hsl(var(--border))] px-3 py-1.5 text-sm font-semibold text-[hsl(var(--primary))] hover:bg-[hsl(var(--muted))]">
+            Ver mesas no cobradas
+          </Link>
+          <Button type="button" size="sm" onClick={() => onCerrado()}>Listo</Button>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <form onSubmit={cerrar} aria-label="Cerrar turno" className="flex flex-col gap-3">
       <p className="text-sm text-[hsl(var(--muted-foreground))]">
         Cuenta el efectivo del cajón. Es el cierre del arqueo del día: el turno no se puede reabrir.
       </p>
+      {pendientes?.mesas.length > 0 && (
+        <div role="note" aria-label="Mesas que quedarán no cobradas" className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-800/50 dark:bg-amber-950/30 dark:text-amber-200">
+          <p className="font-semibold">Al cerrar, estas mesas abiertas quedarán como «no cobradas» (sin ingreso):</p>
+          <ul className="mt-1 flex flex-col gap-0.5">
+            {pendientes.mesas.map((m) => (
+              <li key={m.id} className="flex justify-between gap-3"><span>{m.mesa}</span><span>{formatMoney(m.total)}</span></li>
+            ))}
+          </ul>
+          <p className="mt-1 text-xs">Total sin cobrar: {formatMoney(pendientes.totalMesas)}</p>
+        </div>
+      )}
+      {pendientes?.mostrador.length > 0 && (
+        <p className="text-xs text-[hsl(var(--muted-foreground))]">
+          Hay {pendientes.mostrador.length === 1 ? 'un pedido' : `${pendientes.mostrador.length} pedidos`} de mostrador sin cobrar: si llevan más de 15 minutos sin cambios vencen al cerrar; si son recientes, hay que cobrarlos o esperar.
+        </p>
+      )}
+
       <div className="rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--muted))] p-3 text-sm">
         Efectivo esperado: <strong data-testid="efectivo-esperado-cierre">{esperado === undefined ? '…' : esperado === null ? '—' : formatMoney(esperado)}</strong>
       </div>
