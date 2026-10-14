@@ -242,7 +242,7 @@ export default function MesaDetail() {
                   </div>
                   <div className="p-3 space-y-2">
                     <p className="text-xs font-medium text-[hsl(var(--muted-foreground))] uppercase tracking-wide">Productos</p>
-                    <ProductList products={order.items || []} orderId={order.id} onProductsChanged={refresh} />
+                    <ProductList products={order.items || []} orderId={order.id} createdAt={order.created_at} onProductsChanged={refresh} />
                   </div>
                   <div className="px-3 py-2 border-t border-[hsl(var(--border))] text-right">
                     <span className="text-xs text-[hsl(var(--muted-foreground))]">Subtotal: ${formatCLP(order.subtotal)}</span>

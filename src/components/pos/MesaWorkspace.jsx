@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ArrowLeft, DollarSign, Menu as MenuIcon, Printer, Receipt, Split, X } from 'lucide-react'
+import { ArrowLeft, DollarSign, Menu as MenuIcon, Minus, Plus, Printer, Receipt, Split, Trash2, X } from 'lucide-react'
 import { useMenuPOS } from '../../hooks/useMenuPOS'
 import { useMesaDetail } from '../../hooks/useMesaDetail'
 import { useOrderTotals } from '../../hooks/useOrderTotals'
 import { useOrderManagement } from '../../hooks/useOrderManagement'
-import { addOrderItem, createOrder, setMesaLibre } from '../../lib/salesApi'
+import { addOrderItem, createOrder, removeOrderItem, setMesaLibre, updateOrderItem } from '../../lib/salesApi'
 import { getSplitPaymentSummary } from '../../lib/apiClient'
 import { isV2FeatureEnabled } from '../../lib/v2Features'
 import { formatCLP } from '../../lib/formatCLP'
@@ -29,6 +29,8 @@ import {
 } from './order-panel/orderPrint'
 
 const EMPTY_CUSTOMIZATION = { embutido: null, agregados: [] }
+
+const formatItemName = (item) => item.item_name || item.product_name || '—'
 
 export default function MesaWorkspace({ mesa, atencion = null, localId, cajaId, onBack, onTableUpdated }) {
   const { detail, loading, error: mesaError, refresh } = useMesaDetail(mesa.id)
@@ -225,7 +227,31 @@ export default function MesaWorkspace({ mesa, atencion = null, localId, cajaId, 
     openPrintWindow({ mesa, firstOrder, allItems, subtotal, iva, total, label: 'DETALLE DE COBRO' })
   }, [detail?.active_orders?.length, mesa, firstOrder, allItems, subtotal, iva, total])
 
-  const formatItemName = (item) => item.item_name || item.product_name || '—'
+
+  // Editar la cantidad o quitar un ítem ya enviado (T-30): PATCH solo con la
+  // cantidad (el precio lo pone el backend) y DELETE; luego se recarga la mesa.
+  const [itemOcupado, setItemOcupado] = useState('')
+  const ordenDelItem = useCallback(
+    (item) => (detail?.active_orders || []).find((o) => (o.items || []).some((it) => it.id === item.id)),
+    [detail],
+  )
+  const cambiarItem = useCallback(async (item, accion) => {
+    const orden = ordenDelItem(item)
+    if (!orden) return
+    const nueva = Number(item.quantity) + (accion === 'mas' ? 1 : -1)
+    if (accion === 'quitar' && !window.confirm(`¿Quitar ${formatItemName(item)} del pedido?`)) return
+    setItemOcupado(item.id)
+    setErrorMsg('')
+    try {
+      if (accion === 'quitar' || nueva <= 0) await removeOrderItem(orden.id, item.id, orden.created_at)
+      else await updateOrderItem(orden.id, item.id, { quantity: nueva }, orden.created_at)
+      await refresh()
+    } catch (e) {
+      setErrorMsg(e?.message || 'No se pudo cambiar el pedido')
+    } finally {
+      setItemOcupado('')
+    }
+  }, [ordenDelItem, refresh])
   const visibleError = errorMsg || mesaError
 
   /* ─── fila de menú, con customizador inline para recetas ─── */
@@ -417,7 +443,8 @@ export default function MesaWorkspace({ mesa, atencion = null, localId, cajaId, 
                 <tr className="bg-[hsl(var(--accent))]">
                   <th className="text-left text-xs font-medium text-[hsl(var(--muted-foreground))] px-2 py-2 rounded-l-lg w-12">Cant.</th>
                   <th className="text-left text-xs font-medium text-[hsl(var(--muted-foreground))] px-2 py-2">Nombre</th>
-                  <th className="text-right text-xs font-medium text-[hsl(var(--muted-foreground))] px-2 py-2 rounded-r-lg">Total</th>
+                  <th className="text-right text-xs font-medium text-[hsl(var(--muted-foreground))] px-2 py-2">Total</th>
+                  <th className="px-2 py-2 rounded-r-lg"><span className="sr-only">Acciones</span></th>
                 </tr>
               </thead>
               <tbody>
@@ -426,6 +453,25 @@ export default function MesaWorkspace({ mesa, atencion = null, localId, cajaId, 
                     <td className="px-2 py-2 font-medium text-[hsl(var(--foreground))]">{formatCantidad(item.quantity)}</td>
                     <td className="px-2 py-2 text-[hsl(var(--foreground))]">{formatItemName(item)}</td>
                     <td className="px-2 py-2 text-right font-medium text-[hsl(var(--foreground))]">${(item.total_price || 0).toLocaleString('es-CL')}</td>
+                    <td className="px-1 py-2">
+                      <div className="flex items-center justify-end gap-0.5">
+                        <button type="button" disabled={itemOcupado === item.id || Number(item.quantity) <= 1}
+                          onClick={() => cambiarItem(item, 'menos')} aria-label={`Restar uno de ${formatItemName(item)}`}
+                          className="h-7 w-7 inline-flex items-center justify-center rounded-md text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--accent))] disabled:opacity-40">
+                          <Minus size={14} />
+                        </button>
+                        <button type="button" disabled={itemOcupado === item.id}
+                          onClick={() => cambiarItem(item, 'mas')} aria-label={`Sumar uno de ${formatItemName(item)}`}
+                          className="h-7 w-7 inline-flex items-center justify-center rounded-md text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--accent))] disabled:opacity-40">
+                          <Plus size={14} />
+                        </button>
+                        <button type="button" disabled={itemOcupado === item.id}
+                          onClick={() => cambiarItem(item, 'quitar')} aria-label={`Quitar ${formatItemName(item)} del pedido`}
+                          className="h-7 w-7 inline-flex items-center justify-center rounded-md text-red-600 hover:bg-red-50 disabled:opacity-40">
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    </td>
                   </tr>
                 ))}
               </tbody>

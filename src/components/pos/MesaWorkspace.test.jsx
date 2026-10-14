@@ -5,7 +5,7 @@ import MesaWorkspace from './MesaWorkspace'
 import { useMesaDetail } from '../../hooks/useMesaDetail'
 import { useMenuPOS } from '../../hooks/useMenuPOS'
 import { useOrderManagement } from '../../hooks/useOrderManagement'
-import { createOrder, addOrderItem } from '../../lib/salesApi'
+import { createOrder, addOrderItem, updateOrderItem, removeOrderItem } from '../../lib/salesApi'
 
 vi.mock('../../hooks/useMesaDetail', () => ({ useMesaDetail: vi.fn() }))
 vi.mock('../../hooks/useMenuPOS', () => ({ useMenuPOS: vi.fn() }))
@@ -14,6 +14,8 @@ vi.mock('../../lib/salesApi', () => ({
   createOrder: vi.fn(),
   addOrderItem: vi.fn(),
   setMesaLibre: vi.fn(),
+  updateOrderItem: vi.fn(),
+  removeOrderItem: vi.fn(),
 }))
 vi.mock('../../lib/apiClient', () => ({
   getSplitPaymentSummary: vi.fn().mockResolvedValue({ splits: [], is_fully_paid: false }),
@@ -129,5 +131,43 @@ describe('MesaWorkspace', () => {
     render(<MesaWorkspace mesa={mesa} localId="local1" cajaId="caja1" onBack={() => {}} onTableUpdated={() => {}} />)
 
     expect(screen.getByRole('button', { name: 'Comanda' })).toBeDisabled()
+  })
+})
+
+describe('MesaWorkspace · editar y quitar ítems (T-30)', () => {
+  const orden = { id: 'order-1', created_at: '2026-10-14T12:00:00Z', items: [{ id: 'it-1', product_name: 'Agua', quantity: 2, total_price: 2000 }] }
+
+  it('«+» manda PATCH solo con la cantidad nueva y recarga la mesa', async () => {
+    const user = userEvent.setup()
+    const { refresh } = setup({ activeOrders: [orden] })
+    updateOrderItem.mockResolvedValue({})
+    render(<MesaWorkspace mesa={mesa} localId="local1" cajaId="caja1" onBack={() => {}} onTableUpdated={() => {}} />)
+
+    await user.click(screen.getAllByRole('button', { name: 'Sumar uno de Agua' })[0])
+    expect(updateOrderItem).toHaveBeenCalledWith('order-1', 'it-1', { quantity: 3 }, '2026-10-14T12:00:00Z')
+    await waitFor(() => expect(refresh).toHaveBeenCalled())
+  })
+
+  it('«Quitar» confirma, usa DELETE y recarga', async () => {
+    const user = userEvent.setup()
+    const confirmar = vi.spyOn(window, 'confirm').mockReturnValue(true)
+    const { refresh } = setup({ activeOrders: [orden] })
+    removeOrderItem.mockResolvedValue(true)
+    render(<MesaWorkspace mesa={mesa} localId="local1" cajaId="caja1" onBack={() => {}} onTableUpdated={() => {}} />)
+
+    await user.click(screen.getAllByRole('button', { name: 'Quitar Agua del pedido' })[0])
+    expect(removeOrderItem).toHaveBeenCalledWith('order-1', 'it-1', '2026-10-14T12:00:00Z')
+    await waitFor(() => expect(refresh).toHaveBeenCalled())
+    confirmar.mockRestore()
+  })
+
+  it('un pedido cerrado muestra «El pedido ya está cerrado»', async () => {
+    const user = userEvent.setup()
+    setup({ activeOrders: [orden] })
+    updateOrderItem.mockRejectedValue(new Error('El pedido ya está cerrado'))
+    render(<MesaWorkspace mesa={mesa} localId="local1" cajaId="caja1" onBack={() => {}} onTableUpdated={() => {}} />)
+
+    await user.click(screen.getAllByRole('button', { name: 'Sumar uno de Agua' })[0])
+    expect((await screen.findAllByText('El pedido ya está cerrado')).length).toBeGreaterThan(0)
   })
 })

@@ -372,15 +372,54 @@ export async function listOrderItems(orderId, createdAt) {
   return enrichItemsWithProducts(items, productsMap)
 }
 
+/**
+ * Un 400 por orden cerrada («No se pueden … ítems de una orden cerrada») se
+ * muestra como «El pedido ya está cerrado»; el resto pasa tal cual.
+ */
+function errorDeItem(err) {
+  if (Number(err?.status) === 400 && /cerrad/i.test(String(err?.detail || err?.message || ''))) {
+    const e = new Error('El pedido ya está cerrado')
+    e.status = 400
+    e.detail = err.detail
+    throw e
+  }
+  throw err
+}
+
+/**
+ * Agrega un ítem. El precio lo pone el backend (el del menú del local): no se
+ * manda `unit_price` (T-30).
+ */
 export async function addOrderItem(orderId, body, createdAt) {
   return apiRequest(orderResourcePath(orderId, createdAt, '/items'), {
     method: 'POST',
     body: {
       product_id: body.product_id,
       quantity: Number(body.quantity) || 1,
-      unit_price: Number(body.unit_price) || 0,
     },
-  })
+  }).catch(errorDeItem)
+}
+
+/**
+ * Cambia la cantidad (y la nota, si viene) de un ítem:
+ * `PATCH /orders/{id}/items/{item_id}`. Nunca manda el precio (T-30).
+ */
+export async function updateOrderItem(orderId, itemId, { quantity, notes } = {}, createdAt) {
+  const body = {}
+  if (quantity != null) body.quantity = Number(quantity)
+  if (notes !== undefined) body.notes = notes
+  return apiRequest(orderResourcePath(orderId, createdAt, `/items/${encodeURIComponent(String(itemId))}`), {
+    method: 'PATCH',
+    body,
+  }).catch(errorDeItem)
+}
+
+/** Quita un ítem del pedido: `DELETE /orders/{id}/items/{item_id}` (204). */
+export async function removeOrderItem(orderId, itemId, createdAt) {
+  await apiRequest(orderResourcePath(orderId, createdAt, `/items/${encodeURIComponent(String(itemId))}`), {
+    method: 'DELETE',
+  }).catch(errorDeItem)
+  return true
 }
 
 /**
@@ -423,7 +462,6 @@ export async function createOrder(orderData = {}) {
       {
         product_id: productId,
         quantity: raw.quantity,
-        unit_price: raw.unit_price,
       },
       order.created_at,
     )
