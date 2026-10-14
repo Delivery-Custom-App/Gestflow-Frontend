@@ -1,9 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import DetalleTurno from './DetalleTurno'
-import { getCajaResumen, getMovimientosCaja } from '../../lib/salesApi'
+import { getCajaResumen, getMovimientosCaja, listOrdenesDelTurno } from '../../lib/salesApi'
 
-vi.mock('../../lib/salesApi', () => ({ getCajaResumen: vi.fn(), getMovimientosCaja: vi.fn() }))
+vi.mock('../../lib/salesApi', () => ({ getCajaResumen: vi.fn(), getMovimientosCaja: vi.fn(), listOrdenesDelTurno: vi.fn() }))
 
 const RESUMEN = {
   monto_apertura: '20000.00', total_ingresos: '9500.00', total_esperado: '29500.00',
@@ -96,5 +97,51 @@ describe('DetalleTurno', () => {
     getCajaResumen.mockRejectedValue(new Error('No autorizado'))
     render(<DetalleTurno caja={{ id: 't-1' }} />)
     expect(await screen.findByText('No autorizado')).toBeInTheDocument()
+  })
+})
+
+describe('DetalleTurno · efectivo esperado y por máquina (T-48)', () => {
+  const CON_MAQUINAS = {
+    ...RESUMEN,
+    total_vendido: '9500.00', total_egresos: '1000.00', efectivo_esperado: '24000.00',
+    por_maquina: [{ pos_machine_id: 'pm-1', display_name: 'Point barra', total: '4500.00', cobros: 2 }],
+  }
+
+  it('destaca el efectivo esperado en el cajón y muestra lo cobrado por máquina', async () => {
+    getCajaResumen.mockResolvedValue(CON_MAQUINAS)
+    render(<DetalleTurno caja={{ id: 't-1' }} conArqueo />)
+    expect(await screen.findByText('Efectivo esperado en el cajón')).toBeInTheDocument()
+    expect(cifra('Efectivo esperado en el cajón')).toHaveTextContent('$24.000')
+    const tabla = screen.getByRole('table', { name: 'Por máquina' })
+    expect(within(tabla).getByText('Point barra')).toBeInTheDocument()
+    expect(within(tabla).getByText('$4.500')).toBeInTheDocument()
+    expect(within(tabla).getByText('2')).toBeInTheDocument()
+  })
+
+  it('sin cobros con tarjeta no muestra la tabla por máquina', async () => {
+    getCajaResumen.mockResolvedValue({ ...CON_MAQUINAS, por_maquina: [] })
+    render(<DetalleTurno caja={{ id: 't-1' }} conArqueo />)
+    await screen.findByText('Efectivo esperado en el cajón')
+    expect(screen.queryByRole('table', { name: 'Por máquina' })).not.toBeInTheDocument()
+  })
+
+  it('«Ver órdenes del turno» las pide con GET /orders?caja_id=', async () => {
+    const user = userEvent.setup()
+    getCajaResumen.mockResolvedValue(CON_MAQUINAS)
+    listOrdenesDelTurno.mockResolvedValue([{ id: 'abcdef1234', created_at: '2026-10-04T15:00:00Z', status: 'COMPLETED', total: 5000 }])
+    render(<DetalleTurno caja={{ id: 't-1' }} conArqueo />)
+    await user.click(await screen.findByRole('button', { name: 'Ver órdenes del turno' }))
+    expect(listOrdenesDelTurno).toHaveBeenCalledWith('t-1')
+    const lista = await screen.findByRole('list', { name: 'Órdenes del turno' })
+    expect(within(lista).getByText('#ABCDEF12')).toBeInTheDocument()
+    expect(within(lista).getByText('Cobrada')).toBeInTheDocument()
+  })
+
+  it('al vendedor no le muestra el arqueo ni las órdenes', async () => {
+    getCajaResumen.mockResolvedValue(CON_MAQUINAS)
+    render(<DetalleTurno caja={{ id: 't-1' }} />)
+    await screen.findByText('Ventas')
+    expect(screen.queryByText('Efectivo esperado en el cajón')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Ver órdenes del turno' })).not.toBeInTheDocument()
   })
 })

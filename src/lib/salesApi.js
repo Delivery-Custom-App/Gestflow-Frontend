@@ -238,6 +238,15 @@ export async function getMovimientosCaja(cajaId, { limit = 100, offset = 0 } = {
   return Array.isArray(rows) ? rows : []
 }
 
+/**
+ * Órdenes de un turno (`GET /orders?caja_id=`, B8): para revisar desde el
+ * resumen del turno qué se vendió.
+ */
+export async function listOrdenesDelTurno(cajaId) {
+  const rows = await apiRequest(`/orders?caja_id=${encodeURIComponent(String(cajaId))}`)
+  return (Array.isArray(rows) ? rows : []).map(mapOrderOut)
+}
+
 export async function listMesas(localId) {
   const rows = await apiRequest(`/mesas?local_id=${encodeURIComponent(String(localId))}`)
   return (Array.isArray(rows) ? rows : []).map(mapMesaOut)

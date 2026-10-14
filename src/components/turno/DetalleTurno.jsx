@@ -3,7 +3,7 @@ import { Badge } from '@/components/ui/badge'
 import LoadingSpinner from '../LoadingSpinner'
 import { parseApiDate } from '../../utils/chileDateTime'
 import { formatCLPCurrency as formatMoney } from '../../lib/formatCLP'
-import { getCajaResumen } from '../../lib/salesApi'
+import { getCajaResumen, listOrdenesDelTurno } from '../../lib/salesApi'
 import { movimientosDelTurno, totalesDelTurno } from '../../lib/registroTurnos'
 import { etiquetaDenominacion, filasDelDesglose } from '../../lib/efectivo'
 
@@ -44,10 +44,64 @@ function Cifra({ label, valor, destacada = false }) {
   )
 }
 
+const ESTADO_ORDEN = { PENDING: 'Abierta', PREPARING: 'En preparación', READY: 'Lista', COMPLETED: 'Cobrada', CANCELLED: 'Cancelada' }
+
+/**
+ * Órdenes del turno (`GET /orders?caja_id=`, T-48): se piden solo al abrir la
+ * lista, para no cargar el resumen.
+ */
+function OrdenesDelTurno({ cajaId }) {
+  const [ordenes, setOrdenes] = useState(null) // null = sin pedir
+  const [cargando, setCargando] = useState(false)
+  const [error, setError] = useState('')
+
+  const ver = () => {
+    setCargando(true)
+    setError('')
+    listOrdenesDelTurno(cajaId)
+      .then(setOrdenes)
+      .catch((e) => setError(e?.message || 'No se pudieron cargar las órdenes del turno'))
+      .finally(() => setCargando(false))
+  }
+
+  if (ordenes === null) {
+    return (
+      <div>
+        <button type="button" onClick={ver} disabled={cargando}
+          className="text-xs font-semibold text-[hsl(var(--primary))] hover:underline disabled:opacity-50">
+          {cargando ? 'Cargando órdenes…' : 'Ver órdenes del turno'}
+        </button>
+        {error && <p className="mt-1 text-xs text-red-600">{error}</p>}
+      </div>
+    )
+  }
+  return (
+    <div>
+      <h3 className="mb-2 text-xs font-bold uppercase tracking-wide text-[hsl(var(--muted-foreground))]">Órdenes del turno ({ordenes.length})</h3>
+      {ordenes.length === 0 ? (
+        <p className="text-xs text-[hsl(var(--muted-foreground))]">Este turno no tiene órdenes.</p>
+      ) : (
+        <ul aria-label="Órdenes del turno" className="flex flex-col gap-1">
+          {ordenes.map((o) => (
+            <li key={o.id} className="flex items-center justify-between gap-2 rounded-lg border border-[hsl(var(--border))] px-3 py-1.5 text-xs">
+              <span className="font-mono">#{String(o.id).slice(0, 8).toUpperCase()}</span>
+              <span className="text-[hsl(var(--muted-foreground))]">{fechaHora(o.created_at)}</span>
+              <span>{ESTADO_ORDEN[o.status] || o.status}</span>
+              <span className="font-semibold">{formatMoney(Number(o.total))}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  )
+}
+
 /**
  * Resumen de un turno: cuántas ventas hubo, ingresos y egresos, el desglose
- * por método de pago y sus movimientos. `conArqueo` agrega el monto de
- * apertura y el total esperado (vista del encargado y del dueño).
+ * por método de pago y sus movimientos. `conArqueo` (vista del encargado y
+ * del dueño) agrega el monto de apertura, el efectivo que debería haber en el
+ * cajón (`efectivo_esperado`: para cuadrar se usa este, no `total_esperado`),
+ * lo cobrado con tarjeta por cada máquina y las órdenes del turno (T-48).
  */
 export default function DetalleTurno({ caja, conArqueo = false }) {
   // De qué turno es lo cargado: si no es el que se muestra, está cargando.
@@ -76,6 +130,8 @@ export default function DetalleTurno({ caja, conArqueo = false }) {
 
   const { ventas, egresos } = totalesDelTurno(movimientos)
   const porMetodo = Array.isArray(resumen?.por_metodo) ? resumen.por_metodo : []
+  const porMaquina = Array.isArray(resumen?.por_maquina) ? resumen.por_maquina : []
+  const efectivoEsperado = resumen?.efectivo_esperado != null ? formatMoney(Number(resumen.efectivo_esperado)) : '—'
   // Billetes y monedas de la apertura (T-40): llegan cuando el backend los guarde (B-28).
   const desglose = filasDelDesglose(resumen?.apertura_desglose ?? caja?.apertura_desglose)
 
@@ -89,11 +145,41 @@ export default function DetalleTurno({ caja, conArqueo = false }) {
           <>
             <Cifra label="Apertura" valor={formatMoney(Number(resumen?.monto_apertura))} />
             <div className="col-span-2">
-              <Cifra label="Total esperado" valor={formatMoney(Number(resumen?.total_esperado))} destacada />
+              <Cifra label="Total esperado" valor={formatMoney(Number(resumen?.total_esperado))} />
+            </div>
+            <div className="col-span-3">
+              <Cifra label="Efectivo esperado en el cajón" valor={efectivoEsperado} destacada />
+              <p className="mt-1 text-[11px] text-[hsl(var(--muted-foreground))]">
+                Apertura + lo cobrado en efectivo − lo que salió. Es lo que debería haber al contar el cajón; lo cobrado con tarjeta no está ahí.
+              </p>
             </div>
           </>
         )}
       </div>
+
+      {conArqueo && porMaquina.length > 0 && (
+        <div>
+          <h3 className="mb-2 text-xs font-bold uppercase tracking-wide text-[hsl(var(--muted-foreground))]">Por máquina</h3>
+          <table className="w-full text-sm" aria-label="Por máquina">
+            <thead>
+              <tr className="text-left text-[10px] uppercase tracking-wide text-[hsl(var(--muted-foreground))]">
+                <th className="py-1 font-semibold">Máquina</th>
+                <th className="py-1 text-right font-semibold">Cobros</th>
+                <th className="py-1 text-right font-semibold">Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              {porMaquina.map((m) => (
+                <tr key={m.pos_machine_id || m.display_name} className="border-t border-[hsl(var(--border))]">
+                  <td className="py-1.5">{m.display_name || 'Máquina sin nombre'}</td>
+                  <td className="py-1.5 text-right">{m.cobros}</td>
+                  <td className="py-1.5 text-right font-semibold">{formatMoney(Number(m.total))}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       {conArqueo && desglose.length > 0 && (
         <div>
@@ -125,6 +211,8 @@ export default function DetalleTurno({ caja, conArqueo = false }) {
           </div>
         </div>
       )}
+
+      {conArqueo && <OrdenesDelTurno cajaId={caja.id} />}
 
       <div>
         <h3 className="mb-2 text-xs font-bold uppercase tracking-wide text-[hsl(var(--muted-foreground))]">Movimientos</h3>
