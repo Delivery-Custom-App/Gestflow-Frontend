@@ -222,6 +222,11 @@ export async function apiRequest(path, options = {}) {
       if (response.status === 403 && accountStatus === 'password_change_required') {
         window.dispatchEvent(new CustomEvent('auth:password-change-required'))
       }
+      // Cuenta desactivada o inexistente (tokens anteriores a las sesiones): se
+      // cierra la sesión y el login lo explica (T-52).
+      if (response.status === 403 && (accountStatus === 'inactive' || accountStatus === 'not_found')) {
+        terminarSesion(accountStatus, detail)
+      }
     }
     throw err
   }

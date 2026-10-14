@@ -3,6 +3,25 @@ import { resumirUserAgent } from './dispositivo'
 
 export { resumirUserAgent }
 
+export const MENSAJE_SESION_EXPIRADA = 'Tu sesion expiro. Ingresa nuevamente.'
+
+/**
+ * Qué decirle a la persona cuando su sesión termina (T-52), según el
+ * `X-Account-Status` y el `detail` del backend:
+ * - `session_revoked` (la cerró el administrador, otro inicio en el mismo
+ *   equipo, un cambio de clave…): el motivo del backend tal cual.
+ * - `session_expired`: venció por inactividad.
+ * - `inactive`: la cuenta fue desactivada.
+ * - Sin estado: el mensaje de siempre.
+ */
+export function mensajeDeCierre({ accountStatus, message } = {}) {
+  if (accountStatus === 'session_revoked') return message || 'Tu sesión se cerró. Vuelve a iniciar sesión.'
+  if (accountStatus === 'session_expired') return 'Tu sesión venció por inactividad. Vuelve a iniciar sesión.'
+  if (accountStatus === 'inactive') return 'Tu cuenta está desactivada. Habla con el administrador de tu negocio.'
+  if (accountStatus === 'not_found') return 'Tu cuenta ya no existe. Habla con el administrador de tu negocio.'
+  return message || MENSAJE_SESION_EXPIRADA
+}
+
 /**
  * Mis sesiones abiertas (T-74 · B-16, sección 5d del backend).
  *

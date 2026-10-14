@@ -4,6 +4,7 @@ import { getUserRole } from '../utils/jwt'
 import { WORKER_ROLES } from '../constants/roles'
 import { formatRoleLabel } from '../auth/roleLabel'
 import { isInventoryAdminRole } from '../utils/inventoryAccess'
+import { mensajeDeCierre } from '../lib/sesiones'
 
 const AuthContext = createContext(null)
 
@@ -94,8 +95,9 @@ export function AppAuthProvider({ children }) {
       clearAuthState()
       setEmail('')
       setPassword('')
-      // T-51: si la renovación falló con un motivo del backend, se muestra ese.
-      setErrorMessage(event?.detail?.message || 'Tu sesion expiro. Ingresa nuevamente.')
+      // T-52: el motivo según X-Account-Status (la cerró el administrador,
+      // venció por inactividad, cuenta desactivada…); sin estado, el de siempre.
+      setErrorMessage(mensajeDeCierre(event?.detail || {}))
       setSuccessMessage('')
     }
 
