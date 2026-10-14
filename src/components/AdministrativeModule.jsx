@@ -50,9 +50,9 @@ const ROLES_CAJAS_FISICAS = new Set(['ADMIN', 'ADMINNEGOCIO', 'SUPERADMIN'])
 const getSections = () => [
   { id: 'ventas',        label: 'Ventas',        subtitle: 'Totales de hoy, tendencia, productos más vendidos e histórico' },
   { id: 'flujo-caja',    label: 'Caja y turnos', subtitle: 'Turnos de caja, movimientos y arqueo del día' },
-  // T-26: espera al backend (B-09). Con la bandera apagada la sección no existe y su dirección lleva a Ventas.
+  // T-26: fondo de emergencia (backend B-09). Con la bandera apagada la sección no existe y su dirección lleva a Ventas.
   ...(isV2FeatureEnabled('fondoEmergencia')
-    ? [{ id: 'fondo-emergencia', label: 'Fondo de emergencia', subtitle: 'Plata apartada para imprevistos: saldo, aportes y usos' }]
+    ? [{ id: 'fondo-emergencia', label: 'Fondo de emergencia', subtitle: 'Plata apartada para imprevistos: monto fijo, saldo, gastos y reposiciones' }]
     : []),
   { id: 'configuracion', label: 'Configuración', subtitle: 'Dispositivos POS y ajustes del local' },
 ]
@@ -1282,7 +1282,7 @@ function AdministrativeModule() {
                 {[
                   { icon: ShoppingCart, color: 'text-emerald-600', title: 'Ventas', desc: 'Ventas de las últimas 24 horas por método de pago, tendencia de los últimos 7 días, productos más vendidos e histórico consolidado por semana, mes o año.' },
                   { icon: CreditCard, color: 'text-amber-600', title: 'Caja y turnos', desc: 'Turnos de caja: resumen del día, movimientos de cada turno y cierre del arqueo diario. Y las cajas físicas del local, el puesto permanente al que se vincula la terminal MercadoPago.' },
-                  ...(isV2FeatureEnabled('fondoEmergencia') ? [{ icon: LifeBuoy, color: 'text-rose-600', title: 'Fondo de emergencia', desc: 'Plata apartada para imprevistos del local: su saldo, los aportes y cada uso con su motivo. No forma parte del arqueo de los turnos de caja.' }] : []),
+                  ...(isV2FeatureEnabled('fondoEmergencia') ? [{ icon: LifeBuoy, color: 'text-rose-600', title: 'Fondo de emergencia', desc: 'Plata apartada para imprevistos del local: un monto fijo, su saldo, cada gasto con su motivo y las reposiciones, semana a semana. Un gasto mal anotado se corrige, no se borra. No forma parte del arqueo de los turnos de caja.' }] : []),
                 ].map(({ icon: Icon, color, title, desc, highlight }) => (
                   <div key={title} className={`flex gap-3 rounded-xl p-3 ${highlight ? 'bg-[hsl(var(--primary)/0.08)] border border-[hsl(var(--primary)/0.2)]' : 'bg-[hsl(var(--muted)/0.4)]'}`}>
                     <div className={`mt-0.5 shrink-0 ${color}`}><Icon size={15} /></div>

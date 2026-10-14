@@ -139,6 +139,9 @@ export async function apiRequest(path, options = {}) {
     token: providedToken,
     headers = {},
     retryOnUnauthorized = true,
+    // Con `withTotal` devuelve { data, total }: `total` sale del encabezado X-Total-Count
+    // de las listas paginadas (null si no viene).
+    withTotal = false,
   } = options
 
   const token = providedToken || (await getSession()).access_token
@@ -188,16 +191,14 @@ export async function apiRequest(path, options = {}) {
     throw err
   }
 
-  if (response.status === 204) {
-    return null
-  }
-
   const contentType = response.headers.get('content-type') || ''
-  if (!contentType.includes('application/json')) {
-    return null
-  }
+  const data = response.status === 204 || !contentType.includes('application/json') ? null : await response.json()
 
-  return response.json()
+  if (withTotal) {
+    const total = Number(response.headers.get('X-Total-Count'))
+    return { data, total: response.headers.get('X-Total-Count') != null && Number.isFinite(total) ? total : null }
+  }
+  return data
 }
 
 function mapRoleToV2(role) {

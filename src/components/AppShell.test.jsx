@@ -65,6 +65,7 @@ afterEach(() => {
 
 describe('AppShell — fondo de emergencia', () => {
   it('con la bandera apagada no aparece en Administración', () => {
+    V2_FEATURES.fondoEmergencia = false
     renderShell('loc-mesas', 'administrativo/ventas')
     expect(screen.getByRole('button', { name: 'Caja y turnos' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Fondo de emergencia' })).not.toBeInTheDocument()

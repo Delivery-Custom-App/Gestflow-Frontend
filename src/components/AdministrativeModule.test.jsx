@@ -123,21 +123,21 @@ describe('AdministrativeModule', () => {
   })
 
   it('con la bandera fondoEmergencia apagada, la sección no existe y su dirección lleva a Ventas', async () => {
-    expect(V2_FEATURES.fondoEmergencia).toBe(false)
-    renderAdmin('fondo-emergencia')
-    expect(await screen.findByRole('heading', { name: 'Ventas' })).toBeInTheDocument()
-    expect(screen.queryByRole('heading', { name: 'Fondo de emergencia' })).not.toBeInTheDocument()
+    V2_FEATURES.fondoEmergencia = false
+    try {
+      renderAdmin('fondo-emergencia')
+      expect(await screen.findByRole('heading', { name: 'Ventas' })).toBeInTheDocument()
+      expect(screen.queryByRole('heading', { name: 'Fondo de emergencia' })).not.toBeInTheDocument()
+    } finally {
+      V2_FEATURES.fondoEmergencia = true
+    }
   })
 
-  it('con la bandera encendida, Administración tiene la sección "Fondo de emergencia"', async () => {
-    V2_FEATURES.fondoEmergencia = true
-    try {
-      renderAdmin('fondo-emergencia', 'Admin')
-      expect(await screen.findByRole('heading', { name: 'Fondo de emergencia' })).toBeInTheDocument()
-      expect(await screen.findByText(/todavía no tiene fondo de emergencia/)).toBeInTheDocument()
-    } finally {
-      V2_FEATURES.fondoEmergencia = false
-    }
+  it('la bandera está encendida: Administración tiene la sección "Fondo de emergencia"', async () => {
+    expect(V2_FEATURES.fondoEmergencia).toBe(true)
+    renderAdmin('fondo-emergencia', 'Admin')
+    expect(await screen.findByRole('heading', { name: 'Fondo de emergencia' })).toBeInTheDocument()
+    expect(await screen.findByText(/todavía no tiene fondo de emergencia/)).toBeInTheDocument()
   })
 
   it.each(['rendiciones', 'reportes', 'alertas', 'bonos', 'dashboard'])(
