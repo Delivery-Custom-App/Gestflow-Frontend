@@ -225,6 +225,40 @@ describe('AdministrativeModule', () => {
     expect(within(resumen).getByText('2 · 1 abierto')).toBeInTheDocument()
   })
 
+  it('T-63: egresos, efectivo esperado y diferencias del local, de cada caja física y de cada turno', async () => {
+    getResumenDiario.mockResolvedValueOnce({
+      ...mockResumenDiario,
+      total_egresos: '1000.00', efectivo_esperado: '108400.00', diferencia_total: '-300.00',
+      por_caja_fisica: [{
+        ...mockResumenDiario.por_caja_fisica[0], total_egresos: '1000.00', efectivo_esperado: '108400.00', diferencia_total: '-300.00',
+        cajas: [
+          { caja_id: 'caja-1', cashier_user_id: 'u-ana', status: 'open', total_egresos: '1000.00', efectivo_esperado: '58400.00', monto_cierre_declarado: null, diferencia: null },
+          { caja_id: 'caja-2', cashier_user_id: 'u-beto', status: 'closed', total_egresos: '0.00', efectivo_esperado: '50000.00', monto_cierre_declarado: '49700.00', diferencia: '-300.00' },
+          { caja_id: 'caja-3', cashier_user_id: 'u-beto', status: 'closed', total_egresos: '0.00', efectivo_esperado: '0.00', monto_cierre_declarado: null, diferencia: null },
+        ],
+      }],
+    })
+    renderAdmin('flujo-caja')
+
+    const resumen = (await screen.findByRole('heading', { name: 'Resumen del día' })).closest('article')
+    expect(within(resumen).getByTestId('egresos-dia')).toHaveTextContent('$1.000')
+    expect(within(resumen).getByTestId('efectivo-esperado-dia')).toHaveTextContent('$108.400')
+    expect(within(resumen).getByTestId('diferencia-dia')).toHaveTextContent('Faltan $300')
+    const turnos = within(resumen).getByRole('list', { name: 'Turnos del día' })
+    const filas = within(turnos).getAllByRole('listitem')
+    expect(filas).toHaveLength(3)
+    expect(filas[1]).toHaveAttribute('data-diferencia', 'si')
+    expect(filas[1]).toHaveTextContent('Contado $49.700 · Faltan $300')
+    expect(filas[0]).toHaveTextContent('Sin cerrar')
+    expect(filas[2]).toHaveTextContent('Sin arqueo')
+  })
+
+  it('sin arqueos del día, la diferencia dice «Sin arqueo»', async () => {
+    renderAdmin('flujo-caja')
+    const resumen = (await screen.findByRole('heading', { name: 'Resumen del día' })).closest('article')
+    expect(within(resumen).getByTestId('diferencia-dia')).toHaveTextContent('Sin arqueo')
+  })
+
   it('avisa que no se abrió ningún turno solo cuando de verdad no hay turnos del día', async () => {
     getResumenDiario.mockResolvedValueOnce({
       business_date: '2026-09-26',

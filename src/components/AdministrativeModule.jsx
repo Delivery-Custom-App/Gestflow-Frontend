@@ -20,6 +20,7 @@ import {
 } from '../lib/administrativeApi'
 import { getAuthContext, apiRequest, listUsers } from '../lib/apiClient'
 import { nombreDeVendedor, opcionesDeVendedor, useTurnosFiltrados } from '../lib/registroTurnos'
+import { monto, textoDiferencia } from '../lib/arqueo'
 import DetalleTurno from './turno/DetalleTurno'
 import RegistrarMovimientoCaja from './turno/RegistrarMovimientoCaja'
 import CerrarTurno from './turno/CerrarTurno'
@@ -577,9 +578,22 @@ function FlujoCajaContent({ localId, dashboard, cajas, cajasFisicas, usuarios, r
               <p className="text-[10px] font-semibold uppercase tracking-wide text-[hsl(var(--muted-foreground))]">Ingresos de hoy</p>
               <p className="mt-1 text-sm font-bold text-[hsl(var(--foreground))]">{formatMoney(Number(resumenDiario.total_ingresos))}</p>
             </div>
-            <div className="rounded-lg border border-[hsl(var(--primary)/0.3)] bg-[hsl(var(--primary)/0.08)] p-3">
+            <div className="rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--muted))] p-3">
               <p className="text-[10px] font-semibold uppercase tracking-wide text-[hsl(var(--muted-foreground))]">Total esperado hoy</p>
               <p className="mt-1 text-sm font-bold text-[hsl(var(--foreground))]">{formatMoney(Number(resumenDiario.total_esperado))}</p>
+            </div>
+            {/* T-63: retiros, efectivo esperado y diferencias del día (B-18). */}
+            <div className="rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--muted))] p-3">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-[hsl(var(--muted-foreground))]">Egresos de hoy</p>
+              <p className="mt-1 text-sm font-bold text-[hsl(var(--foreground))]" data-testid="egresos-dia">{formatMoney(monto(resumenDiario.total_egresos) ?? 0)}</p>
+            </div>
+            <div className="rounded-lg border border-[hsl(var(--primary)/0.3)] bg-[hsl(var(--primary)/0.08)] p-3">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-[hsl(var(--muted-foreground))]">Efectivo esperado</p>
+              <p className="mt-1 text-sm font-bold text-[hsl(var(--foreground))]" data-testid="efectivo-esperado-dia">{monto(resumenDiario.efectivo_esperado) === null ? '—' : formatMoney(monto(resumenDiario.efectivo_esperado))}</p>
+            </div>
+            <div className={cn('rounded-lg border p-3', (monto(resumenDiario.diferencia_total) ?? 0) < 0 ? 'border-red-200 bg-red-50 dark:border-red-800/50 dark:bg-red-950/30' : 'border-[hsl(var(--border))] bg-[hsl(var(--muted))]')}>
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-[hsl(var(--muted-foreground))]">Diferencia del día</p>
+              <p className="mt-1 text-sm font-bold text-[hsl(var(--foreground))]" data-testid="diferencia-dia">{textoDiferencia(resumenDiario.diferencia_total) ?? 'Sin arqueo'}</p>
             </div>
           </div>
           {turnosDelDia === 0 ? (
@@ -590,7 +604,7 @@ function FlujoCajaContent({ localId, dashboard, cajas, cajasFisicas, usuarios, r
                 Detalle por caja física
               </p>
               <AmTable
-                headers={['Caja física', 'Turnos', 'Apertura', 'Ingresos', 'Esperado']}
+                headers={['Caja física', 'Turnos', 'Apertura', 'Ingresos', 'Egresos', 'Efectivo esperado', 'Diferencia']}
                 rowKeys={porCajaFisica.map((cf) => cf.caja_fisica_id)}
                 rows={porCajaFisica.map((cf) => {
                   const turnos = safeArray(cf.cajas)
@@ -600,11 +614,39 @@ function FlujoCajaContent({ localId, dashboard, cajas, cajasFisicas, usuarios, r
                     `${turnos.length}${abiertos ? ` · ${abiertos} abierto${abiertos !== 1 ? 's' : ''}` : ''}`,
                     formatMoney(Number(cf.monto_apertura_total)),
                     formatMoney(Number(cf.total_ingresos)),
-                    formatMoney(Number(cf.total_esperado)),
+                    formatMoney(monto(cf.total_egresos) ?? 0),
+                    monto(cf.efectivo_esperado) === null ? '—' : formatMoney(monto(cf.efectivo_esperado)),
+                    textoDiferencia(cf.diferencia_total) ?? 'Sin arqueo',
                   ]
                 })}
                 emptyMessage="Sin cajas físicas con movimiento hoy."
               />
+              <p className="mb-2 mt-4 text-[10px] font-semibold uppercase tracking-wide text-[hsl(var(--muted-foreground))]">
+                Detalle por turno
+              </p>
+              <ul aria-label="Turnos del día" className="flex flex-col gap-1.5">
+                {porCajaFisica.flatMap((cf) => safeArray(cf.cajas).map((t) => {
+                  const dif = monto(t.diferencia)
+                  const conDiferencia = dif !== null && dif !== 0
+                  return (
+                    <li key={t.caja_id} data-diferencia={conDiferencia ? 'si' : 'no'}
+                      className={cn('grid grid-cols-2 gap-x-3 gap-y-0.5 rounded-lg border px-3 py-2 text-xs sm:grid-cols-6',
+                        conDiferencia ? 'border-red-300 bg-red-50 dark:border-red-800/60 dark:bg-red-950/30' : 'border-[hsl(var(--border))]')}>
+                      <span className="font-semibold text-[hsl(var(--foreground))] sm:col-span-2">
+                        {cf.nombre || 'Caja física'} · {nombreDeVendedor(usuariosPorId, t.cashier_user_id)}
+                      </span>
+                      <span>{t.status === 'open' ? 'Abierto' : 'Cerrado'}</span>
+                      <span>Egresos {formatMoney(monto(t.total_egresos) ?? 0)}</span>
+                      <span>Esperado {monto(t.efectivo_esperado) === null ? '—' : formatMoney(monto(t.efectivo_esperado))}</span>
+                      <span className={conDiferencia && dif < 0 ? 'font-semibold text-red-600' : ''}>
+                        {t.status === 'open' ? 'Sin cerrar'
+                          : monto(t.monto_cierre_declarado) === null ? 'Sin arqueo'
+                            : `Contado ${formatMoney(monto(t.monto_cierre_declarado))} · ${textoDiferencia(t.diferencia)}`}
+                      </span>
+                    </li>
+                  )
+                }))}
+              </ul>
             </div>
           )}
         </Panel>
