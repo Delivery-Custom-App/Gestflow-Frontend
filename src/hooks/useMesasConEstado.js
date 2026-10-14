@@ -56,8 +56,7 @@ export function useMesasConEstado(localId) {
   }, [fetchMesas])
 
   const deleteMesa = useCallback(async (id) => {
-    void id
-    await deleteMesaV2()
+    await deleteMesaV2(id)
     await fetchMesas()
   }, [fetchMesas])
 

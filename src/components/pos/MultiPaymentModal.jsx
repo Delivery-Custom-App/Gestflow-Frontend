@@ -5,10 +5,8 @@ import {
   deleteSplitPayment,
   getSplitPaymentSummary,
   updateSplitPayment,
-  createPointCharge,
-  getPointOrderStatus,
-  cancelPointCharge,
 } from '../../lib/apiClient'
+import { createPointCharge, getPointOrderStatus, cancelPointCharge } from '../../lib/cobroTarjeta'
 import TicketModal from './TicketModal'
 
 const PAYMENT_METHODS = [

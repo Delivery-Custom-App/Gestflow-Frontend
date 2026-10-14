@@ -222,7 +222,11 @@ export async function getVentasIndicadores(localId) {
  */
 export async function listarCajasFisicas(localId) {
   const rows = await apiRequest(`/cajas-fisicas?local_id=${encodeURIComponent(localId)}`)
-  return safeList(rows).map((c) => ({ ...c, name: c.nombre ?? c.name ?? null }))
+  // Las desactivadas (archivadas, T-75) no se ofrecen para abrir un turno: el
+  // backend las sigue listando y no impide abrir sobre ellas.
+  return safeList(rows)
+    .filter((c) => c.is_active !== false)
+    .map((c) => ({ ...c, name: c.nombre ?? c.name ?? null }))
 }
 
 export async function getCajasFisicasByLocal(localId) {
@@ -269,6 +273,29 @@ export async function renombrarCajaFisica(cajaFisicaId, nombre) {
     body: { nombre: String(nombre || '').trim() },
   })
   return { ...row, name: row?.nombre ?? null }
+}
+
+/**
+ * Activa o desactiva una caja física (`PATCH is_active`, T-75). Desactivar es
+ * archivarla: deja de ofrecerse al abrir turnos y conserva su historial. Es el
+ * primer paso para eliminarla.
+ */
+export async function cambiarEstadoCajaFisica(cajaFisicaId, activa) {
+  const row = await apiRequest(`/cajas-fisicas/${encodeURIComponent(String(cajaFisicaId))}`, {
+    method: 'PATCH',
+    body: { is_active: Boolean(activa) },
+  })
+  return { ...row, name: row?.nombre ?? null }
+}
+
+/**
+ * Elimina una caja física para siempre (`DELETE /cajas-fisicas/{id}`, T-75).
+ * El backend solo lo permite si ya está desactivada, nunca tuvo turnos y no
+ * tiene lectores POS anclados; si no, responde 400 con el motivo ("Esta caja
+ * física tiene turnos históricos…", "Reasigná estos lectores POS…").
+ */
+export async function eliminarCajaFisica(cajaFisicaId) {
+  await apiRequest(`/cajas-fisicas/${encodeURIComponent(String(cajaFisicaId))}`, { method: 'DELETE' })
 }
 
 export function provisionCajaFisicaMp(cajaFisicaId) {

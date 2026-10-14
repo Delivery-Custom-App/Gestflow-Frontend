@@ -172,7 +172,9 @@ export async function listCajas(localId) {
  * al local: el backend deriva el local de ella. Mandar `local_id` en vez de
  * `caja_fisica_id` era el contrato anterior y hoy responde 422.
  */
-export async function createCajaV2({ caja_fisica_id, cashier_user_id, monto_apertura = 0, apertura_desglose }) {
+export async function createCajaV2({
+  caja_fisica_id, cashier_user_id, monto_apertura = 0, apertura_desglose, pos_machine_id, compartir = false,
+}) {
   if (!caja_fisica_id) throw new Error('Elige la caja física donde se abre el turno')
   let cashierId = cashier_user_id
   if (!cashierId) {
@@ -188,9 +190,16 @@ export async function createCajaV2({ caja_fisica_id, cashier_user_id, monto_aper
       monto_apertura: Number(monto_apertura) || 0,
       // Billetes y monedas contados (T-40), solo si vienen: lo guarda el B-28.
       ...(Array.isArray(apertura_desglose) && apertura_desglose.length > 0 ? { apertura_desglose } : {}),
+      // Restaurante: la máquina POS con que cobrará (5b). En un local al paso no se manda (400).
+      ...(pos_machine_id ? { pos_machine_id: String(pos_machine_id), compartir: Boolean(compartir) } : {}),
     },
   })
   return mapCajaOut(row)
+}
+
+/** Un turno por id (`GET /cajas/{id}`), con su máquina y si se la soltaron. */
+export async function getCaja(cajaId) {
+  return mapCajaOut(await apiRequest(`/cajas/${encodeURIComponent(String(cajaId))}`))
 }
 
 /** Resumen de una caja: monto de apertura, total de ingresos y desglose por método de pago. */
@@ -294,8 +303,14 @@ export async function setMesaLibre(mesaId) {
   return updateMesa(mesaId, { status: 'available' })
 }
 
-export async function deleteMesa() {
-  throw new Error('Eliminar mesas aún no está disponible en Backend V2')
+/**
+ * Da de baja una mesa (`DELETE /mesas/{id}`, B-19). Es una baja lógica: deja
+ * de salir en el listado, pero los pedidos viejos la conservan y se puede
+ * reactivar. El backend responde 409 si está en uso o dentro de un grupo.
+ */
+export async function deleteMesa(mesaId) {
+  if (!mesaId) throw new Error('Falta indicar qué mesa dar de baja')
+  await apiRequest(`/mesas/${encodeURIComponent(String(mesaId))}`, { method: 'DELETE' })
 }
 
 /**

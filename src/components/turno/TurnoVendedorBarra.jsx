@@ -1,12 +1,15 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Clock3, CreditCard, LogOut } from 'lucide-react'
 import { toast } from 'sonner'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { useAuth } from '../../context/AuthContext'
 import { useTurnoVendedor } from '../../context/turnoVendedor'
-import { closeCaja } from '../../lib/salesApi'
+import { closeCaja, getCaja } from '../../lib/salesApi'
 import { mensajeCierreTurno } from '../../lib/turnos'
-import { listarMaquinasDelVendedor, resumenDeMaquinas, webCobraCon } from '../../lib/maquinasCobro'
+import { elegirMaquinaDelTurno, listarMaquinasDelLocal, maquinaDelTurno, webCobraCon } from '../../lib/maquinasCobro'
+import { isAlPasoLocal } from '../../lib/salesModel'
 import { isV2FeatureEnabled } from '../../lib/v2Features'
+import ElegirMaquina from './ElegirMaquina'
 
 function horaDe(fecha) {
   const d = fecha ? new Date(fecha) : null
@@ -14,64 +17,109 @@ function horaDe(fecha) {
   return d.toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' })
 }
 
-/** Cada cuánto se vuelve a mirar la máquina: el encargado puede asignarla o cambiarla durante el turno. */
+/** Cada cuánto se vuelve a mirar el turno: el administrador puede liberarle la máquina. */
 const REVISAR_MAQUINA_CADA_MS = 60_000
 
 const CHIP_AVISO = 'inline-flex max-w-[16rem] items-center gap-1.5 truncate rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-800 dark:bg-amber-950/40 dark:text-amber-300'
 const CHIP = 'inline-flex max-w-[16rem] items-center gap-1.5 truncate rounded-full bg-[hsl(var(--muted))] px-2.5 py-1 text-xs font-semibold text-[hsl(var(--foreground))]'
+const BOTON = 'inline-flex items-center gap-1.5 rounded-full border border-[hsl(var(--border))] px-3 py-1 text-xs font-semibold text-[hsl(var(--foreground))] hover:bg-[hsl(var(--accent))] transition-colors'
 
 /**
- * Con qué máquina cobra con tarjeta (la asignada a él, aunque esté
- * desactivada: el backend cobra igual con ella). Sin una, avisa que solo
- * puede cobrar sin tarjeta; con dos, que el cobro con tarjeta necesita una.
- * Se vuelve a revisar sola, y al volver a la pestaña.
+ * Con qué máquina cobra con tarjeta el turno (sección 5b):
+ * - restaurante: la que eligió (`pos_machine_id`), mientras no se la suelten;
+ * - al paso: la anclada a su caja física.
+ * Se vuelve a revisar sola y al volver a la pestaña, porque el administrador
+ * puede liberarle la máquina durante el turno. En restaurante, con la bandera
+ * `eleccionMaquinaVendedor`, puede elegir o cambiar la máquina desde aquí.
  */
-function MaquinaDelTurno({ localId, userId, turnoId }) {
-  const [resumen, setResumen] = useState(null) // null = sin dato (cargando o no se pudo consultar)
+function MaquinaDelTurno({ turnoInicial, alPaso }) {
+  const [turno, setTurno] = useState(turnoInicial)
+  const [maquinas, setMaquinas] = useState(null) // null = sin dato (cargando o no se pudo consultar)
+  const [eligiendo, setEligiendo] = useState(false)
+  const puedeElegir = !alPaso && isV2FeatureEnabled('eleccionMaquinaVendedor')
+
+  const revisar = useCallback(() => {
+    Promise.all([
+      getCaja(turnoInicial.id).catch(() => null),
+      listarMaquinasDelLocal(turnoInicial.local_id),
+    ])
+      .then(([fresco, filas]) => {
+        if (fresco) setTurno(fresco)
+        setMaquinas(filas)
+      })
+      // Si no se pueden consultar, no se afirma nada.
+      .catch(() => setMaquinas(null))
+  }, [turnoInicial.id, turnoInicial.local_id])
 
   useEffect(() => {
-    let ignore = false
-    const revisar = () => {
-      listarMaquinasDelVendedor(localId, userId)
-        .then((filas) => { if (!ignore) setResumen(resumenDeMaquinas(filas)) })
-        // Si no se pueden consultar, no se afirma nada.
-        .catch(() => { if (!ignore) setResumen(null) })
-    }
     revisar()
     const intervalo = setInterval(revisar, REVISAR_MAQUINA_CADA_MS)
     window.addEventListener('focus', revisar)
-    return () => { ignore = true; clearInterval(intervalo); window.removeEventListener('focus', revisar) }
-  }, [localId, userId, turnoId])
+    return () => { clearInterval(intervalo); window.removeEventListener('focus', revisar) }
+  }, [revisar])
 
-  if (!resumen) return null
-  if (resumen.tipo === 'ninguna') {
-    return (
-      <span title="Solo puedes cobrar sin tarjeta. Pídele al encargado que te asigne una máquina de cobro." className={CHIP_AVISO}>
+  const cambiar = async (maquina, { compartir }) => {
+    const actualizado = await elegirMaquinaDelTurno(turno.id, maquina.id, { compartir })
+    setTurno((t) => ({ ...t, ...actualizado }))
+    setEligiendo(false)
+    toast.success(compartir ? `Compartes la máquina ${maquina.nombre}` : `Cobrarás con ${maquina.nombre}`)
+    revisar()
+  }
+
+  if (!maquinas) return null
+  const maquina = maquinaDelTurno(turno, maquinas, { alPaso })
+  const liberada = !alPaso && Boolean(turno.pos_machine_released_at)
+
+  let chip
+  if (!maquina) {
+    const texto = liberada ? 'Te liberaron la máquina' : alPaso ? 'Tu caja no tiene máquina' : 'Sin máquina de cobro'
+    chip = (
+      <span title={`${texto}: solo puedes cobrar sin tarjeta.${puedeElegir ? ' Elige una para cobrar con tarjeta.' : ''}`} className={CHIP_AVISO}>
         <CreditCard size={13} className="shrink-0" />
         <span className="sm:hidden">Sin máquina</span>
-        <span className="hidden sm:inline">Sin máquina de cobro: solo cobros sin tarjeta</span>
+        <span className="hidden sm:inline">{texto}: solo cobros sin tarjeta</span>
+      </span>
+    )
+  } else {
+    const noCobraEnWeb = !webCobraCon(maquina.proveedor)
+    chip = (
+      <span className={noCobraEnWeb ? CHIP_AVISO : CHIP}
+        title={noCobraEnWeb ? 'La web todavía no cobra con Haulmer.' : maquina.ocupacion >= 2 ? `Compartida: ${maquina.usuarios.join(' y ')}` : undefined}>
+        <CreditCard size={13} className="shrink-0" />
+        <span className="truncate">
+          {maquina.nombre}
+          {maquina.proveedorLabel ? ` · ${maquina.proveedorLabel}` : ''}
+          {maquina.ocupacion >= 2 ? ' · compartida' : ''}
+        </span>
       </span>
     )
   }
-  if (resumen.tipo === 'varias') {
-    return (
-      <span title="El cobro con tarjeta necesita una sola máquina a tu nombre. Pídele al encargado que deje solo una." className={CHIP_AVISO}>
-        <CreditCard size={13} className="shrink-0" /> {resumen.mias.length} máquinas a tu nombre
-      </span>
-    )
-  }
-  const { maquina } = resumen
-  const noCobraEnWeb = !webCobraCon(maquina.proveedor)
+
   return (
-    <span className={noCobraEnWeb ? CHIP_AVISO : CHIP}
-      title={noCobraEnWeb ? 'La web todavía no cobra con Haulmer.' : !maquina.activa ? 'Está desactivada, pero sigue a tu nombre: el cobro con tarjeta usa esta máquina.' : undefined}>
-      <CreditCard size={13} className="shrink-0" />
-      <span className="truncate">
-        {maquina.nombre}
-        {maquina.proveedorLabel ? ` · ${maquina.proveedorLabel}` : ''}
-        {!maquina.activa ? ' (desactivada)' : ''}
-      </span>
-    </span>
+    <>
+      {chip}
+      {puedeElegir && (
+        <button type="button" onClick={() => setEligiendo(true)} className={BOTON}>
+          {maquina ? 'Cambiar máquina' : 'Elegir máquina'}
+        </button>
+      )}
+      {eligiendo && (
+        <Dialog open onOpenChange={(abierto) => { if (!abierto) setEligiendo(false) }}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>{maquina ? 'Cambiar de máquina' : 'Elegir máquina de cobro'}</DialogTitle>
+            </DialogHeader>
+            <ElegirMaquina
+              localId={turno.local_id}
+              maquinaActualId={maquina?.id || null}
+              onConfirmar={cambiar}
+              onSinMaquina={() => setEligiendo(false)}
+              textoSinMaquina="Cancelar"
+            />
+          </DialogContent>
+        </Dialog>
+      )}
+    </>
   )
 }
 
@@ -106,7 +154,7 @@ export default function TurnoVendedorBarra() {
       <span className="hidden sm:inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
         <Clock3 size={13} /> Turno abierto{desde ? ` desde las ${desde}` : ''}
       </span>
-      <MaquinaDelTurno localId={turno.local_id} userId={user?.id} turnoId={turno.id} />
+      <MaquinaDelTurno key={turno.id} turnoInicial={turno} alPaso={isAlPasoLocal(user?.local_sales_model)} />
       {isV2FeatureEnabled('cierreTurnoVendedor') && (
         <button
           type="button"

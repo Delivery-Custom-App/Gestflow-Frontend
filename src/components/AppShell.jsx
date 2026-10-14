@@ -16,6 +16,7 @@ import {
 import AunaroSymbol from '@/assets/brand/AunaroSymbol'
 import { nombreVisible } from '@/lib/altaUsuario'
 import TurnoVendedorBarra from './turno/TurnoVendedorBarra'
+import CambiarLocal from './CambiarLocal'
 import InicialesPerfil from './InicialesPerfil'
 
 const ROLE_BADGE_LABEL = {
@@ -513,6 +514,7 @@ function TopBar({ localId }) {
 
       {/* Right: el turno del vendedor (solo en su vista) y los ajustes personales */}
       <div className="shrink-0 flex items-center gap-2">
+        <CambiarLocal />
         <TurnoVendedorBarra />
         <button
           type="button"

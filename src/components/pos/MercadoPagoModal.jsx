@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { createPointCharge, getPointOrderStatus, cancelPointCharge } from '../../lib/apiClient'
+import { createPointCharge, getPointOrderStatus, cancelPointCharge } from '../../lib/cobroTarjeta'
 import { completeOrderCash } from '../../lib/salesApi'
 import { isV2FeatureEnabled } from '../../lib/v2Features'
 

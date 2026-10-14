@@ -2,7 +2,7 @@
  * El vendedor inicia su turno al entrar: sin turno de hoy se le pregunta
  * "¿Iniciar turno?"; con turno, entra directo a vender.
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterAll } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import InicioDeTurno from './InicioDeTurno'
@@ -10,23 +10,45 @@ import { useTurnoVendedor } from '../../context/turnoVendedor'
 import { createCajaV2, getMiTurnoDeHoy } from '../../lib/salesApi'
 import { listarCajasFisicas } from '../../lib/administrativeApi'
 import { V2_FEATURES } from '../../lib/v2Features'
+import { elegirMaquinaDelTurno } from '../../lib/maquinasCobro'
 
-const sesion = vi.hoisted(() => ({ logout: vi.fn() }))
+const sesion = vi.hoisted(() => ({ logout: vi.fn(), modelo: 'RESTAURANT' }))
 
 vi.mock('../../context/AuthContext', () => ({
-  useAuth: () => ({ user: { id: 'yo', email: 'cajero@demo.gestflow.dev' }, logout: sesion.logout }),
+  useAuth: () => ({
+    user: { id: 'yo', email: 'cajero@demo.gestflow.dev', local_sales_model: sesion.modelo },
+    logout: sesion.logout,
+  }),
 }))
 vi.mock('../../lib/salesApi', () => ({ getMiTurnoDeHoy: vi.fn(), createCajaV2: vi.fn() }))
-vi.mock('../../lib/administrativeApi', () => ({ listarCajasFisicas: vi.fn() }))
-// La elección de máquina tiene sus propias pruebas: aquí solo importa cuándo aparece.
-// Muestra qué recibe, para comprobar que le llegan el local, el usuario y si es un reingreso.
-vi.mock('./ElegirMaquina', () => ({
-  default: ({ onListo, localId, userId, saltarSiTiene }) => (
-    <button type="button" onClick={() => onListo(null)}>
-      {`elegir máquina (simulado) · ${localId} · ${userId} · ${saltarSiTiene ? 'reingreso' : 'recién abierto'}`}
-    </button>
-  ),
+vi.mock('../../lib/maquinasCobro', async (importOriginal) => ({
+  ...(await importOriginal()),
+  elegirMaquinaDelTurno: vi.fn(),
 }))
+vi.mock('../../lib/administrativeApi', () => ({ listarCajasFisicas: vi.fn() }))
+// El cambio de local tiene sus propias pruebas.
+vi.mock('../CambiarLocal', () => ({ default: () => null }))
+// La lista de máquinas tiene sus propias pruebas: aquí se simula que eligió una.
+// Si la acción falla, el simulado muestra el mensaje, como hace el componente real.
+vi.mock('./ElegirMaquina', async () => {
+  const { useState } = await import('react')
+  return {
+    default: function ElegirSimulado({ localId, onConfirmar, onSinMaquina, textoConfirmar, textoSinMaquina }) {
+      const [error, setError] = useState('')
+      const elegir = (compartir) => onConfirmar({ id: 'm-1', nombre: 'Point barra' }, { compartir })
+        .catch((e) => setError(`${e.message}${e.conflicto ? ' · recarga la lista' : ''}`))
+      return (
+        <div>
+          <p>{`máquinas de ${localId}`}</p>
+          <button type="button" onClick={() => elegir(false)}>{textoConfirmar || 'Usar esta máquina'}</button>
+          <button type="button" onClick={() => elegir(true)}>Compartir esta máquina</button>
+          {onSinMaquina && <button type="button" onClick={onSinMaquina}>{textoSinMaquina}</button>}
+          {error && <p role="alert">{error}</p>}
+        </div>
+      )
+    },
+  }
+})
 
 const TURNO = { id: 'turno-1', status: 'open', opened_at: '2026-10-04T12:00:00Z', cashier_user_id: 'yo' }
 const UNA_CAJA = [{ id: 'cf-1', name: 'Caja principal' }]
@@ -44,8 +66,13 @@ function PuntoDeVenta() {
 
 const montar = () => render(<InicioDeTurno localId="loc-1"><PuntoDeVenta /></InicioDeTurno>)
 
+const original = { ...V2_FEATURES }
+
 beforeEach(() => {
   vi.clearAllMocks()
+  // Las pruebas de siempre corren sin elegir máquina; las de la máquina la encienden.
+  V2_FEATURES.eleccionMaquinaVendedor = false
+  sesion.modelo = 'RESTAURANT'
   getMiTurnoDeHoy.mockResolvedValue(null)
   listarCajasFisicas.mockResolvedValue(UNA_CAJA)
   createCajaV2.mockResolvedValue(TURNO)
@@ -161,7 +188,6 @@ describe('InicioDeTurno', () => {
   })
 
   it('con la bandera eleccionMaquinaVendedor apagada, al abrir el turno entra directo', async () => {
-    expect(V2_FEATURES.eleccionMaquinaVendedor).toBe(false)
     const user = userEvent.setup()
     montar()
 
@@ -169,40 +195,8 @@ describe('InicioDeTurno', () => {
     await user.click(await screen.findByRole('button', { name: 'Abrir turno' }))
 
     expect(await screen.findByText('punto de venta · turno-1')).toBeInTheDocument()
-    expect(screen.queryByText(/elegir máquina/)).not.toBeInTheDocument()
-  })
-
-  it('con la bandera encendida, después de abrir el turno elige su máquina y recién ahí vende', async () => {
-    V2_FEATURES.eleccionMaquinaVendedor = true
-    try {
-      const user = userEvent.setup()
-      montar()
-
-      await user.click(await screen.findByRole('button', { name: 'Iniciar turno' }))
-      await user.click(await screen.findByRole('button', { name: 'Abrir turno' }))
-      expect(await screen.findByRole('heading', { name: 'Elige tu máquina de cobro' })).toBeInTheDocument()
-      expect(screen.queryByText(/punto de venta/)).not.toBeInTheDocument()
-
-      await user.click(screen.getByRole('button', { name: 'elegir máquina (simulado) · loc-1 · yo · recién abierto' }))
-      expect(await screen.findByText('punto de venta · turno-1')).toBeInTheDocument()
-    } finally {
-      V2_FEATURES.eleccionMaquinaVendedor = false
-    }
-  })
-
-  it('con la bandera encendida, al volver a entrar con el turno abierto pasa por el selector como reingreso', async () => {
-    V2_FEATURES.eleccionMaquinaVendedor = true
-    try {
-      getMiTurnoDeHoy.mockResolvedValue(TURNO)
-      const user = userEvent.setup()
-      montar()
-
-      // El selector se salta solo si ya tiene su máquina (lo prueba ElegirMaquina).
-      await user.click(await screen.findByRole('button', { name: 'elegir máquina (simulado) · loc-1 · yo · reingreso' }))
-      expect(await screen.findByText('punto de venta · turno-1')).toBeInTheDocument()
-    } finally {
-      V2_FEATURES.eleccionMaquinaVendedor = false
-    }
+    expect(screen.queryByText(/máquinas de/)).not.toBeInTheDocument()
+    expect(createCajaV2).toHaveBeenCalledWith({ caja_fisica_id: 'cf-1', monto_apertura: 0 })
   })
 
   it('puede cerrar sesión en vez de iniciar turno', async () => {
@@ -211,5 +205,117 @@ describe('InicioDeTurno', () => {
 
     await user.click(await screen.findByRole('button', { name: 'Cerrar sesión' }))
     expect(sesion.logout).toHaveBeenCalled()
+  })
+})
+
+describe('InicioDeTurno · máquina POS (T-71)', () => {
+  beforeEach(() => { V2_FEATURES.eleccionMaquinaVendedor = true })
+  afterAll(() => { Object.assign(V2_FEATURES, original) })
+
+  it('restaurante: elige la máquina antes de abrir, y el turno se abre con ella', async () => {
+    const user = userEvent.setup()
+    montar()
+
+    await user.click(await screen.findByRole('button', { name: 'Iniciar turno' }))
+    await user.click(await screen.findByRole('button', { name: 'Abrir turno' }))
+    expect(await screen.findByRole('heading', { name: 'Elige tu máquina de cobro' })).toBeInTheDocument()
+    expect(screen.getByText('máquinas de loc-1')).toBeInTheDocument()
+    // Todavía no se abrió nada: la máquina va en la apertura.
+    expect(createCajaV2).not.toHaveBeenCalled()
+
+    await user.click(screen.getByRole('button', { name: 'Abrir turno con esta máquina' }))
+
+    expect(createCajaV2).toHaveBeenCalledWith({
+      caja_fisica_id: 'cf-1', monto_apertura: 0, pos_machine_id: 'm-1', compartir: false,
+    })
+    expect(await screen.findByText('punto de venta · turno-1')).toBeInTheDocument()
+  })
+
+  it('restaurante: si la máquina ya la usa alguien, abre compartiéndola', async () => {
+    const user = userEvent.setup()
+    montar()
+    await user.click(await screen.findByRole('button', { name: 'Iniciar turno' }))
+    await user.click(await screen.findByRole('button', { name: 'Abrir turno' }))
+    await user.click(await screen.findByRole('button', { name: 'Compartir esta máquina' }))
+
+    expect(createCajaV2).toHaveBeenCalledWith(expect.objectContaining({ pos_machine_id: 'm-1', compartir: true }))
+  })
+
+  it('restaurante: un 409 de la máquina (se llenó) muestra el motivo del backend y pide recargar', async () => {
+    const error = Object.assign(new Error('409: La máquina «Point barra» ya la usan 2 personas (Ana y Luis): elige otra'), { status: 409 })
+    createCajaV2.mockRejectedValue(error)
+    const user = userEvent.setup()
+    montar()
+    await user.click(await screen.findByRole('button', { name: 'Iniciar turno' }))
+    await user.click(await screen.findByRole('button', { name: 'Abrir turno' }))
+    await user.click(await screen.findByRole('button', { name: 'Abrir turno con esta máquina' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'La máquina «Point barra» ya la usan 2 personas (Ana y Luis): elige otra · recarga la lista',
+    )
+    expect(screen.queryByText(/punto de venta/)).not.toBeInTheDocument()
+  })
+
+  it('restaurante: si ya tenía su turno abierto en esa caja, lo toma y entra', async () => {
+    createCajaV2.mockRejectedValue(Object.assign(new Error('409: Ya existe una caja abierta hoy para este cajero en esta caja física'), { status: 409 }))
+    getMiTurnoDeHoy.mockResolvedValueOnce(null).mockResolvedValue({ ...TURNO, pos_machine_id: 'm-1' })
+    const user = userEvent.setup()
+    montar()
+    await user.click(await screen.findByRole('button', { name: 'Iniciar turno' }))
+    await user.click(await screen.findByRole('button', { name: 'Abrir turno' }))
+    await user.click(await screen.findByRole('button', { name: 'Abrir turno con esta máquina' }))
+
+    expect(await screen.findByText('punto de venta · turno-1')).toBeInTheDocument()
+  })
+
+  it('restaurante: "Volver" regresa a elegir la caja física sin abrir nada', async () => {
+    const user = userEvent.setup()
+    montar()
+    await user.click(await screen.findByRole('button', { name: 'Iniciar turno' }))
+    await user.click(await screen.findByRole('button', { name: 'Abrir turno' }))
+    await user.click(await screen.findByRole('button', { name: 'Volver' }))
+
+    expect(await screen.findByRole('button', { name: 'Abrir turno' })).toBeInTheDocument()
+    expect(createCajaV2).not.toHaveBeenCalled()
+  })
+
+  it('restaurante: al volver a entrar con su máquina, entra directo', async () => {
+    getMiTurnoDeHoy.mockResolvedValue({ ...TURNO, pos_machine_id: 'm-1', pos_machine_released_at: null })
+    montar()
+    expect(await screen.findByText('punto de venta · turno-1')).toBeInTheDocument()
+  })
+
+  it('restaurante: si le liberaron la máquina, elige otra con PUT /cajas/{id}/maquina', async () => {
+    getMiTurnoDeHoy.mockResolvedValue({ ...TURNO, pos_machine_id: 'm-9', pos_machine_released_at: '2026-10-14T13:00:00Z' })
+    elegirMaquinaDelTurno.mockResolvedValue({ ...TURNO, pos_machine_id: 'm-1', pos_machine_released_at: null })
+    const user = userEvent.setup()
+    montar()
+
+    expect(await screen.findByRole('heading', { name: 'Tu turno no tiene máquina de cobro' })).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Usar esta máquina' }))
+
+    expect(elegirMaquinaDelTurno).toHaveBeenCalledWith('turno-1', 'm-1', { compartir: false })
+    expect(await screen.findByText('punto de venta · turno-1')).toBeInTheDocument()
+  })
+
+  it('restaurante: sin máquina puede seguir cobrando sin tarjeta', async () => {
+    getMiTurnoDeHoy.mockResolvedValue(TURNO)
+    const user = userEvent.setup()
+    montar()
+    await user.click(await screen.findByRole('button', { name: 'Seguir sin tarjeta' }))
+    expect(await screen.findByText('punto de venta · turno-1')).toBeInTheDocument()
+    expect(elegirMaquinaDelTurno).not.toHaveBeenCalled()
+  })
+
+  it('al paso: no elige máquina (está anclada a la caja) y abre directo sin mandarla', async () => {
+    sesion.modelo = 'AL_PASO'
+    const user = userEvent.setup()
+    montar()
+    await user.click(await screen.findByRole('button', { name: 'Iniciar turno' }))
+    await user.click(await screen.findByRole('button', { name: 'Abrir turno' }))
+
+    expect(await screen.findByText('punto de venta · turno-1')).toBeInTheDocument()
+    expect(screen.queryByText(/máquinas de/)).not.toBeInTheDocument()
+    expect(createCajaV2).toHaveBeenCalledWith({ caja_fisica_id: 'cf-1', monto_apertura: 0 })
   })
 })

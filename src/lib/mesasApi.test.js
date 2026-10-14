@@ -8,7 +8,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { apiRequest } from './apiClient'
-import { createMesa, listMesasConTotales, mapMesaOut, updateMesa } from './salesApi'
+import { createMesa, deleteMesa, listMesasConTotales, mapMesaOut, updateMesa } from './salesApi'
 
 vi.mock('./apiClient', () => ({ apiRequest: vi.fn() }))
 
@@ -112,5 +112,27 @@ describe('Mesas', () => {
 
     expect(mesas).toHaveLength(1)
     expect(mesas[0].total).toBeNull()
+  })
+})
+
+describe('Dar de baja una mesa (T-70)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    apiRequest.mockResolvedValue(null)
+  })
+
+  it('llama a DELETE /mesas/{id} con el id de la mesa', async () => {
+    await deleteMesa('m 7')
+    expect(apiRequest).toHaveBeenCalledWith('/mesas/m%207', { method: 'DELETE' })
+  })
+
+  it('sin id no llama a la API', async () => {
+    await expect(deleteMesa()).rejects.toThrow('Falta indicar qué mesa dar de baja')
+    expect(apiRequest).not.toHaveBeenCalled()
+  })
+
+  it('el 409 del backend llega tal cual a la pantalla', async () => {
+    apiRequest.mockRejectedValue(new Error('409: La mesa está dentro de un grupo'))
+    await expect(deleteMesa('m1')).rejects.toThrow('409: La mesa está dentro de un grupo')
   })
 })

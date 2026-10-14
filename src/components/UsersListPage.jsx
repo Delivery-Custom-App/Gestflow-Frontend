@@ -1,12 +1,14 @@
 import { useState, useEffect, useCallback } from 'react'
 import { m, AnimatePresence } from 'framer-motion'
-import { Users, Store, Plus, Trash2, X, UserPlus, Loader2, Eye, EyeOff, Shield, HelpCircle, KeyRound, Filter } from 'lucide-react'
+import { Users, Store, Plus, Trash2, X, UserPlus, Loader2, Eye, EyeOff, Shield, HelpCircle, KeyRound, Filter, MapPin } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { isSuperAdminRole } from '../auth/roleLabel'
 import { isInventoryAdminRole } from '../utils/inventoryAccess'
 import { useLocals } from '../hooks/useLocals'
 import { listUsers, deleteUser, createUser, getOptionalAuthContext } from '../lib/apiClient'
 import { SIN_LOCAL, usuariosVisibles } from '../lib/listaUsuarios'
+import { puedeTenerVariosLocales } from '../lib/localesAsignados'
+import LocalesAsignadosDialog from './LocalesAsignadosDialog'
 import {
   AVISO_VENDEDOR, LARGO_MINIMO_CONTRASENA, ROL_LABEL, datosDeAlta, formatearRut, pideRut,
   puedeCrearUsuarios, rolConLocal, rolesAsignables, validarAlta,
@@ -205,6 +207,7 @@ export default function UsersListPage() {
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [guideOpen,  setGuideOpen]  = useState(false)
   const [filtroLocal, setFiltroLocal] = useState('')
+  const [localesDe, setLocalesDe] = useState(null) // usuario cuyos locales asignados se ven (T-72)
   // Dentro de una franquicia (/local/:localId/usuarios) la lista es la de ese local.
   const { localId } = useParams()
 
@@ -473,11 +476,19 @@ export default function UsersListPage() {
                       </td>
                       {puedeCrear && (
                         <td className="py-2.5 px-5 text-right">
-                          {canDelete(u) && (
-                            <Button variant="danger" size="sm" onClick={() => onDelete(u)}>
-                              <Trash2 size={14} /> Eliminar
-                            </Button>
-                          )}
+                          <span className="inline-flex items-center gap-2">
+                            {puedeTenerVariosLocales(u.role) && (
+                              <Button variant="outline" size="sm" onClick={() => setLocalesDe(u)}
+                                aria-label={`Locales de ${u.name || u.email}`}>
+                                <MapPin size={14} /> Locales
+                              </Button>
+                            )}
+                            {canDelete(u) && (
+                              <Button variant="danger" size="sm" onClick={() => onDelete(u)}>
+                                <Trash2 size={14} /> Eliminar
+                              </Button>
+                            )}
+                          </span>
                         </td>
                       )}
                     </tr>
@@ -488,6 +499,10 @@ export default function UsersListPage() {
           </Card>
         )}
       </div>
+
+      {puedeCrear && localesDe && (
+        <LocalesAsignadosDialog usuario={localesDe} locales={locales} onClose={() => setLocalesDe(null)} />
+      )}
 
       {puedeCrear && (
         <CreateUserDrawer

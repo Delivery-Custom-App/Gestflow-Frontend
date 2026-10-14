@@ -9,6 +9,9 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { apiRequest } from './apiClient'
 import {
   assignExistingMpPos,
+  cambiarEstadoCajaFisica,
+  eliminarCajaFisica,
+  listarCajasFisicas,
   getCajasByLocal,
   getCajasFisicasByLocal,
   getVentasIndicadores,
@@ -172,3 +175,31 @@ describe('Vinculación MercadoPago por caja física', () => {
     expect(rutasPedidas()).toContain('/cajas?local_id=loc-1')
   })
 })
+
+describe('cajas físicas: desactivar, reactivar y eliminar (T-75)', () => {
+  beforeEach(() => { vi.clearAllMocks() })
+
+  it('al abrir turnos no se ofrecen las desactivadas', async () => {
+    apiRequest.mockResolvedValue([
+      { id: 'cf-1', nombre: 'Caja principal', is_active: true },
+      { id: 'cf-2', nombre: 'Caja vieja', is_active: false },
+    ])
+    const filas = await listarCajasFisicas('loc-1')
+    expect(filas.map((c) => c.name)).toEqual(['Caja principal'])
+  })
+
+  it('desactivar y reactivar usan PATCH is_active', async () => {
+    apiRequest.mockResolvedValue({ id: 'cf-1', nombre: 'Caja principal', is_active: false })
+    await cambiarEstadoCajaFisica('cf-1', false)
+    expect(apiRequest).toHaveBeenCalledWith('/cajas-fisicas/cf-1', { method: 'PATCH', body: { is_active: false } })
+    await cambiarEstadoCajaFisica('cf-1', true)
+    expect(apiRequest).toHaveBeenLastCalledWith('/cajas-fisicas/cf-1', { method: 'PATCH', body: { is_active: true } })
+  })
+
+  it('eliminar usa DELETE /cajas-fisicas/{id}', async () => {
+    apiRequest.mockResolvedValue(null)
+    await eliminarCajaFisica('cf-1')
+    expect(apiRequest).toHaveBeenCalledWith('/cajas-fisicas/cf-1', { method: 'DELETE' })
+  })
+})
+

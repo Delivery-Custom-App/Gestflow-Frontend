@@ -13,6 +13,8 @@ vi.mock('../context/AuthContext', () => ({ useAuth: () => ({ user: sesion.user, 
 vi.mock('../context/ThemeContext', () => ({ useTheme: () => ({ darkMode: false, setDarkMode: vi.fn() }) }))
 vi.mock('../hooks/useCurrentBusiness', () => ({ useCurrentBusiness: () => ({ business: { plan: 'professional' } }) }))
 vi.mock('../lib/apiClient', () => ({ changeMyPassword: vi.fn() }))
+// "Mis sesiones" tiene sus propias pruebas.
+vi.mock('./MisSesiones', () => ({ default: () => <p>mis sesiones (simulado)</p> }))
 vi.mock('../lib/perfil', async (importOriginal) => ({ ...(await importOriginal()), guardarMiNombre: vi.fn(() => Promise.resolve({})) }))
 
 beforeEach(() => {

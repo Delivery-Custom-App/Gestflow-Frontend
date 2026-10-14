@@ -7,7 +7,10 @@ import { TurnoVendedorContext } from '../../context/turnoVendedor'
 import { createCajaV2, getMiTurnoDeHoy } from '../../lib/salesApi'
 import { listarCajasFisicas } from '../../lib/administrativeApi'
 import { isV2FeatureEnabled } from '../../lib/v2Features'
+import { isAlPasoLocal } from '../../lib/salesModel'
+import { elegirMaquinaDelTurno, errorAlTomarMaquina, turnoTieneMaquina } from '../../lib/maquinasCobro'
 import ElegirMaquina from './ElegirMaquina'
+import CambiarLocal from '../CambiarLocal'
 
 function Tarjeta({ titulo, subtitulo, children }) {
   return (
@@ -50,6 +53,13 @@ function Aviso({ children }) {
  * el encargado o el dueño al abrir su turno de caja (Caja y turnos), y el
  * arqueo del día lo suma por caja física. El turno del vendedor parte en 0.
  *
+ * Máquina POS (bandera `eleccionMaquinaVendedor`, sección 5b del backend):
+ * - Restaurante: antes de abrir el turno elige la máquina con que cobrará con
+ *   tarjeta (o la comparte con una persona más) y viaja en `POST /cajas`. Si
+ *   vuelve a entrar con el turno abierto y sin máquina (se la liberaron), elige
+ *   otra con `PUT /cajas/{id}/maquina` o sigue cobrando sin tarjeta.
+ * - Comida al paso: la máquina está anclada a la caja física; no elige nada.
+ *
  * Igual que el cambio de contraseña obligatorio, se muestra en lugar de la
  * aplicación sin tocar la URL: al abrir el turno, sigue donde iba.
  */
@@ -62,7 +72,8 @@ export default function InicioDeTurno({ localId, children }) {
   const [cajaFisicaId, setCajaFisicaId] = useState('')
   const [abriendo, setAbriendo] = useState(false)
   const [intento, setIntento] = useState(0)
-  const [reingreso, setReingreso] = useState(false)
+  // Restaurante con la bandera encendida: el turno se abre eligiendo la máquina POS.
+  const eligeMaquina = isV2FeatureEnabled('eleccionMaquinaVendedor') && !isAlPasoLocal(user?.local_sales_model)
 
   // ¿Ya tiene su turno de hoy? Se vuelve a preguntar al reintentar o al cerrarse el turno.
   useEffect(() => {
@@ -72,9 +83,7 @@ export default function InicioDeTurno({ localId, children }) {
         if (ignore) return
         setTurno(mio)
         // Con el turno ya abierto (volvió a entrar), elige máquina solo si no tiene una.
-        const conMaquina = isV2FeatureEnabled('eleccionMaquinaVendedor')
-        setReingreso(Boolean(mio))
-        setFase(!mio ? 'pregunta' : conMaquina ? 'maquina' : 'listo')
+        setFase(!mio ? 'pregunta' : eligeMaquina && !turnoTieneMaquina(mio) ? 'maquina-turno' : 'listo')
       })
       .catch((e) => {
         if (ignore) return
@@ -82,9 +91,9 @@ export default function InicioDeTurno({ localId, children }) {
         setFase('error')
       })
     return () => { ignore = true }
-  }, [localId, intento])
+  }, [localId, intento, eligeMaquina])
 
-  const reintentar = () => { setError(''); setFase('cargando'); setIntento((n) => n + 1) }
+  const reintentar = useCallback(() => { setError(''); setFase('cargando'); setIntento((n) => n + 1) }, [])
 
   const irAlFormulario = () => {
     setError('')
@@ -105,16 +114,16 @@ export default function InicioDeTurno({ localId, children }) {
   const abrirTurno = async (e) => {
     e.preventDefault()
     if (!cajaFisicaId) { setError('Elige la caja física donde trabajarás'); return }
-    setAbriendo(true)
     setError('')
+    // En restaurante primero elige la máquina: el turno se abre con ella.
+    if (eligeMaquina) { setFase('maquina-apertura'); return }
+    setAbriendo(true)
     try {
       // Sin cashier_user_id explícito, el turno queda a nombre de quien lo abre.
       // En 0: el efectivo inicial no es del vendedor (lo registra el encargado).
       const nuevo = await createCajaV2({ caja_fisica_id: cajaFisicaId, monto_apertura: 0 })
       setTurno(nuevo)
-      setReingreso(false)
-      // Con el turno abierto, elige su máquina de cobro (cuando el backend lo permita: B-01).
-      setFase(isV2FeatureEnabled('eleccionMaquinaVendedor') ? 'maquina' : 'listo')
+      setFase('listo')
     } catch (err) {
       const mensaje = String(err?.message || '')
       if (/409|ya existe una caja abierta/i.test(mensaje)) {
@@ -133,7 +142,27 @@ export default function InicioDeTurno({ localId, children }) {
     setFase('pregunta')
   }, [])
 
-  const alElegirMaquina = useCallback(() => setFase('listo'), [])
+  // Abre el turno con la máquina elegida (restaurante).
+  const abrirConMaquina = useCallback(async (maquina, { compartir }) => {
+    try {
+      const nuevo = await createCajaV2({
+        caja_fisica_id: cajaFisicaId, monto_apertura: 0, pos_machine_id: maquina.id, compartir,
+      })
+      setTurno(nuevo)
+      setFase('listo')
+    } catch (err) {
+      // Ya tenía su turno de hoy en esa caja: se lo toma y entra.
+      if (/ya existe una caja abierta/i.test(String(err?.detail || err?.message || ''))) { reintentar(); return }
+      throw errorAlTomarMaquina(err)
+    }
+  }, [cajaFisicaId, reintentar])
+
+  // Turno ya abierto sin máquina: elige otra.
+  const tomarMaquinaDelTurno = useCallback(async (maquina, { compartir }) => {
+    const actualizado = await elegirMaquinaDelTurno(turno.id, maquina.id, { compartir })
+    setTurno((t) => ({ ...t, ...actualizado }))
+    setFase('listo')
+  }, [turno])
 
   const valor = useMemo(() => ({ turno, alCerrar }), [turno, alCerrar])
 
@@ -169,10 +198,29 @@ export default function InicioDeTurno({ localId, children }) {
     )
   }
 
-  if (fase === 'maquina') {
+  if (fase === 'maquina-apertura') {
     return (
       <Tarjeta titulo="Elige tu máquina de cobro" subtitulo={subtitulo}>
-        <ElegirMaquina localId={localId} userId={user?.id} saltarSiTiene={reingreso} onListo={alElegirMaquina} />
+        <ElegirMaquina
+          localId={localId}
+          onConfirmar={abrirConMaquina}
+          textoConfirmar="Abrir turno con esta máquina"
+          onSinMaquina={() => setFase('formulario')}
+          textoSinMaquina="Volver"
+        />
+      </Tarjeta>
+    )
+  }
+
+  if (fase === 'maquina-turno') {
+    return (
+      <Tarjeta titulo="Tu turno no tiene máquina de cobro" subtitulo={subtitulo}>
+        <ElegirMaquina
+          localId={localId}
+          onConfirmar={tomarMaquinaDelTurno}
+          onSinMaquina={() => setFase('listo')}
+          textoSinMaquina="Seguir sin tarjeta"
+        />
       </Tarjeta>
     )
   }
@@ -186,7 +234,11 @@ export default function InicioDeTurno({ localId, children }) {
         </p>
         <div className="flex items-center justify-between gap-2">
           {salir}
-          <Button onClick={irAlFormulario}>Iniciar turno</Button>
+          <div className="flex items-center gap-2">
+            {/* Con más de un local asignado puede cambiarse antes de abrir el turno (T-73). */}
+            <CambiarLocal />
+            <Button onClick={irAlFormulario}>Iniciar turno</Button>
+          </div>
         </div>
       </Tarjeta>
     )
