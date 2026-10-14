@@ -10,6 +10,7 @@ import { SIN_LOCAL, usuariosVisibles } from '../lib/listaUsuarios'
 import { puedeTenerVariosLocales } from '../lib/localesAsignados'
 import LocalesAsignadosDialog from './LocalesAsignadosDialog'
 import EditarUsuarioDialog from './EditarUsuarioDialog'
+import ClaveTemporalDialog from './ClaveTemporalDialog'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import {
   cambiarEstadoUsuario, puedeGestionar, restablecerClave, separarPorEstado, textoDeError,
@@ -219,6 +220,8 @@ export default function UsersListPage() {
   const [confirmando, setConfirmando] = useState(null) // { usuario, accion: 'desactivar'|'reactivar'|'clave' }
   const [ocupado, setOcupado] = useState(false)
   const [aviso, setAviso] = useState('')
+  // Clave temporal (T-61): solo en memoria mientras el diálogo está abierto.
+  const [claveTemporal, setClaveTemporal] = useState(null) // { nombre, clave, correoEnviado }
   // Dentro de una franquicia (/local/:localId/usuarios) la lista es la de ese local.
   const { localId } = useParams()
 
@@ -271,8 +274,8 @@ export default function UsersListPage() {
     setErr('')
     try {
       if (accion === 'clave') {
-        await restablecerClave(u.id)
-        setAviso(`Se restableció la clave de ${nombreDe(u)}. Deberá cambiarla al entrar.`)
+        const r = await restablecerClave(u.id)
+        setClaveTemporal({ nombre: nombreDe(u), clave: r?.temporary_password || '', correoEnviado: Boolean(r?.email_sent) })
       } else {
         await cambiarEstadoUsuario(u.id, accion === 'reactivar')
         setAviso(accion === 'reactivar' ? `${nombreDe(u)} puede volver a entrar.` : `${nombreDe(u)} quedó desactivado.`)
@@ -559,6 +562,15 @@ export default function UsersListPage() {
           miRol={userRole}
           onClose={() => setEditando(null)}
           onGuardado={() => { setEditando(null); setAviso(`Se guardaron los cambios de ${nombreDe(editando)}.`); loadUsers() }}
+        />
+      )}
+
+      {claveTemporal && (
+        <ClaveTemporalDialog
+          nombre={claveTemporal.nombre}
+          clave={claveTemporal.clave}
+          correoEnviado={claveTemporal.correoEnviado}
+          onClose={() => setClaveTemporal(null)}
         />
       )}
 

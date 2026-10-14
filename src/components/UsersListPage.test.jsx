@@ -341,6 +341,24 @@ describe('UsersListPage · desactivar, reactivar, editar y restablecer (T-32)', 
     expect(restablecerClave).toHaveBeenCalledWith('v1')
   })
 
+  it('T-61: muestra la clave temporal una vez, con Copiar y el aviso de entregarla en mano', async () => {
+    const user = userEvent.setup()
+    const setItem = vi.spyOn(Storage.prototype, 'setItem')
+    montar()
+    await user.click(await screen.findByRole('button', { name: 'Restablecer la clave de Vicente Centro' }))
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Restablecer' }))
+
+    const dialogo = await screen.findByRole('dialog', { name: 'Clave temporal de Vicente Centro' })
+    expect(within(dialogo).getByTestId('clave-temporal')).toHaveTextContent('Temp-1234')
+    expect(within(dialogo).getByRole('alert')).toHaveTextContent('No se pudo enviar por correo: entrégala en mano.')
+    expect(dialogo).toHaveTextContent(/deberá cambiar esta clave al entrar/)
+    expect(setItem.mock.calls.some(([, v]) => String(v).includes('Temp-1234'))).toBe(false)
+
+    await user.click(within(dialogo).getByRole('button', { name: 'Listo' }))
+    expect(screen.queryByText('Temp-1234')).not.toBeInTheDocument()
+    setItem.mockRestore()
+  })
+
   it('un 400 o 403 del backend se muestra tal cual', async () => {
     const user = userEvent.setup()
     cambiarEstadoUsuario.mockRejectedValueOnce(Object.assign(new Error('403: No autorizado'), { status: 403, detail: 'No autorizado' }))
