@@ -86,6 +86,17 @@ export const V2_FEATURES = {
    * backend lo descartaría en silencio: encenderla cuando exista el B-28.
    */
   desgloseEfectivo: false,
+  /**
+   * Cobro con tarjeta por el punto único del backend (T-76):
+   * `/payments/card/orders/{id}/…` en vez de `/payments/point/orders/{id}/…`.
+   * El servidor decide si la máquina del turno cobra con Mercado Pago o con
+   * Haulmer. Apagada mientras Haulmer esté en pausa: además, el backend
+   * recomienda apagar ese módulo (`card_dispatcher`) en producción mientras
+   * ningún cliente lo use, y con él apagado la ruta responde 404. Encenderla
+   * solo con el módulo encendido en el servidor. La web no completa un cobro
+   * Haulmer (lo hace la app): si la máquina es Haulmer, lo cancela y avisa.
+   */
+  cobroTarjetaUnificado: false,
   mercadopagoPoint: true,
   mpConfig: true,
   cajaMpPairing: true,
