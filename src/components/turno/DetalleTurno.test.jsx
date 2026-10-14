@@ -39,7 +39,7 @@ describe('DetalleTurno', () => {
 
     expect(await screen.findByText('Desglose por método de pago')).toBeInTheDocument()
     expect(screen.getByText('Efectivo')).toBeInTheDocument()
-    expect(screen.getByText('Egreso')).toBeInTheDocument()
+    expect(screen.getByText('Retiro o gasto')).toBeInTheDocument()
     expect(screen.getByText('− $1.000')).toBeInTheDocument()
   })
 

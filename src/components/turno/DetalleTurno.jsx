@@ -104,7 +104,7 @@ function OrdenesDelTurno({ cajaId }) {
  * cajón (`efectivo_esperado`: para cuadrar se usa este, no `total_esperado`),
  * lo cobrado con tarjeta por cada máquina y las órdenes del turno (T-48).
  */
-export default function DetalleTurno({ caja, conArqueo = false, cerradoPor = null }) {
+export default function DetalleTurno({ caja, conArqueo = false, cerradoPor = null, nombreDeUsuario = null }) {
   // De qué turno es lo cargado: si no es el que se muestra, está cargando.
   const [cargado, setCargado] = useState(null)
 
@@ -270,9 +270,15 @@ export default function DetalleTurno({ caja, conArqueo = false, cerradoPor = nul
                     {mov.order_id && (
                       <span className="mt-0.5 block text-xs text-[hsl(var(--muted-foreground))]">Orden {String(mov.order_id).slice(0, 8)}</span>
                     )}
+                    {mov.note && <span className="mt-0.5 block text-xs text-[hsl(var(--foreground))]">{mov.note}</span>}
+                    {!mov.order_id && mov.actor_user_id && nombreDeUsuario && (
+                      <span className="mt-0.5 block text-xs text-[hsl(var(--muted-foreground))]">Registró: {nombreDeUsuario(mov.actor_user_id)}</span>
+                    )}
                   </div>
                   <Badge variant="secondary" className="shrink-0 text-[10px]">
-                    {esEgreso ? 'Egreso' : (MOVIMIENTO_SOURCE_LABEL[mov.payment_source] || mov.payment_source || 'Ingreso')}
+                    {esEgreso ? 'Retiro o gasto'
+                      : !mov.order_id ? 'Ingreso manual'
+                        : (MOVIMIENTO_SOURCE_LABEL[mov.payment_source] || mov.payment_source || 'Ingreso')}
                   </Badge>
                 </li>
               )

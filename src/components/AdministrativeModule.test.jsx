@@ -551,6 +551,17 @@ describe('AdministrativeModule', () => {
     expect(within(lateral).getByRole('button', { name: /Cerrar turno \(arqueo del día\)/ })).toBeInTheDocument()
   })
 
+  it('T-56: en un turno abierto el encargado ve «Registrar movimiento»', async () => {
+    const user = userEvent.setup()
+    renderAdmin('flujo-caja', 'Admin')
+    const panel = (await screen.findByRole('heading', { name: 'Turnos de caja' })).closest('article')
+    const filaAna = (await within(within(panel).getByRole('table')).findByText('Ana Rojas')).closest('tr')
+    await user.click(within(filaAna).getByRole('button', { name: 'Ver resumen' }))
+    const lateral = (await screen.findByRole('heading', { name: 'Resumen del turno' })).closest('.fixed')
+    await user.click(within(lateral).getByRole('button', { name: 'Registrar movimiento' }))
+    expect(within(lateral).getByRole('form', { name: 'Registrar movimiento' })).toBeInTheDocument()
+  })
+
   it('si no se pueden leer los nombres, la tabla igual distingue a cada vendedor', async () => {
     listUsers.mockRejectedValueOnce(new Error('403'))
     renderAdmin('flujo-caja', 'Admin')

@@ -23,6 +23,7 @@ import { getAuthContext, apiRequest, listUsers } from '../lib/apiClient'
 import { mensajeCierreTurno } from '../lib/turnos'
 import { nombreDeVendedor, opcionesDeVendedor, useTurnosFiltrados } from '../lib/registroTurnos'
 import DetalleTurno from './turno/DetalleTurno'
+import RegistrarMovimientoCaja from './turno/RegistrarMovimientoCaja'
 import ConteoEfectivo from './turno/ConteoEfectivo'
 import { desgloseParaApi, totalesDelConteo } from '../lib/efectivo'
 import TablaTurnos from './turno/TablaTurnos'
@@ -625,6 +626,7 @@ function FlujoCajaContent({ localId, dashboard, cajas, cajasFisicas, usuarios, r
               ...c,
               vendedor: nombreDeVendedor(usuariosPorId, c.cashier_user_id),
               cerradoPor: c.closed_by_user_id ? nombreDeVendedor(usuariosPorId, c.closed_by_user_id) : null,
+              nombreDeUsuario: (id) => nombreDeVendedor(usuariosPorId, id),
             }) : undefined}
             vacio={filtrados.cargando ? 'Buscando turnos…' : filtroVendedor || filtroFecha ? 'No hay turnos con esos filtros.' : 'Este local todavía no tiene turnos de caja.'}
           />
@@ -1022,10 +1024,14 @@ function AbrirTurnoModal({ localId, onClose, onSaved, onCrearCajaFisica }) {
  * Resumen de un turno para el encargado y el dueño: ventas, ingresos,
  * egresos, apertura y total esperado (DetalleTurno), y el cierre del arqueo.
  */
-function CajaMovimientosModal({ caja, onClose, onClosed }) {
+function CajaMovimientosModal({ caja, onClose, onClosed, puedeRegistrarMovimientos = false }) {
   const [err, setErr] = useState('')
   const [visible, setVisible] = useState(false)
   const [closing, setClosing] = useState(false)
+  // T-56: retiros, gastos e ingresos de caja; al registrar se recarga el resumen.
+  const [registrando, setRegistrando] = useState(false)
+  const [version, setVersion] = useState(0)
+  const [aviso, setAviso] = useState('')
   const isOpen = caja.status === 'open' || caja.is_active
 
   useEffect(() => { requestAnimationFrame(() => setVisible(true)) }, [])
@@ -1082,7 +1088,25 @@ function CajaMovimientosModal({ caja, onClose, onClosed }) {
               <p className="text-xs text-red-600 dark:text-red-400">{err}</p>
             </div>
           )}
-          <DetalleTurno caja={caja} conArqueo cerradoPor={caja.cerradoPor} />
+          {aviso && <p role="status" className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800">{aviso}</p>}
+          {isOpen && puedeRegistrarMovimientos && (
+            registrando ? (
+              <RegistrarMovimientoCaja
+                cajaId={caja.id}
+                onCancelar={() => setRegistrando(false)}
+                onRegistrado={({ tipo, monto }) => {
+                  setRegistrando(false)
+                  setAviso(`${tipo === 'egreso' ? 'Retiro o gasto' : 'Ingreso'} de ${formatMoney(monto)} registrado.`)
+                  setVersion((v) => v + 1)
+                }}
+              />
+            ) : (
+              <Button size="sm" variant="outline" className="self-start" onClick={() => { setRegistrando(true); setAviso('') }}>
+                Registrar movimiento
+              </Button>
+            )
+          )}
+          <DetalleTurno key={version} caja={caja} conArqueo cerradoPor={caja.cerradoPor} nombreDeUsuario={caja.nombreDeUsuario} />
         </div>
 
         {/* Footer */}
@@ -1263,6 +1287,7 @@ function AdministrativeModule() {
           caja={movimientosCaja}
           onClose={() => setMovimientosCaja(null)}
           onClosed={() => setRefreshKey(k => k + 1)}
+          puedeRegistrarMovimientos={puedeGestionarCajasFisicas}
         />
       )}
       <AnimatePresence>
