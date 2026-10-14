@@ -26,6 +26,7 @@ import DetalleTurno from './turno/DetalleTurno'
 import RegistrarMovimientoCaja from './turno/RegistrarMovimientoCaja'
 import CerrarTurno from './turno/CerrarTurno'
 import SupervisionTurno from './turno/SupervisionTurno'
+import HistorialTurno from './turno/HistorialTurno'
 import ConteoEfectivo from './turno/ConteoEfectivo'
 import { desgloseParaApi, totalesDelConteo } from '../lib/efectivo'
 import TablaTurnos from './turno/TablaTurnos'
@@ -1081,6 +1082,8 @@ function CajaMovimientosModal({ caja, onClose, onClosed, puedeRegistrarMovimient
   const [registrando, setRegistrando] = useState(false)
   const [version, setVersion] = useState(0)
   const [aviso, setAviso] = useState('')
+  // T-43: historial del turno, bajo pedido.
+  const [verHistorial, setVerHistorial] = useState(false)
   const isOpen = caja.status === 'open' || caja.is_active
 
   useEffect(() => { requestAnimationFrame(() => setVisible(true)) }, [])
@@ -1140,6 +1143,12 @@ function CajaMovimientosModal({ caja, onClose, onClosed, puedeRegistrarMovimient
             <SupervisionTurno turno={caja} usuarios={caja.usuarios} onHecho={() => { setVersion((v) => v + 1); onClosed?.() }} />
           )}
           <DetalleTurno key={version} caja={caja} conArqueo cerradoPor={caja.cerradoPor} nombreDeUsuario={caja.nombreDeUsuario} />
+          <div className="flex flex-col gap-2">
+            <Button size="sm" variant="outline" className="self-start" onClick={() => setVerHistorial((v) => !v)} aria-expanded={verHistorial}>
+              {verHistorial ? 'Ocultar historial' : 'Historial'}
+            </Button>
+            {verHistorial && <HistorialTurno key={version} cajaId={caja.id} />}
+          </div>
         </div>
 
         {/* Footer */}
