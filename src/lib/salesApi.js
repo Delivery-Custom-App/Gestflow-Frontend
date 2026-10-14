@@ -294,8 +294,14 @@ export async function setMesaLibre(mesaId) {
   return updateMesa(mesaId, { status: 'available' })
 }
 
-export async function deleteMesa() {
-  throw new Error('Eliminar mesas aún no está disponible en Backend V2')
+/**
+ * Da de baja una mesa (`DELETE /mesas/{id}`, B-19). Es una baja lógica: deja
+ * de salir en el listado, pero los pedidos viejos la conservan y se puede
+ * reactivar. El backend responde 409 si está en uso o dentro de un grupo.
+ */
+export async function deleteMesa(mesaId) {
+  if (!mesaId) throw new Error('Falta indicar qué mesa dar de baja')
+  await apiRequest(`/mesas/${encodeURIComponent(String(mesaId))}`, { method: 'DELETE' })
 }
 
 /**

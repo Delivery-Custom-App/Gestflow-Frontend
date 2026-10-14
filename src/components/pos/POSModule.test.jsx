@@ -5,6 +5,7 @@ import { MemoryRouter, Route, Routes } from 'react-router'
 import POSModule from './POSModule'
 
 const sesion = vi.hoisted(() => ({ isWorker: false, user: { id: 'enc' } }))
+const bajaDeMesa = vi.hoisted(() => vi.fn())
 const MESAS = [
   { id: 'm1', name: 'Mesa 1', nombre: 'Mesa 1', state: 'ocupada', capacidad: 4, total: 5000,
     ordenes_en_curso: [{ id: 'o1', caja_id: 'caja-ana', waiter_user_id: 'beto' }] },
@@ -14,7 +15,7 @@ const MESAS = [
 vi.mock('../../context/AuthContext', () => ({ useAuth: () => sesion }))
 vi.mock('../../hooks/useCajaActiva', () => ({ useCajaActiva: () => ({ cajaId: 'caja-enc' }) }))
 vi.mock('../../hooks/useMesasConEstado', () => ({
-  useMesasConEstado: () => ({ mesas: MESAS, loading: false, error: null, refresh: vi.fn() }),
+  useMesasConEstado: () => ({ mesas: MESAS, loading: false, error: null, refresh: vi.fn(), deleteMesa: bajaDeMesa }),
 }))
 vi.mock('../../hooks/useMesasKPIs', () => ({ useMesasKPIs: () => ({ kpis: null, loading: false, error: null, refresh: vi.fn() }) }))
 vi.mock('../../hooks/useGruposDeMesas', () => ({ useGruposDeMesas: () => ({ porMesa: new Map(), crear: vi.fn(), deshacer: vi.fn() }) }))
@@ -46,7 +47,7 @@ function montar() {
 }
 const tarjeta = (nombre) => screen.getByText(nombre).closest('div.group')
 
-beforeEach(() => { sesion.isWorker = false; sesion.user = { id: 'enc' } })
+beforeEach(() => { sesion.isWorker = false; sesion.user = { id: 'enc' }; bajaDeMesa.mockReset() })
 
 describe('POSModule · quién atiende y traspasos', () => {
   it('el encargado ve quién atiende cada mesa en curso y quién la atendía', () => {
@@ -80,5 +81,43 @@ describe('POSModule · quién atiende y traspasos', () => {
     montar()
     await user.click(within(tarjeta('Mesa 1')).getAllByRole('button').at(-1))
     expect(screen.getByText('mesa abierta · atiende Beto Soto · antes Ana Rojas')).toBeInTheDocument()
+  })
+})
+
+describe('POSModule · dar de baja una mesa (T-70)', () => {
+  it('el encargado confirma y se da de baja la mesa elegida, con su id', async () => {
+    const user = userEvent.setup()
+    bajaDeMesa.mockResolvedValue(undefined)
+    montar()
+
+    await user.click(within(tarjeta('Mesa 2')).getByRole('button', { name: 'Eliminar mesa' }))
+    const dialogo = screen.getByRole('dialog')
+    expect(within(dialogo).getByText(/Sus pedidos anteriores se conservan/)).toBeInTheDocument()
+    expect(within(dialogo).getByText(/se puede reactivar/)).toBeInTheDocument()
+    await user.click(within(dialogo).getByRole('button', { name: 'Eliminar Mesa' }))
+
+    expect(bajaDeMesa).toHaveBeenCalledWith('m2')
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+
+  it('si el backend la rechaza (409) el motivo queda en el diálogo y la mesa sigue', async () => {
+    const user = userEvent.setup()
+    bajaDeMesa.mockRejectedValue(new Error('409: La mesa Mesa 1 está en uso: cóbrala antes de darla de baja'))
+    montar()
+
+    await user.click(within(tarjeta('Mesa 1')).getByRole('button', { name: 'Eliminar mesa' }))
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Eliminar Mesa' }))
+
+    const dialogo = screen.getByRole('dialog')
+    expect(within(dialogo).getByText('La mesa Mesa 1 está en uso: cóbrala antes de darla de baja')).toBeInTheDocument()
+    expect(within(dialogo).getByRole('button', { name: 'Eliminar Mesa' })).toBeDisabled()
+    expect(bajaDeMesa).toHaveBeenCalledWith('m1')
+  })
+
+  it('el vendedor no ve la acción de eliminar', () => {
+    sesion.isWorker = true
+    sesion.user = { id: 'ana' }
+    montar()
+    expect(screen.queryByRole('button', { name: 'Eliminar mesa' })).not.toBeInTheDocument()
   })
 })
