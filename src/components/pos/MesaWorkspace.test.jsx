@@ -171,3 +171,21 @@ describe('MesaWorkspace · editar y quitar ítems (T-30)', () => {
     expect((await screen.findAllByText('El pedido ya está cerrado')).length).toBeGreaterThan(0)
   })
 })
+
+describe('MesaWorkspace · roles de caja (A-03)', () => {
+  const orden = { id: 'order-1', created_at: '2026-10-14T12:00:00Z', items: [] }
+
+  it('el administrador de restaurante no ve «Cobrar», pero sí cancelar', () => {
+    setup({ activeOrders: [orden] })
+    render(<MesaWorkspace mesa={mesa} localId="local1" cajaId="caja1" puedeCobrar={false} onBack={() => {}} onTableUpdated={() => {}} />)
+    expect(screen.queryByRole('button', { name: /^cobrar$/i })).not.toBeInTheDocument()
+    expect(screen.getAllByTitle('Cancelar orden').length).toBeGreaterThan(0)
+    expect(screen.getAllByText(/el administrador no cobra/).length).toBeGreaterThan(0)
+  })
+
+  it('el dueño y el vendedor ven «Cobrar»', () => {
+    setup({ activeOrders: [orden] })
+    render(<MesaWorkspace mesa={mesa} localId="local1" cajaId="caja1" onBack={() => {}} onTableUpdated={() => {}} />)
+    expect(screen.getAllByRole('button', { name: /cobrar/i }).length).toBeGreaterThan(0)
+  })
+})

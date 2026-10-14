@@ -596,6 +596,29 @@ describe('AdministrativeModule', () => {
     expect(within(lateral).getByRole('form', { name: 'Registrar movimiento' })).toBeInTheDocument()
   })
 
+  it('A-03: en restaurante el administrador no ve «Abrir turno de caja»; el dueño sí', async () => {
+    render(
+      <AuthProvider user={{ id: 'u-1', local_sales_model: 'RESTAURANT' }} userRole="Admin" logout={() => {}}>
+        <MemoryRouter initialEntries={['/local/loc-1/administrativo/flujo-caja']}>
+          <Routes><Route path="/local/:localId/administrativo/:sectionId?" element={<AdministrativeModule />} /></Routes>
+        </MemoryRouter>
+      </AuthProvider>,
+    )
+    await screen.findByRole('heading', { name: 'Turnos de caja' })
+    expect(screen.queryByRole('button', { name: /Abrir turno de caja/ })).not.toBeInTheDocument()
+  })
+
+  it('A-03: en al paso el administrador sí abre turno', async () => {
+    render(
+      <AuthProvider user={{ id: 'u-1', local_sales_model: 'AL_PASO' }} userRole="Admin" logout={() => {}}>
+        <MemoryRouter initialEntries={['/local/loc-1/administrativo/flujo-caja']}>
+          <Routes><Route path="/local/:localId/administrativo/:sectionId?" element={<AdministrativeModule />} /></Routes>
+        </MemoryRouter>
+      </AuthProvider>,
+    )
+    expect(await screen.findByRole('button', { name: /Abrir turno de caja/ })).toBeInTheDocument()
+  })
+
   it('si no se pueden leer los nombres, la tabla igual distingue a cada vendedor', async () => {
     listUsers.mockRejectedValueOnce(new Error('403'))
     renderAdmin('flujo-caja', 'Admin')

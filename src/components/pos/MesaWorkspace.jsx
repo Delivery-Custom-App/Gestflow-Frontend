@@ -32,7 +32,7 @@ const EMPTY_CUSTOMIZATION = { embutido: null, agregados: [] }
 
 const formatItemName = (item) => item.item_name || item.product_name || '—'
 
-export default function MesaWorkspace({ mesa, atencion = null, localId, cajaId, onBack, onTableUpdated }) {
+export default function MesaWorkspace({ mesa, atencion = null, localId, cajaId, puedeCobrar = true, onBack, onTableUpdated }) {
   const { detail, loading, error: mesaError, refresh } = useMesaDetail(mesa.id)
   const { updateOrderStatus } = useOrderManagement()
   const { data: menuData, loading: menuLoading, fetch: fetchMenu } = useMenuPOS(localId)
@@ -350,7 +350,7 @@ export default function MesaWorkspace({ mesa, atencion = null, localId, cajaId, 
     <div className="flex h-full min-h-0 flex-col">
       <div className="px-4 lg:px-5 py-4 border-b border-[hsl(var(--border))] shrink-0 space-y-3">
         <div className="flex flex-wrap gap-2">
-          <Button
+          {puedeCobrar && <Button
             onClick={handleCobrar}
             disabled={cobrarLoading || cancelLoading || !detail?.active_orders?.length || (hasSplits && !splitFullyPaid)}
             className="flex-1 min-w-[120px] h-11 rounded-xl font-semibold shadow-sm bg-[hsl(var(--primary))] hover:bg-[hsl(var(--primary))]/90 text-white disabled:opacity-50"
@@ -358,7 +358,7 @@ export default function MesaWorkspace({ mesa, atencion = null, localId, cajaId, 
           >
             <DollarSign size={18} className="mr-2" />
             {cobrarLoading ? 'Procesando...' : 'Cobrar'}
-          </Button>
+          </Button>}
           <Button
             onClick={handlePrintChargeDetail}
             disabled={!detail?.active_orders?.length}
@@ -402,6 +402,12 @@ export default function MesaWorkspace({ mesa, atencion = null, localId, cajaId, 
             <X size={18} />
           </Button>
         </div>
+        {!puedeCobrar && (
+          <p className="text-xs text-[hsl(var(--muted-foreground))]">
+            En restaurante el administrador no cobra: cobra quien abrió la mesa. Puedes cancelar la orden o traspasar la mesa.
+          </p>
+        )}
+      
       </div>
 
       <div className="flex-1 overflow-y-auto min-h-0 px-4 lg:px-5 py-4 space-y-4">

@@ -7,6 +7,8 @@
  */
 export function mensajeCierreTurno(err) {
   const texto = String(err?.detail || err?.message || '')
+  // A-03: el vendedor no cierra la caja (B-05).
+  if (Number(err?.status) === 403) return 'Solo el administrador del local o el dueño cierran la caja.'
   if (/órdenes en curso|ordenes en curso/i.test(texto) || Number(err?.status) === 409) {
     return 'No se puede cerrar el turno todavía: queda un pedido de mostrador reciente o un cobro con tarjeta en curso. '
       + 'Cóbralo o espera a que termine el cobro, y vuelve a intentar en unos minutos.'

@@ -1,11 +1,10 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Clock3, CreditCard, LogOut } from 'lucide-react'
+import { Clock3, CreditCard } from 'lucide-react'
 import { toast } from 'sonner'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { useAuth } from '../../context/AuthContext'
 import { useTurnoVendedor } from '../../context/turnoVendedor'
-import { closeCaja, getCaja } from '../../lib/salesApi'
-import { mensajeCierreTurno } from '../../lib/turnos'
+import { getCaja } from '../../lib/salesApi'
 import { elegirMaquinaDelTurno, listarMaquinasDelLocal, maquinaDelTurno, webCobraCon } from '../../lib/maquinasCobro'
 import { isAlPasoLocal } from '../../lib/salesModel'
 import { isV2FeatureEnabled } from '../../lib/v2Features'
@@ -124,30 +123,17 @@ function MaquinaDelTurno({ turnoInicial, alPaso }) {
 }
 
 /**
- * En la vista del vendedor: su turno abierto y, cuando el backend defina la
- * opción, el botón para cerrarlo (bandera `cierreTurnoVendedor`). Fuera de la
- * vista del vendedor no hay turno en contexto y no se muestra nada.
+ * En la vista del vendedor: su turno abierto y la máquina con que cobra. El
+ * vendedor no cierra la caja (A-03, B-05: el backend le responde 403): la
+ * cuenta y la cierra el administrador del local o el dueño. Fuera de la vista
+ * del vendedor no hay turno en contexto y no se muestra nada.
  */
 export default function TurnoVendedorBarra() {
   const contexto = useTurnoVendedor()
   const { user } = useAuth()
-  const [cerrando, setCerrando] = useState(false)
   if (!contexto?.turno) return null
-  const { turno, alCerrar } = contexto
+  const { turno } = contexto
   const desde = horaDe(turno.opened_at)
-
-  const cerrarTurno = async () => {
-    if (!window.confirm('¿Cerrar tu turno? Es el cierre del arqueo del día: no se puede reabrir.')) return
-    setCerrando(true)
-    try {
-      await closeCaja(turno.id)
-      toast.success('Turno cerrado')
-      alCerrar()
-    } catch (err) {
-      toast.error(mensajeCierreTurno(err))
-      setCerrando(false)
-    }
-  }
 
   return (
     <div className="flex items-center gap-2">
@@ -155,16 +141,6 @@ export default function TurnoVendedorBarra() {
         <Clock3 size={13} /> Turno abierto{desde ? ` desde las ${desde}` : ''}
       </span>
       <MaquinaDelTurno key={turno.id} turnoInicial={turno} alPaso={isAlPasoLocal(user?.local_sales_model)} />
-      {isV2FeatureEnabled('cierreTurnoVendedor') && (
-        <button
-          type="button"
-          onClick={cerrarTurno}
-          disabled={cerrando}
-          className="inline-flex items-center gap-1.5 rounded-full border border-[hsl(var(--border))] px-3 py-1 text-xs font-semibold text-[hsl(var(--foreground))] hover:bg-[hsl(var(--accent))] transition-colors disabled:opacity-50"
-        >
-          <LogOut size={13} /> {cerrando ? 'Cerrando…' : 'Cerrar turno'}
-        </button>
-      )}
     </div>
   )
 }

@@ -21,6 +21,7 @@ import {
 import { getAuthContext, apiRequest, listUsers } from '../lib/apiClient'
 import { nombreDeVendedor, opcionesDeVendedor, useTurnosFiltrados } from '../lib/registroTurnos'
 import { monto, textoDiferencia } from '../lib/arqueo'
+import { puedeVender } from '../lib/rolesCaja'
 import DetalleTurno from './turno/DetalleTurno'
 import RegistrarMovimientoCaja from './turno/RegistrarMovimientoCaja'
 import CerrarTurno from './turno/CerrarTurno'
@@ -257,11 +258,12 @@ function AmTable({ headers, rows, rowKeys, emptyMessage }) {
 
 // ── Section helpers ────────────────────────────────────────────
 
-function SectionActions({ activeSection, onNuevaCaja }) {
+function SectionActions({ activeSection, onNuevaCaja, puedeAbrirTurno = true }) {
   if (activeSection === 'ventas') {
     return null
   }
-  if (activeSection === 'flujo-caja') {
+  // A-03: en restaurante el administrador no tiene caja propia (no abre turno).
+  if (activeSection === 'flujo-caja' && puedeAbrirTurno) {
     return (
       <div className="flex gap-2">
         <Button onClick={onNuevaCaja}>+ Abrir turno de caja</Button>
@@ -1183,7 +1185,8 @@ function renderSectionContent(activeSection, payload) {
 function AdministrativeModule() {
   const location = useLocation()
   const { localId, sectionId } = useParams()
-  const { userRole } = useAuth()
+  const { userRole, user } = useAuth()
+  const puedeAbrirTurno = puedeVender(userRole, user?.local_sales_model)
   const puedeGestionarCajasFisicas = ROLES_CAJAS_FISICAS.has(normalizeRoleKey(userRole))
   const [sectionData, setSectionData] = useState({ dashboard: null, orders: null, cajas: [], indicadores: null })
   const [detalleLoading, setDetalleLoading] = useState(false)
@@ -1376,6 +1379,7 @@ function AdministrativeModule() {
             <SectionActions
               activeSection={activeSection}
               onNuevaCaja={() => setShowNuevaCaja(true)}
+              puedeAbrirTurno={puedeAbrirTurno}
             />
             <button
               onClick={() => setGuideOpen(true)}

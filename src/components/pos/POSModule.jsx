@@ -23,10 +23,14 @@ import {
 } from '../../lib/atencionMesas'
 import TraspasarMesasModal from './TraspasarMesasModal'
 import { toast } from 'sonner'
+import { puedeVender } from '../../lib/rolesCaja'
+import { SALES_MODEL } from '../../lib/salesModel'
 import { ArrowRightLeft, CreditCard, PlusCircle, Printer } from 'lucide-react'
 
 export default function POSModule() {
-  const { isWorker, user } = useAuth()
+  const { isWorker, user, userRole } = useAuth()
+  // A-03: en restaurante el administrador no cobra (403); cancela y traspasa.
+  const puedeCobrar = puedeVender(userRole, SALES_MODEL.RESTAURANT)
   const { pathname } = useLocation()
   const { localId } = useParams()
   const { cajaId } = useCajaActiva(localId)
@@ -248,6 +252,7 @@ export default function POSModule() {
             atencion={atencionPorMesa.get(String(selectedMesa.id)) || null}
             localId={localId}
             cajaId={cajaId}
+            puedeCobrar={puedeCobrar}
             onBack={handleWorkspaceBack}
             onTableUpdated={handleTableUpdated}
           />
