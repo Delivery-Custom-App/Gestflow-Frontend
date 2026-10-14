@@ -102,6 +102,14 @@ export function AppAuthProvider({ children }) {
     return () => window.removeEventListener('auth:session-expired', handleSessionExpired)
   }, [clearAuthState])
 
+  // T-62: un 403 con X-Account-Status `password_change_required` lleva a la
+  // pantalla de cambio obligatorio, sea cual sea el rol (la decide la marca).
+  useEffect(() => {
+    const exigirCambio = () => setUser((u) => (u && !u.must_change_password ? { ...u, must_change_password: true } : u))
+    window.addEventListener('auth:password-change-required', exigirCambio)
+    return () => window.removeEventListener('auth:password-change-required', exigirCambio)
+  }, [])
+
   const handleSubmit = useCallback(async (event) => {
     event.preventDefault()
 

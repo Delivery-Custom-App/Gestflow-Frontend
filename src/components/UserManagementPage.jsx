@@ -5,7 +5,7 @@ import { useAuth } from '../context/AuthContext'
 import { useLocals } from '../hooks/useLocals'
 import { createUser } from '../lib/apiClient'
 import {
-  AVISO_VENDEDOR, LARGO_MINIMO_CONTRASENA, ROL_LABEL, datosDeAlta, formatearRut, pideRut,
+  AVISO_VENDEDOR, LARGO_MINIMO_CONTRASENA, exigeCambioDeClave, ROL_LABEL, datosDeAlta, formatearRut, pideRut,
   localFijoDelAlta, puedeCrearUsuarios, rolConLocal, rolesAsignables, validarAlta,
 } from '../lib/altaUsuario'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
@@ -193,7 +193,7 @@ export default function UserManagementPage() {
                 </div>
               )}
 
-              {form.role === 'EMPLEADO' && (
+              {exigeCambioDeClave(form.role) && (
                 <p className="rounded-lg border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-800">{AVISO_VENDEDOR}</p>
               )}
 

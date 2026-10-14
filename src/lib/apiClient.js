@@ -188,6 +188,16 @@ export async function apiRequest(path, options = {}) {
     const err = new Error(message)
     err.status = response.status
     err.detail = detail
+    // Estado de la cuenta que manda el backend (X-Account-Status): con
+    // `password_change_required` la app pasa a la pantalla de cambio de
+    // clave obligatorio aunque la marca de /auth/me no haya llegado (T-62).
+    const accountStatus = response.headers.get('X-Account-Status')
+    if (accountStatus) {
+      err.accountStatus = accountStatus
+      if (response.status === 403 && accountStatus === 'password_change_required') {
+        window.dispatchEvent(new CustomEvent('auth:password-change-required'))
+      }
+    }
     throw err
   }
 

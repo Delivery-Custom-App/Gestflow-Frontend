@@ -108,14 +108,17 @@ describe('CreateUserDrawer', () => {
     expect(createUser).not.toHaveBeenCalled()
   })
 
-  it('al crear un vendedor avisa del cambio de contraseña y del correo; a un encargado no', async () => {
+  it('al crear un vendedor o un encargado (T-62) avisa del cambio de contraseña; a un dueño no', async () => {
     const user = userEvent.setup()
-    abrirCajon()
+    abrirCajon({ userRole: 'Superadmin' })
 
     expect(screen.getByText(/deberá cambiar la contraseña/i)).toBeInTheDocument()
     expect(screen.getByText(/le llegará un correo con sus datos de acceso/i)).toBeInTheDocument()
 
     await user.selectOptions(screen.getByLabelText(/^Rol/), 'ADMIN')
+    expect(screen.getByText(/deberá cambiar la contraseña/i)).toBeInTheDocument()
+
+    await user.selectOptions(screen.getByLabelText(/^Rol/), 'ADMIN_NEGOCIO')
     expect(screen.queryByText(/deberá cambiar la contraseña/i)).not.toBeInTheDocument()
   })
 

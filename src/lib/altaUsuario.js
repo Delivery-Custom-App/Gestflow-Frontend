@@ -95,9 +95,17 @@ export function datosDeAlta(form, local) {
   }
 }
 
-/** Aviso para quien crea un vendedor: así lo hace el backend al crearlo. */
+/**
+ * Aviso para quien crea un vendedor o un encargado: el backend los deja con
+ * cambio de clave obligatorio (T-62). El dueño entra directo.
+ */
 export const AVISO_VENDEDOR =
   'En su primer ingreso deberá cambiar la contraseña, y le llegará un correo con sus datos de acceso.'
+
+/** ¿El alta de este rol queda con cambio de clave obligatorio? (encargado y vendedor). */
+export function exigeCambioDeClave(role) {
+  return role === 'EMPLEADO' || role === 'ADMIN'
+}
 
 /**
  * Nombre de una persona para mostrar: nombre y apellido; si no los tiene

@@ -16,7 +16,7 @@ import {
   cambiarEstadoUsuario, puedeGestionar, restablecerClave, separarPorEstado, textoDeError,
 } from '../lib/gestionUsuarios'
 import {
-  AVISO_VENDEDOR, LARGO_MINIMO_CONTRASENA, ROL_LABEL, datosDeAlta, formatearRut, pideRut,
+  AVISO_VENDEDOR, LARGO_MINIMO_CONTRASENA, exigeCambioDeClave, ROL_LABEL, datosDeAlta, formatearRut, pideRut,
   esEncargadoDeLocal, localFijoDelAlta, puedeCrearUsuarios, rolConLocal, rolesAsignables, validarAlta,
 } from '../lib/altaUsuario'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
@@ -184,7 +184,7 @@ export function CreateUserDrawer({ isOpen, onClose, onSuccess, locales, localesL
             </div>
           )}
 
-          {form.role === 'EMPLEADO' && (
+          {exigeCambioDeClave(form.role) && (
             <p className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-800 dark:border-sky-800/50 dark:bg-sky-950/30 dark:text-sky-300">
               {AVISO_VENDEDOR}
             </p>
