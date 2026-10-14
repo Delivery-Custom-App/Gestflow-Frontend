@@ -8,6 +8,7 @@ import { createCajaV2, getMiTurnoDeHoy } from '../../lib/salesApi'
 import { listarCajasFisicas } from '../../lib/administrativeApi'
 import { isV2FeatureEnabled } from '../../lib/v2Features'
 import { isAlPasoLocal } from '../../lib/salesModel'
+import { mensajeTurnoTerminado, turnoTerminado } from '../../lib/turnos'
 import { elegirMaquinaDelTurno, errorAlTomarMaquina, turnoTieneMaquina } from '../../lib/maquinasCobro'
 import ElegirMaquina from './ElegirMaquina'
 import CambiarLocal from '../CambiarLocal'
@@ -82,8 +83,9 @@ export default function InicioDeTurno({ localId, children }) {
       .then((mio) => {
         if (ignore) return
         setTurno(mio)
+        // T-41: si su turno de hoy ya terminó, no vuelve a vender en él.
         // Con el turno ya abierto (volvió a entrar), elige máquina solo si no tiene una.
-        setFase(!mio ? 'pregunta' : eligeMaquina && !turnoTieneMaquina(mio) ? 'maquina-turno' : 'listo')
+        setFase(!mio ? 'pregunta' : turnoTerminado(mio) ? 'terminado' : eligeMaquina && !turnoTieneMaquina(mio) ? 'maquina-turno' : 'listo')
       })
       .catch((e) => {
         if (ignore) return
@@ -142,6 +144,12 @@ export default function InicioDeTurno({ localId, children }) {
     setFase('pregunta')
   }, [])
 
+  // T-41: terminó su turno (o el administrador se lo terminó).
+  const alTerminar = useCallback((actualizado) => {
+    setTurno((t) => ({ ...t, ...actualizado }))
+    setFase('terminado')
+  }, [])
+
   // Abre el turno con la máquina elegida (restaurante).
   const abrirConMaquina = useCallback(async (maquina, { compartir }) => {
     try {
@@ -164,7 +172,7 @@ export default function InicioDeTurno({ localId, children }) {
     setFase('listo')
   }, [turno])
 
-  const valor = useMemo(() => ({ turno, alCerrar }), [turno, alCerrar])
+  const valor = useMemo(() => ({ turno, alCerrar, alTerminar }), [turno, alCerrar, alTerminar])
 
   if (fase === 'listo') {
     return <TurnoVendedorContext.Provider value={valor}>{children}</TurnoVendedorContext.Provider>
@@ -193,6 +201,21 @@ export default function InicioDeTurno({ localId, children }) {
         <div className="flex items-center justify-between gap-2">
           {salir}
           <Button onClick={reintentar}>Reintentar</Button>
+        </div>
+      </Tarjeta>
+    )
+  }
+
+  if (fase === 'terminado') {
+    return (
+      <Tarjeta titulo="Tu turno terminó" subtitulo={subtitulo}>
+        <p role="status" className="mb-5 text-sm text-[hsl(var(--foreground))]">{mensajeTurnoTerminado(turno)}</p>
+        <p className="mb-5 text-xs text-[hsl(var(--muted-foreground))]">
+          Ya no puedes vender en este turno. Si sigues trabajando hoy, pide al administrador que te abra uno nuevo.
+        </p>
+        <div className="flex items-center justify-between gap-2">
+          {salir}
+          <Button variant="outline" onClick={reintentar}>Volver a revisar</Button>
         </div>
       </Tarjeta>
     )

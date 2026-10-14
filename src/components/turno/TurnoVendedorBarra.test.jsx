@@ -10,13 +10,13 @@ import userEvent from '@testing-library/user-event'
 import { toast } from 'sonner'
 import TurnoVendedorBarra from './TurnoVendedorBarra'
 import { TurnoVendedorContext } from '../../context/turnoVendedor'
-import { getCaja } from '../../lib/salesApi'
+import { getCaja, terminarTurno } from '../../lib/salesApi'
 import { elegirMaquinaDelTurno, listarMaquinasDelLocal, mapMaquina } from '../../lib/maquinasCobro'
 import { V2_FEATURES } from '../../lib/v2Features'
 
 const sesion = vi.hoisted(() => ({ modelo: 'RESTAURANT' }))
 
-vi.mock('../../lib/salesApi', () => ({ getCaja: vi.fn() }))
+vi.mock('../../lib/salesApi', () => ({ getCaja: vi.fn(), terminarTurno: vi.fn() }))
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
 vi.mock('../../context/AuthContext', () => ({
   useAuth: () => ({ user: { id: 'yo', local_sales_model: sesion.modelo } }),
@@ -143,5 +143,49 @@ describe('TurnoVendedorBarra · máquina del turno (T-71)', () => {
     await waitFor(() => expect(listarMaquinasDelLocal).toHaveBeenCalled())
     expect(screen.queryByText(/máquina/i)).not.toBeInTheDocument()
     expect(screen.getByText(/Turno abierto/)).toBeInTheDocument()
+  })
+})
+
+describe('TurnoVendedorBarra · terminar mi turno (T-41)', () => {
+  it('muestra el recordatorio y «Terminar mi turno»', () => {
+    montar({ turno: TURNO, alCerrar: vi.fn(), alTerminar: vi.fn() })
+    expect(screen.getByTestId('recordatorio-terminar')).toHaveTextContent('Al terminar tu jornada, termina tu turno')
+    expect(screen.getByRole('button', { name: /Terminar mi turno/ })).toBeInTheDocument()
+  })
+
+  it('confirma, llama a terminar-turno y avisa a la vista', async () => {
+    const user = userEvent.setup()
+    const alTerminar = vi.fn()
+    terminarTurno.mockResolvedValue({ ...TURNO, turno_terminado_at: '2026-10-04T20:00:00Z', turno_terminado_forzado: false })
+    montar({ turno: TURNO, alCerrar: vi.fn(), alTerminar })
+
+    await user.click(screen.getByRole('button', { name: /Terminar mi turno/ }))
+    const dialogo = screen.getByRole('dialog', { name: '¿Terminar tu turno?' })
+    expect(dialogo).toHaveTextContent(/la cuenta y la cierra el administrador/)
+    await user.click(within(dialogo).getByRole('button', { name: 'Terminar turno' }))
+
+    expect(terminarTurno).toHaveBeenCalledWith('turno-1')
+    await waitFor(() => expect(alTerminar).toHaveBeenCalledWith(expect.objectContaining({ turno_terminado_at: '2026-10-04T20:00:00Z' })))
+    expect(toast.success).toHaveBeenCalledWith('Terminaste tu turno')
+  })
+
+  it('con mesas abiertas (409) muestra el detail y no termina', async () => {
+    const user = userEvent.setup()
+    const alTerminar = vi.fn()
+    terminarTurno.mockRejectedValue(Object.assign(new Error('409: x'), {
+      status: 409, detail: 'Tienes 1 mesa(s) o pedido(s) abiertos: cóbralos o pídele al administrador que los reasigne antes de terminar el turno',
+    }))
+    montar({ turno: TURNO, alCerrar: vi.fn(), alTerminar })
+    await user.click(screen.getByRole('button', { name: /Terminar mi turno/ }))
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Terminar turno' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent(/cóbralos o pídele al administrador que los reasigne/)
+    expect(alTerminar).not.toHaveBeenCalled()
+  })
+
+  it('si el administrador le terminó el turno, al revisarlo se avisa a la vista', async () => {
+    const alTerminar = vi.fn()
+    getCaja.mockResolvedValue({ ...TURNO, turno_terminado_at: '2026-10-04T18:00:00Z', turno_terminado_forzado: true, turno_terminado_motivo: 'Se retiró por una emergencia' })
+    montar({ turno: TURNO, alCerrar: vi.fn(), alTerminar })
+    await waitFor(() => expect(alTerminar).toHaveBeenCalledWith(expect.objectContaining({ turno_terminado_forzado: true })))
   })
 })

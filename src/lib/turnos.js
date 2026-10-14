@@ -17,6 +17,30 @@ export function mensajeCierreTurno(err) {
   return texto.replace(/^\d{3}:\s*/, '') || 'No se pudo cerrar el turno'
 }
 
+/**
+ * El turno ya terminó (T-41): lo terminó el vendedor o el administrador
+ * (`turno_terminado_at`). La caja sigue abierta hasta que el administrador la
+ * cuenta y la cierra, pero ya no se vende en ese turno.
+ */
+export function turnoTerminado(turno) {
+  return Boolean(turno?.turno_terminado_at)
+}
+
+/** Qué decirle al vendedor cuando su turno terminó. */
+export function mensajeTurnoTerminado(turno) {
+  if (turno?.turno_terminado_forzado) {
+    return `El administrador terminó tu turno. Motivo: ${turno.turno_terminado_motivo || 'sin motivo'}`
+  }
+  return 'Terminaste tu turno. La caja la cuenta y la cierra el administrador.'
+}
+
+/** Mensaje del 409 o 403 al terminar el turno, sin el código. */
+export function mensajeTerminarTurno(err) {
+  const texto = String(err?.detail || err?.message || '').replace(/^\d{3}:\s*/, '')
+  if (Number(err?.status) === 403) return 'Solo puedes terminar tu propio turno.'
+  return texto || 'No se pudo terminar el turno'
+}
+
 const ACTIVAS = new Set(['PENDING', 'PREPARING', 'READY', 'open', 'preparing', 'ready'])
 
 /**

@@ -319,3 +319,22 @@ describe('InicioDeTurno · máquina POS (T-71)', () => {
     expect(createCajaV2).toHaveBeenCalledWith({ caja_fisica_id: 'cf-1', monto_apertura: 0 })
   })
 })
+
+describe('InicioDeTurno · turno terminado (T-41)', () => {
+  it('si su turno de hoy ya terminó por el administrador, muestra el motivo y no lo deja vender', async () => {
+    getMiTurnoDeHoy.mockResolvedValue({
+      id: 't-1', local_id: 'loc-1', status: 'open', turno_terminado_at: '2026-10-14T18:00:00Z',
+      turno_terminado_forzado: true, turno_terminado_motivo: 'Se retiró por una emergencia',
+    })
+    render(<InicioDeTurno localId="loc-1"><p>punto de venta</p></InicioDeTurno>)
+    expect(await screen.findByRole('heading', { name: 'Tu turno terminó' })).toBeInTheDocument()
+    expect(screen.getByRole('status')).toHaveTextContent('El administrador terminó tu turno. Motivo: Se retiró por una emergencia')
+    expect(screen.queryByText('punto de venta')).not.toBeInTheDocument()
+  })
+
+  it('si lo terminó él, se lo recuerda', async () => {
+    getMiTurnoDeHoy.mockResolvedValue({ id: 't-1', local_id: 'loc-1', status: 'open', turno_terminado_at: '2026-10-14T18:00:00Z', turno_terminado_forzado: false })
+    render(<InicioDeTurno localId="loc-1"><p>punto de venta</p></InicioDeTurno>)
+    expect(await screen.findByRole('status')).toHaveTextContent('Terminaste tu turno')
+  })
+})

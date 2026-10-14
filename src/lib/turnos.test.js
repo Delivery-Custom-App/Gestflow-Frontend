@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { mensajeCierreTurno, pendientesAlCerrar } from './turnos'
+import { mensajeCierreTurno, mensajeTerminarTurno, mensajeTurnoTerminado, pendientesAlCerrar, turnoTerminado } from './turnos'
 
 describe('mensajeCierreTurno', () => {
   it('el 409 ya no pide cerrar las mesas: explica el pedido de mostrador reciente o el cobro con tarjeta (T-45)', () => {
@@ -28,5 +28,21 @@ describe('pendientesAlCerrar (T-45)', () => {
     expect(r.mesas).toEqual([{ id: 'o1', mesa: 'Mesa 2', total: 4400 }])
     expect(r.mostrador).toEqual([{ id: 'o2', total: 1500 }])
     expect(r.totalMesas).toBe(4400)
+  })
+})
+
+describe('turno terminado (T-41)', () => {
+  it('turnoTerminado mira turno_terminado_at', () => {
+    expect(turnoTerminado({ turno_terminado_at: '2026-10-14T20:00:00Z' })).toBe(true)
+    expect(turnoTerminado({ turno_terminado_at: null })).toBe(false)
+  })
+  it('si lo terminó el administrador, dice el motivo', () => {
+    expect(mensajeTurnoTerminado({ turno_terminado_forzado: true, turno_terminado_motivo: 'Se retiró por una emergencia' }))
+      .toBe('El administrador terminó tu turno. Motivo: Se retiró por una emergencia')
+    expect(mensajeTurnoTerminado({ turno_terminado_forzado: false })).toMatch(/Terminaste tu turno/)
+  })
+  it('el 409 al terminar se muestra sin el código', () => {
+    expect(mensajeTerminarTurno({ status: 409, detail: 'Tienes 1 mesa(s) abiertas' })).toBe('Tienes 1 mesa(s) abiertas')
+    expect(mensajeTerminarTurno({ status: 403 })).toMatch(/tu propio turno/)
   })
 })

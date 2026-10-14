@@ -206,6 +206,15 @@ export async function createCajaV2({
   return mapCajaOut(row)
 }
 
+/**
+ * El vendedor termina su turno (T-41, sección 5b): suelta la máquina y deja la
+ * caja abierta para que el administrador la cuente y la cierre. 409 si tiene
+ * mesas o pedidos abiertos o si ya terminó; 403 si no es su turno.
+ */
+export async function terminarTurno(cajaId) {
+  return mapCajaOut(await apiRequest(`/cajas/${encodeURIComponent(String(cajaId))}/terminar-turno`, { method: 'POST' }))
+}
+
 /** Un turno por id (`GET /cajas/{id}`), con su máquina y si se la soltaron. */
 export async function getCaja(cajaId) {
   return mapCajaOut(await apiRequest(`/cajas/${encodeURIComponent(String(cajaId))}`))
@@ -477,7 +486,15 @@ export async function createOrder(orderData = {}) {
     if (meseroId) payload.waiter_user_id = meseroId
   }
 
-  const order = await apiRequest('/orders', { method: 'POST', body: payload })
+  const order = await apiRequest('/orders', { method: 'POST', body: payload }).catch((err) => {
+    // T-41: con el turno ya terminado el backend responde 400; se explica.
+    if (/turno de esta caja ya terminó/i.test(String(err?.detail || err?.message || ''))) {
+      const e = new Error('Tu turno ya terminó: no puedes crear pedidos. Si sigues trabajando, pide al administrador que te abra uno nuevo.')
+      e.status = 400
+      throw e
+    }
+    throw err
+  })
   const items = Array.isArray(orderData.items) ? orderData.items : []
   const createdItems = []
 

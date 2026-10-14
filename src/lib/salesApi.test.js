@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { apiRequest, getOptionalAuthContext } from './apiClient'
-import { completeOrderMercadoPago, createCajaV2, createOrder, getActiveCaja, getBoleta, getMiTurnoDeHoy, listCajas, todayIso, closeCaja } from './salesApi'
+import { completeOrderMercadoPago, createCajaV2, createOrder, getActiveCaja, getBoleta, getMiTurnoDeHoy, listCajas, todayIso, closeCaja, terminarTurno } from './salesApi'
 
 vi.mock('./apiClient', () => ({
   apiRequest: vi.fn(),
@@ -290,5 +290,22 @@ describe('closeCaja con arqueo (T-55)', () => {
     apiRequest.mockResolvedValue({ id: 'c1', status: 'closed' })
     await closeCaja('c1', { montoCierreDeclarado: 0 })
     expect(apiRequest.mock.calls[0][1].body).toEqual({ status: 'closed', monto_cierre_declarado: '0.00' })
+  })
+})
+
+describe('turno terminado (T-41)', () => {
+  beforeEach(() => { vi.clearAllMocks() })
+  it('terminarTurno llama a POST /cajas/{id}/terminar-turno', async () => {
+    apiRequest.mockResolvedValue({ id: 'c1', status: 'open', turno_terminado_at: '2026-10-14T20:00:00Z' })
+    const r = await terminarTurno('c1')
+    expect(apiRequest).toHaveBeenCalledWith('/cajas/c1/terminar-turno', { method: 'POST' })
+    expect(r.turno_terminado_at).toBe('2026-10-14T20:00:00Z')
+  })
+  it('crear un pedido con el turno terminado se explica', async () => {
+    getOptionalAuthContext.mockResolvedValue({ user: { id: 'u1' } })
+    apiRequest.mockRejectedValueOnce(Object.assign(new Error('400: El turno de esta caja ya terminó: inicia un turno nuevo'), {
+      status: 400, detail: 'El turno de esta caja ya terminó: inicia un turno nuevo',
+    }))
+    await expect(createOrder({ local_id: 'loc-1', caja_id: 'c1', items: [] })).rejects.toThrow(/Tu turno ya terminó/)
   })
 })
