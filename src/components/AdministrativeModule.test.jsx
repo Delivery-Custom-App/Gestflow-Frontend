@@ -303,7 +303,7 @@ describe('AdministrativeModule', () => {
 
     const panel = (await screen.findByRole('heading', { name: 'Cajas físicas' })).closest('article')
     expect(within(panel).getByRole('button', { name: '+ Nueva caja física' })).toBeInTheDocument()
-    expect(within(panel).getAllByRole('button', { name: 'Renombrar' })).toHaveLength(mockCajasFisicas.length)
+    expect(within(panel).getAllByRole('button', { name: 'Editar' })).toHaveLength(mockCajasFisicas.length)
 
     await user.click(within(panel).getByRole('button', { name: '+ Nueva caja física' }))
     expect(await screen.findByText('modal de caja física')).toBeInTheDocument()
@@ -316,7 +316,7 @@ describe('AdministrativeModule', () => {
     expect(await screen.findByRole('heading', { name: 'Turnos de caja' })).toBeInTheDocument()
     expect(screen.queryByRole('heading', { name: 'Cajas físicas' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '+ Nueva caja física' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Renombrar' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Editar' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Desactivar' })).not.toBeInTheDocument()
     expect(screen.queryByText(/estado de MercadoPago/i)).not.toBeInTheDocument()
   })

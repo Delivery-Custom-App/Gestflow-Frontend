@@ -699,6 +699,7 @@ function FlujoCajaContent({ localId, dashboard, cajas, cajasFisicas, usuarios, r
               return [
                 <span className="inline-flex items-center gap-2" key={`nombre-${cf.id}`}>
                   {cf.name || 'Caja física sin nombre'}
+                  <Badge variant="outline">{cf.tipo === 'digital' ? 'Digital' : 'Física'}</Badge>
                   {!activa && <Badge variant="warning">Desactivada</Badge>}
                 </span>,
                 <div className="flex items-center gap-2" key={`mp-${cf.id}`}>
@@ -710,7 +711,7 @@ function FlujoCajaContent({ localId, dashboard, cajas, cajasFisicas, usuarios, r
                 <div className="flex items-center gap-2" key={`acc-${cf.id}`}>
                   {onGestionarCajaFisica && (
                     <Button size="sm" variant="outline" onClick={() => onGestionarCajaFisica({ cajaFisica: cf })}>
-                      Renombrar
+                      Editar
                     </Button>
                   )}
                   {activa && (

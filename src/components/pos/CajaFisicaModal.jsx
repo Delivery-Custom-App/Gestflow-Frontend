@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { crearCajaFisica, renombrarCajaFisica } from '../../lib/administrativeApi'
+import { TIPOS_CAJA_FISICA, crearCajaFisica, renombrarCajaFisica } from '../../lib/administrativeApi'
 
 /**
  * Alta y renombrado de cajas físicas.
@@ -15,6 +15,9 @@ import { crearCajaFisica, renombrarCajaFisica } from '../../lib/administrativeAp
 export default function CajaFisicaModal({ localId, cajaFisica, onClose, onSaved }) {
   const esRenombrar = Boolean(cajaFisica)
   const [nombre, setNombre] = useState(cajaFisica?.name || cajaFisica?.nombre || '')
+  // A-02: física o digital. Solo un dato: no cambia ninguna regla de apertura.
+  const tipoInicial = cajaFisica?.tipo === 'digital' ? 'digital' : 'fisica'
+  const [tipo, setTipo] = useState(tipoInicial)
   const [guardando, setGuardando] = useState(false)
   const [error, setError] = useState('')
 
@@ -29,9 +32,9 @@ export default function CajaFisicaModal({ localId, cajaFisica, onClose, onSaved 
     setError('')
     try {
       if (esRenombrar) {
-        await renombrarCajaFisica(cajaFisica.id, limpio)
+        await renombrarCajaFisica(cajaFisica.id, limpio, tipo !== tipoInicial ? tipo : undefined)
       } else {
-        await crearCajaFisica(localId, limpio)
+        await crearCajaFisica(localId, limpio, tipo)
       }
       onSaved()
       onClose()
@@ -51,7 +54,7 @@ export default function CajaFisicaModal({ localId, cajaFisica, onClose, onSaved 
         <div className="flex items-center justify-between border-b border-[hsl(var(--border))] px-6 py-4">
           <div>
             <h2 className="text-sm font-semibold text-[hsl(var(--foreground))]">
-              {esRenombrar ? 'Renombrar caja física' : 'Nueva caja física'}
+              {esRenombrar ? 'Editar caja física' : 'Nueva caja física'}
             </h2>
             <p className="text-xs text-[hsl(var(--muted-foreground))]">
               {esRenombrar
@@ -84,6 +87,20 @@ export default function CajaFisicaModal({ localId, cajaFisica, onClose, onSaved 
             />
           </div>
 
+          <div className="space-y-1.5">
+            <Label htmlFor="caja-fisica-tipo">Tipo</Label>
+            <select
+              id="caja-fisica-tipo"
+              value={tipo}
+              onChange={(e) => setTipo(e.target.value)}
+              disabled={guardando}
+              className="w-full rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3 py-2 text-sm text-[hsl(var(--foreground))]"
+            >
+              {Object.entries(TIPOS_CAJA_FISICA).map(([valor, etiqueta]) => <option key={valor} value={valor}>{etiqueta}</option>)}
+            </select>
+            <p className="text-[11px] text-[hsl(var(--muted-foreground))]">Es solo un dato para distinguirlas: las dos abren turno con cualquier monto, también $0.</p>
+          </div>
+
           {error && (
             <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{error}</p>
           )}
@@ -93,7 +110,7 @@ export default function CajaFisicaModal({ localId, cajaFisica, onClose, onSaved 
               Cancelar
             </Button>
             <Button type="submit" size="sm" disabled={guardando} className="flex-1">
-              {guardando ? 'Guardando…' : esRenombrar ? 'Guardar nombre' : 'Crear caja física'}
+              {guardando ? 'Guardando…' : esRenombrar ? 'Guardar cambios' : 'Crear caja física'}
             </Button>
           </div>
         </form>

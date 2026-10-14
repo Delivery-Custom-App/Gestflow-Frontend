@@ -257,20 +257,29 @@ export function createCaja(body) {
 
 export { getCajaResumen, getMovimientosCaja, closeCaja, getResumenDiario }
 
+/**
+ * Tipo de caja (A-02, R6): `fisica` (por defecto) o `digital`. Es solo un
+ * dato: las dos abren turno con cualquier monto, también 0.
+ */
+export const TIPOS_CAJA_FISICA = { fisica: 'Física', digital: 'Digital' }
+
 /** Alta de caja física. El backend responde 409 si el nombre ya existe en el local. */
-export async function crearCajaFisica(localId, nombre) {
+export async function crearCajaFisica(localId, nombre, tipo = 'fisica') {
   const row = await apiRequest('/cajas-fisicas', {
     method: 'POST',
-    body: { local_id: localId, nombre: String(nombre || '').trim() },
+    body: { local_id: localId, nombre: String(nombre || '').trim(), tipo: tipo === 'digital' ? 'digital' : 'fisica' },
   })
   return { ...row, name: row?.nombre ?? null }
 }
 
-/** Renombra una caja física. Misma regla de nombre único por local. */
-export async function renombrarCajaFisica(cajaFisicaId, nombre) {
+/**
+ * Renombra una caja física y, si viene, cambia su tipo. Misma regla de nombre
+ * único por local. Cambiar el tipo no toca los turnos abiertos.
+ */
+export async function renombrarCajaFisica(cajaFisicaId, nombre, tipo) {
   const row = await apiRequest(`/cajas-fisicas/${encodeURIComponent(String(cajaFisicaId))}`, {
     method: 'PATCH',
-    body: { nombre: String(nombre || '').trim() },
+    body: { nombre: String(nombre || '').trim(), ...(tipo ? { tipo } : {}) },
   })
   return { ...row, name: row?.nombre ?? null }
 }
