@@ -216,11 +216,22 @@ export async function getCajaResumen(cajaId) {
   return apiRequest(`/cajas/${encodeURIComponent(String(cajaId))}/resumen`)
 }
 
-/** Cierra una caja (arqueo del día ya hecho). No se puede reabrir después. */
-export async function closeCaja(cajaId) {
+/**
+ * Cierra un turno (arqueo del día). No se puede reabrir después. Con el
+ * efectivo contado (T-55) manda `monto_cierre_declarado` y, si viene,
+ * `nota_cierre`: el backend calcula la diferencia contra lo esperado y, si no
+ * coincide y falta la nota, responde 400 sin cerrar.
+ */
+export async function closeCaja(cajaId, { montoCierreDeclarado, notaCierre } = {}) {
+  const body = { status: 'closed' }
+  if (montoCierreDeclarado !== undefined && montoCierreDeclarado !== null) {
+    body.monto_cierre_declarado = Number(montoCierreDeclarado).toFixed(2)
+  }
+  const nota = String(notaCierre || '').trim()
+  if (nota) body.nota_cierre = nota
   const row = await apiRequest(`/cajas/${encodeURIComponent(String(cajaId))}`, {
     method: 'PATCH',
-    body: { status: 'closed' },
+    body,
   })
   return mapCajaOut(row)
 }

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { apiRequest, getOptionalAuthContext } from './apiClient'
-import { completeOrderMercadoPago, createCajaV2, createOrder, getActiveCaja, getBoleta, getMiTurnoDeHoy, listCajas, todayIso } from './salesApi'
+import { completeOrderMercadoPago, createCajaV2, createOrder, getActiveCaja, getBoleta, getMiTurnoDeHoy, listCajas, todayIso, closeCaja } from './salesApi'
 
 vi.mock('./apiClient', () => ({
   apiRequest: vi.fn(),
@@ -269,5 +269,26 @@ describe('listCajas (A-01): filtros en el servidor', () => {
       '/cajas?local_id=loc-1',
       '/cajas?local_id=loc-1&business_date=2026-10-14&status=closed&cashier_user_id=u1',
     ])
+  })
+})
+
+describe('closeCaja con arqueo (T-55)', () => {
+  beforeEach(() => { vi.clearAllMocks() })
+  it('sin conteo cierra como antes', async () => {
+    apiRequest.mockResolvedValue({ id: 'c1', status: 'closed' })
+    await closeCaja('c1')
+    expect(apiRequest).toHaveBeenCalledWith('/cajas/c1', { method: 'PATCH', body: { status: 'closed' } })
+  })
+  it('con el efectivo contado y la nota', async () => {
+    apiRequest.mockResolvedValue({ id: 'c1', status: 'closed' })
+    await closeCaja('c1', { montoCierreDeclarado: 8600, notaCierre: '  Vuelto mal dado ' })
+    expect(apiRequest).toHaveBeenCalledWith('/cajas/c1', {
+      method: 'PATCH', body: { status: 'closed', monto_cierre_declarado: '8600.00', nota_cierre: 'Vuelto mal dado' },
+    })
+  })
+  it('0 contado también se manda', async () => {
+    apiRequest.mockResolvedValue({ id: 'c1', status: 'closed' })
+    await closeCaja('c1', { montoCierreDeclarado: 0 })
+    expect(apiRequest.mock.calls[0][1].body).toEqual({ status: 'closed', monto_cierre_declarado: '0.00' })
   })
 })

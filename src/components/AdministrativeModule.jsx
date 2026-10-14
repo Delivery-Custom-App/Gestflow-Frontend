@@ -16,14 +16,13 @@ import {
   getLocalDashboard,
   getOrdersByLocal,
   createCaja,
-  closeCaja,
   getResumenDiario,
 } from '../lib/administrativeApi'
 import { getAuthContext, apiRequest, listUsers } from '../lib/apiClient'
-import { mensajeCierreTurno } from '../lib/turnos'
 import { nombreDeVendedor, opcionesDeVendedor, useTurnosFiltrados } from '../lib/registroTurnos'
 import DetalleTurno from './turno/DetalleTurno'
 import RegistrarMovimientoCaja from './turno/RegistrarMovimientoCaja'
+import CerrarTurno from './turno/CerrarTurno'
 import ConteoEfectivo from './turno/ConteoEfectivo'
 import { desgloseParaApi, totalesDelConteo } from '../lib/efectivo'
 import TablaTurnos from './turno/TablaTurnos'
@@ -1025,9 +1024,9 @@ function AbrirTurnoModal({ localId, onClose, onSaved, onCrearCajaFisica }) {
  * egresos, apertura y total esperado (DetalleTurno), y el cierre del arqueo.
  */
 function CajaMovimientosModal({ caja, onClose, onClosed, puedeRegistrarMovimientos = false }) {
-  const [err, setErr] = useState('')
   const [visible, setVisible] = useState(false)
-  const [closing, setClosing] = useState(false)
+  // T-55: el cierre pide el efectivo contado (arqueo).
+  const [cerrandoTurno, setCerrandoTurno] = useState(false)
   // T-56: retiros, gastos e ingresos de caja; al registrar se recarga el resumen.
   const [registrando, setRegistrando] = useState(false)
   const [version, setVersion] = useState(0)
@@ -1041,19 +1040,6 @@ function CajaMovimientosModal({ caja, onClose, onClosed, puedeRegistrarMovimient
     setTimeout(onClose, 300)
   }
 
-  const handleCloseCaja = async () => {
-    if (!window.confirm('¿Cerrar este turno? Es el cierre del arqueo del día — no se puede reabrir después.')) return
-    setClosing(true); setErr('')
-    try {
-      await closeCaja(caja.id)
-      onClosed?.()
-      handleClose()
-    } catch (e) {
-      // Con órdenes en curso el backend responde 409: se explica qué hacer.
-      setErr(mensajeCierreTurno(e))
-      setClosing(false)
-    }
-  }
 
   return (
     <div className="fixed inset-0 z-50">
@@ -1082,12 +1068,6 @@ function CajaMovimientosModal({ caja, onClose, onClosed, puedeRegistrarMovimient
 
         {/* Body */}
         <div className="p-6 flex flex-col gap-5 flex-1">
-          {err && (
-            <div className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 dark:border-red-800/50 dark:bg-red-950/30 px-3 py-2">
-              <span className="h-1.5 w-1.5 rounded-full bg-red-500 shrink-0" />
-              <p className="text-xs text-red-600 dark:text-red-400">{err}</p>
-            </div>
-          )}
           {aviso && <p role="status" className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800">{aviso}</p>}
           {isOpen && puedeRegistrarMovimientos && (
             registrando ? (
@@ -1112,15 +1092,22 @@ function CajaMovimientosModal({ caja, onClose, onClosed, puedeRegistrarMovimient
         {/* Footer */}
         {isOpen && (
           <div className="px-6 py-4 border-t border-[hsl(var(--border))] shrink-0">
-            <button
-              type="button"
-              onClick={handleCloseCaja}
-              disabled={closing}
-              className="flex w-full items-center justify-center gap-2 rounded-lg border border-red-200 dark:border-red-800/50 px-4 py-2 text-sm font-semibold text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors disabled:opacity-50"
-            >
-              <Lock size={14} />
-              {closing ? 'Cerrando…' : 'Cerrar turno (arqueo del día)'}
-            </button>
+            {cerrandoTurno ? (
+              <CerrarTurno
+                cajaId={caja.id}
+                onCancelar={() => setCerrandoTurno(false)}
+                onCerrado={() => { onClosed?.(); handleClose() }}
+              />
+            ) : (
+              <button
+                type="button"
+                onClick={() => setCerrandoTurno(true)}
+                className="flex w-full items-center justify-center gap-2 rounded-lg border border-red-200 dark:border-red-800/50 px-4 py-2 text-sm font-semibold text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors disabled:opacity-50"
+              >
+                <Lock size={14} />
+                Cerrar turno (arqueo del día)
+              </button>
+            )}
           </div>
         )}
       </div>
