@@ -26,6 +26,8 @@ vi.mock('../../lib/maquinasCobro', async (importOriginal) => ({
   elegirMaquinaDelTurno: vi.fn(),
 }))
 vi.mock('../../lib/administrativeApi', () => ({ listarCajasFisicas: vi.fn() }))
+// El cambio de local tiene sus propias pruebas.
+vi.mock('../CambiarLocal', () => ({ default: () => null }))
 // La lista de máquinas tiene sus propias pruebas: aquí se simula que eligió una.
 // Si la acción falla, el simulado muestra el mensaje, como hace el componente real.
 vi.mock('./ElegirMaquina', async () => {

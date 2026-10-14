@@ -10,6 +10,7 @@ import { isV2FeatureEnabled } from '../../lib/v2Features'
 import { isAlPasoLocal } from '../../lib/salesModel'
 import { elegirMaquinaDelTurno, errorAlTomarMaquina, turnoTieneMaquina } from '../../lib/maquinasCobro'
 import ElegirMaquina from './ElegirMaquina'
+import CambiarLocal from '../CambiarLocal'
 
 function Tarjeta({ titulo, subtitulo, children }) {
   return (
@@ -233,7 +234,11 @@ export default function InicioDeTurno({ localId, children }) {
         </p>
         <div className="flex items-center justify-between gap-2">
           {salir}
-          <Button onClick={irAlFormulario}>Iniciar turno</Button>
+          <div className="flex items-center gap-2">
+            {/* Con más de un local asignado puede cambiarse antes de abrir el turno (T-73). */}
+            <CambiarLocal />
+            <Button onClick={irAlFormulario}>Iniciar turno</Button>
+          </div>
         </div>
       </Tarjeta>
     )

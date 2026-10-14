@@ -121,6 +121,27 @@ export async function refreshSession() {
   }
 }
 
+/**
+ * Cambia el local activo de un administrador de local o un empleado entre los
+ * que tiene asignados (`POST /auth/switch-local`, T-73). Es la misma sesión,
+ * pero el backend entrega un token nuevo con el `local_id` nuevo: se guarda en
+ * lugar del anterior para que todas las peticiones siguientes lo usen. El
+ * usuario se vuelve a leer después con `/auth/me` (refreshUser).
+ */
+export async function cambiarLocalActivo(localId) {
+  const current = getStoredSession()
+  if (!current?.access_token) throw new Error('No hay una sesión abierta')
+  if (!localId) throw new Error('Elige el local al que te cambias')
+  const response = await fetch(buildUrl('/auth/switch-local'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${current.access_token}` },
+    body: JSON.stringify({ local_id: String(localId) }),
+  })
+  const session = await parseAuthResponse(response)
+  writeSession(session)
+  return session
+}
+
 export async function fetchCurrentUser(token) {
   const response = await fetch(buildUrl('/auth/me'), {
     headers: { Authorization: `Bearer ${token}` },

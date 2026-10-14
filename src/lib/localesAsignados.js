@@ -82,6 +82,41 @@ export function localesParaAgregar(locales, asignaciones, { localPrincipalId } =
     .sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')))
 }
 
+/*
+ * Nombres de locales vistos (T-73). El empleado solo puede leer su local
+ * activo (`GET /locals/{id}` de otro asignado le responde 404) y la asignación
+ * no trae el nombre, así que se recuerdan en este navegador los nombres de los
+ * locales en que ya estuvo. Es solo para mostrar: si no se sabe, se dice
+ * "Otro local asignado".
+ */
+const CLAVE_NOMBRES = 'gestflow_nombres_locales'
+
+function leerNombres() {
+  try {
+    const crudo = window.localStorage.getItem(CLAVE_NOMBRES)
+    const datos = crudo ? JSON.parse(crudo) : {}
+    return datos && typeof datos === 'object' ? datos : {}
+  } catch {
+    return {}
+  }
+}
+
+export function recordarNombreDeLocal(localId, nombre) {
+  if (!localId || !nombre) return
+  try {
+    const nombres = leerNombres()
+    if (nombres[String(localId)] === nombre) return
+    nombres[String(localId)] = nombre
+    window.localStorage.setItem(CLAVE_NOMBRES, JSON.stringify(nombres))
+  } catch {
+    // Sin almacenamiento solo se pierde el nombre recordado.
+  }
+}
+
+export function nombreRecordadoDeLocal(localId) {
+  return leerNombres()[String(localId)] || null
+}
+
 /** Solo el administrador de local y el empleado pueden tener varios locales. */
 export function puedeTenerVariosLocales(role) {
   const r = String(role || '').toUpperCase()
