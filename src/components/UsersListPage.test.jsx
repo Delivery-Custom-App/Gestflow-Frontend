@@ -245,3 +245,23 @@ describe('Quién ve qué usuarios', () => {
     expect(screen.queryByRole('button', { name: 'Ver todo el negocio' })).not.toBeInTheDocument()
   })
 })
+
+describe('UsersListPage · locales asignados (T-72)', () => {
+  const montar = () => render(<MemoryRouter><UsersListPage /></MemoryRouter>)
+  beforeEach(() => { listUsers.mockResolvedValue(NEGOCIO) })
+
+  it('el dueño tiene "Locales" en encargados y vendedores, no en el dueño', async () => {
+    montar()
+    expect(await screen.findByRole('button', { name: 'Locales de Elena Centro' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Locales de Vicente Centro' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Locales de Dueño Demo' })).not.toBeInTheDocument()
+  })
+
+  it('el encargado no ve la acción (el backend solo deja asignar al dueño)', async () => {
+    session.role = 'Admin'
+    montar()
+    expect(await screen.findByText('Vicente Centro')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Locales de/ })).not.toBeInTheDocument()
+  })
+})
+
