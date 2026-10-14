@@ -162,8 +162,17 @@ export async function getMiTurnoDeHoy(localId) {
   return mio ? mapCajaOut(mio) : null
 }
 
-export async function listCajas(localId) {
-  const rows = await apiRequest(`/cajas?local_id=${encodeURIComponent(String(localId))}`)
+/**
+ * Turnos del local. Los filtros los resuelve el servidor (A-01, B-17):
+ * `business_date`, `status` (open | closed) y `cashier_user_id`. Cada turno
+ * trae `total_ingresos` y `total_esperado`, sin pedir un resumen por turno.
+ */
+export async function listCajas(localId, { businessDate, status, cashierUserId } = {}) {
+  const qs = new URLSearchParams({ local_id: String(localId) })
+  if (businessDate) qs.set('business_date', businessDate)
+  if (status) qs.set('status', status)
+  if (cashierUserId) qs.set('cashier_user_id', String(cashierUserId))
+  const rows = await apiRequest(`/cajas?${qs.toString()}`)
   return (Array.isArray(rows) ? rows : []).map(mapCajaOut)
 }
 

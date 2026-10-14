@@ -21,7 +21,7 @@ import {
 } from '../lib/administrativeApi'
 import { getAuthContext, apiRequest, listUsers } from '../lib/apiClient'
 import { mensajeCierreTurno } from '../lib/turnos'
-import { filtrarTurnos, nombreDeVendedor, opcionesDeVendedor } from '../lib/registroTurnos'
+import { nombreDeVendedor, opcionesDeVendedor, useTurnosFiltrados } from '../lib/registroTurnos'
 import DetalleTurno from './turno/DetalleTurno'
 import ConteoEfectivo from './turno/ConteoEfectivo'
 import { desgloseParaApi, totalesDelConteo } from '../lib/efectivo'
@@ -529,7 +529,7 @@ const MP_PAIRING_ACTION = {
   paired:           'Ver vinculación',
 }
 
-function FlujoCajaContent({ dashboard, cajas, cajasFisicas, usuarios, resumenDiario, loading, error, onManagePairing, onViewMovimientos, onGestionarCajaFisica }) {
+function FlujoCajaContent({ localId, dashboard, cajas, cajasFisicas, usuarios, resumenDiario, loading, error, onManagePairing, onViewMovimientos, onGestionarCajaFisica }) {
   const [filtroVendedor, setFiltroVendedor] = useState('')
   const [filtroFecha, setFiltroFecha] = useState('')
   const cajasList = safeArray(cajas)
@@ -545,10 +545,11 @@ function FlujoCajaContent({ dashboard, cajas, cajasFisicas, usuarios, resumenDia
   const nombrePorCajaFisica = new Map(cajasFisicasList.map((cf) => [String(cf.id), cf.name]))
   const showMpPairing = typeof onManagePairing === 'function'
   const showMovimientos = typeof onViewMovimientos === 'function'
+  // A-01: con filtros, la lista la trae el servidor (GET /cajas?business_date=&cashier_user_id=).
+  const filtrados = useTurnosFiltrados(localId, cajasList, { vendedorId: filtroVendedor, fecha: filtroFecha })
   const stateNode = <SectionState loading={loading} error={error} isEmpty={!dashboard && !loading && !error} emptyMessage="Sin datos de flujo. Completa órdenes desde el POS y registra gastos para ver gráficos." />
   if (loading || error || (!dashboard && !loading && !error)) return stateNode
 
-  const turnosFiltrados = filtrarTurnos(cajasList, { vendedorId: filtroVendedor, fecha: filtroFecha })
   const openCajasCount = cajasList.filter((c) => c.is_active).length
 
   return (
@@ -614,13 +615,14 @@ function FlujoCajaContent({ dashboard, cajas, cajasFisicas, usuarios, resumenDia
             fecha={filtroFecha}
             onFecha={setFiltroFecha}
           />
+          {filtrados.error && <p role="alert" className="text-xs text-red-600">{filtrados.error}</p>}
           <TablaTurnos
             key={`${filtroVendedor}|${filtroFecha}`}
-            turnos={turnosFiltrados}
+            turnos={filtrados.turnos}
             cajaFisicaDe={(c) => nombrePorCajaFisica.get(String(c.caja_fisica_id))}
             vendedorDe={(c) => nombreDeVendedor(usuariosPorId, c.cashier_user_id)}
             onVer={showMovimientos ? (c) => onViewMovimientos({ ...c, vendedor: nombreDeVendedor(usuariosPorId, c.cashier_user_id) }) : undefined}
-            vacio={filtroVendedor || filtroFecha ? 'No hay turnos con esos filtros.' : 'Este local todavía no tiene turnos de caja.'}
+            vacio={filtrados.cargando ? 'Buscando turnos…' : filtroVendedor || filtroFecha ? 'No hay turnos con esos filtros.' : 'Este local todavía no tiene turnos de caja.'}
           />
         </div>
       </Panel>
@@ -1101,7 +1103,7 @@ function CajaMovimientosModal({ caja, onClose, onClosed }) {
 function renderSectionContent(activeSection, payload) {
   switch (activeSection) {
     case 'flujo-caja':
-      return <FlujoCajaContent dashboard={payload.dashboard} cajas={payload.cajas} cajasFisicas={payload.cajasFisicas} usuarios={payload.usuarios} resumenDiario={payload.resumenDiario} loading={payload.loading} error={payload.error} onManagePairing={payload.onManagePairing} onViewMovimientos={payload.onViewMovimientos} onGestionarCajaFisica={payload.onGestionarCajaFisica} />
+      return <FlujoCajaContent localId={payload.localId} dashboard={payload.dashboard} cajas={payload.cajas} cajasFisicas={payload.cajasFisicas} usuarios={payload.usuarios} resumenDiario={payload.resumenDiario} loading={payload.loading} error={payload.error} onManagePairing={payload.onManagePairing} onViewMovimientos={payload.onViewMovimientos} onGestionarCajaFisica={payload.onGestionarCajaFisica} />
     case 'fondo-emergencia':
       return <FondoEmergencia localId={payload.localId} />
     case 'configuracion':

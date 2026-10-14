@@ -8,6 +8,8 @@ import { listUsers } from '../lib/apiClient'
 import { V2_FEATURES } from '../lib/v2Features'
 import { cambiarEstadoCajaFisica, createCaja, eliminarCajaFisica, getCajasByLocal, getCajasFisicasByLocal, getOrdersByLocal, getResumenDiario, getVentasIndicadores, listarCajasFisicas } from '../lib/administrativeApi'
 
+import { apiRequest } from '../lib/apiClient'
+
 vi.mock('../lib/apiClient', async (importOriginal) => ({
   ...(await importOriginal()),
   getAuthContext: vi.fn(() => Promise.resolve({ token: 'test-token' })),
@@ -509,14 +511,27 @@ describe('AdministrativeModule', () => {
     expect(within(tabla()).getByText('Beto Soto')).toBeInTheDocument()
     expect(filas()).toHaveLength(2)
 
-    await user.selectOptions(within(panel).getByLabelText('Vendedor'), 'u-beto')
-    expect(filas()).toHaveLength(1)
-    expect(within(filas()[0]).getByText('Beto Soto')).toBeInTheDocument()
+    // A-01: con filtros, la lista la entrega el servidor (GET /cajas con los parámetros).
+    apiRequest.mockImplementation(async (path) => {
+      if (!String(path).startsWith('/cajas?')) return []
+      const q = new URLSearchParams(String(path).split('?')[1])
+      return mockCajas.filter((c) => (!q.get('cashier_user_id') || c.cashier_user_id === q.get('cashier_user_id'))
+        && (!q.get('business_date') || c.business_date === q.get('business_date')))
+    })
+    try {
+      await user.selectOptions(within(panel).getByLabelText('Vendedor'), 'u-beto')
+      await waitFor(() => expect(filas()).toHaveLength(1))
+      expect(within(filas()[0]).getByText('Beto Soto')).toBeInTheDocument()
+      expect(apiRequest).toHaveBeenCalledWith('/cajas?local_id=loc-1&cashier_user_id=u-beto')
 
-    await user.selectOptions(within(panel).getByLabelText('Vendedor'), '')
-    await user.type(within(panel).getByLabelText('Fecha'), '2026-09-13')
-    expect(filas()).toHaveLength(1)
-    expect(within(filas()[0]).getByText('Ana Rojas')).toBeInTheDocument()
+      await user.selectOptions(within(panel).getByLabelText('Vendedor'), '')
+      await user.type(within(panel).getByLabelText('Fecha'), '2026-09-13')
+      await waitFor(() => expect(within(filas()[0]).getByText('Ana Rojas')).toBeInTheDocument())
+      expect(filas()).toHaveLength(1)
+      expect(apiRequest).toHaveBeenCalledWith('/cajas?local_id=loc-1&business_date=2026-09-13')
+    } finally {
+      apiRequest.mockImplementation(() => Promise.resolve([]))
+    }
   })
 
   it('al abrir un turno ve su resumen: ventas, ingresos, egresos y el arqueo para cerrarlo', async () => {

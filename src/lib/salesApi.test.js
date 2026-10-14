@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { apiRequest, getOptionalAuthContext } from './apiClient'
-import { completeOrderMercadoPago, createCajaV2, createOrder, getActiveCaja, getBoleta, getMiTurnoDeHoy, todayIso } from './salesApi'
+import { completeOrderMercadoPago, createCajaV2, createOrder, getActiveCaja, getBoleta, getMiTurnoDeHoy, listCajas, todayIso } from './salesApi'
 
 vi.mock('./apiClient', () => ({
   apiRequest: vi.fn(),
@@ -256,5 +256,18 @@ describe('createOrder — quién atiende la mesa', () => {
   it('una venta sin mesa no lleva mesero (el backend lo rechaza fuera de los locales con mesas)', async () => {
     await createOrder({ local_id: 'l1', caja_id: 'c1', source: 'mostrador' })
     expect(cuerpoDeLaOrden()).not.toHaveProperty('waiter_user_id')
+  })
+})
+
+describe('listCajas (A-01): filtros en el servidor', () => {
+  beforeEach(() => { vi.clearAllMocks() })
+  it('manda business_date, status y cashier_user_id solo si vienen', async () => {
+    apiRequest.mockResolvedValue([{ id: 'c1', status: 'open', total_ingresos: '100.00' }])
+    await listCajas('loc-1')
+    await listCajas('loc-1', { businessDate: '2026-10-14', status: 'closed', cashierUserId: 'u1' })
+    expect(apiRequest.mock.calls.map(([p]) => p)).toEqual([
+      '/cajas?local_id=loc-1',
+      '/cajas?local_id=loc-1&business_date=2026-10-14&status=closed&cashier_user_id=u1',
+    ])
   })
 })

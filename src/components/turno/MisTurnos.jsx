@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 import LoadingSpinner from '../LoadingSpinner'
 import { useAuth } from '../../context/AuthContext'
 import { listCajas } from '../../lib/salesApi'
-import { filtrarTurnos, turnosDe } from '../../lib/registroTurnos'
+import { turnosDe } from '../../lib/registroTurnos'
 import TablaTurnos from './TablaTurnos'
 import FiltrosTurnos from './FiltrosTurnos'
 import DetalleTurno from './DetalleTurno'
@@ -59,14 +59,15 @@ export default function MisTurnos() {
 
   useEffect(() => {
     let ignore = false
-    listCajas(localId)
-      // El backend ya le entrega solo los suyos; se filtra igual.
+    // La fecha y el cajero los filtra el servidor (A-01). El backend ya le
+    // entrega solo los suyos; se filtra igual.
+    listCajas(localId, { businessDate: fecha || undefined, cashierUserId: user?.id })
       .then((filas) => { if (!ignore) { setTurnos(turnosDe(filas, user?.id)); setError('') } })
       .catch((e) => { if (!ignore) { setTurnos([]); setError(e?.message || 'No se pudieron cargar tus turnos') } })
     return () => { ignore = true }
-  }, [localId, user?.id, intento])
+  }, [localId, user?.id, intento, fecha])
 
-  const visibles = filtrarTurnos(turnos, { fecha })
+  const visibles = turnos || []
 
   return (
     <main className="flex-1 overflow-y-auto no-scrollbar px-5 py-6">
