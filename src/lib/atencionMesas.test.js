@@ -69,20 +69,21 @@ describe('traspasarMesas', () => {
   const m1 = { mesa: { id: 'm1', name: 'Mesa 1' }, ordenes: [{ id: 'o1', created_at: '2026-10-04T12:00:00Z' }, { id: 'o2' }] }
   const m2 = { mesa: { id: 'm2', name: 'Mesa 2' }, ordenes: [{ id: 'o3' }] }
 
-  it('pasa cada orden en curso de cada mesa al nuevo vendedor', async () => {
+  it('T-42: reasigna cada orden en curso con POST …/reasignar, el empleado y el motivo', async () => {
     apiRequest.mockResolvedValue({})
-    expect(await traspasarMesas([m1, m2], 'beto')).toEqual([])
+    expect(await traspasarMesas([m1, m2], 'beto', 'Cubre la terraza')).toEqual([])
 
-    expect(apiRequest).toHaveBeenCalledWith('/orders/o1?created_at=2026-10-04T12%3A00%3A00Z', { method: 'PATCH', body: { waiter_user_id: 'beto' } })
-    expect(apiRequest).toHaveBeenCalledWith('/orders/o2', { method: 'PATCH', body: { waiter_user_id: 'beto' } })
-    expect(apiRequest).toHaveBeenCalledWith('/orders/o3', { method: 'PATCH', body: { waiter_user_id: 'beto' } })
+    const cuerpo = { method: 'POST', body: { to_user_id: 'beto', motivo: 'Cubre la terraza' } }
+    expect(apiRequest).toHaveBeenCalledWith('/orders/o1/reasignar?created_at=2026-10-04T12%3A00%3A00Z', cuerpo)
+    expect(apiRequest).toHaveBeenCalledWith('/orders/o2/reasignar', cuerpo)
+    expect(apiRequest).toHaveBeenCalledWith('/orders/o3/reasignar', cuerpo)
   })
 
-  it('si una mesa falla, sigue con las demás y dice cuál no se pudo', async () => {
-    apiRequest.mockImplementation((ruta) => (ruta.startsWith('/orders/o1') ? Promise.reject(new Error('403')) : Promise.resolve({})))
-    const fallidas = await traspasarMesas([m1, m2], 'beto')
+  it('si una mesa falla (409), sigue con las demás y dice cuál no se pudo', async () => {
+    apiRequest.mockImplementation((ruta) => (ruta.startsWith('/orders/o1') ? Promise.reject(Object.assign(new Error('409: x'), { detail: 'La orden ya está cobrada' })) : Promise.resolve({})))
+    const fallidas = await traspasarMesas([m1, m2], 'beto', 'Motivo')
 
-    expect(fallidas).toEqual([{ mesa: m1, error: '403' }])
-    expect(apiRequest).toHaveBeenCalledWith('/orders/o3', expect.anything())
+    expect(fallidas).toEqual([{ mesa: m1, error: 'La orden ya está cobrada' }])
+    expect(apiRequest).toHaveBeenCalledWith('/orders/o3/reasignar', expect.anything())
   })
 })

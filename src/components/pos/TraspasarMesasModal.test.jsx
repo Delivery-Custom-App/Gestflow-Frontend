@@ -5,6 +5,7 @@ import TraspasarMesasModal from './TraspasarMesasModal'
 import { traspasarMesas } from '../../lib/atencionMesas'
 
 vi.mock('../../lib/atencionMesas', () => ({ traspasarMesas: vi.fn() }))
+vi.mock('../../lib/supervision', async (importOriginal) => ({ ...(await importOriginal()) }))
 
 const NOMBRES = { ana: 'Ana Rojas', beto: 'Beto Soto', carla: 'Carla Díaz' }
 const nombre = (id) => NOMBRES[id]
@@ -42,9 +43,10 @@ describe('TraspasarMesasModal', () => {
 
     await user.selectOptions(screen.getByLabelText('De'), 'ana')
     await user.selectOptions(screen.getByLabelText('A'), 'carla')
+    await user.type(screen.getByLabelText('Motivo'), 'Ana se retiró')
     await user.click(screen.getByRole('button', { name: 'Traspasar 2 mesas' }))
 
-    await waitFor(() => expect(traspasarMesas).toHaveBeenCalledWith([MESAS[0], MESAS[1]], 'carla'))
+    await waitFor(() => expect(traspasarMesas).toHaveBeenCalledWith([MESAS[0], MESAS[1]], 'carla', 'Ana se retiró'))
     expect(onDone).toHaveBeenCalledWith({ cantidad: 2, a: 'Carla Díaz' })
   })
 
@@ -55,14 +57,25 @@ describe('TraspasarMesasModal', () => {
     await user.selectOptions(screen.getByLabelText('De'), 'ana')
     await user.click(screen.getByRole('checkbox', { name: /Mesa 2/ }))
     await user.selectOptions(screen.getByLabelText('A'), 'beto')
+    await user.type(screen.getByLabelText('Motivo'), 'Beto cubre')
     await user.click(screen.getByRole('button', { name: 'Traspasar 1 mesa' }))
 
-    await waitFor(() => expect(traspasarMesas).toHaveBeenCalledWith([MESAS[0]], 'beto'))
+    await waitFor(() => expect(traspasarMesas).toHaveBeenCalledWith([MESAS[0]], 'beto', 'Beto cubre'))
   })
 
-  it('avisa que el cobro sigue sumando al turno donde se abrió la mesa', () => {
+  it('T-42: avisa que las mesas pasan al turno de quien las recibe', () => {
     montar()
-    expect(screen.getByText(/sigue sumando al turno donde se abrió/)).toBeInTheDocument()
+    expect(screen.getByText(/pasan al turno de quien las recibe/)).toBeInTheDocument()
+  })
+
+  it('T-42: sin motivo (3 a 300 caracteres) no traspasa', async () => {
+    const user = userEvent.setup()
+    montar()
+    await user.selectOptions(screen.getByLabelText('De'), 'ana')
+    await user.selectOptions(screen.getByLabelText('A'), 'carla')
+    await user.click(screen.getByRole('button', { name: 'Traspasar 2 mesas' }))
+    expect(screen.getByRole('alert')).toHaveTextContent(/motivo/)
+    expect(traspasarMesas).not.toHaveBeenCalled()
   })
 
   it('si alguna mesa no se pudo traspasar, lo dice y no cierra', async () => {
@@ -73,6 +86,7 @@ describe('TraspasarMesasModal', () => {
 
     await user.selectOptions(screen.getByLabelText('De'), 'ana')
     await user.selectOptions(screen.getByLabelText('A'), 'carla')
+    await user.type(screen.getByLabelText('Motivo'), 'Ana se retiró')
     await user.click(screen.getByRole('button', { name: 'Traspasar 2 mesas' }))
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Mesa 2 (No autorizado)')

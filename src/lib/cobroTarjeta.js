@@ -1,4 +1,5 @@
 import { apiRequest } from './apiClient'
+import { traducirErrorCobro } from './supervision'
 import { isV2FeatureEnabled } from './v2Features'
 
 /**
@@ -31,7 +32,9 @@ const rutaOrden = (orderId) => `${rutaBaseCobroTarjeta()}/orders/${encodeURIComp
 
 /** Envía el cobro de una orden a la terminal. */
 export async function createPointCharge(orderId, body = {}) {
+  // T-42: el 403 «Solo quien abrió la mesa puede cobrarla» con la sugerencia.
   const respuesta = await apiRequest(`${rutaOrden(orderId)}/charge`, { method: 'POST', body })
+    .catch((err) => { throw traducirErrorCobro(err) })
   if (String(respuesta?.provider || '').toLowerCase() === 'haulmer') {
     // La web no puede completar un cobro Haulmer: se suelta la terminal.
     await apiRequest(`${rutaOrden(orderId)}/charge`, { method: 'DELETE' }).catch(() => null)

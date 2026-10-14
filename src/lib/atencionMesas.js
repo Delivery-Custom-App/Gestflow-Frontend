@@ -2,17 +2,18 @@
  * Quién atiende cada mesa y el traspaso de mesas entre vendedores.
  *
  * El backend guarda en cada orden el mesero actual (`waiter_user_id`), solo en
- * locales con mesas, y no guarda historial. "Quién la atendía antes" se
- * deduce del turno donde se abrió la orden (`caja_id` → `cashier_user_id`),
- * que no cambia: si hoy la atiende otra persona, la mesa fue traspasada.
+ * locales con mesas. "Quién la atendía antes" se deduce del turno donde se
+ * abrió la orden (`caja_id` → `cashier_user_id`).
  *
- * El cobro de una mesa traspasada sigue sumando al turno donde se abrió
- * (cambiar `caja_id` no existe: B-06).
+ * Traspasar es reasignar (T-42, B-06): `POST /orders/{id}/reasignar` con el
+ * empleado y el motivo; la orden pasa al turno del nuevo empleado y lo que se
+ * cobre suma a ese turno. Solo se le puede pasar a alguien con turno hoy.
  */
 import { useEffect, useState } from 'react'
-import { apiRequest, listUsers } from './apiClient'
+import { listUsers } from './apiClient'
 import { listCajas } from './salesApi'
 import { nombreVisible } from './altaUsuario'
+import { reasignarOrden } from './supervision'
 
 /**
  * Quién atiende una mesa a partir de sus órdenes en curso (`ordenes_en_curso`
@@ -57,24 +58,21 @@ export function vendedoresDelLocal(usuarios, localId) {
 }
 
 /**
- * Pasa las órdenes en curso de las mesas a otro vendedor. Sigue con las demás
- * si una falla, y devuelve cuáles no se pudieron pasar.
+ * Reasigna las órdenes en curso de las mesas a otro empleado, con el motivo
+ * (T-42). Sigue con las demás si una falla, y devuelve cuáles no se pudieron
+ * pasar (por ejemplo, 409 si ya estaba cobrada o el destino no tiene turno).
  */
-export async function traspasarMesas(mesas, nuevoId) {
+export async function traspasarMesas(mesas, nuevoId, motivo) {
   const fallidas = []
   for (const mesa of mesas) {
     try {
       for (const orden of mesa.ordenes) {
-        const qs = orden.created_at ? `?created_at=${encodeURIComponent(String(orden.created_at))}` : ''
         // Secuencial a propósito: pocas órdenes por mesa y un error se atribuye a su mesa.
         // oxlint-disable-next-line react-doctor/async-await-in-loop
-        await apiRequest(`/orders/${encodeURIComponent(String(orden.id))}${qs}`, {
-          method: 'PATCH',
-          body: { waiter_user_id: nuevoId },
-        })
+        await reasignarOrden(orden.id, orden.created_at, { toUserId: nuevoId, motivo })
       }
     } catch (e) {
-      fallidas.push({ mesa, error: e?.message || 'No se pudo traspasar' })
+      fallidas.push({ mesa, error: String(e?.detail || e?.message || 'No se pudo traspasar').replace(/^\d{3}:\s*/, '') })
     }
   }
   return fallidas
@@ -85,7 +83,7 @@ export async function traspasarMesas(mesas, nuevoId) {
  * leer a los demás) y de quién es cada turno del local.
  */
 export function useDatosDeAtencion(localId, { esVendedor }) {
-  const [datos, setDatos] = useState({ usuarios: [], usuariosPorId: new Map(), duenoDeTurno: new Map() })
+  const [datos, setDatos] = useState({ usuarios: [], usuariosPorId: new Map(), duenoDeTurno: new Map(), cajas: [] })
   const [version, setVersion] = useState(0)
 
   useEffect(() => {
@@ -100,6 +98,7 @@ export function useDatosDeAtencion(localId, { esVendedor }) {
         usuarios,
         usuariosPorId: new Map(usuarios.map((u) => [String(u.id), u])),
         duenoDeTurno: new Map(cajas.map((c) => [String(c.id), String(c.cashier_user_id)])),
+        cajas,
       })
     })
     return () => { ignore = true }

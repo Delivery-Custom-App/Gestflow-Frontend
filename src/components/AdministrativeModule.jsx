@@ -25,6 +25,7 @@ import { puedeVender } from '../lib/rolesCaja'
 import DetalleTurno from './turno/DetalleTurno'
 import RegistrarMovimientoCaja from './turno/RegistrarMovimientoCaja'
 import CerrarTurno from './turno/CerrarTurno'
+import SupervisionTurno from './turno/SupervisionTurno'
 import ConteoEfectivo from './turno/ConteoEfectivo'
 import { desgloseParaApi, totalesDelConteo } from '../lib/efectivo'
 import TablaTurnos from './turno/TablaTurnos'
@@ -673,6 +674,7 @@ function FlujoCajaContent({ localId, dashboard, cajas, cajasFisicas, usuarios, r
               vendedor: nombreDeVendedor(usuariosPorId, c.cashier_user_id),
               cerradoPor: c.closed_by_user_id ? nombreDeVendedor(usuariosPorId, c.closed_by_user_id) : null,
               nombreDeUsuario: (id) => nombreDeVendedor(usuariosPorId, id),
+              usuarios: safeArray(usuarios),
             }) : undefined}
             vacio={filtrados.cargando ? 'Buscando turnos…' : filtroVendedor || filtroFecha ? 'No hay turnos con esos filtros.' : 'Este local todavía no tiene turnos de caja.'}
           />
@@ -1133,6 +1135,9 @@ function CajaMovimientosModal({ caja, onClose, onClosed, puedeRegistrarMovimient
                 Registrar movimiento
               </Button>
             )
+          )}
+          {isOpen && puedeRegistrarMovimientos && (
+            <SupervisionTurno turno={caja} usuarios={caja.usuarios} onHecho={() => { setVersion((v) => v + 1); onClosed?.() }} />
           )}
           <DetalleTurno key={version} caja={caja} conArqueo cerradoPor={caja.cerradoPor} nombreDeUsuario={caja.nombreDeUsuario} />
         </div>

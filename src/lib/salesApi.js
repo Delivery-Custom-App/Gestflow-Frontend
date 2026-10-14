@@ -4,6 +4,7 @@
  */
 import { apiRequest, getOptionalAuthContext } from './apiClient'
 import { fetchProductsMap } from './v2CatalogApi'
+import { traducirErrorCobro } from './supervision'
 
 /**
  * Backend V2 solo devuelve product_id en order_items (sin nombre embebido).
@@ -537,7 +538,8 @@ export async function createOrder(orderData = {}) {
 export async function updateOrderStatus(orderId, status, createdAt, extra = {}) {
   const body = { status: toV2OrderStatus(status), ...extra }
   const path = orderResourcePath(orderId, createdAt)
-  const updated = await apiRequest(path, { method: 'PATCH', body })
+  // T-42: el 403 «Solo quien abrió la mesa puede cobrarla» con la sugerencia de pedir la reasignación.
+  const updated = await apiRequest(path, { method: 'PATCH', body }).catch((err) => { throw traducirErrorCobro(err) })
   return mapOrderOut(updated)
 }
 

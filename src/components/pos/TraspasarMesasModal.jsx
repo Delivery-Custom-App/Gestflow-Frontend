@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { ArrowRightLeft, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { traspasarMesas } from '../../lib/atencionMesas'
+import { MOTIVO_MAX, validarMotivo } from '../../lib/supervision'
 
 const SIN_REGISTRAR = '__sin_registrar__'
 const CAMPO = 'h-9 w-full rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 text-sm text-[hsl(var(--foreground))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary)/0.4)]'
@@ -28,6 +29,7 @@ export default function TraspasarMesasModal({ mesas, vendedores, nombre, onClose
   const delOrigen = mesas.filter((m) => (m.atiendeId || SIN_REGISTRAR) === deId)
   const [elegidas, setElegidas] = useState(() => new Set(delOrigen.map((m) => String(m.mesa.id))))
   const [aId, setAId] = useState('')
+  const [motivo, setMotivo] = useState('')
   const [guardando, setGuardando] = useState(false)
   const [error, setError] = useState('')
 
@@ -50,9 +52,11 @@ export default function TraspasarMesasModal({ mesas, vendedores, nombre, onClose
   const destinos = vendedores.filter((v) => v.id !== deId)
 
   const traspasar = async () => {
+    const problema = validarMotivo(motivo)
+    if (problema) { setError(problema); return }
     setGuardando(true)
     setError('')
-    const fallidas = await traspasarMesas(aTraspasar, aId)
+    const fallidas = await traspasarMesas(aTraspasar, aId, motivo)
     setGuardando(false)
     if (fallidas.length) {
       setError(`No se pudieron traspasar: ${fallidas.map((f) => `${f.mesa.mesa.name} (${f.error})`).join(', ')}`)
@@ -120,13 +124,19 @@ export default function TraspasarMesasModal({ mesas, vendedores, nombre, onClose
                   {destinos.map((v) => <option key={v.id} value={v.id}>{v.nombre}</option>)}
                 </select>
                 {deId && destinos.length === 0 && (
-                  <p className="text-xs text-[hsl(var(--muted-foreground))]">No hay otro vendedor en este local.</p>
+                  <p className="text-xs text-[hsl(var(--muted-foreground))]">No hay otro vendedor con turno abierto hoy en este local.</p>
                 )}
               </div>
 
+              <div className="flex flex-col gap-1.5">
+                <label htmlFor="traspaso-motivo" className="text-xs font-semibold text-[hsl(var(--muted-foreground))]">Motivo</label>
+                <textarea id="traspaso-motivo" rows={2} maxLength={MOTIVO_MAX} value={motivo} onChange={(e) => setMotivo(e.target.value)}
+                  disabled={guardando} placeholder="Ej: Ana cubre el sector terraza" className={`${CAMPO} h-auto py-2`} />
+              </div>
+
               <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-800/50 dark:bg-amber-950/30 dark:text-amber-300">
-                Quien las recibe puede agregar productos y cobrarlas. Lo cobrado sigue sumando al turno donde se abrió
-                cada mesa, y ese turno no se puede cerrar mientras tenga mesas en curso.
+                Las mesas pasan al turno de quien las recibe: él las cobra y lo cobrado suma a su turno. Solo se pueden
+                pasar a alguien con turno abierto hoy. El empleado recibe un aviso con el motivo.
               </p>
             </>
           )}

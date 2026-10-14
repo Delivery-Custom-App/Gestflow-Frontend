@@ -19,11 +19,13 @@ import { useAuth } from '../../context/AuthContext'
 import { useCajaActiva } from '../../hooks/useCajaActiva'
 import { isV2FeatureEnabled } from '../../lib/v2Features'
 import {
-  atencionDeMesa, fueTraspasada, nombreDePersona, useDatosDeAtencion, vendedoresDelLocal,
+  atencionDeMesa, fueTraspasada, nombreDePersona, useDatosDeAtencion,
 } from '../../lib/atencionMesas'
 import TraspasarMesasModal from './TraspasarMesasModal'
 import { toast } from 'sonner'
 import { puedeVender } from '../../lib/rolesCaja'
+import { empleadosConTurnoHoy } from '../../lib/supervision'
+import { hoyEnChile } from '../../lib/fondoEmergencia'
 import { SALES_MODEL } from '../../lib/salesModel'
 import { ArrowRightLeft, CreditCard, PlusCircle, Printer } from 'lucide-react'
 
@@ -51,7 +53,7 @@ export default function POSModule() {
   const [showMPConfig, setShowMPConfig] = useState(false)
 
   // ── Quién atiende cada mesa, y traspasar mesas (encargado y dueño) ───────
-  const { usuarios, usuariosPorId, duenoDeTurno, recargar: recargarAtencion } = useDatosDeAtencion(localId, { esVendedor: isWorker })
+  const { usuarios, usuariosPorId, duenoDeTurno, cajas: turnosDelLocal, recargar: recargarAtencion } = useDatosDeAtencion(localId, { esVendedor: isWorker })
   const [traspasando, setTraspasando] = useState(false)
   const nombre = useCallback(
     (id) => nombreDePersona(id, { yoId: user?.id, usuariosPorId }),
@@ -377,7 +379,7 @@ export default function POSModule() {
       {traspasando && (
         <TraspasarMesasModal
           mesas={mesasEnCurso}
-          vendedores={vendedoresDelLocal(usuarios, localId)}
+          vendedores={empleadosConTurnoHoy(usuarios, turnosDelLocal, { localId, hoy: hoyEnChile() })}
           nombre={nombre}
           onClose={() => setTraspasando(false)}
           onDone={handleTraspasoHecho}
