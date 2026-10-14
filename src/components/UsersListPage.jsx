@@ -17,7 +17,7 @@ import {
 } from '../lib/gestionUsuarios'
 import {
   AVISO_VENDEDOR, LARGO_MINIMO_CONTRASENA, ROL_LABEL, datosDeAlta, formatearRut, pideRut,
-  puedeCrearUsuarios, rolConLocal, rolesAsignables, validarAlta,
+  esEncargadoDeLocal, localFijoDelAlta, puedeCrearUsuarios, rolConLocal, rolesAsignables, validarAlta,
 } from '../lib/altaUsuario'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -50,9 +50,10 @@ function roleBadge(role) {
 }
 
 // ── Drawer crear usuario ─────────────────────────────────────────────────────
-export function CreateUserDrawer({ isOpen, onClose, onSuccess, locales, localesLoading, userRole, localIdPorDefecto = '' }) {
-  // Abierto desde una franquicia, el alta llega con ese local elegido.
-  const formInicial = { ...FORM_VACIO, local_id: localIdPorDefecto || '' }
+export function CreateUserDrawer({ isOpen, onClose, onSuccess, locales, localesLoading, userRole, localIdPorDefecto = '', localFijo = '' }) {
+  // Abierto desde una franquicia, el alta llega con ese local elegido. El
+  // encargado (T-47) solo crea vendedores de su local: rol y local fijos.
+  const formInicial = { ...FORM_VACIO, local_id: localFijo || localIdPorDefecto || '' }
   const [form, setForm]       = useState(formInicial)
   const [loading, setLoading] = useState(false)
   const [err, setErr]         = useState('')
@@ -157,7 +158,7 @@ export function CreateUserDrawer({ isOpen, onClose, onSuccess, locales, localesL
               id="u-role"
               value={form.role}
               onChange={set('role')}
-              disabled={loading}
+              disabled={loading || availableRoles.length <= 1}
               className="w-full rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3 py-2 text-sm text-[hsl(var(--foreground))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary))]/40"
             >
               {availableRoles.map((r) => <option key={r} value={r}>{ROL_LABEL[r]}</option>)}
@@ -171,13 +172,15 @@ export function CreateUserDrawer({ isOpen, onClose, onSuccess, locales, localesL
                 id="u-local"
                 value={form.local_id}
                 onChange={set('local_id')}
-                disabled={loading || localesLoading}
+                disabled={loading || localesLoading || Boolean(localFijo)}
                 className="w-full rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3 py-2 text-sm text-[hsl(var(--foreground))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary))]/40"
               >
                 <option value="">{localesLoading ? 'Cargando locales…' : 'Selecciona un Local'}</option>
                 {locales.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
               </select>
-              <p className="text-xs text-[hsl(var(--muted-foreground))]">El usuario solo tendrá acceso a este local.</p>
+              <p className="text-xs text-[hsl(var(--muted-foreground))]">
+                {localFijo ? 'Como encargado, creas vendedores de tu local.' : 'El usuario solo tendrá acceso a este local.'}
+              </p>
             </div>
           )}
 
@@ -262,9 +265,14 @@ export default function UsersListPage() {
   }
 
   const puedeCrear = puedeCrearUsuarios(userRole)
+  // El encargado (T-47) crea y gestiona a los vendedores de su local; asignar
+  // varios locales y ver todo el negocio queda para el dueño y el superadmin.
+  const encargado = esEncargadoDeLocal(userRole)
+  const miLocalId = user?.local_id || null
+  const puedeVerNegocio = puedeCrear && !encargado
 
   // No hay borrado de usuarios: se desactiva (conserva su historial). Nunca la cuenta propia.
-  const gestionable = (u) => puedeGestionar(userRole, user?.id, u)
+  const gestionable = (u) => puedeGestionar(userRole, user?.id, u, miLocalId)
   const nombreDe = (u) => u.name || u.email
 
   const confirmar = async () => {
@@ -355,8 +363,8 @@ export default function UsersListPage() {
                   title: 'Roles',
                   desc: 'Cada usuario tiene un rol: Dueño de negocio (todas sus franquicias), Encargado de local (gestiona su franquicia) o Vendedor (el punto de venta de su local).',
                 },
-                // El encargado solo consulta la lista de su local: sin filtro ni alta.
-                ...(puedeCrear ? [{
+                // El filtro por local es de la vista de todo el negocio (el dueño).
+                ...(puedeVerNegocio ? [{
                   icon: Filter,
                   color: 'text-[hsl(var(--primary))]',
                   title: 'Filtrar por local',
@@ -366,7 +374,9 @@ export default function UsersListPage() {
                   icon: UserPlus,
                   color: 'text-[hsl(var(--primary))]',
                   title: 'Crear usuario',
-                  desc: 'Registra un nuevo usuario con su nombre, correo, contraseña, rol y la franquicia a la que pertenece. Dentro de una franquicia, llega con ese local elegido.',
+                  desc: encargado
+                    ? 'Registra un vendedor de tu local con su nombre, correo y contraseña. También puedes editar su nombre, desactivarlo o reactivarlo.'
+                    : 'Registra un nuevo usuario con su nombre, correo, contraseña, rol y la franquicia a la que pertenece. Dentro de una franquicia, llega con ese local elegido.',
                   highlight: true,
                 }] : []),
                 {
@@ -414,7 +424,7 @@ export default function UsersListPage() {
               <p className="text-sm text-[hsl(var(--muted-foreground))]">
                 {visibles.length} usuario{visibles.length === 1 ? '' : 's'}
                 {!localId && ` · ${cantidadLocales} local${cantidadLocales === 1 ? '' : 'es'}`}
-                {localId && puedeCrear && (
+                {localId && puedeVerNegocio && (
                   <>
                     {' · '}
                     <button type="button" onClick={() => navigate('/usuarios')} className="font-medium text-[hsl(var(--primary))] hover:underline">
@@ -513,7 +523,7 @@ export default function UsersListPage() {
                       {puedeCrear && (
                         <td className="py-2.5 px-5 text-right">
                           <span className="inline-flex items-center gap-2">
-                            {puedeTenerVariosLocales(u.role) && (
+                            {puedeVerNegocio && puedeTenerVariosLocales(u.role) && (
                               <Button variant="outline" size="sm" onClick={() => setLocalesDe(u)}
                                 aria-label={`Locales de ${u.name || u.email}`}>
                                 <MapPin size={14} /> Locales
@@ -601,7 +611,7 @@ export default function UsersListPage() {
         </Dialog>
       )}
 
-      {puedeCrear && localesDe && (
+      {puedeVerNegocio && localesDe && (
         <LocalesAsignadosDialog usuario={localesDe} locales={locales} onClose={() => setLocalesDe(null)} />
       )}
 
@@ -615,6 +625,7 @@ export default function UsersListPage() {
           localesLoading={localesLoading}
           userRole={userRole}
           localIdPorDefecto={localId}
+          localFijo={localFijoDelAlta(userRole, miLocalId)}
         />
       )}
     </div>

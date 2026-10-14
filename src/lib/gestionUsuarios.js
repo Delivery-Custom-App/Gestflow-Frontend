@@ -23,16 +23,18 @@ export function separarPorEstado(users = []) {
 
 /**
  * ¿Quien mira puede gestionar a esta persona? Nunca a sí mismo ni a un
- * superadmin; el dueño gestiona a encargados y vendedores; el superadmin, a
- * todos menos otros superadmins.
+ * superadmin; el dueño gestiona a encargados y vendedores; el encargado de
+ * local, solo a los vendedores de su local (T-47); el superadmin, a todos
+ * menos otros superadmins.
  */
-export function puedeGestionar(miRol, miId, usuario) {
+export function puedeGestionar(miRol, miId, usuario, miLocalId = null) {
   if (!usuario || String(miId || '') === String(usuario.id)) return false
   const mio = normalizeRoleKey(miRol)
   const suyo = normalizeRoleKey(usuario.role)
   if (suyo === 'SUPERADMIN') return false
   if (mio === 'SUPERADMIN') return true
   if (mio === 'ADMINNEGOCIO') return suyo === 'ADMIN' || suyo === 'EMPLEADO'
+  if (mio === 'ADMIN') return suyo === 'EMPLEADO' && Boolean(miLocalId) && String(usuario.local_id || '') === String(miLocalId)
   return false
 }
 

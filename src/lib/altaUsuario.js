@@ -3,7 +3,7 @@
  * /usuarios/crear — qué roles puede asignar cada quien, cómo se valida el
  * formulario y qué se le envía al backend.
  */
-import { isSuperAdminRole, isAdminNegocioRole } from '../auth/roleLabel'
+import { isSuperAdminRole, isAdminNegocioRole, normalizeRoleKey } from '../auth/roleLabel'
 import { isV2FeatureEnabled } from './v2Features'
 import { validateChileRutMessage, normalizeRutInput, formatRutForDisplay } from '../utils/chileRut'
 
@@ -18,19 +18,33 @@ export const ROL_LABEL = {
   EMPLEADO: 'Vendedor',
 }
 
+/** ¿Es encargado (administrador) de local? */
+export function esEncargadoDeLocal(userRole) {
+  return normalizeRoleKey(userRole) === 'ADMIN'
+}
+
 /**
- * En el backend solo el superadmin y el dueño crean usuarios: al encargado
- * `POST /users` le responde 403, así que no se le ofrece el alta.
+ * Crean usuarios el superadmin, el dueño y el encargado de local (T-47, B17
+ * de la app): el encargado solo crea vendedores de su propio local.
  */
 export function puedeCrearUsuarios(userRole) {
-  return isSuperAdminRole(userRole) || isAdminNegocioRole(userRole)
+  return isSuperAdminRole(userRole) || isAdminNegocioRole(userRole) || esEncargadoDeLocal(userRole)
 }
 
 /** Roles que puede asignar quien crea, del más alto al más bajo. */
 export function rolesAsignables(userRole) {
   if (isSuperAdminRole(userRole)) return ['SUPERADMIN', 'ADMIN_NEGOCIO', 'ADMIN', 'EMPLEADO']
   if (isAdminNegocioRole(userRole)) return ['ADMIN', 'EMPLEADO']
+  if (esEncargadoDeLocal(userRole)) return ['EMPLEADO']
   return []
+}
+
+/**
+ * Local fijo del alta: el encargado solo crea en su local (el backend le
+ * responde 403 con otro). Para el dueño y el superadmin no hay local fijo.
+ */
+export function localFijoDelAlta(userRole, miLocalId) {
+  return esEncargadoDeLocal(userRole) && miLocalId ? String(miLocalId) : ''
 }
 
 /** ¿Este rol trabaja en un local? (el dueño y el superadmin no se atan a uno). */

@@ -6,7 +6,7 @@ import { useLocals } from '../hooks/useLocals'
 import { createUser } from '../lib/apiClient'
 import {
   AVISO_VENDEDOR, LARGO_MINIMO_CONTRASENA, ROL_LABEL, datosDeAlta, formatearRut, pideRut,
-  puedeCrearUsuarios, rolConLocal, rolesAsignables, validarAlta,
+  localFijoDelAlta, puedeCrearUsuarios, rolConLocal, rolesAsignables, validarAlta,
 } from '../lib/altaUsuario'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -40,10 +40,13 @@ function generatePassword() {
 }
 
 export default function UserManagementPage() {
-  const { userRole } = useAuth()
+  const { userRole, user } = useAuth()
   const navigate = useNavigate()
   const { locales, loading: localesLoading } = useLocals()
-  const [form, setForm] = useState(FORM_VACIO)
+  // El encargado (T-47) crea vendedores de su local: el local queda fijo.
+  const localFijo = localFijoDelAlta(userRole, user?.local_id)
+  const formVacio = { ...FORM_VACIO, local_id: localFijo }
+  const [form, setForm] = useState(formVacio)
   const [showPassword, setShowPassword] = useState(false)
   const [roleConfirmed, setRoleConfirmed] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -54,7 +57,7 @@ export default function UserManagementPage() {
   const availableRoles = [...rolesAsignables(userRole)].reverse()
   const needsConfirm = HIGH_ROLES.has(form.role)
 
-  // En el backend solo el superadmin y el dueño crean usuarios.
+  // Crean usuarios el superadmin, el dueño y el encargado (solo vendedores de su local).
   if (!puedeCrearUsuarios(userRole)) {
     return (
       <div className="flex-1 flex items-center justify-center bg-[hsl(var(--background))]">
@@ -93,7 +96,7 @@ export default function UserManagementPage() {
       await createUser(datosDeAlta(form, local))
       const localName = rolConLocal(form.role) ? local?.name : null
       setOk(`Usuario "${form.email.trim()}" creado como ${ROL_LABEL[form.role]}${localName ? ` en "${localName}"` : ''}.`)
-      setForm(FORM_VACIO)
+      setForm(formVacio)
       setRoleConfirmed(false)
       setShowPassword(false)
     } catch (e2) {
@@ -182,7 +185,7 @@ export default function UserManagementPage() {
               {rolConLocal(form.role) && (
                 <div>
                   <label htmlFor="user-management-page-local-asignado" className={labelCls}>Local asignado</label>
-                  <select id="user-management-page-local-asignado" className={inputCls} value={form.local_id} onChange={set('local_id')} disabled={localesLoading}>
+                  <select id="user-management-page-local-asignado" className={inputCls} value={form.local_id} onChange={set('local_id')} disabled={localesLoading || Boolean(localFijo)}>
                     <option value="">{localesLoading ? 'Cargando locales…' : '— Selecciona un local —'}</option>
                     {locales.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
                   </select>

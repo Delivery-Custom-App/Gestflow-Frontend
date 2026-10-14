@@ -26,7 +26,7 @@ vi.mock('../lib/gestionUsuarios', async (importOriginal) => ({
   actualizarUsuario: vi.fn(() => Promise.resolve({})),
   restablecerClave: vi.fn(() => Promise.resolve({ temporary_password: 'Temp-1234', email_sent: false })),
 }))
-vi.mock('../context/AuthContext', () => ({ useAuth: () => ({ userRole: session.role, user: { id: 'yo' } }) }))
+vi.mock('../context/AuthContext', () => ({ useAuth: () => ({ userRole: session.role, user: { id: 'yo', local_id: session.role === 'Admin' ? 'loc-1' : null } }) }))
 vi.mock('../hooks/useLocals', () => ({ useLocals: () => ({ locales: LOCALES, loading: false }) }))
 
 const LOCALES = [
@@ -158,12 +158,12 @@ describe('UsersListPage', () => {
     expect(screen.getAllByRole('button', { name: /Crear usuario/ })).toHaveLength(2)
   })
 
-  it('quien no puede crear usuarios no ve el botón', async () => {
+  it('T-47: el encargado también ve el botón de crear', async () => {
     session.role = 'Admin'
     montar()
 
     expect(await screen.findByText('Juan Pérez')).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /Crear usuario/ })).not.toBeInTheDocument()
+    expect(screen.getAllByRole('button', { name: /Crear usuario/ }).length).toBeGreaterThan(0)
   })
 })
 
@@ -237,7 +237,7 @@ describe('Quién ve qué usuarios', () => {
     expect(screen.getByLabelText(/Local asignado/)).toHaveValue('loc-2')
   })
 
-  it('el encargado ve la lista de su local, pero no crea, no elimina ni salta al negocio', async () => {
+  it('T-47: el encargado gestiona solo a los vendedores de su local, sin saltar al negocio', async () => {
     session.role = 'Admin'
     // El backend ya le devuelve solo los de su local.
     listUsers.mockResolvedValue(NEGOCIO.filter((u) => u.local_id === 'loc-1'))
@@ -246,10 +246,37 @@ describe('Quién ve qué usuarios', () => {
     expect(await screen.findByText('Vicente Centro')).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Usuarios de Sucursal Centro' })).toBeInTheDocument()
     expect(nombres()).toEqual(['Elena Centro', 'Vicente Centro'])
-    expect(within(screen.getByRole('table')).queryByRole('columnheader', { name: 'Acción' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /Crear usuario/ })).not.toBeInTheDocument()
+    // Al vendedor de su local lo edita y lo desactiva; a otro encargado, no.
+    expect(screen.getByRole('button', { name: 'Desactivar a Vicente Centro' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Desactivar a Elena Centro' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /Eliminar/ })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Ver todo el negocio' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Locales de/ })).not.toBeInTheDocument()
+  })
+
+  it('T-47: su alta tiene el rol Vendedor y su local fijos', async () => {
+    session.role = 'Admin'
+    listUsers.mockResolvedValue(NEGOCIO.filter((u) => u.local_id === 'loc-1'))
+    abrir('/local/loc-1/usuarios')
+    await screen.findByText('Vicente Centro')
+
+    expect(screen.getByLabelText(/^Rol/)).toBeDisabled()
+    expect(screen.getByLabelText(/^Rol/)).toHaveValue('EMPLEADO')
+    expect(screen.getByLabelText(/Local asignado/)).toHaveValue('loc-1')
+    expect(screen.getByLabelText(/Local asignado/)).toBeDisabled()
+  })
+
+  it('T-47: al editar a su vendedor no puede cambiarle el rol ni el local', async () => {
+    const user = userEvent.setup()
+    session.role = 'Admin'
+    listUsers.mockResolvedValue(NEGOCIO.filter((u) => u.local_id === 'loc-1'))
+    abrir('/local/loc-1/usuarios')
+
+    await user.click(await screen.findByRole('button', { name: 'Editar a Vicente Centro' }))
+    const dialogo = screen.getByRole('dialog')
+    expect(within(dialogo).getByLabelText('Nombre')).toBeInTheDocument()
+    expect(within(dialogo).queryByLabelText('Rol')).not.toBeInTheDocument()
+    expect(within(dialogo).queryByLabelText('Local')).not.toBeInTheDocument()
   })
 })
 

@@ -46,6 +46,12 @@ describe('quién gestiona a quién', () => {
     expect(puedeGestionar('Admin Negocio', 'yo', { id: 'e', role: 'ADMIN' })).toBe(true)
     expect(puedeGestionar('Admin Negocio', 'yo', { id: 'd', role: 'ADMIN_NEGOCIO' })).toBe(false)
   })
+  it('T-47: el encargado gestiona solo a los vendedores de su local', () => {
+    expect(puedeGestionar('Admin', 'yo', VICENTE, 'loc-1')).toBe(true)
+    expect(puedeGestionar('Admin', 'yo', VICENTE, 'loc-2')).toBe(false)
+    expect(puedeGestionar('Admin', 'yo', { id: 'e', role: 'ADMIN', local_id: 'loc-1' }, 'loc-1')).toBe(false)
+    expect(puedeGestionar('Admin', 'yo', VICENTE, null)).toBe(false)
+  })
   it('el superadmin gestiona a todos menos superadmins', () => {
     expect(puedeGestionar('Superadmin', 'yo', { id: 'd', role: 'ADMIN_NEGOCIO' })).toBe(true)
   })
