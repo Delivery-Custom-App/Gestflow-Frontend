@@ -5,6 +5,7 @@ import LoadingSpinner from './LoadingSpinner'
 import IncomeChart from './charts/IncomeChart'
 import CajaMpPairingModal from './pos/CajaMpPairingModal'
 import CajaFisicaModal from './pos/CajaFisicaModal'
+import CajaFisicaEstadoDialog from './pos/CajaFisicaEstadoDialog'
 import TicketModal from './pos/TicketModal'
 import { isV2FeatureEnabled } from '../lib/v2Features'
 import {
@@ -642,8 +643,12 @@ function FlujoCajaContent({ dashboard, cajas, cajasFisicas, usuarios, resumenDia
             rows={cajasFisicasList.map((cf) => {
               const status = cf.mpDisponible === false ? 'desconocido' : (cf.mp?.pairing_status || 'unprovisioned')
               const badge = MP_PAIRING_BADGE[status] || MP_PAIRING_BADGE.unprovisioned
+              const activa = cf.is_active !== false
               return [
-                cf.name || 'Caja física sin nombre',
+                <span className="inline-flex items-center gap-2" key={`nombre-${cf.id}`}>
+                  {cf.name || 'Caja física sin nombre'}
+                  {!activa && <Badge variant="warning">Desactivada</Badge>}
+                </span>,
                 <div className="flex items-center gap-2" key={`mp-${cf.id}`}>
                   <Badge variant={badge.variant}>{badge.label}</Badge>
                   {status === 'paired' && cf.mp?.terminal_id && (
@@ -656,9 +661,27 @@ function FlujoCajaContent({ dashboard, cajas, cajasFisicas, usuarios, resumenDia
                       Renombrar
                     </Button>
                   )}
-                  <Button size="sm" variant="outline" onClick={() => onManagePairing(cf)}>
-                    {MP_PAIRING_ACTION[status] || MP_PAIRING_ACTION.unprovisioned}
-                  </Button>
+                  {activa && (
+                    <Button size="sm" variant="outline" onClick={() => onManagePairing(cf)}>
+                      {MP_PAIRING_ACTION[status] || MP_PAIRING_ACTION.unprovisioned}
+                    </Button>
+                  )}
+                  {/* T-75: primero se desactiva (archiva); una desactivada se reactiva o se elimina. */}
+                  {onGestionarCajaFisica && activa && (
+                    <Button size="sm" variant="outline" onClick={() => onGestionarCajaFisica({ cajaFisica: cf, accion: 'desactivar' })}>
+                      Desactivar
+                    </Button>
+                  )}
+                  {onGestionarCajaFisica && !activa && (
+                    <>
+                      <Button size="sm" variant="outline" onClick={() => onGestionarCajaFisica({ cajaFisica: cf, accion: 'reactivar' })}>
+                        Reactivar
+                      </Button>
+                      <Button size="sm" variant="danger" onClick={() => onGestionarCajaFisica({ cajaFisica: cf, accion: 'eliminar' })}>
+                        Eliminar
+                      </Button>
+                    </>
+                  )}
                 </div>,
               ]
             })}
@@ -1205,7 +1228,15 @@ function AdministrativeModule() {
           onClose={() => setBoletaOrden(null)}
         />
       )}
-      {puedeGestionarCajasFisicas && cajaFisicaModal && (
+      {puedeGestionarCajasFisicas && cajaFisicaModal?.accion && (
+        <CajaFisicaEstadoDialog
+          cajaFisica={cajaFisicaModal.cajaFisica}
+          accion={cajaFisicaModal.accion}
+          onClose={() => setCajaFisicaModal(null)}
+          onSaved={() => setRefreshKey(k => k + 1)}
+        />
+      )}
+      {puedeGestionarCajasFisicas && cajaFisicaModal && !cajaFisicaModal.accion && (
         <CajaFisicaModal
           localId={localId}
           cajaFisica={cajaFisicaModal.cajaFisica}

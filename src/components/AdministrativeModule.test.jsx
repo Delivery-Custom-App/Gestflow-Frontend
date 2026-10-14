@@ -6,7 +6,7 @@ import userEvent from '@testing-library/user-event'
 import { AuthProvider } from '../context/AuthContext'
 import { listUsers } from '../lib/apiClient'
 import { V2_FEATURES } from '../lib/v2Features'
-import { createCaja, getCajasByLocal, getCajasFisicasByLocal, getOrdersByLocal, getResumenDiario, getVentasIndicadores, listarCajasFisicas } from '../lib/administrativeApi'
+import { cambiarEstadoCajaFisica, createCaja, eliminarCajaFisica, getCajasByLocal, getCajasFisicasByLocal, getOrdersByLocal, getResumenDiario, getVentasIndicadores, listarCajasFisicas } from '../lib/administrativeApi'
 
 vi.mock('../lib/apiClient', async (importOriginal) => ({
   ...(await importOriginal()),
@@ -99,6 +99,8 @@ vi.mock('../lib/administrativeApi', async (importOriginal) => ({
   getResumenDiario: vi.fn(() => Promise.resolve(mockResumenDiario)),
   listarCajasFisicas: vi.fn(() => Promise.resolve(mockCajasFisicas)),
   createCaja: vi.fn(() => Promise.resolve({ id: 'caja-9', caja_fisica_id: 'cf-1' })),
+  cambiarEstadoCajaFisica: vi.fn(() => Promise.resolve({})),
+  eliminarCajaFisica: vi.fn(() => Promise.resolve()),
 }))
 
 // El módulo lee el rol del contexto: las cajas físicas son supervisorias y no
@@ -279,6 +281,7 @@ describe('AdministrativeModule', () => {
     expect(screen.queryByRole('heading', { name: 'Cajas físicas' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '+ Nueva caja física' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Renombrar' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Desactivar' })).not.toBeInTheDocument()
     expect(screen.queryByText(/estado de MercadoPago/i)).not.toBeInTheDocument()
   })
 
@@ -542,3 +545,56 @@ describe('AdministrativeModule', () => {
   })
 
 })
+
+describe('AdministrativeModule · desactivar y eliminar cajas físicas (T-75)', () => {
+  const panelCajas = async () => (await screen.findByRole('heading', { name: 'Cajas físicas' })).closest('article')
+
+  it('una caja activa se desactiva con confirmación (PATCH is_active=false) y la lista se recarga', async () => {
+    const user = userEvent.setup()
+    renderAdmin('flujo-caja')
+    const panel = await panelCajas()
+    const fila = within(panel).getByText('Caja principal').closest('tr')
+    await user.click(within(fila).getByRole('button', { name: 'Desactivar' }))
+
+    const dialogo = await screen.findByRole('dialog', { name: 'Desactivar caja física' })
+    expect(within(dialogo).getByText(/Deja de ofrecerse al abrir turnos/)).toBeInTheDocument()
+    const llamadasAntes = getCajasFisicasByLocal.mock.calls.length
+    await user.click(within(dialogo).getByRole('button', { name: 'Desactivar' }))
+
+    expect(cambiarEstadoCajaFisica).toHaveBeenCalledWith('cf-1', false)
+    await waitFor(() => expect(getCajasFisicasByLocal.mock.calls.length).toBeGreaterThan(llamadasAntes))
+  })
+
+  it('una desactivada se marca y ofrece reactivar o eliminar (no vincular MercadoPago)', async () => {
+    getCajasFisicasByLocal.mockResolvedValueOnce([
+      { id: 'cf-9', name: 'Caja vieja', is_active: false, mp: null, mpDisponible: true },
+    ])
+    renderAdmin('flujo-caja')
+    const panel = await panelCajas()
+    const fila = within(panel).getByText('Caja vieja').closest('tr')
+    expect(within(fila).getByText('Desactivada')).toBeInTheDocument()
+    expect(within(fila).getByRole('button', { name: 'Reactivar' })).toBeInTheDocument()
+    expect(within(fila).getByRole('button', { name: 'Eliminar' })).toBeInTheDocument()
+    expect(within(fila).queryByRole('button', { name: 'Desactivar' })).not.toBeInTheDocument()
+    expect(within(fila).queryByRole('button', { name: /Vincular/ })).not.toBeInTheDocument()
+  })
+
+  it('eliminar una con turnos históricos muestra el motivo del backend y la caja sigue', async () => {
+    getCajasFisicasByLocal.mockResolvedValueOnce([
+      { id: 'cf-9', name: 'Caja vieja', is_active: false, mp: null, mpDisponible: true },
+    ])
+    eliminarCajaFisica.mockRejectedValueOnce(new Error('400: Esta caja física tiene turnos históricos -- no se puede borrar de forma permanente sin perder ese historial. Queda desactivada (archivada).'))
+    const user = userEvent.setup()
+    renderAdmin('flujo-caja')
+    const panel = await panelCajas()
+    await user.click(within(within(panel).getByText('Caja vieja').closest('tr')).getByRole('button', { name: 'Eliminar' }))
+
+    const dialogo = await screen.findByRole('dialog', { name: 'Eliminar caja física' })
+    await user.click(within(dialogo).getByRole('button', { name: 'Eliminar para siempre' }))
+
+    expect(eliminarCajaFisica).toHaveBeenCalledWith('cf-9')
+    expect(await within(dialogo).findByRole('alert')).toHaveTextContent('Esta caja física tiene turnos históricos')
+    expect(within(panel).getByText('Caja vieja')).toBeInTheDocument()
+  })
+})
+
