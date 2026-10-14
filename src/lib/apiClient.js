@@ -266,10 +266,6 @@ export async function listUsers(businessId) {
   return filtered.map((u) => ({ ...u, name: displayNameFromUser(u) }))
 }
 
-export async function deleteUser() {
-  throw new Error('Eliminar usuarios aún no está disponible en Backend V2')
-}
-
 export async function getBusiness(businessId) {
   if (!businessId) return null
   return apiRequest(`/businesses/${businessId}`)

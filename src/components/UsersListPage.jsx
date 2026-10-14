@@ -1,14 +1,19 @@
 import { useState, useEffect, useCallback } from 'react'
 import { m, AnimatePresence } from 'framer-motion'
-import { Users, Store, Plus, Trash2, X, UserPlus, Loader2, Eye, EyeOff, Shield, HelpCircle, KeyRound, Filter, MapPin } from 'lucide-react'
+import { Users, Store, Plus, X, UserPlus, Loader2, Eye, EyeOff, Shield, HelpCircle, KeyRound, Filter, MapPin, Pencil, UserX, UserCheck } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { isSuperAdminRole } from '../auth/roleLabel'
 import { isInventoryAdminRole } from '../utils/inventoryAccess'
 import { useLocals } from '../hooks/useLocals'
-import { listUsers, deleteUser, createUser, getOptionalAuthContext } from '../lib/apiClient'
+import { listUsers, createUser, getOptionalAuthContext } from '../lib/apiClient'
 import { SIN_LOCAL, usuariosVisibles } from '../lib/listaUsuarios'
 import { puedeTenerVariosLocales } from '../lib/localesAsignados'
 import LocalesAsignadosDialog from './LocalesAsignadosDialog'
+import EditarUsuarioDialog from './EditarUsuarioDialog'
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import {
+  cambiarEstadoUsuario, puedeGestionar, restablecerClave, separarPorEstado, textoDeError,
+} from '../lib/gestionUsuarios'
 import {
   AVISO_VENDEDOR, LARGO_MINIMO_CONTRASENA, ROL_LABEL, datosDeAlta, formatearRut, pideRut,
   puedeCrearUsuarios, rolConLocal, rolesAsignables, validarAlta,
@@ -208,6 +213,12 @@ export default function UsersListPage() {
   const [guideOpen,  setGuideOpen]  = useState(false)
   const [filtroLocal, setFiltroLocal] = useState('')
   const [localesDe, setLocalesDe] = useState(null) // usuario cuyos locales asignados se ven (T-72)
+  // Gestión (T-32): pestaña de activos o inactivos, edición y confirmaciones.
+  const [pestana, setPestana] = useState('activos')
+  const [editando, setEditando] = useState(null)
+  const [confirmando, setConfirmando] = useState(null) // { usuario, accion: 'desactivar'|'reactivar'|'clave' }
+  const [ocupado, setOcupado] = useState(false)
+  const [aviso, setAviso] = useState('')
   // Dentro de una franquicia (/local/:localId/usuarios) la lista es la de ese local.
   const { localId } = useParams()
 
@@ -249,23 +260,31 @@ export default function UsersListPage() {
 
   const puedeCrear = puedeCrearUsuarios(userRole)
 
-  const canDelete = (targetUser) => {
-    // El encargado solo consulta la lista: no crea ni elimina usuarios.
-    if (!puedeCrear) return false
-    const me = String(user?.id || '')
-    const myRole = String(userRole || '').toUpperCase().replace(/[\s_-]+/g, '')
-    const targetRole = String(targetUser.role || '').toUpperCase().replace(/[\s_-]+/g, '')
-    if (me === String(targetUser.id)) return false
-    if (targetRole === 'SUPERADMIN') return false
-    if (targetRole === 'ADMINNEGOCIO' && myRole !== 'SUPERADMIN') return false
-    if (targetRole === 'ADMIN' && myRole !== 'SUPERADMIN' && myRole !== 'ADMINNEGOCIO') return false
-    return myRole === 'SUPERADMIN' || myRole === 'ADMINNEGOCIO' || myRole === 'ADMIN'
-  }
+  // No hay borrado de usuarios: se desactiva (conserva su historial). Nunca la cuenta propia.
+  const gestionable = (u) => puedeGestionar(userRole, user?.id, u)
+  const nombreDe = (u) => u.name || u.email
 
-  const onDelete = async (u) => {
-    if (!window.confirm(`¿Eliminar al usuario ${u.email}?`)) return
-    try { await deleteUser(u.id); loadUsers() }
-    catch (e2) { setErr(e2.detail || e2.message || 'Error al eliminar usuario') }
+  const confirmar = async () => {
+    if (!confirmando) return
+    const { usuario: u, accion } = confirmando
+    setOcupado(true)
+    setErr('')
+    try {
+      if (accion === 'clave') {
+        await restablecerClave(u.id)
+        setAviso(`Se restableció la clave de ${nombreDe(u)}. Deberá cambiarla al entrar.`)
+      } else {
+        await cambiarEstadoUsuario(u.id, accion === 'reactivar')
+        setAviso(accion === 'reactivar' ? `${nombreDe(u)} puede volver a entrar.` : `${nombreDe(u)} quedó desactivado.`)
+      }
+      setConfirmando(null)
+      loadUsers()
+    } catch (e2) {
+      setErr(textoDeError(e2))
+      setConfirmando(null)
+    } finally {
+      setOcupado(false)
+    }
   }
 
   const localNameById = Object.fromEntries(locales.map((l) => [String(l.id), l.name]))
@@ -273,7 +292,8 @@ export default function UsersListPage() {
   const ordenRol = (u) => ORDEN_ROL[String(u.role || '').toUpperCase()] ?? 99
 
   // Por local (sin local al final) y, dentro de cada uno, del rol más alto al vendedor.
-  const visibles = [...usuariosVisibles(users, { localId, filtroLocal })].sort((a, b) => {
+  const porEstado = separarPorEstado(usuariosVisibles(users, { localId, filtroLocal }))
+  const visibles = [...porEstado[pestana]].sort((a, b) => {
     if (!a.local_id !== !b.local_id) return a.local_id ? -1 : 1
     const porLocal = nombreLocal(a.local_id).localeCompare(nombreLocal(b.local_id))
     return porLocal || ordenRol(a) - ordenRol(b)
@@ -418,7 +438,17 @@ export default function UsersListPage() {
           </div>
         </div>
 
-        {err && <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{err}</div>}
+        {err && <div role="alert" className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{err}</div>}
+        {aviso && <div role="status" className="text-sm text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2">{aviso}</div>}
+
+        <div role="tablist" aria-label="Estado de los usuarios" className="inline-flex rounded-lg border border-[hsl(var(--border))] p-0.5">
+          {[['activos', 'Activos'], ['inactivos', 'Inactivos']].map(([clave, texto]) => (
+            <button key={clave} type="button" role="tab" aria-selected={pestana === clave} onClick={() => setPestana(clave)}
+              className={`rounded-md px-3 py-1.5 text-sm font-medium ${pestana === clave ? 'bg-[hsl(var(--primary))] text-white' : 'text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))]'}`}>
+              {texto} ({porEstado[clave].length})
+            </button>
+          ))}
+        </div>
 
         {mostrarFiltro && (
           <div className="flex items-center gap-2">
@@ -445,7 +475,7 @@ export default function UsersListPage() {
           <p className="text-sm text-[hsl(var(--muted-foreground))]">Cargando usuarios…</p>
         ) : visibles.length === 0 ? (
           <Card><CardContent className="p-8 text-center text-[hsl(var(--muted-foreground))]">
-            {localId ? 'Este local todavía no tiene usuarios.' : 'No hay usuarios.'}
+            {pestana === 'inactivos' ? 'No hay usuarios desactivados.' : localId ? 'Este local todavía no tiene usuarios.' : 'No hay usuarios.'}
           </CardContent></Card>
         ) : (
           <Card className="overflow-hidden">
@@ -463,7 +493,10 @@ export default function UsersListPage() {
                 <tbody>
                   {visibles.map((u) => (
                     <tr key={u.id} className="border-b border-[hsl(var(--border))] last:border-0 hover:bg-[hsl(var(--muted))]/30">
-                      <td className="py-2.5 px-5 font-medium text-[hsl(var(--foreground))]">{u.name || '—'}</td>
+                      <td className="py-2.5 px-5 font-medium text-[hsl(var(--foreground))]">
+                        {u.name || '—'}
+                        {u.is_active === false && <Badge variant="outline" className="ml-2">Inactivo</Badge>}
+                      </td>
                       <td className="py-2.5 px-5 text-[hsl(var(--muted-foreground))]">{u.email}</td>
                       <td className="py-2.5 px-5">{roleBadge(u.role)}</td>
                       <td className="py-2.5 px-5 text-[hsl(var(--muted-foreground))]">
@@ -483,10 +516,29 @@ export default function UsersListPage() {
                                 <MapPin size={14} /> Locales
                               </Button>
                             )}
-                            {canDelete(u) && (
-                              <Button variant="danger" size="sm" onClick={() => onDelete(u)}>
-                                <Trash2 size={14} /> Eliminar
-                              </Button>
+                            {gestionable(u) && (
+                              <>
+                                <Button variant="outline" size="sm" onClick={() => setEditando(u)} aria-label={`Editar a ${nombreDe(u)}`}>
+                                  <Pencil size={14} /> Editar
+                                </Button>
+                                {u.is_active !== false && (
+                                  <Button variant="outline" size="sm" onClick={() => setConfirmando({ usuario: u, accion: 'clave' })}
+                                    aria-label={`Restablecer la clave de ${nombreDe(u)}`}>
+                                    <KeyRound size={14} /> Restablecer clave
+                                  </Button>
+                                )}
+                                {u.is_active === false ? (
+                                  <Button variant="outline" size="sm" onClick={() => setConfirmando({ usuario: u, accion: 'reactivar' })}
+                                    aria-label={`Reactivar a ${nombreDe(u)}`}>
+                                    <UserCheck size={14} /> Reactivar
+                                  </Button>
+                                ) : (
+                                  <Button variant="danger" size="sm" onClick={() => setConfirmando({ usuario: u, accion: 'desactivar' })}
+                                    aria-label={`Desactivar a ${nombreDe(u)}`}>
+                                    <UserX size={14} /> Desactivar
+                                  </Button>
+                                )}
+                              </>
                             )}
                           </span>
                         </td>
@@ -499,6 +551,43 @@ export default function UsersListPage() {
           </Card>
         )}
       </div>
+
+      {editando && (
+        <EditarUsuarioDialog
+          usuario={editando}
+          locales={locales}
+          miRol={userRole}
+          onClose={() => setEditando(null)}
+          onGuardado={() => { setEditando(null); setAviso(`Se guardaron los cambios de ${nombreDe(editando)}.`); loadUsers() }}
+        />
+      )}
+
+      {confirmando && (
+        <Dialog open onOpenChange={(abierto) => { if (!abierto && !ocupado) setConfirmando(null) }}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>
+                {confirmando.accion === 'desactivar' ? `¿Desactivar a ${nombreDe(confirmando.usuario)}?`
+                  : confirmando.accion === 'reactivar' ? `¿Reactivar a ${nombreDe(confirmando.usuario)}?`
+                    : `¿Restablecer la clave de ${nombreDe(confirmando.usuario)}?`}
+              </DialogTitle>
+              <DialogDescription>
+                {confirmando.accion === 'desactivar'
+                  ? 'No podrá entrar a GestFlow y se cerrarán sus sesiones. Su historial de turnos y ventas se conserva, y se puede reactivar cuando quieras.'
+                  : confirmando.accion === 'reactivar'
+                    ? 'Podrá volver a entrar con su clave.'
+                    : 'Se genera una clave temporal, se cierran sus sesiones y deberá cambiarla al entrar.'}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setConfirmando(null)} disabled={ocupado}>Cancelar</Button>
+              <Button variant={confirmando.accion === 'desactivar' ? 'danger' : 'default'} onClick={confirmar} disabled={ocupado}>
+                {ocupado ? 'Un momento…' : confirmando.accion === 'desactivar' ? 'Desactivar' : confirmando.accion === 'reactivar' ? 'Reactivar' : 'Restablecer'}
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
 
       {puedeCrear && localesDe && (
         <LocalesAsignadosDialog usuario={localesDe} locales={locales} onClose={() => setLocalesDe(null)} />

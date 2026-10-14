@@ -10,6 +10,7 @@ import { MemoryRouter, Route, Routes } from 'react-router'
 import UsersListPage, { CreateUserDrawer } from './UsersListPage'
 import { createUser, listUsers } from '../lib/apiClient'
 import { V2_FEATURES } from '../lib/v2Features'
+import { actualizarUsuario, cambiarEstadoUsuario, restablecerClave } from '../lib/gestionUsuarios'
 
 const session = vi.hoisted(() => ({ role: 'Admin Negocio' }))
 
@@ -18,6 +19,12 @@ vi.mock('../lib/apiClient', () => ({
   listUsers: vi.fn(),
   deleteUser: vi.fn(),
   getOptionalAuthContext: vi.fn(() => Promise.resolve({ businessId: 'b-1' })),
+}))
+vi.mock('../lib/gestionUsuarios', async (importOriginal) => ({
+  ...(await importOriginal()),
+  cambiarEstadoUsuario: vi.fn(() => Promise.resolve({})),
+  actualizarUsuario: vi.fn(() => Promise.resolve({})),
+  restablecerClave: vi.fn(() => Promise.resolve({ temporary_password: 'Temp-1234', email_sent: false })),
 }))
 vi.mock('../context/AuthContext', () => ({ useAuth: () => ({ userRole: session.role, user: { id: 'yo' } }) }))
 vi.mock('../hooks/useLocals', () => ({ useLocals: () => ({ locales: LOCALES, loading: false }) }))
@@ -265,3 +272,81 @@ describe('UsersListPage · locales asignados (T-72)', () => {
   })
 })
 
+
+describe('UsersListPage · desactivar, reactivar, editar y restablecer (T-32)', () => {
+  const montar = () => render(<MemoryRouter><UsersListPage /></MemoryRouter>)
+  beforeEach(() => {
+    listUsers.mockResolvedValue([
+      ...NEGOCIO.map((u) => ({ ...u, is_active: true })),
+      { id: 'x1', email: 'ex@demo.cl', name: 'Exempleado', role: 'EMPLEADO', local_id: 'loc-1', is_active: false },
+      { id: 'yo', email: 'yo@demo.cl', name: 'Yo Mismo', role: 'ADMIN_NEGOCIO', local_id: null, is_active: true },
+    ])
+  })
+
+  it('ya no hay «Eliminar»: hay Desactivar, con confirmación que explica que se conserva el historial', async () => {
+    const user = userEvent.setup()
+    montar()
+    expect(await screen.findByText('Vicente Centro')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Eliminar/ })).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Desactivar a Vicente Centro' }))
+    const dialogo = screen.getByRole('dialog')
+    expect(dialogo).toHaveTextContent(/No podrá entrar/)
+    expect(dialogo).toHaveTextContent(/historial de turnos y ventas se conserva/)
+    await user.click(within(dialogo).getByRole('button', { name: 'Desactivar' }))
+    expect(cambiarEstadoUsuario).toHaveBeenCalledWith('v1', false)
+    expect(await screen.findByRole('status')).toHaveTextContent('Vicente Centro quedó desactivado.')
+  })
+
+  it('la cuenta propia no tiene Desactivar', async () => {
+    montar()
+    expect(await screen.findByText('Yo Mismo')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Desactivar a Yo Mismo' })).not.toBeInTheDocument()
+  })
+
+  it('la pestaña Inactivos lista a los desactivados con «Reactivar»', async () => {
+    const user = userEvent.setup()
+    montar()
+    await screen.findByText('Vicente Centro')
+    expect(screen.queryByText('Exempleado')).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('tab', { name: /Inactivos \(1\)/ }))
+    expect(screen.getByText('Exempleado')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Reactivar a Exempleado' }))
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Reactivar' }))
+    expect(cambiarEstadoUsuario).toHaveBeenCalledWith('x1', true)
+  })
+
+  it('editar cambia nombre, rol y local; sin local no deja guardar', async () => {
+    const user = userEvent.setup()
+    montar()
+    await user.click(await screen.findByRole('button', { name: 'Editar a Vicente Centro' }))
+    const dialogo = screen.getByRole('dialog')
+    await user.selectOptions(within(dialogo).getByLabelText('Local'), '')
+    await user.type(within(dialogo).getByLabelText('Nombre'), 'Vicente')
+    await user.click(within(dialogo).getByRole('button', { name: 'Guardar' }))
+    expect(within(dialogo).getByRole('alert')).toHaveTextContent(/siempre tiene uno/)
+    expect(actualizarUsuario).not.toHaveBeenCalled()
+
+    await user.selectOptions(within(dialogo).getByLabelText('Local'), 'loc-2')
+    await user.click(within(dialogo).getByRole('button', { name: 'Guardar' }))
+    await waitFor(() => expect(actualizarUsuario).toHaveBeenCalledWith('v1', { first_name: 'Vicente', local_id: 'loc-2' }))
+  })
+
+  it('restablecer clave pide confirmación y llama a regenerate-password', async () => {
+    const user = userEvent.setup()
+    montar()
+    await user.click(await screen.findByRole('button', { name: 'Restablecer la clave de Vicente Centro' }))
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Restablecer' }))
+    expect(restablecerClave).toHaveBeenCalledWith('v1')
+  })
+
+  it('un 400 o 403 del backend se muestra tal cual', async () => {
+    const user = userEvent.setup()
+    cambiarEstadoUsuario.mockRejectedValueOnce(Object.assign(new Error('403: No autorizado'), { status: 403, detail: 'No autorizado' }))
+    montar()
+    await user.click(await screen.findByRole('button', { name: 'Desactivar a Vicente Centro' }))
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Desactivar' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('No autorizado')
+  })
+})
