@@ -1,7 +1,10 @@
 /** Mis sesiones (T-74): lectura, orden y cómo se nombra cada dispositivo. */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { apiRequest } from './apiClient'
-import { fechaHora, listarMisSesiones, nombreDelDispositivo, resumirUserAgent } from './sesiones'
+import {
+  cerrarSesionesDe, fechaHora, listarMisSesiones, listarSesionesDe, nombreDelDispositivo, resumirUserAgent, textoDelCierre,
+  validarMotivoSesion,
+} from './sesiones'
 
 vi.mock('./apiClient', () => ({ apiRequest: vi.fn() }))
 
@@ -50,5 +53,35 @@ describe('fechaHora', () => {
     expect(fechaHora('2026-10-14T12:30:00')).toMatch(/^14-10-2026 12:30$/)
     expect(fechaHora(null)).toBe('—')
     expect(fechaHora('no es fecha')).toBe('—')
+  })
+})
+
+describe('sesiones de otra persona (T-53)', () => {
+  it('lista con incluir_cerradas y deja las abiertas primero', async () => {
+    apiRequest.mockResolvedValue([
+      { id: 'c', activa: false, revoked_at: '2026-10-14T10:00:00Z' },
+      { id: 'a', activa: true, last_seen_at: '2026-10-14T09:00:00Z' },
+    ])
+    const filas = await listarSesionesDe('u 1', { incluirCerradas: true })
+    expect(apiRequest).toHaveBeenCalledWith('/users/u%201/sessions?incluir_cerradas=true')
+    expect(filas.map((s) => s.id)).toEqual(['a', 'c'])
+  })
+
+  it('cerrar manda motivo y session_id (null = todas)', async () => {
+    apiRequest.mockResolvedValue({ cerradas: 2, sesiones: [] })
+    await cerrarSesionesDe('u1', { motivo: '  Perdió el celular ', sessionId: null })
+    expect(apiRequest).toHaveBeenCalledWith('/users/u1/sessions/cerrar', { method: 'POST', body: { motivo: 'Perdió el celular', session_id: null } })
+  })
+
+  it('el motivo va de 3 a 300 caracteres', () => {
+    expect(validarMotivoSesion('ab')).toMatch(/al menos 3/)
+    expect(validarMotivoSesion('x'.repeat(301))).toMatch(/300/)
+    expect(validarMotivoSesion('Perdió el celular')).toBeNull()
+  })
+
+  it('textoDelCierre traduce revoked_kind', () => {
+    expect(textoDelCierre({ revoked_kind: 'admin' })).toBe('La cerró el administrador')
+    expect(textoDelCierre({ revoked_kind: 'password' })).toMatch(/clave/)
+    expect(textoDelCierre({ revoked_kind: 'otro' })).toBe('otro')
   })
 })

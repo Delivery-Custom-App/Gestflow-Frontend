@@ -51,3 +51,52 @@ export function fechaHora(valor) {
   const hora = d.toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit', hour12: false })
   return `${fecha} ${hora}`
 }
+
+// ── Sesiones de otra persona (T-53) ──────────────────────────────────────────
+// El administrador de local ve las de los empleados de su local; el dueño, las
+// de su negocio. Cerrar una sesión no termina el turno ni suelta la máquina.
+
+export const MOTIVO_SESION_MIN = 3
+export const MOTIVO_SESION_MAX = 300
+
+/** `GET /users/{id}/sessions?incluir_cerradas=`: abiertas primero, de la más reciente a la más antigua. */
+export async function listarSesionesDe(userId, { incluirCerradas = false } = {}) {
+  const filas = await apiRequest(`/users/${encodeURIComponent(String(userId))}/sessions?incluir_cerradas=${incluirCerradas ? 'true' : 'false'}`)
+  return (Array.isArray(filas) ? filas : [])
+    .sort((a, b) => (Number(b.activa !== false) - Number(a.activa !== false))
+      || String(b.last_seen_at || b.revoked_at || '').localeCompare(String(a.last_seen_at || a.revoked_at || '')))
+}
+
+/** Motivo obligatorio de 3 a 300 caracteres; null si está bien. */
+export function validarMotivoSesion(motivo) {
+  const texto = String(motivo || '').trim()
+  if (texto.length < MOTIVO_SESION_MIN) return `Escribe el motivo (al menos ${MOTIVO_SESION_MIN} caracteres).`
+  if (texto.length > MOTIVO_SESION_MAX) return `El motivo puede tener hasta ${MOTIVO_SESION_MAX} caracteres.`
+  return null
+}
+
+/**
+ * `POST /users/{id}/sessions/cerrar` con `motivo` y `session_id` (sin él se
+ * cierran todas). Devuelve `{ cerradas, sesiones }`.
+ */
+export async function cerrarSesionesDe(userId, { motivo, sessionId = null }) {
+  return apiRequest(`/users/${encodeURIComponent(String(userId))}/sessions/cerrar`, {
+    method: 'POST',
+    body: { motivo: String(motivo || '').trim(), session_id: sessionId || null },
+  })
+}
+
+const CIERRES = {
+  admin: 'La cerró el administrador',
+  logout: 'Cerró sesión',
+  replaced: 'Volvió a entrar en el mismo equipo',
+  limit: 'Superó el máximo de sesiones abiertas',
+  password: 'Cambio o restablecimiento de clave',
+  deactivated: 'Cuenta desactivada',
+  refresh_reuse: 'Token de renovación reutilizado',
+}
+
+/** Cómo se cerró una sesión, en palabras. */
+export function textoDelCierre(sesion) {
+  return CIERRES[sesion?.revoked_kind] || sesion?.revoked_kind || 'Cerrada'
+}

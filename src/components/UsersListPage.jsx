@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { m, AnimatePresence } from 'framer-motion'
-import { Users, Store, Plus, X, UserPlus, Loader2, Eye, EyeOff, Shield, HelpCircle, KeyRound, Filter, MapPin, Pencil, UserX, UserCheck } from 'lucide-react'
+import { Users, Store, Plus, X, UserPlus, Loader2, Eye, EyeOff, Shield, HelpCircle, KeyRound, Filter, MapPin, Pencil, UserX, UserCheck, MonitorSmartphone } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { isSuperAdminRole } from '../auth/roleLabel'
 import { isInventoryAdminRole } from '../utils/inventoryAccess'
@@ -11,6 +11,7 @@ import { puedeTenerVariosLocales } from '../lib/localesAsignados'
 import LocalesAsignadosDialog from './LocalesAsignadosDialog'
 import EditarUsuarioDialog from './EditarUsuarioDialog'
 import ClaveTemporalDialog from './ClaveTemporalDialog'
+import SesionesEmpleadoDialog from './SesionesEmpleadoDialog'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import {
   cambiarEstadoUsuario, puedeGestionar, restablecerClave, separarPorEstado, textoDeError,
@@ -225,6 +226,7 @@ export default function UsersListPage() {
   const [aviso, setAviso] = useState('')
   // Clave temporal (T-61): solo en memoria mientras el diálogo está abierto.
   const [claveTemporal, setClaveTemporal] = useState(null) // { nombre, clave, correoEnviado }
+  const [sesionesDe, setSesionesDe] = useState(null) // usuario cuyas sesiones se ven (T-53)
   // Dentro de una franquicia (/local/:localId/usuarios) la lista es la de ese local.
   const { localId } = useParams()
 
@@ -534,6 +536,9 @@ export default function UsersListPage() {
                                 <Button variant="outline" size="sm" onClick={() => setEditando(u)} aria-label={`Editar a ${nombreDe(u)}`}>
                                   <Pencil size={14} /> Editar
                                 </Button>
+                                <Button variant="outline" size="sm" onClick={() => setSesionesDe(u)} aria-label={`Sesiones de ${nombreDe(u)}`}>
+                                  <MonitorSmartphone size={14} /> Sesiones
+                                </Button>
                                 {u.is_active !== false && (
                                   <Button variant="outline" size="sm" onClick={() => setConfirmando({ usuario: u, accion: 'clave' })}
                                     aria-label={`Restablecer la clave de ${nombreDe(u)}`}>
@@ -572,6 +577,17 @@ export default function UsersListPage() {
           miRol={userRole}
           onClose={() => setEditando(null)}
           onGuardado={() => { setEditando(null); setAviso(`Se guardaron los cambios de ${nombreDe(editando)}.`); loadUsers() }}
+        />
+      )}
+
+      {sesionesDe && (
+        <SesionesEmpleadoDialog
+          usuario={sesionesDe}
+          onClose={() => setSesionesDe(null)}
+          nombreDeUsuario={(id) => {
+            const quien = users.find((x) => String(x.id) === String(id))
+            return quien ? nombreDe(quien) : String(id) === String(user?.id) ? 'ti' : `Usuario ${String(id).slice(0, 8)}…`
+          }}
         />
       )}
 

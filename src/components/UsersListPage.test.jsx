@@ -26,6 +26,10 @@ vi.mock('../lib/gestionUsuarios', async (importOriginal) => ({
   actualizarUsuario: vi.fn(() => Promise.resolve({})),
   restablecerClave: vi.fn(() => Promise.resolve({ temporary_password: 'Temp-1234', email_sent: false })),
 }))
+vi.mock('../lib/sesiones', async (importOriginal) => ({
+  ...(await importOriginal()),
+  listarSesionesDe: vi.fn(() => Promise.resolve([])),
+}))
 vi.mock('../context/AuthContext', () => ({ useAuth: () => ({ userRole: session.role, user: { id: 'yo', local_id: session.role === 'Admin' ? 'loc-1' : null } }) }))
 vi.mock('../hooks/useLocals', () => ({ useLocals: () => ({ locales: LOCALES, loading: false }) }))
 
@@ -326,6 +330,13 @@ describe('UsersListPage · desactivar, reactivar, editar y restablecer (T-32)', 
     await user.click(within(dialogo).getByRole('button', { name: 'Desactivar' }))
     expect(cambiarEstadoUsuario).toHaveBeenCalledWith('v1', false)
     expect(await screen.findByRole('status')).toHaveTextContent('Vicente Centro quedó desactivado.')
+  })
+
+  it('T-53: «Sesiones» abre las sesiones de la persona', async () => {
+    const user = userEvent.setup()
+    montar()
+    await user.click(await screen.findByRole('button', { name: 'Sesiones de Vicente Centro' }))
+    expect(await screen.findByRole('dialog', { name: 'Sesiones de Vicente Centro' })).toBeInTheDocument()
   })
 
   it('la cuenta propia no tiene Desactivar', async () => {
