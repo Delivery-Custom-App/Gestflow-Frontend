@@ -1,4 +1,7 @@
 import { apiRequest } from './apiClient'
+import { resumirUserAgent } from './dispositivo'
+
+export { resumirUserAgent }
 
 /**
  * Mis sesiones abiertas (T-74 · B-16, sección 5d del backend).
@@ -14,32 +17,6 @@ export async function listarMisSesiones() {
     // La actual primero; después, la de actividad más reciente.
     .sort((a, b) => (Number(Boolean(b.es_actual)) - Number(Boolean(a.es_actual)))
       || String(b.last_seen_at || '').localeCompare(String(a.last_seen_at || '')))
-}
-
-const NAVEGADORES = [
-  [/Edg\//, 'Edge'],
-  [/OPR\/|Opera/, 'Opera'],
-  [/Firefox\//, 'Firefox'],
-  [/Chrome\//, 'Chrome'],
-  [/Safari\//, 'Safari'],
-]
-const SISTEMAS = [
-  [/Windows/, 'Windows'],
-  [/Android/, 'Android'],
-  [/iPhone|iPad|iOS/, 'iPhone o iPad'],
-  [/Mac OS X|Macintosh/, 'Mac'],
-  [/Linux/, 'Linux'],
-]
-
-/** "Chrome en Windows" a partir del user agent; si no se reconoce, el texto recortado. */
-export function resumirUserAgent(userAgent) {
-  const ua = String(userAgent || '')
-  if (!ua) return 'Dispositivo desconocido'
-  const navegador = NAVEGADORES.find(([re]) => re.test(ua))?.[1]
-  const sistema = SISTEMAS.find(([re]) => re.test(ua))?.[1]
-  if (navegador && sistema) return `${navegador} en ${sistema}`
-  if (navegador || sistema) return navegador || sistema
-  return ua.length > 40 ? `${ua.slice(0, 40)}…` : ua
 }
 
 /** El nombre que se muestra: el que dio la app al iniciar sesión o, si no hay, el navegador. */

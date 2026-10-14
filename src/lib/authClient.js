@@ -1,3 +1,5 @@
+import { nombreDelEquipo, obtenerDeviceId } from './dispositivo'
+
 const TOKEN_KEY = 'gestflow-auth-token'
 const USER_KEY = 'gestflow-auth-user'
 
@@ -75,11 +77,16 @@ async function parseAuthResponse(response) {
   }
 }
 
+/**
+ * Inicia sesión. Manda el `device_id` de este navegador y un `device_name`
+ * legible (T-50): así volver a entrar en el mismo equipo reemplaza su sesión
+ * anterior en vez de sumar otra.
+ */
 export async function loginWithPassword({ email, password }) {
   const response = await fetch(buildUrl('/auth/login'), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email, password }),
+    body: JSON.stringify({ email, password, device_id: obtenerDeviceId(), device_name: nombreDelEquipo() }),
   })
   const session = await parseAuthResponse(response)
 
