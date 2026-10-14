@@ -1,13 +1,56 @@
 /**
  * Agregados de venta a nivel negocio (todas las franquicias) para los cards
  * de "venta semanal" y "comparativa mensual" del resumen del Inicio del dueño.
- * Reutiliza /orders por local (mismo endpoint que el indicador de Flujo),
- * sumando `total` de pedidos con status COMPLETED.
+ * La semana reutiliza /orders por local (mismo endpoint que el indicador de
+ * Flujo); la comparativa mensual sale de /reports/sales (T-28).
  */
 import { apiRequest, getOptionalAuthContext } from './apiClient'
 
 const DAY_LABELS = ['L', 'M', 'M', 'J', 'V', 'S', 'D']
 const MONTH_LABELS = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
+
+const pad = (n) => String(n).padStart(2, '0')
+const isoDia = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+
+/**
+ * Rangos de los últimos `count` meses (el actual al final), con fechas
+ * YYYY-MM-DD inclusivas: del primer al último día del mes, y el mes en curso
+ * cortado en `hoy`.
+ */
+export function rangosMensuales(hoy = new Date(), count = 4) {
+  return Array.from({ length: count }, (_, i) => {
+    const offset = count - 1 - i
+    const start = new Date(hoy.getFullYear(), hoy.getMonth() - offset, 1)
+    const ultimo = new Date(hoy.getFullYear(), hoy.getMonth() - offset + 1, 0)
+    const end = offset === 0 ? hoy : ultimo
+    return { label: MONTH_LABELS[start.getMonth()], startDate: isoDia(start), endDate: isoDia(end) }
+  })
+}
+
+/** Variación porcentual redondeada; null si falta un dato o el anterior es 0. */
+export function variacion(actual, anterior) {
+  if (actual == null || anterior == null || !(anterior > 0)) return null
+  return Math.round(((actual - anterior) / anterior) * 100)
+}
+
+/**
+ * Venta completada de los locales en el rango, sumando `total_sales` de
+ * /reports/sales. Si falla la llamada de algún local devuelve null (la
+ * pantalla muestra «—» en vez de un 0 que parecería real).
+ */
+async function totalDelRango(locals, token, { startDate, endDate }) {
+  try {
+    const reportes = await Promise.all(
+      locals.map((l) => apiRequest(
+        `/reports/sales?${new URLSearchParams({ local_id: String(l.id), start_date: startDate, end_date: endDate })}`,
+        { token },
+      )),
+    )
+    return reportes.reduce((sum, r) => sum + Number(r?.total_sales || 0), 0)
+  } catch {
+    return null
+  }
+}
 
 function isCompleted(order) {
   return String(order?.status || '').toLowerCase() === 'completed'
@@ -82,32 +125,25 @@ export async function fetchBusinessSalesSummary(locales) {
     changeVsYesterday = yesterday > 0 ? Math.round(((today - yesterday) / yesterday) * 100) : null
   }
 
-  // ── Mensual: mes actual + 3 anteriores ──────────────────────────────
+  // ── Mensual: mes actual + 3 anteriores (T-28) ────────────────────────
+  // Cada mes sale de /reports/sales (una llamada por local y mes), que suma
+  // las órdenes completadas por día contable. El mes en curso se corta hoy.
   const monthCount = 4
-  const monthRanges = Array.from({ length: monthCount }, (_, i) => {
-    const offset = monthCount - 1 - i
-    const start = new Date(now.getFullYear(), now.getMonth() - offset, 1)
-    const end = new Date(now.getFullYear(), now.getMonth() - offset + 1, 1)
-    return { start, end, label: MONTH_LABELS[start.getMonth()] }
-  })
-
-  // Lecturas independientes por mes: en paralelo (Promise.all conserva el orden).
-  const monthTotals = await Promise.all(monthRanges.map(async (range) => {
-    const orders = await sumOrdersInRange(locales, token, range.start, range.end)
-    const total = orders.filter(isCompleted).reduce((sum, o) => sum + Number(o.total || 0), 0)
-    return { label: range.label, total }
-  }))
+  const monthTotals = await Promise.all(
+    rangosMensuales(now, monthCount).map(async (range) => ({
+      label: range.label,
+      start: range.startDate,
+      end: range.endDate,
+      total: await totalDelRango(locales, token, range),
+    })),
+  )
 
   const months = monthTotals.map((m, i) => {
-    if (i === 0) return { ...m, momPercent: null }
-    const prev = monthTotals[i - 1].total
-    const momPercent = prev > 0 ? Math.round(((m.total - prev) / prev) * 100) : null
-    return { ...m, momPercent }
+    const prev = i > 0 ? monthTotals[i - 1].total : null
+    return { ...m, momPercent: variacion(m.total, prev) }
   })
 
-  const first = monthTotals[0].total
-  const last = monthTotals[monthTotals.length - 1].total
-  const accumulatedPercent = first > 0 ? Math.round(((last - first) / first) * 100) : null
+  const accumulatedPercent = variacion(monthTotals[monthTotals.length - 1].total, monthTotals[0].total)
 
   return {
     weekly: { days, total: weekTotal, changeVsYesterday },
