@@ -475,7 +475,9 @@ function ProductsTable({
         <div className="shrink-0 border-t border-[hsl(var(--border))] px-6 py-4 flex flex-col gap-3">
           {confirmDelete && (
             <div className="rounded-lg bg-red-50 border border-red-200 px-4 py-3 flex items-center justify-between gap-3">
-              <span className="text-sm text-red-700 font-medium">¿Eliminar este producto?</span>
+              <span className="text-sm text-red-700 font-medium">
+                ¿Eliminar del stock de este local? Se deja de controlar aquí; el producto sigue existiendo en el negocio y en los otros locales.
+              </span>
               <div className="flex gap-2">
                 <Button type="button" variant="destructive" size="sm" disabled={deleting}
                   onClick={async () => {

@@ -6,6 +6,7 @@ import {
   patchCategory,
   patchProduct,
   postCategory,
+  removeFromLocalMenu,
 } from '../../lib/inventoryApi'
 import { fetchLocalMenuCatalog } from '../../lib/salesApi'
 import { apiRequest } from '../../lib/apiClient'
@@ -154,6 +155,22 @@ function MenuBuilderPage() {
       toast.error(err?.message || 'No se pudo renombrar')
     } finally {
       setCategorySaving(false)
+    }
+  }
+
+  async function handleQuitarDelMenu(item) {
+    const nombre = item.product_name || item.name || 'este producto'
+    if (!item.local_product_id) {
+      toast.error('Este producto no está en el menú de este local.')
+      return
+    }
+    if (!window.confirm(`¿Quitar "${nombre}" del menú de este local? El producto sigue existiendo en el negocio y en los otros locales.`)) return
+    try {
+      await removeFromLocalMenu(item.local_product_id)
+      setProducts((prev) => prev.filter((row) => String(row.local_product_id) !== String(item.local_product_id)))
+      toast.success(`"${nombre}" se quitó del menú de este local`)
+    } catch (err) {
+      toast.error(err?.message || 'No se pudo quitar del menú')
     }
   }
 
@@ -453,9 +470,10 @@ function MenuBuilderPage() {
                             <button
                               type="button"
                               className="text-xs font-semibold text-red-600 hover:underline"
-                              onClick={() => toast.info('Eliminar plato próximamente.')}
+                              aria-label={`Quitar ${item.product_name || item.name} del menú`}
+                              onClick={() => handleQuitarDelMenu(item)}
                             >
-                              Eliminar
+                              Quitar del menú
                             </button>
                           </div>
                         </div>

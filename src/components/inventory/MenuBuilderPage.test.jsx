@@ -3,7 +3,7 @@ import { render, screen, within, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router'
 import MenuBuilderPage from './MenuBuilderPage'
-import { cambiarSiSePrepara } from '../../lib/inventoryApi'
+import { cambiarSiSePrepara, removeFromLocalMenu } from '../../lib/inventoryApi'
 
 vi.mock('./InventoryShell', () => ({ default: ({ children }) => <div>{children}</div> }))
 vi.mock('./ImportarCatalogoDrawer', () => ({ default: () => null }))
@@ -18,12 +18,13 @@ vi.mock('../../lib/inventoryApi', () => ({
   postInventoryNewProduct: vi.fn(),
   getInventarioDelProducto: vi.fn(() => Promise.resolve(null)),
   cambiarSiSePrepara: vi.fn(() => Promise.resolve(null)),
+  removeFromLocalMenu: vi.fn(() => Promise.resolve(null)),
 }))
 vi.mock('../../lib/salesApi', () => ({
   fetchLocalMenuCatalog: vi.fn(() => Promise.resolve({
     categories: [{
       id: 'c1', name: 'Fondos', products: [
-        { id: 'p1', product_id: 'p1', name: 'Bebida lata', price: 1500, is_active: true, stock_deduction_mode: 'DIRECT_STOCK' },
+        { id: 'p1', product_id: 'p1', local_product_id: 'lp1', name: 'Bebida lata', price: 1500, is_active: true, stock_deduction_mode: 'DIRECT_STOCK' },
         { id: 'p2', product_id: 'p2', name: 'Lomo a lo pobre', price: 9900, is_active: true, stock_deduction_mode: 'RECIPE_BASED' },
       ],
     }],
@@ -65,5 +66,30 @@ describe('MenuBuilderPage · productos que se preparan', () => {
     await waitFor(() => expect(cambiarSiSePrepara).toHaveBeenCalledWith('l1', 'p1', expect.objectContaining({ prepara: true })))
     expect(await within(tarjeta('Bebida lata')).findByText('Se prepara')).toBeInTheDocument()
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+})
+
+describe('MenuBuilderPage · quitar del menú (T-29)', () => {
+  it('pide confirmación, llama a DELETE /local-products/{id} y saca la tarjeta', async () => {
+    const user = userEvent.setup()
+    const confirmar = vi.spyOn(window, 'confirm').mockReturnValue(true)
+    montar()
+
+    await user.click(await screen.findByRole('button', { name: 'Quitar Bebida lata del menú' }))
+    expect(confirmar.mock.calls[0][0]).toMatch(/sigue existiendo en el negocio/)
+    expect(removeFromLocalMenu).toHaveBeenCalledWith('lp1')
+    await waitFor(() => expect(screen.queryByText('Bebida lata')).not.toBeInTheDocument())
+    confirmar.mockRestore()
+  })
+
+  it('si no se confirma, no se borra nada', async () => {
+    const user = userEvent.setup()
+    const confirmar = vi.spyOn(window, 'confirm').mockReturnValue(false)
+    montar()
+
+    await user.click(await screen.findByRole('button', { name: 'Quitar Bebida lata del menú' }))
+    expect(removeFromLocalMenu).not.toHaveBeenCalled()
+    expect(screen.getByText('Bebida lata')).toBeInTheDocument()
+    confirmar.mockRestore()
   })
 })

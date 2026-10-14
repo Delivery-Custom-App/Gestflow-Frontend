@@ -410,14 +410,31 @@ export async function patchInventoryProductUnitCost(_localId, productId, body) {
   })
 }
 
-/** Soft: desactiva el producto (V2 no tiene DELETE de inventario). */
-export async function deleteInventoryItem(_localId, inventoryId) {
-  const inv = await apiRequest(`/inventory/${encodeURIComponent(String(inventoryId))}`)
-  if (inv?.product_id) {
-    await apiRequest(`/products/${encodeURIComponent(String(inv.product_id))}`, {
-      method: 'DELETE',
-    })
+/** Mensaje legible para un 403 al quitar algo de un local. */
+function conPermiso(err, accion) {
+  if (Number(err?.status) === 403) {
+    const e = new Error(`No tienes permiso para ${accion} en este local.`)
+    e.status = 403
+    throw e
   }
+  throw err
+}
+
+/**
+ * Deja de controlar el stock del producto en ese local (T-29, B-11):
+ * `DELETE /inventory/{id}` responde 204 y no toca el producto del negocio ni
+ * los otros locales. Antes se borraba el producto en todo el negocio (E3).
+ */
+export async function deleteInventoryItem(_localId, inventoryId) {
+  await apiRequest(`/inventory/${encodeURIComponent(String(inventoryId))}`, { method: 'DELETE' })
+    .catch((e) => conPermiso(e, 'quitar productos del stock'))
+  return null
+}
+
+/** Saca el producto del menú de ese local (`DELETE /local-products/{id}`, T-29). */
+export async function removeFromLocalMenu(localProductId) {
+  await apiRequest(`/local-products/${encodeURIComponent(String(localProductId))}`, { method: 'DELETE' })
+    .catch((e) => conPermiso(e, 'quitar productos del menú'))
   return null
 }
 
