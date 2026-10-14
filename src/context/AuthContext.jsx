@@ -90,11 +90,12 @@ export function AppAuthProvider({ children }) {
   }, [clearPreviousSession])
 
   useEffect(() => {
-    const handleSessionExpired = () => {
+    const handleSessionExpired = (event) => {
       clearAuthState()
       setEmail('')
       setPassword('')
-      setErrorMessage('Tu sesion expiro. Ingresa nuevamente.')
+      // T-51: si la renovación falló con un motivo del backend, se muestra ese.
+      setErrorMessage(event?.detail?.message || 'Tu sesion expiro. Ingresa nuevamente.')
       setSuccessMessage('')
     }
 

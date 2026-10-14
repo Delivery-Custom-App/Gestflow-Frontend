@@ -6,7 +6,18 @@ const USER_KEY = 'gestflow-auth-user'
 // SEC: refresh_token vive solo en memoria (no localStorage) para acotar el
 // radio de daño de un eventual XSS — se pierde en un full reload, trade-off
 // aceptado. Ver docs/seguridad/TAREAS_SECURITY_2026-09-16.md.
+//
+// T-51 (renovación automática) mantiene esa decisión: tampoco va a
+// sessionStorage, porque duplicar una pestaña copiaría un refresh_token que
+// el backend rota en cada uso, y usar uno viejo lo trata como robo y cierra
+// la sesión. Después de recargar, la sesión dura lo que le quede al
+// access_token (hoy 8 horas) y luego pide volver a entrar.
 let inMemoryRefreshToken = null
+// Cuándo vence el access_token (ms desde epoch), a partir de `expires_in`.
+let inMemoryExpiresAt = null
+// Una sola renovación a la vez: si varias peticiones reciben 401 juntas,
+// comparten la misma promesa (el refresh_token se rota en cada uso).
+let renovacionEnCurso = null
 
 const apiBaseUrl = import.meta.env.VITE_API_URL || ''
 
@@ -26,16 +37,18 @@ function readJson(key) {
   }
 }
 
-function writeSession({ access_token, refresh_token, user }) {
+function writeSession({ access_token, refresh_token, expires_in, user }) {
   if (typeof window === 'undefined') return
 
   if (access_token) window.localStorage.setItem(TOKEN_KEY, access_token)
   if (refresh_token) inMemoryRefreshToken = refresh_token
+  if (Number(expires_in) > 0) inMemoryExpiresAt = Date.now() + Number(expires_in) * 1000
   if (user) window.localStorage.setItem(USER_KEY, JSON.stringify(user))
 }
 
 export function clearStoredSession() {
   inMemoryRefreshToken = null
+  inMemoryExpiresAt = null
 
   if (typeof window === 'undefined') return
 
@@ -52,6 +65,7 @@ export function getStoredSession() {
   return {
     access_token: accessToken,
     refresh_token: inMemoryRefreshToken,
+    expires_at: inMemoryExpiresAt,
     user: readJson(USER_KEY),
   }
 }
@@ -73,6 +87,7 @@ async function parseAuthResponse(response) {
   return {
     access_token: accessToken,
     refresh_token: session.refresh_token || null,
+    expires_in: session.expires_in ?? null,
     user: session.user || json.user || null,
   }
 }
@@ -101,31 +116,52 @@ export async function loginWithPassword({ email, password }) {
 }
 
 /**
- * Backend V2 no expone /auth/refresh todavía.
- * Si no hay refresh_token, se mantiene la sesión actual (access JWT).
+ * Renueva la sesión con `POST /auth/refresh` (T-51, B-16): entrega un
+ * access_token y un refresh_token nuevos (el anterior deja de servir), y se
+ * guardan los dos. Varias llamadas a la vez comparten la misma renovación.
+ *
+ * - Sin refresh_token (por ejemplo, después de recargar) se mantiene la
+ *   sesión actual.
+ * - Un 401 (sesión cerrada, vencida o token inválido) lanza un error con el
+ *   `detail` y el `X-Account-Status` del backend: quien llama cierra la sesión
+ *   y lo muestra.
+ * - Un fallo de red, un 404 o un 5xx no cierran la sesión: se sigue con el
+ *   access_token actual.
  */
-export async function refreshSession() {
+export function refreshSession() {
+  if (!renovacionEnCurso) {
+    renovacionEnCurso = renovar().finally(() => { renovacionEnCurso = null })
+  }
+  return renovacionEnCurso
+}
+
+async function renovar() {
   const current = getStoredSession()
   if (!current?.access_token) return null
   if (!current.refresh_token) return current
 
+  let response
   try {
-    const response = await fetch(buildUrl('/auth/refresh'), {
+    response = await fetch(buildUrl('/auth/refresh'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ refresh_token: current.refresh_token }),
     })
-    if (!response.ok) {
-      // Endpoint inexistente o token inválido — no borrar sesión si el access sigue vivo
-      if (response.status === 404) return current
-      return null
-    }
-    const session = await parseAuthResponse(response)
-    writeSession(session)
-    return session
   } catch {
     return current
   }
+  if (response.status === 401) {
+    const json = await response.json().catch(() => ({}))
+    const err = new Error(json?.detail || 'Tu sesión expiró. Ingresa nuevamente.')
+    err.status = 401
+    err.detail = json?.detail || null
+    err.accountStatus = response.headers?.get?.('X-Account-Status') || null
+    throw err
+  }
+  if (!response.ok) return current
+  const session = await parseAuthResponse(response)
+  writeSession(session)
+  return { ...session, user: session.user || current.user }
 }
 
 /**

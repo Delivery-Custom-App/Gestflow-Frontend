@@ -132,6 +132,17 @@ export async function getOptionalAuthContext() {
   }
 }
 
+/**
+ * Cierra la sesión local y avisa a la app con el motivo que mandó el backend
+ * (`X-Account-Status` y `detail`), para que el login lo muestre.
+ */
+function terminarSesion(accountStatus, detail) {
+  clearStoredSession()
+  window.dispatchEvent(new CustomEvent('auth:session-expired', {
+    detail: { accountStatus: accountStatus || null, message: detail || null },
+  }))
+}
+
 export async function apiRequest(path, options = {}) {
   const {
     method = 'GET',
@@ -172,13 +183,27 @@ export async function apiRequest(path, options = {}) {
   }
 
   if (response.status === 401 && retryOnUnauthorized) {
-    try {
-      const refreshedSession = await getSession(true)
-      response = await makeRequest(refreshedSession.access_token)
-    } catch (authErr) {
-      clearStoredSession()
-      window.dispatchEvent(new CustomEvent('auth:session-expired'))
-      throw authErr
+    // Con X-Account-Status la sesión ya está cerrada o vencida (T-52): no
+    // sirve renovar. Sin él, el access_token venció: se renueva una vez y se
+    // reintenta (T-51).
+    if (!response.headers.get('X-Account-Status')) {
+      try {
+        const refreshedSession = await getSession(true)
+        response = await makeRequest(refreshedSession.access_token)
+      } catch (authErr) {
+        terminarSesion(authErr?.accountStatus, authErr?.detail)
+        throw authErr
+      }
+    }
+    if (response.status === 401) {
+      const detail = await parseErrorResponse(response)
+      const accountStatus = response.headers.get('X-Account-Status')
+      terminarSesion(accountStatus, detail)
+      const err = new Error(`401: ${detail}`)
+      err.status = 401
+      err.detail = detail
+      if (accountStatus) err.accountStatus = accountStatus
+      throw err
     }
   }
 
