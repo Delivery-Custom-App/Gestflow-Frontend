@@ -1,189 +1,139 @@
 /**
- * Elegir la máquina de cobro del turno (bandera `eleccionMaquinaVendedor`,
- * a la espera de B-01 y B-02 en el backend).
+ * Lista de máquinas POS para elegir (T-71): quién usa cada una, compartir una
+ * con una persona, llenas no elegibles y los 409 del backend.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import ElegirMaquina from './ElegirMaquina'
-import { listarMaquinasDelVendedor, tomarMaquina } from '../../lib/maquinasCobro'
+import { listarMaquinasDelLocal, mapMaquina } from '../../lib/maquinasCobro'
 
 vi.mock('../../lib/maquinasCobro', async (importOriginal) => ({
   ...(await importOriginal()),
-  listarMaquinasDelVendedor: vi.fn(),
-  tomarMaquina: vi.fn(),
+  listarMaquinasDelLocal: vi.fn(),
 }))
 
-const maq = (id, nombre, estado, extra = {}) => ({ id, nombre, estado, activa: true, proveedor: 'mercadopago', proveedorLabel: 'Mercado Pago', ...extra })
-const LIBRE_MP = maq('m-1', 'Point Mostrador', 'libre')
-const LIBRE_HM = maq('m-3', 'Haulmer Caja', 'libre', { proveedor: 'haulmer', proveedorLabel: 'Haulmer' })
-const AJENA = maq('m-2', 'Point Barra', 'en_uso')
+const maquina = (extra) => mapMaquina({
+  id: 'm-1', display_name: 'Point barra', provider: 'mercadopago', is_active: true, ocupacion: 0, usuarios: [], ...extra,
+})
+const LIBRE = maquina({ id: 'm-1', display_name: 'Point barra' })
+const COMPARTIBLE = maquina({ id: 'm-2', display_name: 'Point terraza', ocupacion: 1, usuarios: ['Ana'] })
+const LLENA = maquina({ id: 'm-3', display_name: 'Point salón', ocupacion: 2, usuarios: ['Ana', 'Luis'] })
+const DESACTIVADA = maquina({ id: 'm-4', display_name: 'Point vieja', is_active: false })
+const HAULMER = maquina({ id: 'm-5', display_name: 'Haulmer caja', provider: 'haulmer' })
 
-let onListo
+const montar = (props = {}) => render(<ElegirMaquina localId="loc-1" onConfirmar={vi.fn()} {...props} />)
+
 beforeEach(() => {
   vi.clearAllMocks()
-  onListo = vi.fn()
-  tomarMaquina.mockResolvedValue({})
+  listarMaquinasDelLocal.mockResolvedValue([LIBRE, COMPARTIBLE, LLENA, DESACTIVADA])
 })
 
-const montar = (props = {}) => render(<ElegirMaquina localId="loc-1" userId="yo" onListo={onListo} {...props} />)
-const opcion = (nombre) => screen.getByRole('radio', { name: new RegExp(nombre) })
-
 describe('ElegirMaquina', () => {
-  it('lista las máquinas de su local y, si se sabe, de qué proveedor es cada una', async () => {
-    listarMaquinasDelVendedor.mockResolvedValue([LIBRE_HM, AJENA, LIBRE_MP])
+  it('muestra cada máquina con quién la usa: libre, compartida, llena y desactivada', async () => {
     montar()
-
-    expect(await screen.findByText('Point Mostrador')).toBeInTheDocument()
-    expect(listarMaquinasDelVendedor).toHaveBeenCalledWith('loc-1', 'yo')
-    expect(screen.getAllByText('Mercado Pago')).toHaveLength(2)
-    expect(screen.getByText('Haulmer')).toBeInTheDocument()
+    expect(await screen.findByRole('radio', { name: 'Point barra · Libre' })).toBeEnabled()
+    expect(screen.getByRole('radio', { name: 'Point terraza · Compartida con Ana' })).toBeEnabled()
+    expect(screen.getByRole('radio', { name: 'Point salón · Llena (Ana y Luis)' })).toBeDisabled()
+    expect(screen.getByRole('radio', { name: 'Point vieja · Desactivada' })).toBeDisabled()
+    expect(listarMaquinasDelLocal).toHaveBeenCalledWith('loc-1')
   })
 
-  it('si no se sabe el proveedor (al vendedor el backend no se lo da), no inventa uno', async () => {
-    listarMaquinasDelVendedor.mockResolvedValue([{ ...LIBRE_MP, proveedor: null, proveedorLabel: null }])
-    montar()
+  it('una libre se toma sin compartir', async () => {
+    const onConfirmar = vi.fn().mockResolvedValue(undefined)
+    const user = userEvent.setup()
+    montar({ onConfirmar })
 
-    expect(await screen.findByText('Point Mostrador')).toBeInTheDocument()
-    expect(screen.queryByText(/desconocido|Mercado Pago|Haulmer/i)).not.toBeInTheDocument()
+    await user.click(await screen.findByRole('radio', { name: 'Point barra · Libre' }))
+    await user.click(screen.getByRole('button', { name: 'Usar esta máquina' }))
+
+    expect(onConfirmar).toHaveBeenCalledWith(expect.objectContaining({ id: 'm-1' }), { compartir: false })
   })
 
-  it('una Haulmer avisa que la web todavía no cobra con ese proveedor', async () => {
-    listarMaquinasDelVendedor.mockResolvedValue([LIBRE_HM])
+  it('una con una persona se comparte: el botón lo dice y se pide compartir', async () => {
+    const onConfirmar = vi.fn().mockResolvedValue(undefined)
+    const user = userEvent.setup()
+    montar({ onConfirmar })
+
+    await user.click(await screen.findByRole('radio', { name: 'Point terraza · Compartida con Ana' }))
+    await user.click(screen.getByRole('button', { name: 'Compartir esta máquina' }))
+
+    expect(onConfirmar).toHaveBeenCalledWith(expect.objectContaining({ id: 'm-2' }), { compartir: true })
+  })
+
+  it('con una sola opción la deja elegida', async () => {
+    listarMaquinasDelLocal.mockResolvedValue([LIBRE, LLENA])
+    montar()
+    expect(await screen.findByRole('radio', { name: 'Point barra · Libre' })).toBeChecked()
+  })
+
+  it('un 409 muestra el motivo del backend y vuelve a pedir la lista', async () => {
+    const conflicto = Object.assign(new Error('La máquina «Point barra» ya la usan 2 personas (Ana y Luis): elige otra'), { conflicto: true })
+    const onConfirmar = vi.fn().mockRejectedValue(conflicto)
+    const user = userEvent.setup()
+    montar({ onConfirmar })
+
+    await user.click(await screen.findByRole('radio', { name: 'Point barra · Libre' }))
+    await user.click(screen.getByRole('button', { name: 'Usar esta máquina' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('ya la usan 2 personas (Ana y Luis): elige otra')
+    await waitFor(() => expect(listarMaquinasDelLocal).toHaveBeenCalledTimes(2))
+  })
+
+  it('otro error se muestra sin recargar la lista', async () => {
+    const onConfirmar = vi.fn().mockRejectedValue(new Error('Esta máquina no tiene lector configurado'))
+    const user = userEvent.setup()
+    montar({ onConfirmar })
+
+    await user.click(await screen.findByRole('radio', { name: 'Point barra · Libre' }))
+    await user.click(screen.getByRole('button', { name: 'Usar esta máquina' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Esta máquina no tiene lector configurado')
+    expect(listarMaquinasDelLocal).toHaveBeenCalledTimes(1)
+  })
+
+  it('la máquina que ya tiene el turno aparece como suya y no se ofrece de nuevo', async () => {
+    montar({ maquinaActualId: 'm-1' })
+    expect(await screen.findByRole('radio', { name: 'Point barra · Tu máquina' })).toBeDisabled()
+    expect(screen.getByRole('radio', { name: 'Point terraza · Compartida con Ana' })).toBeChecked()
+  })
+
+  it('si todas están llenas o desactivadas, lo dice y no muestra el botón de usar', async () => {
+    listarMaquinasDelLocal.mockResolvedValue([LLENA, DESACTIVADA])
+    montar({ onSinMaquina: vi.fn(), textoSinMaquina: 'Seguir sin tarjeta' })
+    expect(await screen.findByText(/Todas las máquinas están llenas o desactivadas/)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Usar esta máquina' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Seguir sin tarjeta' })).toBeInTheDocument()
+  })
+
+  it('sin máquinas en el local, pide al encargado que registre una', async () => {
+    listarMaquinasDelLocal.mockResolvedValue([])
+    montar()
+    expect(await screen.findByText(/Tu local no tiene máquinas de cobro registradas/)).toBeInTheDocument()
+  })
+
+  it('avisa si es una Haulmer: la web todavía no cobra con ella', async () => {
+    listarMaquinasDelLocal.mockResolvedValue([HAULMER])
     montar()
     expect(await screen.findByText('La web todavía no cobra con Haulmer')).toBeInTheDocument()
   })
 
-  it('la que tiene otra persona aparece "En uso" y no se puede elegir', async () => {
-    listarMaquinasDelVendedor.mockResolvedValue([AJENA, LIBRE_MP])
-    montar()
-
-    expect(await screen.findByText('En uso por otra persona')).toBeInTheDocument()
-    expect(opcion('Point Barra')).toBeDisabled()
-    expect(opcion('Point Mostrador')).not.toBeDisabled()
-  })
-
-  it('al elegir una libre, la toma y queda con él', async () => {
-    listarMaquinasDelVendedor.mockResolvedValue([LIBRE_MP])
+  it('si no se pueden cargar, no afirma que no haya máquinas y permite reintentar', async () => {
+    listarMaquinasDelLocal.mockRejectedValueOnce(new Error('500: error'))
     const user = userEvent.setup()
     montar()
+    expect(await screen.findByRole('alert')).toHaveTextContent('500: error')
+    expect(screen.queryByText(/no tiene máquinas/)).not.toBeInTheDocument()
 
-    await user.click(await screen.findByRole('radio', { name: /Point Mostrador/ }))
-    await user.click(screen.getByRole('button', { name: 'Usar esta máquina' }))
-
-    await waitFor(() => expect(tomarMaquina).toHaveBeenCalledWith('m-1', 'yo'))
-    expect(onListo).toHaveBeenCalledWith(expect.objectContaining({ id: 'm-1', estado: 'mia' }))
-  })
-
-  it('si ya tiene una, viene elegida, no puede tomar otra y no se le ofrece "seguir sin máquina"', async () => {
-    listarMaquinasDelVendedor.mockResolvedValue([{ ...LIBRE_MP, estado: 'mia' }, LIBRE_HM])
-    const user = userEvent.setup()
-    montar()
-
-    expect(await screen.findByText('Es tuya')).toBeInTheDocument()
-    expect(opcion('Point Mostrador')).toBeChecked()
-    // Tomar otra le dejaría dos a su nombre, y soltar la suya no es posible (B-02).
-    expect(opcion('Haulmer Caja')).toBeDisabled()
-    expect(screen.queryByRole('button', { name: 'Seguir sin máquina' })).not.toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: 'Continuar con mi máquina' }))
-    expect(tomarMaquina).not.toHaveBeenCalled()
-    expect(onListo).toHaveBeenCalledWith(expect.objectContaining({ id: 'm-1' }))
-  })
-
-  it('su máquina desactivada sigue apareciendo como suya: el backend cobra con ella', async () => {
-    listarMaquinasDelVendedor.mockResolvedValue([{ ...LIBRE_MP, estado: 'mia', activa: false }, LIBRE_HM])
-    montar()
-
-    expect(await screen.findByText('Desactivada')).toBeInTheDocument()
-    expect(opcion('Point Mostrador')).toBeChecked()
-    expect(opcion('Haulmer Caja')).toBeDisabled()
-  })
-
-  it('con dos a su nombre avisa que el cobro necesita una sola y lo deja continuar', async () => {
-    listarMaquinasDelVendedor.mockResolvedValue([{ ...LIBRE_MP, estado: 'mia' }, { ...LIBRE_HM, estado: 'mia' }])
-    const user = userEvent.setup()
-    montar()
-
-    expect(await screen.findByText(/Tienes 2 máquinas a tu nombre/)).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: 'Continuar' }))
-    expect(onListo).toHaveBeenCalledWith(null)
-    expect(tomarMaquina).not.toHaveBeenCalled()
-  })
-
-  it('al volver a entrar con su máquina ya asignada, no se le pregunta de nuevo', async () => {
-    listarMaquinasDelVendedor.mockResolvedValue([{ ...LIBRE_MP, estado: 'mia' }, LIBRE_HM])
-    montar({ saltarSiTiene: true })
-
-    await waitFor(() => expect(onListo).toHaveBeenCalledWith(expect.objectContaining({ id: 'm-1' })))
-  })
-
-  it('al volver a entrar sin máquina, sí se le pregunta', async () => {
-    listarMaquinasDelVendedor.mockResolvedValue([LIBRE_MP])
-    montar({ saltarSiTiene: true })
-
-    expect(await screen.findByRole('radio', { name: /Point Mostrador/ })).toBeInTheDocument()
-    expect(onListo).not.toHaveBeenCalled()
-  })
-
-  it('si el backend todavía no le permite tomarla, lo explica y no avanza', async () => {
-    listarMaquinasDelVendedor.mockResolvedValue([LIBRE_MP])
-    tomarMaquina.mockRejectedValue(new Error('Todavía no puedes elegir tu máquina desde aquí. Pídele al encargado que te la asigne.'))
-    const user = userEvent.setup()
-    montar()
-
-    await user.click(await screen.findByRole('radio', { name: /Point Mostrador/ }))
-    await user.click(screen.getByRole('button', { name: 'Usar esta máquina' }))
-
-    expect(await screen.findByText(/Pídele al encargado que te la asigne/)).toBeInTheDocument()
-    expect(onListo).not.toHaveBeenCalled()
-  })
-
-  it('si otra persona la tomó recién (409), recarga la lista y ya no aparece libre', async () => {
-    listarMaquinasDelVendedor
-      .mockResolvedValueOnce([LIBRE_MP, LIBRE_HM])
-      .mockResolvedValueOnce([{ ...LIBRE_MP, estado: 'en_uso' }, LIBRE_HM])
-    const conflicto = Object.assign(new Error('Otra persona acaba de tomar esa máquina. Elige otra.'), { conflicto: true })
-    tomarMaquina.mockRejectedValue(conflicto)
-    const user = userEvent.setup()
-    montar()
-
-    await user.click(await screen.findByRole('radio', { name: /Point Mostrador/ }))
-    await user.click(screen.getByRole('button', { name: 'Usar esta máquina' }))
-
-    expect(await screen.findByText(/Otra persona acaba de tomar esa máquina/)).toBeInTheDocument()
-    await waitFor(() => expect(opcion('Point Mostrador')).toBeDisabled())
-    expect(opcion('Point Mostrador')).not.toBeChecked()
-    expect(listarMaquinasDelVendedor).toHaveBeenCalledTimes(2)
-  })
-
-  it('si no se pueden cargar las máquinas, no afirma que no haya: deja reintentar o continuar', async () => {
-    listarMaquinasDelVendedor.mockRejectedValueOnce(new Error('sin conexión')).mockResolvedValueOnce([LIBRE_MP])
-    const user = userEvent.setup()
-    montar()
-
-    expect(await screen.findByText('sin conexión')).toBeInTheDocument()
-    expect(screen.queryByText(/No hay máquinas de cobro disponibles/)).not.toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Continuar sin elegir' })).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Reintentar' }))
-    expect(await screen.findByRole('radio', { name: /Point Mostrador/ })).toBeInTheDocument()
+    expect(await screen.findByRole('radio', { name: 'Point barra · Libre' })).toBeInTheDocument()
   })
 
-  it('puede seguir sin máquina', async () => {
-    listarMaquinasDelVendedor.mockResolvedValue([LIBRE_MP])
+  it('"Seguir sin máquina" avisa a quien la usa', async () => {
+    const onSinMaquina = vi.fn()
     const user = userEvent.setup()
-    montar()
-
+    montar({ onSinMaquina })
     await user.click(await screen.findByRole('button', { name: 'Seguir sin máquina' }))
-    expect(onListo).toHaveBeenCalledWith(null)
-  })
-
-  it('si el local no tiene máquinas, el turno sigue igual y avisa que solo podrá cobrar sin tarjeta', async () => {
-    listarMaquinasDelVendedor.mockResolvedValue([])
-    const user = userEvent.setup()
-    montar()
-
-    expect(await screen.findByText(/solo podrás cobrar sin tarjeta/)).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: 'Continuar' }))
-    expect(onListo).toHaveBeenCalledWith(null)
+    expect(onSinMaquina).toHaveBeenCalled()
   })
 })

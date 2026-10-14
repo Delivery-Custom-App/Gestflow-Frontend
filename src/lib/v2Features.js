@@ -57,23 +57,19 @@ export const V2_FEATURES = {
    */
   cierreTurnoVendedor: false,
   /**
-   * El vendedor elige su máquina de cobro al iniciar el turno. La pantalla está
-   * hecha (lista de máquinas, las ajenas "en uso", tomar una o seguir sin
-   * máquina) y espera al backend:
-   * - B-01: hoy `PATCH /pos-machines/{id}` responde 403 al vendedor; tiene que
-   *   poder asignarse una máquina libre (409 si ya es de otro, nunca dos).
-   * - B-02: al cerrar el turno, el backend tiene que soltar la máquina.
-   * - B-08: el vendedor no recibe el proveedor (`GET /payment-connections` le
-   *   responde 403): sin él la lista no dice si es Mercado Pago o Haulmer.
-   * - En locales con mesas el backend exige que cada máquina tenga mesero fijo
-   *   y el vendedor solo ve las suyas: el flujo de elegir aplica a comida al
-   *   paso, salvo que el backend cambie ese modelo.
-   * - La web cobra con tarjeta solo por MercadoPago Point; elegir una Haulmer
-   *   sirve recién cuando la web cobre con Haulmer.
-   * Mientras tanto, la barra del vendedor ya muestra la máquina que le asignó
-   * el encargado (o que no tiene ninguna, o que tiene más de una).
+   * El vendedor elige su máquina de cobro (T-71, sección 5b del backend).
+   * - Restaurante: elige la máquina POS antes de abrir su turno y viaja en
+   *   `POST /cajas` (`pos_machine_id`, `compartir`). Una máquina la usan hasta
+   *   2 personas: con una adentro se comparte; con dos está llena. Durante el
+   *   turno puede cambiarla desde la barra (`PUT /cajas/{id}/maquina`), y si el
+   *   administrador se la libera (`pos_machine_released_at`) elige otra o sigue
+   *   cobrando sin tarjeta. La máquina se suelta sola al terminar el turno.
+   * - Comida al paso: la máquina está anclada a la caja física y no se elige.
+   * El estado sale de `ocupacion`, `usuarios` y `disponible` de cada máquina, y
+   * el proveedor de `provider` (ya no se pide `/payment-connections`).
+   * Necesita el backend con la sección 5b (Develop, octubre 2026).
    */
-  eleccionMaquinaVendedor: false,
+  eleccionMaquinaVendedor: true,
   /**
    * Fondo de emergencia del local (T-26): saldo, aportes y usos con motivo,
    * en Administración. Lo manejan el dueño y el encargado; el vendedor no lo
