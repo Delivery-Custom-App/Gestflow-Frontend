@@ -47,7 +47,9 @@ describe('CajaFisicaEstadoDialog', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('Reasigná estos lectores POS antes de eliminar: Point caja')
     expect(onSaved).not.toHaveBeenCalled()
     expect(onClose).not.toHaveBeenCalled()
-    expect(screen.getByRole('button', { name: 'Cerrar' })).toBeInTheDocument()
+    // El botón de abajo pasa de "Cancelar" a "Cerrar" (la X del diálogo también se llama "Cerrar").
+    expect(screen.getAllByRole('button', { name: 'Cerrar' }).some((b) => b.textContent === 'Cerrar')).toBe(true)
+    expect(screen.queryByRole('button', { name: 'Cancelar' })).not.toBeInTheDocument()
   })
 
   it('cancelar no llama a la API', async () => {
