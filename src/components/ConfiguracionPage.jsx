@@ -7,6 +7,7 @@ import { changeMyPassword } from '../lib/apiClient'
 import { guardarMiNombre, tieneNombre, validarNombre } from '../lib/perfil'
 import { formatRoleLabel } from '../auth/roleLabel'
 import InicialesPerfil from './InicialesPerfil'
+import MisSesiones from './MisSesiones'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from './ui/card'
 import { Button } from './ui/button'
 import { Input } from './ui/input'
@@ -243,6 +244,16 @@ function ConfiguracionPage() {
           </CardHeader>
           <CardContent>
             <ChangePasswordForm />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Mis sesiones</CardTitle>
+            <CardDescription>Los dispositivos donde tu cuenta está abierta.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <MisSesiones />
           </CardContent>
         </Card>
 
