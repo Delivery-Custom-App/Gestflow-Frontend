@@ -6,6 +6,7 @@ import { formatCLPCurrency as formatMoney } from '../../lib/formatCLP'
 import { getCajaResumen, listOrdenesDelTurno } from '../../lib/salesApi'
 import { movimientosDelTurno, totalesDelTurno } from '../../lib/registroTurnos'
 import { etiquetaDenominacion, filasDelDesglose } from '../../lib/efectivo'
+import { monto, textoDiferencia } from '../../lib/arqueo'
 
 // Canal del pedido (mesa, mostrador, delivery…), no cómo pagó el cliente.
 const MOVIMIENTO_SOURCE_LABEL = {
@@ -103,7 +104,7 @@ function OrdenesDelTurno({ cajaId }) {
  * cajón (`efectivo_esperado`: para cuadrar se usa este, no `total_esperado`),
  * lo cobrado con tarjeta por cada máquina y las órdenes del turno (T-48).
  */
-export default function DetalleTurno({ caja, conArqueo = false }) {
+export default function DetalleTurno({ caja, conArqueo = false, cerradoPor = null }) {
   // De qué turno es lo cargado: si no es el que se muestra, está cargando.
   const [cargado, setCargado] = useState(null)
 
@@ -128,7 +129,15 @@ export default function DetalleTurno({ caja, conArqueo = false }) {
     )
   }
 
-  const { ventas, egresos } = totalesDelTurno(movimientos)
+  const { ventas, egresos: egresosCalculados } = totalesDelTurno(movimientos)
+  // T-57: el backend separa lo vendido de lo que entró a mano y suma lo que salió.
+  const vendido = monto(resumen?.total_vendido) ?? monto(resumen?.total_ingresos) ?? 0
+  const ingresosManuales = monto(resumen?.ingresos_manuales) ?? 0
+  const egresos = monto(resumen?.total_egresos) ?? egresosCalculados
+  const cerrado = String(caja?.status || resumen?.status || '') === 'closed' || caja?.is_active === false
+  const contado = monto(resumen?.monto_cierre_declarado ?? caja?.monto_cierre_declarado)
+  const diferencia = monto(resumen?.diferencia ?? caja?.diferencia)
+  const nota = resumen?.nota_cierre ?? caja?.nota_cierre ?? null
   const porMetodo = Array.isArray(resumen?.por_metodo) ? resumen.por_metodo : []
   const porMaquina = Array.isArray(resumen?.por_maquina) ? resumen.por_maquina : []
   const efectivoEsperado = resumen?.efectivo_esperado != null ? formatMoney(Number(resumen.efectivo_esperado)) : '—'
@@ -139,7 +148,9 @@ export default function DetalleTurno({ caja, conArqueo = false }) {
     <div className="flex flex-col gap-5">
       <div className="grid grid-cols-3 gap-3">
         <Cifra label="Ventas" valor={String(ventas)} />
+        <Cifra label="Vendido" valor={formatMoney(vendido)} />
         <Cifra label="Ingresos" valor={formatMoney(Number(resumen?.total_ingresos))} />
+        <Cifra label="Ingresos manuales" valor={formatMoney(ingresosManuales)} />
         <Cifra label="Egresos" valor={formatMoney(egresos)} />
         {conArqueo && (
           <>
@@ -156,6 +167,33 @@ export default function DetalleTurno({ caja, conArqueo = false }) {
           </>
         )}
       </div>
+
+      {conArqueo && cerrado && (
+        <div aria-label="Arqueo del cierre" role="group">
+          <h3 className="mb-2 text-xs font-bold uppercase tracking-wide text-[hsl(var(--muted-foreground))]">Arqueo del cierre</h3>
+          {contado === null ? (
+            <p className="rounded-lg border border-[hsl(var(--border))] px-3 py-2 text-sm text-[hsl(var(--muted-foreground))]">
+              Sin arqueo: este turno se cerró sin contar el efectivo.
+            </p>
+          ) : (
+            <div className="grid grid-cols-2 gap-3">
+              <Cifra label="Contado" valor={formatMoney(contado)} />
+              <div className={diferencia !== null && diferencia < 0
+                ? 'rounded-lg border border-red-200 bg-red-50 p-3 dark:border-red-800/50 dark:bg-red-950/30'
+                : 'rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--muted))] p-3'}>
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-[hsl(var(--muted-foreground))]">Diferencia</p>
+                <p data-testid="diferencia-cierre" className={`mt-1 text-sm font-bold ${diferencia !== null && diferencia < 0 ? 'text-red-600 dark:text-red-400' : 'text-[hsl(var(--foreground))]'}`}>
+                  {textoDiferencia(diferencia) ?? '—'}
+                </p>
+              </div>
+              {nota && (
+                <p className="col-span-2 text-sm text-[hsl(var(--foreground))]"><span className="font-semibold">Nota:</span> {nota}</p>
+              )}
+            </div>
+          )}
+          {cerradoPor && <p className="mt-2 text-xs text-[hsl(var(--muted-foreground))]">Cerró: {cerradoPor}</p>}
+        </div>
+      )}
 
       {conArqueo && porMaquina.length > 0 && (
         <div>

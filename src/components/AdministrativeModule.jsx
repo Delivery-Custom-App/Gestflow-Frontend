@@ -621,7 +621,11 @@ function FlujoCajaContent({ localId, dashboard, cajas, cajasFisicas, usuarios, r
             turnos={filtrados.turnos}
             cajaFisicaDe={(c) => nombrePorCajaFisica.get(String(c.caja_fisica_id))}
             vendedorDe={(c) => nombreDeVendedor(usuariosPorId, c.cashier_user_id)}
-            onVer={showMovimientos ? (c) => onViewMovimientos({ ...c, vendedor: nombreDeVendedor(usuariosPorId, c.cashier_user_id) }) : undefined}
+            onVer={showMovimientos ? (c) => onViewMovimientos({
+              ...c,
+              vendedor: nombreDeVendedor(usuariosPorId, c.cashier_user_id),
+              cerradoPor: c.closed_by_user_id ? nombreDeVendedor(usuariosPorId, c.closed_by_user_id) : null,
+            }) : undefined}
             vacio={filtrados.cargando ? 'Buscando turnos…' : filtroVendedor || filtroFecha ? 'No hay turnos con esos filtros.' : 'Este local todavía no tiene turnos de caja.'}
           />
         </div>
@@ -1078,7 +1082,7 @@ function CajaMovimientosModal({ caja, onClose, onClosed }) {
               <p className="text-xs text-red-600 dark:text-red-400">{err}</p>
             </div>
           )}
-          <DetalleTurno caja={caja} conArqueo />
+          <DetalleTurno caja={caja} conArqueo cerradoPor={caja.cerradoPor} />
         </div>
 
         {/* Footer */}

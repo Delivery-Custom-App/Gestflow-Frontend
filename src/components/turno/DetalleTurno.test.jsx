@@ -145,3 +145,40 @@ describe('DetalleTurno · efectivo esperado y por máquina (T-48)', () => {
     expect(screen.queryByRole('button', { name: 'Ver órdenes del turno' })).not.toBeInTheDocument()
   })
 })
+
+describe('DetalleTurno · vendido, ingresos manuales, egresos y arqueo (T-57)', () => {
+  const CERRADO = {
+    ...RESUMEN, total_ingresos: '7100.00', total_vendido: '6600.00', ingresos_manuales: '500.00', total_egresos: '1000.00',
+    efectivo_esperado: '8900.00', monto_cierre_declarado: '8600.00', diferencia: '-300.00', nota_cierre: 'Vuelto mal dado',
+  }
+
+  it('separa lo vendido, lo que entró a mano y lo que salió', async () => {
+    getCajaResumen.mockResolvedValue({ ...CERRADO, monto_cierre_declarado: null, diferencia: null, nota_cierre: null })
+    render(<DetalleTurno caja={{ id: 't-1', status: 'open' }} conArqueo />)
+    expect(await screen.findByText('Vendido')).toBeInTheDocument()
+    expect(cifra('Vendido')).toHaveTextContent('$6.600')
+    expect(cifra('Ingresos manuales')).toHaveTextContent('$500')
+    expect(cifra('Egresos')).toHaveTextContent('$1.000')
+    expect(cifra('Efectivo esperado en el cajón')).toHaveTextContent('$8.900')
+    // Turno abierto: todavía no hay arqueo.
+    expect(screen.queryByRole('group', { name: 'Arqueo del cierre' })).not.toBeInTheDocument()
+  })
+
+  it('en un turno cerrado muestra contado, diferencia en rojo si falta, nota y quién cerró', async () => {
+    getCajaResumen.mockResolvedValue(CERRADO)
+    render(<DetalleTurno caja={{ id: 't-1', status: 'closed' }} conArqueo cerradoPor="Marta Díaz" />)
+    const arqueo = await screen.findByRole('group', { name: 'Arqueo del cierre' })
+    expect(within(arqueo).getByText('Contado').nextSibling).toHaveTextContent('$8.600')
+    expect(within(arqueo).getByTestId('diferencia-cierre')).toHaveTextContent('Faltan $300')
+    expect(within(arqueo).getByTestId('diferencia-cierre').className).toMatch(/red/)
+    expect(arqueo).toHaveTextContent('Nota: Vuelto mal dado')
+    expect(arqueo).toHaveTextContent('Cerró: Marta Díaz')
+  })
+
+  it('un turno cerrado antes del cambio (campos en null) dice «Sin arqueo»', async () => {
+    getCajaResumen.mockResolvedValue({ ...RESUMEN, monto_cierre_declarado: null, diferencia: null, nota_cierre: null })
+    render(<DetalleTurno caja={{ id: 't-1', status: 'closed' }} conArqueo />)
+    const arqueo = await screen.findByRole('group', { name: 'Arqueo del cierre' })
+    expect(arqueo).toHaveTextContent(/Sin arqueo/)
+  })
+})
