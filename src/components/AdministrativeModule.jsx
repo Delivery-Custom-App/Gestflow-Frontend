@@ -27,6 +27,7 @@ import ConteoEfectivo from './turno/ConteoEfectivo'
 import { desgloseParaApi, totalesDelConteo } from '../lib/efectivo'
 import TablaTurnos from './turno/TablaTurnos'
 import FondoEmergencia from './FondoEmergencia'
+import NoCobradas from './NoCobradas'
 import FiltrosTurnos from './turno/FiltrosTurnos'
 import { useAuth } from '../context/AuthContext'
 import { normalizeRoleKey } from '../auth/roleLabel'
@@ -50,6 +51,8 @@ const ROLES_CAJAS_FISICAS = new Set(['ADMIN', 'ADMINNEGOCIO', 'SUPERADMIN'])
 const getSections = () => [
   { id: 'ventas',        label: 'Ventas',        subtitle: 'Totales de hoy, tendencia, productos más vendidos e histórico' },
   { id: 'flujo-caja',    label: 'Caja y turnos', subtitle: 'Turnos de caja, movimientos y arqueo del día' },
+  // T-46: lo que quedó sin cobrar al cerrar la caja y los pedidos vencidos.
+  { id: 'no-cobradas',   label: 'Mesas no cobradas', subtitle: 'Mesas que quedaron sin cobrar al cerrar la caja y pedidos de mostrador vencidos' },
   // T-26: fondo de emergencia (backend B-09). Con la bandera apagada la sección no existe y su dirección lleva a Ventas.
   ...(isV2FeatureEnabled('fondoEmergencia')
     ? [{ id: 'fondo-emergencia', label: 'Fondo de emergencia', subtitle: 'Plata apartada para imprevistos: monto fijo, saldo, gastos y reposiciones' }]
@@ -1121,6 +1124,8 @@ function renderSectionContent(activeSection, payload) {
       return <FlujoCajaContent localId={payload.localId} dashboard={payload.dashboard} cajas={payload.cajas} cajasFisicas={payload.cajasFisicas} usuarios={payload.usuarios} resumenDiario={payload.resumenDiario} loading={payload.loading} error={payload.error} onManagePairing={payload.onManagePairing} onViewMovimientos={payload.onViewMovimientos} onGestionarCajaFisica={payload.onGestionarCajaFisica} />
     case 'fondo-emergencia':
       return <FondoEmergencia localId={payload.localId} />
+    case 'no-cobradas':
+      return <NoCobradas localId={payload.localId} />
     case 'configuracion':
       return <ConfiguracionContent localId={payload.localId} />
     case 'ventas':
