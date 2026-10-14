@@ -38,6 +38,8 @@ export default function SupervisionTurno({ turno, usuarios = [], onHecho }) {
   const [ocupado, setOcupado] = useState(false)
   const [maquina, setMaquina] = useState(null)
   const [destinos, setDestinos] = useState([])
+  // T-54: cerrar también todas sus sesiones, con el mismo motivo.
+  const [cerrarSesion, setCerrarSesion] = useState(false)
 
   useEffect(() => {
     let ignore = false
@@ -53,7 +55,7 @@ export default function SupervisionTurno({ turno, usuarios = [], onHecho }) {
     return () => { ignore = true }
   }, [turno, usuarios])
 
-  const empezar = (cual) => { setAccion(cual); setMotivo(''); setDestino(''); setPedirDestino(false); setError(''); setAviso('') }
+  const empezar = (cual) => { setAccion(cual); setMotivo(''); setDestino(''); setPedirDestino(false); setCerrarSesion(false); setError(''); setAviso('') }
 
   const confirmar = async (e) => {
     e.preventDefault()
@@ -68,8 +70,10 @@ export default function SupervisionTurno({ turno, usuarios = [], onHecho }) {
         const n = Array.isArray(r?.turnos_liberados) ? r.turnos_liberados.length : 0
         setAviso(`Se liberó la máquina. ${n === 1 ? 'Quedó 1 turno' : `Quedaron ${n} turnos`} sin máquina: deberán elegir otra para cobrar con tarjeta.`)
       } else {
-        await forzarTermino(turno.id, { motivo, reasignarAUserId: destino || null })
-        setAviso('Se terminó el turno. El empleado recibe un aviso con el motivo.')
+        await forzarTermino(turno.id, { motivo, reasignarAUserId: destino || null, cerrarSesion })
+        setAviso(cerrarSesion
+          ? 'Se terminó el turno y se cerraron sus sesiones. El empleado recibe un aviso con el motivo.'
+          : 'Se terminó el turno. El empleado recibe un aviso con el motivo.')
       }
       setAccion(null)
       onHecho?.()
@@ -119,6 +123,15 @@ export default function SupervisionTurno({ turno, usuarios = [], onHecho }) {
                 {destinos.map((d) => <option key={d.id} value={d.id}>{d.nombre}</option>)}
               </select>
             </div>
+          )}
+          {accion === 'terminar' && (
+            <label className="flex items-start gap-2 text-sm text-[hsl(var(--foreground))]">
+              <input type="checkbox" checked={cerrarSesion} onChange={(e) => setCerrarSesion(e.target.checked)} disabled={ocupado} className="mt-0.5" />
+              <span>
+                Cerrar también su sesión
+                <span className="block text-xs text-[hsl(var(--muted-foreground))]">Se cierran todas sus sesiones abiertas con el mismo motivo: tendrá que volver a iniciar sesión.</span>
+              </span>
+            </label>
           )}
           {error && <p role="alert" className="text-xs text-red-600">{error}</p>}
           <div className="flex justify-end gap-2">

@@ -26,6 +26,11 @@ describe('rutas', () => {
     ])
     expect(apiRequest.mock.calls[0][0]).toBe('/cajas/c1/forzar-termino')
   })
+  it('T-54: con cerrarSesion manda cerrar_sesion: true', async () => {
+    apiRequest.mockResolvedValue({})
+    await forzarTermino('c1', { motivo: 'Perdió el celular', cerrarSesion: true })
+    expect(apiRequest.mock.calls[0][1].body).toEqual({ motivo: 'Perdió el celular', cerrar_sesion: true })
+  })
   it('reasignar una orden con created_at', async () => {
     apiRequest.mockResolvedValue({})
     await reasignarOrden('o1', '2026-10-14T12:00:00Z', { toUserId: 'u2', motivo: 'Cubre' })

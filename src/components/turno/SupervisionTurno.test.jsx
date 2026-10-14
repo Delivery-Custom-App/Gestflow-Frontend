@@ -57,7 +57,7 @@ describe('SupervisionTurno', () => {
     await user.type(screen.getByLabelText('Motivo'), 'Se retiró por una emergencia')
     await user.selectOptions(destino, 'ana')
     await user.click(screen.getByRole('button', { name: 'Terminar turno' }))
-    expect(forzarTermino).toHaveBeenCalledWith('c1', { motivo: 'Se retiró por una emergencia', reasignarAUserId: 'ana' })
+    expect(forzarTermino).toHaveBeenCalledWith('c1', { motivo: 'Se retiró por una emergencia', reasignarAUserId: 'ana', cerrarSesion: false })
   })
 
   it('el 409 sin destino pide elegir a quién pasarle las mesas', async () => {
@@ -80,5 +80,20 @@ describe('SupervisionTurno', () => {
     expect(await screen.findByText(/ya terminó/)).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Terminar este turno' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Liberar máquina' })).not.toBeInTheDocument()
+  })
+})
+
+describe('SupervisionTurno · cerrar también su sesión (T-54)', () => {
+  it('la casilla viene desmarcada; marcada manda cerrar_sesion con el mismo motivo', async () => {
+    const user = userEvent.setup()
+    render(<SupervisionTurno turno={TURNO} usuarios={USUARIOS} onHecho={() => {}} />)
+    await user.click(await screen.findByRole('button', { name: 'Terminar este turno' }))
+    const casilla = screen.getByRole('checkbox', { name: /Cerrar también su sesión/ })
+    expect(casilla).not.toBeChecked()
+    await user.click(casilla)
+    await user.type(screen.getByLabelText('Motivo'), 'Perdió el celular')
+    await user.click(screen.getByRole('button', { name: 'Terminar turno' }))
+    expect(forzarTermino).toHaveBeenCalledWith('c1', { motivo: 'Perdió el celular', reasignarAUserId: null, cerrarSesion: true })
+    expect(await screen.findByRole('status')).toHaveTextContent('se cerraron sus sesiones')
   })
 })
