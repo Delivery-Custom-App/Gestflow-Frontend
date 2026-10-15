@@ -442,14 +442,16 @@ function errorDeItem(err) {
  * Agrega un ítem. El precio lo pone el backend (el del menú del local): no se
  * manda `unit_price` (T-30).
  */
-export async function addOrderItem(orderId, body, createdAt) {
-  return apiRequest(orderResourcePath(orderId, createdAt, '/items'), {
+export async function addOrderItem(orderId, body, createdAt, key) {
+  const options = {
     method: 'POST',
     body: {
       product_id: body.product_id,
       quantity: Number(body.quantity) || 1,
     },
-  }).catch(errorDeItem)
+  }
+  if (key) options.headers = { 'Idempotency-Key': key }
+  return apiRequest(orderResourcePath(orderId, createdAt, '/items'), options).catch(errorDeItem)
 }
 
 /**
@@ -505,7 +507,10 @@ export async function createOrder(orderData = {}) {
     if (meseroId) payload.waiter_user_id = meseroId
   }
 
-  const order = await apiRequest('/orders', { method: 'POST', body: payload }).catch((err) => {
+  const idempotencyKey = orderData.idempotency_key
+  const createOptions = { method: 'POST', body: payload }
+  if (idempotencyKey) createOptions.headers = { 'Idempotency-Key': `${idempotencyKey}:crear` }
+  const order = await apiRequest('/orders', createOptions).catch((err) => {
     // T-41: con el turno ya terminado el backend responde 400; se explica.
     if (/turno de esta caja ya terminó/i.test(String(err?.detail || err?.message || ''))) {
       const e = new Error('Tu turno ya terminó: no puedes crear pedidos. Si sigues trabajando, pide al administrador que te abra uno nuevo.')
@@ -517,7 +522,7 @@ export async function createOrder(orderData = {}) {
   const items = Array.isArray(orderData.items) ? orderData.items : []
   const createdItems = []
 
-  for (const raw of items) {
+  for (const [index, raw] of items.entries()) {
     const productId = raw.product_id || raw.recipe_id
     if (!productId) continue
     // Secuencial a propósito: conserva el orden de los ítems/comanda y evita escrituras concurrentes sobre la misma orden/mesa.
@@ -529,6 +534,7 @@ export async function createOrder(orderData = {}) {
         quantity: raw.quantity,
       },
       order.created_at,
+      idempotencyKey ? `${idempotencyKey}:item:${index}` : undefined,
     )
     createdItems.push(item)
   }

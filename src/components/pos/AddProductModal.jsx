@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react'
-import { useOrderItems } from '../../hooks/useOrderItems'
-import { createOrder } from '../../lib/salesApi'
+import { useState, useRef } from 'react'
+import { addOrderItem, createOrder } from '../../lib/salesApi'
+import { nuevaClaveIdempotencia } from '../../lib/idempotency'
 import { useCajaActiva } from '../../hooks/useCajaActiva'
 import {
   Dialog,
@@ -20,45 +20,12 @@ import { Label } from '@/components/ui/label'
 export default function AddProductModal({ orderId, mesaId, localId, onClose, onProductAdded, products = [] }) {
   const [actualOrderId, setActualOrderId] = useState(orderId)
   const { cajaId } = useCajaActiva(localId)
-  const { createItem, loading: loadingItem, error: errorItem } = useOrderItems(actualOrderId)
   const [selectedProduct, setSelectedProduct] = useState(null)
   const [quantity, setQuantity] = useState(1)
   const [localError, setLocalError] = useState(null)
   const [creatingOrder, setCreatingOrder] = useState(false)
-
-  useEffect(() => {
-    if (errorItem) setLocalError(errorItem)
-  }, [errorItem])
-
-  const createOrderIfNeeded = async () => {
-    if (actualOrderId) return true
-
-    if (!mesaId || !localId) {
-      setLocalError('Datos de mesa/local faltantes')
-      return false
-    }
-
-    setCreatingOrder(true)
-    setLocalError(null)
-
-    try {
-      const newOrder = await createOrder({
-        local_id: localId,
-        mesa_id: mesaId,
-        caja_id: cajaId || null,
-        source: 'dine_in',
-        items: [],
-      })
-      setActualOrderId(newOrder.id)
-      return true
-    } catch (err) {
-      setLocalError(err.message || 'Error al crear orden')
-      console.error('Error creating order:', err)
-      return false
-    } finally {
-      setCreatingOrder(false)
-    }
-  }
+  const [submitting, setSubmitting] = useState(false)
+  const idempotencyActionRef = useRef(null)
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -74,20 +41,58 @@ export default function AddProductModal({ orderId, mesaId, localId, onClose, onP
       return
     }
 
-    const hasOrder = await createOrderIfNeeded()
-    if (!hasOrder || !actualOrderId) return
+    if (!actualOrderId && (!mesaId || !localId)) {
+      setLocalError('Datos de mesa/local faltantes')
+      return
+    }
 
-    const newItem = await createItem(selectedProduct.id, quantity, 0)
+    const action = idempotencyActionRef.current || {
+      key: nuevaClaveIdempotencia(),
+      createsOrder: !actualOrderId,
+    }
+    idempotencyActionRef.current = action
+    setLocalError(null)
+    setSubmitting(true)
 
-    if (newItem) {
+    try {
+      let targetOrderId = actualOrderId
+      let itemKey = action.key
+
+      if (action.createsOrder) {
+        itemKey = `${action.key}:item:0`
+        if (!targetOrderId) {
+          setCreatingOrder(true)
+          const newOrder = await createOrder({
+            local_id: localId,
+            mesa_id: mesaId,
+            caja_id: cajaId || null,
+            source: 'dine_in',
+            items: [],
+            idempotency_key: action.key,
+          })
+          targetOrderId = newOrder.id
+          setActualOrderId(targetOrderId)
+        }
+      }
+
+      const newItem = await addOrderItem(targetOrderId, {
+        product_id: selectedProduct.id,
+        quantity,
+      }, undefined, itemKey)
       if (onProductAdded) onProductAdded(newItem)
       setSelectedProduct(null)
       setQuantity(1)
+      idempotencyActionRef.current = null
       onClose()
+    } catch (err) {
+      setLocalError(err.message || 'Error al agregar producto')
+    } finally {
+      setCreatingOrder(false)
+      setSubmitting(false)
     }
   }
 
-  const isLoading = loadingItem || creatingOrder
+  const isLoading = submitting
 
   return (
     <Dialog open onOpenChange={onClose}>
@@ -156,7 +161,7 @@ export default function AddProductModal({ orderId, mesaId, localId, onClose, onP
               disabled={isLoading}
               className="bg-[hsl(var(--primary))] hover:bg-[hsl(var(--primary))]/90 text-white"
             >
-              {creatingOrder ? 'Creando orden...' : loadingItem ? 'Agregando...' : 'Agregar Producto'}
+              {creatingOrder ? 'Creando orden...' : submitting ? 'Agregando...' : 'Agregar Producto'}
             </Button>
           </DialogFooter>
         </form>

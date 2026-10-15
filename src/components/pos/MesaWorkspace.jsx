@@ -5,6 +5,7 @@ import { useMesaDetail } from '../../hooks/useMesaDetail'
 import { useOrderTotals } from '../../hooks/useOrderTotals'
 import { useOrderManagement } from '../../hooks/useOrderManagement'
 import { addOrderItem, createOrder, removeOrderItem, setMesaLibre, updateOrderItem } from '../../lib/salesApi'
+import { obtenerClaveIdempotencia } from '../../lib/idempotency'
 import { getSplitPaymentSummary } from '../../lib/apiClient'
 import { isV2FeatureEnabled } from '../../lib/v2Features'
 import { formatCLP } from '../../lib/formatCLP'
@@ -57,6 +58,7 @@ export default function MesaWorkspace({ mesa, atencion = null, localId, cajaId, 
   const [mobileTab, setMobileTab] = useState('menu') // 'menu' | 'pedido'
 
   const submittingRef = useRef(false)
+  const idempotencyKeyRef = useRef(null)
 
   useEffect(() => { fetchMenu() }, [fetchMenu])
 
@@ -158,6 +160,7 @@ export default function MesaWorkspace({ mesa, atencion = null, localId, cajaId, 
     setSubmitting(true)
     setErrorMsg('')
     try {
+      const idempotencyKey = obtenerClaveIdempotencia(idempotencyKeyRef)
       const items = Object.entries(selectedQtys).map(([key, quantity]) => {
         const it = allMenuItems.find(i => i.key === key)
         const cust = customizations[key]
@@ -165,14 +168,15 @@ export default function MesaWorkspace({ mesa, atencion = null, localId, cajaId, 
         return { product_id: it?.id, quantity, unit_price: unitPrice }
       })
       if (firstOrder) {
-        for (const item of items) {
+        for (const [index, item] of items.entries()) {
           // Secuencial a propósito: conserva el orden de los ítems/comanda y evita escrituras concurrentes sobre la misma orden/mesa.
           // oxlint-disable-next-line react-doctor/async-await-in-loop
-          await addOrderItem(firstOrder.id, item, firstOrder.created_at)
+          await addOrderItem(firstOrder.id, item, firstOrder.created_at, `${idempotencyKey}:item:${index}`)
         }
       } else {
-        await createOrder({ local_id: localId, mesa_id: mesa.id, caja_id: cajaId || null, source: 'dine_in', guests: Number(guests), items })
+        await createOrder({ local_id: localId, mesa_id: mesa.id, caja_id: cajaId || null, source: 'dine_in', guests: Number(guests), items, idempotency_key: idempotencyKey })
       }
+      idempotencyKeyRef.current = null
       setSelectedQtys({})
       setCustomizations({})
       setExpandedKeys(new Set())

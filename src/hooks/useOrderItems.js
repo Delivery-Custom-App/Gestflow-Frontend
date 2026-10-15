@@ -27,8 +27,8 @@ export function useOrderItems(orderId, createdAt) {
   }, [orderId])
 
   const createItem = useCallback(
-    (productId, quantity) => run(
-      () => addOrderItem(orderId, { product_id: productId, quantity: parseInt(quantity, 10) }, createdAt),
+    (productId, quantity, key) => run(
+      () => addOrderItem(orderId, { product_id: productId, quantity: parseInt(quantity, 10) }, createdAt, key),
       'Error al agregar producto',
       null,
     ),

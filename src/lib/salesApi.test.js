@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { apiRequest, getOptionalAuthContext } from './apiClient'
-import { completeOrderCash, completeOrderMercadoPago, createCajaV2, createOrder, getActiveCaja, getBoleta, getMiTurnoDeHoy, listCajas, todayIso, closeCaja, terminarTurno, updateOrderFields } from './salesApi'
+import { addOrderItem, completeOrderCash, completeOrderMercadoPago, createCajaV2, createOrder, getActiveCaja, getBoleta, getMiTurnoDeHoy, listCajas, todayIso, closeCaja, terminarTurno, updateOrderFields } from './salesApi'
 
 vi.mock('./apiClient', () => ({
   apiRequest: vi.fn(),
@@ -287,6 +287,49 @@ describe('createOrder — quién atiende la mesa', () => {
   it('una venta sin mesa no lleva mesero (el backend lo rechaza fuera de los locales con mesas)', async () => {
     await createOrder({ local_id: 'l1', caja_id: 'c1', source: 'mostrador' })
     expect(cuerpoDeLaOrden()).not.toHaveProperty('waiter_user_id')
+  })
+})
+
+describe('Idempotency-Key (T-64)', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('usa una clave distinta para crear la orden y cada ítem del lote', async () => {
+    apiRequest
+      .mockResolvedValueOnce({ id: 'ord-1', created_at: '2026-10-14T12:00:00Z' })
+      .mockResolvedValueOnce({ id: 'item-1', product_id: 'prod-1', quantity: 2, unit_price: 500, subtotal: 1000 })
+      .mockResolvedValueOnce({ id: 'item-2', product_id: 'prod-2', quantity: 1, unit_price: 800, subtotal: 800 })
+
+    await createOrder({
+      local_id: 'local-1',
+      caja_id: 'caja-1',
+      items: [{ product_id: 'prod-1', quantity: 2 }, { product_id: 'prod-2', quantity: 1 }],
+      idempotency_key: 'accion-1',
+    })
+
+    expect(apiRequest.mock.calls[0][1].headers).toEqual({ 'Idempotency-Key': 'accion-1:crear' })
+    expect(apiRequest.mock.calls[0][1].body).not.toHaveProperty('idempotency_key')
+    expect(apiRequest.mock.calls[1][1].headers).toEqual({ 'Idempotency-Key': 'accion-1:item:0' })
+    expect(apiRequest.mock.calls[2][1].headers).toEqual({ 'Idempotency-Key': 'accion-1:item:1' })
+  })
+
+  it('reutiliza la clave de un ítem en reintentos y omite la cabecera si no hay clave', async () => {
+    apiRequest.mockResolvedValue({ id: 'item-1', product_id: 'prod-1', quantity: 1, unit_price: 500, subtotal: 500 })
+
+    await addOrderItem('ord-1', { product_id: 'prod-1', quantity: 1 }, undefined, 'accion-2')
+    await addOrderItem('ord-1', { product_id: 'prod-1', quantity: 1 }, undefined, 'accion-2')
+    await addOrderItem('ord-1', { product_id: 'prod-1', quantity: 1 })
+
+    expect(apiRequest.mock.calls[0][1].headers).toEqual({ 'Idempotency-Key': 'accion-2' })
+    expect(apiRequest.mock.calls[1][1].headers).toEqual({ 'Idempotency-Key': 'accion-2' })
+    expect(apiRequest.mock.calls[2][1]).not.toHaveProperty('headers')
+  })
+
+  it('no manda la cabecera al crear una orden cuando no se entrega clave', async () => {
+    apiRequest.mockResolvedValue({ id: 'ord-1', created_at: '2026-10-14T12:00:00Z' })
+
+    await createOrder({ local_id: 'local-1', caja_id: 'caja-1' })
+
+    expect(apiRequest.mock.calls[0][1]).not.toHaveProperty('headers')
   })
 })
 

@@ -142,9 +142,27 @@ describe('MesaWorkspace', () => {
       source: 'dine_in',
       guests: 4,
       items: [{ product_id: 'prod1', quantity: 1, unit_price: 1000 }],
+      idempotency_key: expect.any(String),
     }))
     expect(addOrderItem).not.toHaveBeenCalled()
     expect(refresh).toHaveBeenCalled()
+  })
+
+  it('reutiliza la clave si falla la creación y el usuario reintenta la misma acción', async () => {
+    const user = userEvent.setup()
+    setup({ activeOrders: [] })
+    createOrder.mockRejectedValueOnce(new Error('Sin conexión')).mockResolvedValueOnce({ id: 'order-nueva' })
+    render(<MesaWorkspace mesa={mesa} localId="local1" cajaId="caja1" onBack={() => {}} onTableUpdated={() => {}} />)
+
+    await user.click(screen.getByText('+'))
+    await user.click(screen.getByRole('button', { name: /agregar al pedido/i }))
+    expect(await screen.findByText('Sin conexión')).toBeInTheDocument()
+    const firstKey = createOrder.mock.calls[0][0].idempotency_key
+
+    await user.click(screen.getByRole('button', { name: /agregar al pedido/i }))
+
+    await waitFor(() => expect(createOrder).toHaveBeenCalledTimes(2))
+    expect(createOrder.mock.calls[1][0].idempotency_key).toBe(firstKey)
   })
 
   it('agregar producto con orden ya activa llama addOrderItem, no createOrder', async () => {
@@ -160,6 +178,7 @@ describe('MesaWorkspace', () => {
       'order-existing',
       { product_id: 'prod1', quantity: 1, unit_price: 1000 },
       '2024-01-01T00:00:00Z',
+      expect.stringMatching(/:item:0$/),
     ))
     expect(createOrder).not.toHaveBeenCalled()
     expect(refresh).toHaveBeenCalled()

@@ -1,8 +1,9 @@
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useParams } from 'react-router'
 import { Printer } from 'lucide-react'
 import { cancelOrder, createOrder, fetchProductsCatalog } from '../../lib/salesApi'
 import { formatCLP } from '../../lib/formatCLP'
+import { obtenerClaveIdempotencia } from '../../lib/idempotency'
 import { useCajaActiva } from '../../hooks/useCajaActiva'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -66,6 +67,7 @@ export default function VentaDirectaView() {
   const [showMPModal, setShowMPModal] = useState(false)
   const [successMsg, setSuccessMsg] = useState('')
   const [showPrinterConfig, setShowPrinterConfig] = useState(false)
+  const idempotencyKeyRef = useRef(null)
 
   const loadCatalog = useCallback(() => {
     if (!localId) return
@@ -110,13 +112,16 @@ export default function VentaDirectaView() {
         const p = products.find((prod) => prod.id === id)
         return { product_id: id, quantity, unit_price: p?.price || 0 }
       })
+      const idempotencyKey = obtenerClaveIdempotencia(idempotencyKeyRef)
       const order = await createOrder({
         local_id: localId,
         mesa_id: null,
         caja_id: cajaId || null,
         source: 'mostrador',
         items,
+        idempotency_key: idempotencyKey,
       })
+      idempotencyKeyRef.current = null
       setActiveOrder({ id: order.id, total: order.total ?? subtotal, created_at: order.created_at })
       setShowMPModal(true)
     } catch (err) {

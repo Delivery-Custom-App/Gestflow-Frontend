@@ -1,6 +1,7 @@
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useMenuPOS } from '../../hooks/useMenuPOS'
 import { createOrder } from '../../lib/salesApi'
+import { obtenerClaveIdempotencia } from '../../lib/idempotency'
 import { formatCLP } from '../../lib/formatCLP'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -27,6 +28,7 @@ export default function MesaDetailModal({ mesa, localId, cajaId, onClose, onTabl
 
   const [processing, setProcessing] = useState(false)
   const [error, setError]           = useState('')
+  const idempotencyKeyRef = useRef(null)
 
   const [visible, setVisible] = useState(false)
   useEffect(() => { requestAnimationFrame(() => setVisible(true)) }, [])
@@ -121,6 +123,7 @@ export default function MesaDetailModal({ mesa, localId, cajaId, onClose, onTabl
     }
     setProcessing(true); setError('')
     try {
+      const idempotencyKey = obtenerClaveIdempotencia(idempotencyKeyRef)
       const items = Object.entries(selectedQtys).map(([key, quantity]) => {
         const it   = allItems.find(i => i.key === key)
         const cust = customizations[key]
@@ -138,8 +141,10 @@ export default function MesaDetailModal({ mesa, localId, cajaId, onClose, onTabl
         source: 'dine_in',
         guests: Number(guests),
         items,
+        idempotency_key: idempotencyKey,
       })
       onTableUpdated?.()
+      idempotencyKeyRef.current = null
       onClose?.()
     } catch (err) {
       setError(err?.message || 'Error al crear la orden')

@@ -4,6 +4,7 @@ import { useMesaDetail } from '../../hooks/useMesaDetail'
 import { useMenuPOS } from '../../hooks/useMenuPOS'
 import { formatCLP } from '../../lib/formatCLP'
 import { addOrderItem, createOrder } from '../../lib/salesApi'
+import { obtenerClaveIdempotencia } from '../../lib/idempotency'
 import { useCajaActiva } from '../../hooks/useCajaActiva'
 import ProductList from './ProductList'
 import { Button } from '@/components/ui/button'
@@ -37,6 +38,7 @@ export default function MesaDetail() {
   const [pickerSearch, setPickerSearch] = useState('')
   const [addingProduct, setAddingProduct] = useState(false)
   const [addError, setAddError] = useState(null)
+  const idempotencyKeyRef = useRef(null)
 
   useEffect(() => {
     fetchMenu()
@@ -63,6 +65,7 @@ export default function MesaDetail() {
 
   const handleOpenPicker = (orderId = null) => {
     pickerOrderIdRef.current = orderId
+    idempotencyKeyRef.current = null
     setAddError(null)
     setPickerSearch('')
     fetchMenu()
@@ -74,6 +77,9 @@ export default function MesaDetail() {
     setAddError(null)
     try {
       let orderId = pickerOrderIdRef.current
+      const idempotencyKey = obtenerClaveIdempotencia(idempotencyKeyRef)
+      let itemKey = idempotencyKey
+      let orderCreatedAt
 
       if (!orderId) {
         if (!Number.isInteger(Number(guests)) || Number(guests) < 1) {
@@ -86,19 +92,23 @@ export default function MesaDetail() {
           caja_id: cajaId || null,
           source: 'dine_in',
           guests: Number(guests),
+          idempotency_key: idempotencyKey,
           items: [],
         })
         orderId = newOrder.id
+        orderCreatedAt = newOrder.created_at
+        itemKey = `${idempotencyKey}:item:0`
       }
 
       await addOrderItem(orderId, {
         product_id: product.id,
         quantity: 1,
         unit_price: product.price,
-      })
+      }, orderCreatedAt, itemKey)
 
       setShowPicker(false)
       setPickerSearch('')
+      idempotencyKeyRef.current = null
       fetchMenu()
       await refresh()
     } catch (err) {
