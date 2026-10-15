@@ -16,13 +16,14 @@ import NuevoProductoModal from './NuevoProductoModal'
 import EditarProductoModal from './EditarProductoModal'
 import { sePrepara } from '../../lib/tipoProducto'
 import ImportarCatalogoDrawer from './ImportarCatalogoDrawer'
+import ImportarPlanillaDialog from './ImportarPlanillaDialog'
 import LoadingSpinner from '../LoadingSpinner'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import {
   GripVertical, Plus, Pencil, Trash2, MoreHorizontal,
-  Eye, UtensilsCrossed, Search, PackagePlus,
+  Eye, UtensilsCrossed, Search, PackagePlus, FileSpreadsheet,
 } from 'lucide-react'
 
 function MenuBuilderPage() {
@@ -38,6 +39,8 @@ function MenuBuilderPage() {
 
   const [menuOpenId, setMenuOpenId] = useState('')
   const [importarAbierto, setImportarAbierto] = useState(false)
+  // T-60: importar productos desde una planilla (.xlsx o .csv).
+  const [planillaAbierta, setPlanillaAbierta] = useState(false)
   const [editingCategoryId, setEditingCategoryId] = useState('')
   const [editingCategoryName, setEditingCategoryName] = useState('')
   const [newCategoryName, setNewCategoryName] = useState('')
@@ -506,6 +509,15 @@ function MenuBuilderPage() {
                 <PackagePlus className="h-4 w-4 shrink-0" />
                 <span>Importar del catálogo</span>
               </Button>
+              <Button
+                variant="outline"
+                className="h-auto min-h-11 w-full justify-start gap-2 whitespace-normal px-3 py-2.5 text-left text-sm leading-snug"
+                onClick={() => setPlanillaAbierta(true)}
+                disabled={!localId}
+              >
+                <FileSpreadsheet className="h-4 w-4 shrink-0" />
+                <span>Importar desde planilla</span>
+              </Button>
               <div className="mt-auto rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] p-3 text-[11px] leading-relaxed text-[hsl(var(--muted-foreground))]">
                 Los platos con “En venta” son exactamente los que aparecen al tomar pedido en Mesas.
                 Stock y costos se gestionan en Control de stock.
@@ -514,6 +526,10 @@ function MenuBuilderPage() {
           </div>
         )}
       </div>
+
+      {planillaAbierta && (
+        <ImportarPlanillaDialog localId={localId} onClose={() => setPlanillaAbierta(false)} onImportado={load} />
+      )}
 
       {importarAbierto && (
         <ImportarCatalogoDrawer
