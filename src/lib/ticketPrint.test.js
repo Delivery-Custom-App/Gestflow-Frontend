@@ -119,3 +119,10 @@ describe('imprimirEnNavegador', () => {
     expect(print).toHaveBeenCalled()
   })
 })
+
+describe('comanda con notas (A-06)', () => {
+  it('muestra la nota de cada ítem', () => {
+    const html = comandaHtml({ order_id: 'abcdef12', items: [{ product_name: 'Churrasco', quantity: 1, notes: 'sin mayo' }] })
+    expect(html).toContain('Nota: sin mayo')
+  })
+})

@@ -22,6 +22,7 @@ export default function AddProductModal({ orderId, mesaId, localId, onClose, onP
   const { cajaId } = useCajaActiva(localId)
   const [selectedProduct, setSelectedProduct] = useState(null)
   const [quantity, setQuantity] = useState(1)
+  const [nota, setNota] = useState('')
   const [localError, setLocalError] = useState(null)
   const [creatingOrder, setCreatingOrder] = useState(false)
   const [submitting, setSubmitting] = useState(false)
@@ -78,10 +79,12 @@ export default function AddProductModal({ orderId, mesaId, localId, onClose, onP
       const newItem = await addOrderItem(targetOrderId, {
         product_id: selectedProduct.id,
         quantity,
+        ...(nota.trim() ? { notes: nota.trim() } : {}),
       }, undefined, itemKey)
       if (onProductAdded) onProductAdded(newItem)
       setSelectedProduct(null)
       setQuantity(1)
+      setNota('')
       idempotencyActionRef.current = null
       onClose()
     } catch (err) {
@@ -138,6 +141,13 @@ export default function AddProductModal({ orderId, mesaId, localId, onClose, onP
               required
               className="h-9"
             />
+          </div>
+
+          {/* Nota del ítem (A-06): llega a la comanda */}
+          <div className="space-y-1.5">
+            <Label htmlFor="item-nota">Nota (opcional)</Label>
+            <Input id="item-nota" type="text" maxLength={200} placeholder="Ej: sin cebolla"
+              value={nota} onChange={(e) => setNota(e.target.value)} disabled={isLoading} className="h-9" />
           </div>
 
           {/* Error */}

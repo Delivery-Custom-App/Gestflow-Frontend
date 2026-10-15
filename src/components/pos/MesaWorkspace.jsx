@@ -251,6 +251,8 @@ export default function MesaWorkspace({ mesa, atencion = null, localId, cajaId, 
   // Editar la cantidad o quitar un ítem ya enviado (T-30): PATCH solo con la
   // cantidad (el precio lo pone el backend) y DELETE; luego se recarga la mesa.
   const [itemOcupado, setItemOcupado] = useState('')
+  // A-06: nota del ítem; vaciarla la borra (PATCH notes: null).
+  const [editandoNota, setEditandoNota] = useState(null) // { item, texto }
   const ordenDelItem = useCallback(
     (item) => (detail?.active_orders || []).find((o) => (o.items || []).some((it) => it.id === item.id)),
     [detail],
@@ -260,6 +262,20 @@ export default function MesaWorkspace({ mesa, atencion = null, localId, cajaId, 
     if (!orden) return
     const nueva = Number(item.quantity) + (accion === 'mas' ? 1 : -1)
     if (accion === 'quitar' && !window.confirm(`¿Quitar ${formatItemName(item)} del pedido?`)) return
+    if (accion === 'nota') {
+      setItemOcupado(item.id)
+      setErrorMsg('')
+      try {
+        await updateOrderItem(orden.id, item.id, { notes: String(editandoNota?.texto || '').trim() || null }, orden.created_at)
+        setEditandoNota(null)
+        await refresh()
+      } catch (e) {
+        setErrorMsg(e?.message || 'No se pudo guardar la nota')
+      } finally {
+        setItemOcupado('')
+      }
+      return
+    }
     setItemOcupado(item.id)
     setErrorMsg('')
     try {
@@ -276,7 +292,7 @@ export default function MesaWorkspace({ mesa, atencion = null, localId, cajaId, 
     } finally {
       setItemOcupado('')
     }
-  }, [ordenDelItem, refresh, updateAfterItemRemoval])
+  }, [ordenDelItem, refresh, updateAfterItemRemoval, editandoNota])
   const visibleError = errorMsg || mesaError
 
   /* ─── fila de menú, con customizador inline para recetas ─── */
@@ -509,7 +525,24 @@ export default function MesaWorkspace({ mesa, atencion = null, localId, cajaId, 
                 {allItems.map((item) => (
                   <tr key={item.id} className="border-b border-[hsl(var(--border))] last:border-0">
                     <td className="px-2 py-2 font-medium text-[hsl(var(--foreground))]">{formatCantidad(item.quantity)}</td>
-                    <td className="px-2 py-2 text-[hsl(var(--foreground))]">{formatItemName(item)}</td>
+                    <td className="px-2 py-2 text-[hsl(var(--foreground))]">
+                      {formatItemName(item)}
+                      {editandoNota?.item.id === item.id ? (
+                        <form className="mt-1 flex gap-1" onSubmit={(e) => { e.preventDefault(); cambiarItem(item, 'nota') }}>
+                          <input aria-label={`Nota de ${formatItemName(item)}`} maxLength={200} value={editandoNota.texto}
+                            onChange={(e) => setEditandoNota({ item, texto: e.target.value })} placeholder="Ej: sin cebolla"
+                            className="h-7 flex-1 rounded border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-2 text-xs" />
+                          <button type="submit" disabled={itemOcupado === item.id} className="rounded px-2 text-xs font-semibold text-[hsl(var(--primary))]">Guardar</button>
+                          <button type="button" onClick={() => setEditandoNota(null)} className="rounded px-1 text-xs">✕</button>
+                        </form>
+                      ) : (
+                        <button type="button" onClick={() => setEditandoNota({ item, texto: item.notes || '' })}
+                          className="block text-left text-xs text-[hsl(var(--muted-foreground))] hover:underline"
+                          aria-label={`${item.notes ? 'Editar' : 'Agregar'} nota de ${formatItemName(item)}`}>
+                          {item.notes ? `Nota: ${item.notes}` : '+ nota'}
+                        </button>
+                      )}
+                    </td>
                     <td className="px-2 py-2 text-right font-medium text-[hsl(var(--foreground))]">${(item.total_price || 0).toLocaleString('es-CL')}</td>
                     <td className="px-1 py-2">
                       <div className="flex items-center justify-end gap-0.5">

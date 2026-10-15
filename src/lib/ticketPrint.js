@@ -71,7 +71,7 @@ function documento(titulo, cuerpo) {
 export function comandaHtml(comanda) {
   const items = Array.isArray(comanda?.items) ? comanda.items : []
   const filas = items.length
-    ? items.map((i) => `<tr><td class="cant">${esc(formatCantidad(i.quantity))}x</td><td>${esc(i.product_name)}</td></tr>`).join('')
+    ? items.map((i) => `<tr><td class="cant">${esc(formatCantidad(i.quantity))}x</td><td>${esc(i.product_name)}${i.notes ? `<br><span class="chico">Nota: ${esc(i.notes)}</span>` : ''}</td></tr>`).join('')
     : '<tr><td colspan="2">Sin ítems para preparar</td></tr>'
 
   return documento(`Comanda ${ordenCorta(comanda?.order_id)}`, `

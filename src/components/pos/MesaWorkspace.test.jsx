@@ -273,3 +273,17 @@ describe('MesaWorkspace · roles de caja (A-03)', () => {
     expect(screen.getAllByRole('button', { name: /cobrar/i }).length).toBeGreaterThan(0)
   })
 })
+
+describe('MesaWorkspace · nota del ítem (A-06)', () => {
+  it('agrega una nota a un ítem con PATCH notes y vaciarla la borra', async () => {
+    const user = userEvent.setup()
+    const orden = { id: 'order-1', created_at: '2026-10-14T12:00:00Z', items: [{ id: 'it-1', product_name: 'Agua', quantity: 1, total_price: 1000, notes: null }] }
+    setup({ activeOrders: [orden] })
+    updateOrderItem.mockResolvedValue({})
+    render(<MesaWorkspace mesa={mesa} localId="local1" cajaId="caja1" onBack={() => {}} onTableUpdated={() => {}} />)
+    await user.click(screen.getAllByRole('button', { name: 'Agregar nota de Agua' })[0])
+    await user.type(screen.getAllByLabelText('Nota de Agua')[0], 'sin gas')
+    await user.click(screen.getAllByRole('button', { name: 'Guardar' })[0])
+    expect(updateOrderItem).toHaveBeenCalledWith('order-1', 'it-1', { notes: 'sin gas' }, '2026-10-14T12:00:00Z')
+  })
+})

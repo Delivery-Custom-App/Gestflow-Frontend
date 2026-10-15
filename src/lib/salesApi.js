@@ -7,14 +7,16 @@ import { fetchProductsMap } from './v2CatalogApi'
 import { traducirErrorCobro } from './supervision'
 
 /**
- * Backend V2 solo devuelve product_id en order_items (sin nombre embebido).
- * Resuelve nombre + total_price contra el catálogo para las pantallas que
- * esperan el shape legacy (item_name/product_name/total_price).
+ * Ítems del pedido con el shape que esperan las pantallas
+ * (item_name/product_name/total_price). Desde B-20 cada ítem trae
+ * `product_name` (el nombre con que se agregó: no cambia si después se
+ * renombra el producto) y `notes`; el catálogo queda solo como respaldo para
+ * ítems antiguos sin nombre (A-06).
  */
-function enrichItemsWithProducts(items, productsMap) {
+function enrichItemsWithProducts(items, productsMap = new Map()) {
   return (Array.isArray(items) ? items : []).map((item) => {
     const product = productsMap.get(String(item.product_id))
-    const name = product?.name || null
+    const name = item.product_name || product?.name || null
     return {
       ...item,
       quantity: Number(item.quantity),
@@ -22,6 +24,7 @@ function enrichItemsWithProducts(items, productsMap) {
       ...(item.subtotal != null && { subtotal: Number(item.subtotal) }),
       product_name: name,
       item_name: name,
+      notes: item.notes || null,
       total_price: Number(item.subtotal ?? Number(item.quantity) * Number(item.unit_price)) || 0,
     }
   })
@@ -476,10 +479,10 @@ export async function getMesaDetail(mesaId) {
 }
 
 export async function listOrderItems(orderId, createdAt) {
-  const [items, productsMap] = await Promise.all([
-    apiRequest(orderResourcePath(orderId, createdAt, '/items')),
-    fetchProductsMap().catch(() => new Map()),
-  ])
+  const items = await apiRequest(orderResourcePath(orderId, createdAt, '/items'))
+  // A-06: el nombre viene en cada ítem; el catálogo solo para ítems antiguos sin él.
+  const faltaNombre = (Array.isArray(items) ? items : []).some((it) => !it.product_name)
+  const productsMap = faltaNombre ? await fetchProductsMap().catch(() => new Map()) : new Map()
   return enrichItemsWithProducts(items, productsMap)
 }
 
@@ -501,12 +504,17 @@ function errorDeItem(err) {
  * Agrega un ítem. El precio lo pone el backend (el del menú del local): no se
  * manda `unit_price` (T-30).
  */
+export const NOTA_ITEM_MAX = 200
+
 export async function addOrderItem(orderId, body, createdAt, key) {
+  const nota = String(body.notes || '').trim()
   const options = {
     method: 'POST',
     body: {
       product_id: body.product_id,
       quantity: Number(body.quantity) || 1,
+      // A-06: nota del ítem (por ejemplo «sin cebolla»), hasta 200 caracteres.
+      ...(nota ? { notes: nota.slice(0, NOTA_ITEM_MAX) } : {}),
     },
   }
   if (key) options.headers = { 'Idempotency-Key': key }
@@ -592,6 +600,7 @@ export async function createOrder(orderData = {}) {
       {
         product_id: productId,
         quantity: raw.quantity,
+        notes: raw.notes,
       },
       order.created_at,
       idempotencyKey ? `${idempotencyKey}:item:${index}` : undefined,
@@ -608,10 +617,11 @@ export async function createOrder(orderData = {}) {
     }
   }
 
-  // `order` es la orden vacía devuelta por POST /orders (total=0); el backend
-  // recalcula order.total recién al agregar cada ítem, pero ese valor nunca
-  // vuelve en la respuesta de /items — lo recomputamos acá con los subtotales.
-  const computedTotal = createdItems.reduce(
+  // `order` es la orden vacía devuelta por POST /orders (total=0). Cada ítem
+  // trae `order_total` (B-20): el del último es el total del pedido (A-06).
+  // Sin él (backend anterior), se suma con los subtotales.
+  const ultimoTotal = createdItems.length ? createdItems[createdItems.length - 1]?.order_total : null
+  const computedTotal = ultimoTotal != null ? Number(ultimoTotal) : createdItems.reduce(
     (s, it) => s + (Number(it.subtotal) || (Number(it.unit_price) || 0) * (Number(it.quantity) || 0)),
     0,
   )
