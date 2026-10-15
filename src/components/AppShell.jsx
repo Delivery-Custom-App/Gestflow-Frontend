@@ -6,7 +6,7 @@ import { useCurrentBusiness } from '../hooks/useCurrentBusiness'
 import { useTheme } from '../context/ThemeContext'
 import { m, AnimatePresence } from 'framer-motion'
 import { cn } from '@/lib/utils'
-import { ReceiptText,
+import { CreditCard, ReceiptText,
   LayoutDashboard, House, ChevronDown, ChevronLeft, ChevronRight,
   DollarSign, FileText, BarChart3, Wallet,
   Table2, ChefHat, Moon, Sun, LifeBuoy,
@@ -59,6 +59,7 @@ function deriveActiveKey(pathname) {
   if (pathname.includes('/administrativo'))               return 'administracion'
   if (pathname.includes('/rrhh'))                         return 'hr-hub'
   if (pathname.includes('/usuarios'))                    return 'usuarios'
+  if (pathname === '/maquinas')                          return 'maquinas'
   if (pathname.includes('/gestor/resumen'))              return 'gestor-resumen'
   if (pathname.includes('/gestor/negocios'))             return 'gestor'
   if (pathname.includes('/gestor/auditoria'))            return 'gestor-auditoria'
@@ -171,6 +172,7 @@ function Sidebar({ collapsed, onToggle, onClose }) {
       case 'locales':   navigate('/admin'); break
       // Dentro de una franquicia, los usuarios de ese local sin salir de ella.
       case 'usuarios':  navigate(localId ? `/local/${localId}/usuarios` : '/usuarios', { state: navState }); break
+      case 'maquinas':  navigate('/maquinas'); break
       case 'gestor':    navigate('/gestor'); break
       case 'gestor-resumen':       navigate('/gestor/resumen'); break
       case 'gestor-auditoria':     navigate('/gestor/auditoria'); break
@@ -206,6 +208,8 @@ function Sidebar({ collapsed, onToggle, onClose }) {
     // El dueño ve a los de todos sus locales; el encargado, a los del suyo
     // (sin local asignado no hay usuarios que mostrarle: el ítem no se ofrece).
     ...(isOwner || (isEncargado && (assignedLocalId || localId)) ? [{ key: 'usuarios', label: 'Usuarios', icon: Users }] : []),
+    // T-44: máquinas POS de todo el negocio, solo el dueño.
+    ...(isOwner ? [{ key: 'maquinas', label: 'Máquinas POS', icon: CreditCard }] : []),
     // RRHH está apagado con `hrModule` (src/lib/v2Features.js): ningún rol lo ve.
     ...(isV2FeatureEnabled('hrModule') && localId && !isWorker ? [{ key: 'hr-hub', label: 'RRHH', icon: Users }] : []),
     ...(!isWorker && localId ? [{ key: 'dashboard', label: 'Dashboard', icon: LayoutDashboard }] : []),
