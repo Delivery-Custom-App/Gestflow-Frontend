@@ -2,7 +2,7 @@ import { Search, X } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
 
-import { EMPTY_MESA_FILTERS } from './filterMesas'
+import { EMPTY_MESA_FILTERS, SIN_ZONA, zonasDe } from './filterMesas'
 
 // V2 solo maneja available/occupied: no existe un estado "en cobro".
 const ESTADO_OPTIONS = ['libre', 'ocupada']
@@ -19,7 +19,8 @@ export default function MesasFilters({ mesas = NO_MESAS, filters, onFiltersChang
 
   const handleFiltersChange = onFiltersChange
   const handleLimpiarFiltros = () => handleFiltersChange(EMPTY_MESA_FILTERS)
-  const activeCount = [filters.nombre.trim(), filters.estado].filter(Boolean).length
+  const activeCount = [filters.nombre.trim(), filters.estado, filters.zona].filter(Boolean).length
+  const zonas = zonasDe(mesas)
 
   return (
     <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
@@ -63,6 +64,19 @@ export default function MesasFilters({ mesas = NO_MESAS, filters, onFiltersChang
           ))}
         </select>
 
+
+        {zonas.length > 0 && (
+          <select
+            value={filters.zona || ''}
+            onChange={(e) => handleFiltersChange({ ...filters, zona: e.target.value })}
+            className={selectCls}
+            aria-label="Filtrar por zona"
+          >
+            <option value="">Todas las zonas</option>
+            {zonas.map((z) => <option key={z} value={z}>{z}</option>)}
+            <option value={SIN_ZONA}>Sin zona</option>
+          </select>
+        )}
 
         {activeCount > 0 && (
           <button

@@ -47,10 +47,8 @@ export function useMesasConEstado(localId) {
   }, [localId, fetchMesas])
 
   const updateMesa = useCallback(async ({ id, name, capacidad, zona, is_active }) => {
-    void capacidad
-    void zona
-    void is_active
-    const data = await updateMesaV2(id, { name })
+    // A-05: la zona y el estado activo ahora se guardan.
+    const data = await updateMesaV2(id, { name, capacidad, zona, is_active })
     await fetchMesas()
     return data
   }, [fetchMesas])

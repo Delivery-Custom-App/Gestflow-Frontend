@@ -102,12 +102,12 @@ export function mapMesaOut(mesa) {
     name: mesa.nombre || mesa.name || 'Mesa',
     nombre: mesa.nombre || mesa.name,
     state,
-    is_active: true,
+    // A-05 (B-19): baja lógica y zona («Terraza», «Salón»); `null` sin zona.
+    is_active: mesa.is_active !== false,
     // V2 entrega `capacity`; la UI la lee como `capacidad`. Leer solo el nombre
     // en español hacía que siempre cayera al valor por defecto de la tarjeta.
     capacidad: mesa.capacity ?? mesa.capacidad ?? null,
-    // El backend no tiene zonas: se expone null explícito, no un dato inventado.
-    zona: null,
+    zona: mesa.zona ? String(mesa.zona) : null,
   }
 }
 
@@ -325,9 +325,21 @@ export async function listOrdenesDelTurno(cajaId) {
   return rows.map(mapOrderOut)
 }
 
-export async function listMesas(localId) {
-  const rows = await apiRequest(`/mesas?local_id=${encodeURIComponent(String(localId))}`)
+export const ZONA_MAX = 50
+
+/** Mesas del local; con `incluirInactivas` también las dadas de baja (A-05). */
+export async function listMesas(localId, { incluirInactivas = false } = {}) {
+  const qs = incluirInactivas ? '&include_inactive=true' : ''
+  const rows = await apiRequest(`/mesas?local_id=${encodeURIComponent(String(localId))}${qs}`)
   return (Array.isArray(rows) ? rows : []).map(mapMesaOut)
+}
+
+/** Reactiva una mesa dada de baja (`PATCH /mesas/{id}` con `is_active: true`). */
+export async function reactivarMesa(mesaId) {
+  return mapMesaOut(await apiRequest(`/mesas/${encodeURIComponent(String(mesaId))}`, {
+    method: 'PATCH',
+    body: { is_active: true },
+  }))
 }
 
 /**
@@ -360,14 +372,16 @@ export async function listMesasConTotales(localId) {
   })
 }
 
-export async function createMesa({ local_id, name, nombre, capacidad }) {
+export async function createMesa({ local_id, name, nombre, capacidad, zona }) {
   const capacity = Number(capacidad)
+  const zonaLimpia = String(zona || '').trim()
   const row = await apiRequest('/mesas', {
     method: 'POST',
     body: {
       local_id,
       nombre: String(nombre || name || '').trim(),
       status: 'available',
+      ...(zonaLimpia ? { zona: zonaLimpia } : {}),
       // V2 acepta capacidad desde la migración 0025.
       ...(Number.isFinite(capacity) && capacity > 0 ? { capacity } : {}),
     },
@@ -384,6 +398,9 @@ export async function updateMesa(mesaId, body = {}) {
     const capacity = Number(body.capacity ?? body.capacidad)
     if (Number.isFinite(capacity) && capacity > 0) patch.capacity = capacity
   }
+  // A-05: zona (vacía la quita) y reactivar o dar de baja.
+  if (body.zona !== undefined) patch.zona = String(body.zona || '').trim() || null
+  if (body.is_active !== undefined) patch.is_active = Boolean(body.is_active)
   if (body.status != null) patch.status = body.status
   if (body.state === 'libre') patch.status = 'available'
   if (body.state === 'ocupada' || body.state === 'en_cobro') patch.status = 'occupied'

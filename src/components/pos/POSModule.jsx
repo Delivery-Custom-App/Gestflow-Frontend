@@ -22,6 +22,7 @@ import {
   atencionDeMesa, fueTraspasada, nombreDePersona, useDatosDeAtencion,
 } from '../../lib/atencionMesas'
 import TraspasarMesasModal from './TraspasarMesasModal'
+import MesasDadasDeBaja from './MesasDadasDeBaja'
 import { toast } from 'sonner'
 import { puedeVender } from '../../lib/rolesCaja'
 import { empleadosConTurnoHoy } from '../../lib/supervision'
@@ -51,6 +52,8 @@ export default function POSModule() {
   const [selectedMesa, setSelectedMesa] = useState(null)
   const [showPrinterConfig, setShowPrinterConfig] = useState(false)
   const [showMPConfig, setShowMPConfig] = useState(false)
+  // A-05: ver las mesas dadas de baja y reactivarlas (encargado y dueño).
+  const [verDadasDeBaja, setVerDadasDeBaja] = useState(false)
 
   // ── Quién atiende cada mesa, y traspasar mesas (encargado y dueño) ───────
   const { usuarios, usuariosPorId, duenoDeTurno, cajas: turnosDelLocal, recargar: recargarAtencion } = useDatosDeAtencion(localId, { esVendedor: isWorker })
@@ -237,6 +240,10 @@ export default function POSModule() {
                     Impresora
                   </button>
                 )}
+                <label className="inline-flex h-10 items-center gap-2 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3 text-sm text-[hsl(var(--foreground))]">
+                  <input type="checkbox" checked={verDadasDeBaja} onChange={(e) => setVerDadasDeBaja(e.target.checked)} />
+                  Ver dadas de baja
+                </label>
                 <button
                   onClick={() => setShowModal(true)}
                   className="inline-flex h-10 items-center gap-2 rounded-xl bg-[hsl(var(--primary))] px-4 text-sm font-semibold text-white shadow-sm hover:opacity-90"
@@ -261,6 +268,7 @@ export default function POSModule() {
           />
         ) : activeView === 'mesas' ? (
           <div className="space-y-5">
+            {!isWorker && verDadasDeBaja && <MesasDadasDeBaja localId={localId} onReactivada={() => { refreshMesas(); refreshKpis() }} />}
             <MesasKPICards kpis={kpis} loading={kpisLoading} error={kpisError} />
             {mesasError ? (
               <div className="rounded-xl border-2 border-red-200 bg-red-50 p-8 text-red-700 dark:border-red-800/40 dark:bg-red-950/20 dark:text-red-400">

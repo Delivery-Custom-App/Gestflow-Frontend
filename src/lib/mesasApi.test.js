@@ -8,7 +8,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { apiRequest } from './apiClient'
-import { createMesa, deleteMesa, listMesasConTotales, mapMesaOut, updateMesa } from './salesApi'
+import { createMesa, deleteMesa, listMesas, listMesasConTotales, mapMesaOut, reactivarMesa, updateMesa } from './salesApi'
 
 vi.mock('./apiClient', () => ({ apiRequest: vi.fn() }))
 
@@ -28,8 +28,27 @@ describe('Mesas', () => {
     expect(mapMesaOut({ id: 'm1', nombre: 'Mesa 1', status: 'available', capacity: null }).capacidad).toBeNull()
   })
 
-  it('no inventa zonas: el backend no las tiene', () => {
-    expect(mapMesaOut({ id: 'm1', nombre: 'Mesa 1', status: 'available', zona: 'Terraza' }).zona).toBeNull()
+  it('A-05: lee la zona y si está activa', () => {
+    expect(mapMesaOut({ id: 'm1', nombre: 'Mesa 1', status: 'available', zona: 'Terraza' }).zona).toBe('Terraza')
+    expect(mapMesaOut({ id: 'm1', nombre: 'Mesa 1', status: 'available', zona: null }).zona).toBeNull()
+    expect(mapMesaOut({ id: 'm1', nombre: 'Mesa 1', is_active: false }).is_active).toBe(false)
+    expect(mapMesaOut({ id: 'm1', nombre: 'Mesa 1' }).is_active).toBe(true)
+  })
+
+  it('A-05: listar dadas de baja, reactivar, crear y editar con zona', async () => {
+    apiRequest.mockResolvedValue([])
+    await listMesas('loc-1', { incluirInactivas: true })
+    expect(apiRequest).toHaveBeenLastCalledWith('/mesas?local_id=loc-1&include_inactive=true')
+
+    apiRequest.mockResolvedValue({ id: 'm1', nombre: 'Mesa 1', is_active: true })
+    await reactivarMesa('m1')
+    expect(apiRequest).toHaveBeenLastCalledWith('/mesas/m1', { method: 'PATCH', body: { is_active: true } })
+
+    await createMesa({ local_id: 'loc-1', name: 'Mesa 9', capacidad: '2', zona: 'Salón' })
+    expect(apiRequest.mock.lastCall[1].body).toMatchObject({ nombre: 'Mesa 9', zona: 'Salón' })
+
+    await updateMesa('m1', { name: 'Mesa 1', zona: '' })
+    expect(apiRequest.mock.lastCall[1].body).toEqual({ nombre: 'Mesa 1', zona: null })
   })
 
   it('crear una mesa guarda la capacidad en el backend', async () => {
