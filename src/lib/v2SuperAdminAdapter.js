@@ -1,6 +1,8 @@
 import { apiRequest } from './apiClient'
 
 const ADMIN_ROLES = new Set(['ADMIN_NEGOCIO', 'ADMIN'])
+const ORDER_STATUSES = ['open', 'preparing', 'ready', 'completed', 'cancelled']
+const NON_CANCELLED_STATUSES = ORDER_STATUSES.filter((status) => status !== 'cancelled')
 
 export function displayNameFromEmail(email) {
   if (!email) return '—'
@@ -11,23 +13,37 @@ export function displayNameFromEmail(email) {
     .trim() || email
 }
 
-function monthStartUtc() {
-  const now = new Date()
-  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1))
+function todayInChileIso(now = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Santiago', year: 'numeric', month: '2-digit', day: '2-digit',
+  }).formatToParts(now)
+  const values = Object.fromEntries(parts.map(({ type, value }) => [type, value]))
+  return `${values.year}-${values.month}-${values.day}`
 }
 
-function normalizeStatus(status) {
-  return String(status || '').toLowerCase()
+function chileMidnightIso(isoDate) {
+  const [year, month, day] = isoDate.split('-').map(Number)
+  const wallClockUtc = Date.UTC(year, month - 1, day)
+  const localParts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Santiago', year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23',
+  }).formatToParts(new Date(wallClockUtc))
+  const values = Object.fromEntries(localParts.map(({ type, value }) => [type, value]))
+  const representedUtc = Date.UTC(
+    Number(values.year), Number(values.month) - 1, Number(values.day),
+    Number(values.hour), Number(values.minute), Number(values.second),
+  )
+  return new Date(wallClockUtc - (representedUtc - wallClockUtc)).toISOString()
 }
 
-function isValidOrder(order) {
-  return normalizeStatus(order?.status) !== 'cancelled'
+function dateOnly(value, fallback) {
+  const date = String(value || '').slice(0, 10)
+  return /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : fallback
 }
 
-function sumOrderTotal(orders) {
-  return orders
-    .filter(isValidOrder)
-    .reduce((acc, order) => acc + Number(order.total || 0), 0)
+function earliestBusinessDate(local, business) {
+  const dates = [dateOnly(local?.created_at), dateOnly(business?.created_at)].filter(Boolean)
+  return dates.sort()[0] || '2000-01-01'
 }
 
 function countBy(items, keyFn) {
@@ -41,19 +57,72 @@ function countBy(items, keyFn) {
 }
 
 async function fetchPlatformSnapshot(token) {
-  const [businesses, users, locals, orders] = await Promise.all([
+  const [businesses, users, locals] = await Promise.all([
     apiRequest('/businesses', { token }),
     apiRequest('/users', { token }),
     apiRequest('/locals', { token }),
-    apiRequest('/orders', { token }),
   ])
 
   return {
     businesses: Array.isArray(businesses) ? businesses : [],
     users: Array.isArray(users) ? users : [],
     locals: Array.isArray(locals) ? locals : [],
-    orders: Array.isArray(orders) ? orders : [],
   }
+}
+
+async function countOrders(localId, statuses, token, dateFrom, dateTo) {
+  const query = new URLSearchParams({ local_id: String(localId), limit: '1', offset: '0' })
+  const list = Array.isArray(statuses) ? statuses : [statuses]
+  list.forEach((status) => query.append('status', status))
+  if (dateFrom) query.set('date_from', dateFrom)
+  if (dateTo) query.set('date_to', dateTo)
+  const response = await apiRequest(`/orders?${query.toString()}`, { token, withTotal: true })
+  return Number.isFinite(response?.total) ? response.total : 0
+}
+
+async function salesForLocal(localId, startDate, endDate, token) {
+  const query = new URLSearchParams({ local_id: String(localId), start_date: startDate, end_date: endDate })
+  const report = await apiRequest(`/reports/sales?${query.toString()}`, { token }).catch(() => null)
+  return Number(report?.total_sales) || 0
+}
+
+async function summarizeLocalOrders(local, business, token, today, monthStart, now) {
+  const startDate = earliestBusinessDate(local, business)
+  const monthStartInstant = chileMidnightIso(monthStart)
+  const nowInstant = now.toISOString()
+  const [statusCounts, monthlyOrders, revenue, monthlyRevenue] = await Promise.all([
+    Promise.all(ORDER_STATUSES.map(async (status) => [
+      status,
+      await countOrders(local.id, status, token),
+    ])),
+    countOrders(local.id, NON_CANCELLED_STATUSES, token, monthStartInstant, nowInstant),
+    salesForLocal(local.id, startDate, today, token),
+    salesForLocal(local.id, monthStart, today, token),
+  ])
+  const ordersByStatus = Object.fromEntries(statusCounts)
+  const orders = NON_CANCELLED_STATUSES.reduce((sum, status) => sum + ordersByStatus[status], 0)
+  return { orders, monthlyOrders, revenue, monthlyRevenue, ordersByStatus }
+}
+
+function aggregateLocalSummaries(locals, summaries) {
+  return locals.reduce((aggregate, local) => {
+    const summary = summaries.get(String(local.id))
+    if (!summary) return aggregate
+    aggregate.orders += summary.orders
+    aggregate.monthly_orders += summary.monthlyOrders
+    aggregate.revenue += summary.revenue
+    aggregate.monthly_revenue += summary.monthlyRevenue
+    Object.entries(summary.ordersByStatus).forEach(([status, count]) => {
+      aggregate.orders_by_status[status] = (aggregate.orders_by_status[status] || 0) + count
+    })
+    return aggregate
+  }, {
+    orders: 0,
+    monthly_orders: 0,
+    revenue: 0,
+    monthly_revenue: 0,
+    orders_by_status: {},
+  })
 }
 
 function mapUserRow(user, businessNames) {
@@ -93,30 +162,23 @@ export async function v2ListAllUsers({ role, businessId } = {}, token) {
 }
 
 export async function v2GetGlobalStats(token) {
-  const { businesses, users, locals, orders } = await fetchPlatformSnapshot(token)
-  const monthStart = monthStartUtc()
-
-  const validOrders = orders.filter(isValidOrder)
-  const monthOrders = validOrders.filter(
-    (order) => new Date(order.created_at) >= monthStart
-  )
+  const { businesses, users, locals } = await fetchPlatformSnapshot(token)
+  const now = new Date()
+  const today = todayInChileIso(now)
+  const monthStart = `${today.slice(0, 7)}-01`
+  const businessById = new Map(businesses.map((business) => [String(business.id), business]))
+  const summaryEntries = await Promise.all(locals.map(async (local) => [
+    String(local.id),
+    await summarizeLocalOrders(local, businessById.get(String(local.business_id)), token, today, monthStart, now),
+  ]))
+  const summaries = new Map(summaryEntries)
+  const totals = aggregateLocalSummaries(locals, summaries)
 
   const tenants = businesses.map((business) => {
     const businessId = String(business.id)
-    const businessLocals = locals.filter(
-      (local) => String(local.business_id) === businessId
-    )
-    const localIds = new Set(businessLocals.map((local) => String(local.id)))
-    const businessUsers = users.filter(
-      (user) => String(user.business_id) === businessId
-    )
-    const businessOrders = validOrders.filter((order) =>
-      localIds.has(String(order.local_id))
-    )
-    const businessMonthOrders = businessOrders.filter(
-      (order) => new Date(order.created_at) >= monthStart
-    )
-
+    const businessLocals = locals.filter((local) => String(local.business_id) === businessId)
+    const businessUsers = users.filter((user) => String(user.business_id) === businessId)
+    const sales = aggregateLocalSummaries(businessLocals, summaries)
     return {
       id: business.id,
       name: business.name,
@@ -124,26 +186,26 @@ export async function v2GetGlobalStats(token) {
       is_active: business.is_active !== false,
       locals: businessLocals.length,
       users: businessUsers.length,
-      orders: businessOrders.length,
-      revenue: sumOrderTotal(businessOrders),
-      monthly_revenue: sumOrderTotal(businessMonthOrders),
+      orders: sales.orders,
+      revenue: sales.revenue,
+      monthly_revenue: sales.monthly_revenue,
       created_at: business.created_at,
     }
   })
 
   return {
-    generated_at: new Date().toISOString(),
+    generated_at: now.toISOString(),
     totals: {
       businesses: businesses.length,
-      active_businesses: businesses.filter((b) => b.is_active !== false).length,
+      active_businesses: businesses.filter((business) => business.is_active !== false).length,
       users: users.length,
       locals: locals.length,
-      orders: validOrders.length,
-      monthly_orders: monthOrders.length,
-      revenue: sumOrderTotal(validOrders),
-      monthly_revenue: sumOrderTotal(monthOrders),
+      orders: totals.orders,
+      monthly_orders: totals.monthly_orders,
+      revenue: totals.revenue,
+      monthly_revenue: totals.monthly_revenue,
     },
-    orders_by_status: countBy(orders, (order) => normalizeStatus(order.status) || 'unknown'),
+    orders_by_status: totals.orders_by_status,
     users_by_role: countBy(users, (user) => String(user.role || 'EMPLEADO').toUpperCase()),
     businesses_by_plan: countBy(businesses, (business) => String(business.plan || 'starter')),
     tenants,
@@ -151,7 +213,7 @@ export async function v2GetGlobalStats(token) {
 }
 
 export async function v2GetBusinessStats(businessId, token) {
-  const [{ businesses, users, locals, orders }, audit] = await Promise.all([
+  const [{ businesses, users, locals }, audit] = await Promise.all([
     fetchPlatformSnapshot(token),
     v2GetAuditLog({ businessId, limit: 20, offset: 0 }, token).catch(() => []),
   ])
@@ -164,36 +226,32 @@ export async function v2GetBusinessStats(businessId, token) {
     throw error
   }
 
-  const monthStart = monthStartUtc()
+  const now = new Date()
+  const today = todayInChileIso(now)
+  const monthStart = `${today.slice(0, 7)}-01`
   const id = String(businessId)
   const businessLocals = locals.filter((local) => String(local.business_id) === id)
-  const localIds = new Set(businessLocals.map((local) => String(local.id)))
   const businessUsers = users.filter((user) => String(user.business_id) === id)
-  const businessOrders = orders.filter((order) => localIds.has(String(order.local_id)))
-  const validOrders = businessOrders.filter(isValidOrder)
-  const monthOrders = validOrders.filter(
-    (order) => new Date(order.created_at) >= monthStart
-  )
-  const admins = businessUsers.filter((user) =>
-    ADMIN_ROLES.has(String(user.role || '').toUpperCase())
-  )
+  const summaryEntries = await Promise.all(businessLocals.map(async (local) => [
+    String(local.id),
+    await summarizeLocalOrders(local, business, token, today, monthStart, now),
+  ]))
+  const stats = aggregateLocalSummaries(businessLocals, new Map(summaryEntries))
+  const admins = businessUsers.filter((user) => ADMIN_ROLES.has(String(user.role || '').toUpperCase()))
 
   return {
     business: { ...business, is_active: business.is_active !== false },
-    generated_at: new Date().toISOString(),
+    generated_at: now.toISOString(),
     stats: {
       locals: businessLocals.length,
       users: businessUsers.length,
       admins: admins.length,
-      orders: validOrders.length,
-      monthly_orders: monthOrders.length,
-      revenue: sumOrderTotal(validOrders),
-      monthly_revenue: sumOrderTotal(monthOrders),
+      orders: stats.orders,
+      monthly_orders: stats.monthly_orders,
+      revenue: stats.revenue,
+      monthly_revenue: stats.monthly_revenue,
     },
-    orders_by_status: countBy(
-      businessOrders,
-      (order) => normalizeStatus(order.status) || 'unknown'
-    ),
+    orders_by_status: stats.orders_by_status,
     admins: admins.map((user) => ({
       id: user.id,
       email: user.email,
@@ -205,7 +263,6 @@ export async function v2GetBusinessStats(businessId, token) {
     audit: Array.isArray(audit) ? audit : [],
   }
 }
-
 function withQuery(path, params) {
   const query = new URLSearchParams()
   Object.entries(params).forEach(([key, value]) => {

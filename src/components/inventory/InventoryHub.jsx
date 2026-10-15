@@ -9,7 +9,7 @@ import {
   ResponsiveContainer, CartesianGrid,
 } from 'recharts'
 import { getInventoryKpisByLocal, getInventoryStockList } from '../../lib/inventoryApi'
-import { useAlerts } from '../../hooks/useAlerts'
+import { isV2FeatureEnabled } from '../../lib/v2Features'
 import InventoryShell from './InventoryShell'
 import LoadingSpinner from '../LoadingSpinner'
 import ChartSkeleton from '../ui/ChartSkeleton'
@@ -17,73 +17,12 @@ import { getStockAlertLevel } from './stockAlertUtils'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { cn } from '@/lib/utils'
 import { m, AnimatePresence } from 'framer-motion'
 import { formatCLPDisplay as formatMoney } from '../../lib/formatCLP'
 import {
   Package, CheckCircle, TrendingDown, AlertTriangle, DollarSign,
   ArrowRight, ShoppingCart, HelpCircle, X,
 } from 'lucide-react'
-
-const SEVERITY_CONFIG = {
-  critical: {
-    label: 'Crítica',
-    cls:   'border-l-4 border-l-red-500 border border-red-200 bg-red-50 dark:border-slate-700 dark:border-l-red-500 dark:bg-red-950/30',
-    badge: 'bg-red-500 text-white',
-  },
-  high: {
-    label: 'Alta',
-    cls:   'border-l-4 border-l-orange-500 border border-orange-200 bg-orange-50 dark:border-slate-700 dark:border-l-orange-500 dark:bg-orange-950/30',
-    badge: 'bg-orange-500 text-white',
-  },
-  medium: {
-    label: 'Media',
-    cls:   'border-l-4 border-l-amber-400 border border-amber-200 bg-amber-50 dark:border-slate-700 dark:border-l-amber-400 dark:bg-amber-950/20',
-    badge: 'bg-amber-400 text-white',
-  },
-  low: {
-    label: 'Baja',
-    cls:   'border-l-4 border-l-blue-400 border border-blue-200 bg-blue-50 dark:border-slate-700 dark:border-l-blue-400 dark:bg-blue-950/20',
-    badge: 'bg-blue-400 text-white',
-  },
-}
-
-function AlertCard({ alert }) {
-  const cfg         = SEVERITY_CONFIG[alert.severity] || SEVERITY_CONFIG.medium
-  const orderPlaced = alert.metadata?.order_placed === true
-  const date        = alert.created_at
-    ? new Date(alert.created_at).toLocaleString('es-CL', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
-    : ''
-
-  return (
-    <article className={cn('rounded-xl p-4 shadow-sm', cfg.cls)}>
-      <div className="flex items-center gap-2 mb-1 flex-wrap">
-        <span className={cn('inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide', cfg.badge)}>
-          {cfg.label}
-        </span>
-        {orderPlaced && (
-          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide">
-            <ShoppingCart size={9} />
-            Se necesita Pedido
-          </span>
-        )}
-        {alert.status === 'resolved' && !orderPlaced && (
-          <span className="inline-flex items-center rounded-full bg-green-100 text-green-700 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide">
-            Solucionada
-          </span>
-        )}
-        {alert.status === 'resolved' && orderPlaced && (
-          <span className="inline-flex items-center rounded-full bg-green-100 text-green-700 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide">
-            Solucionada vía pedido
-          </span>
-        )}
-        <span className="text-[10px] text-[hsl(var(--muted-foreground))]">{date}</span>
-      </div>
-      <h4 className="text-sm font-bold text-[hsl(var(--foreground))]">{alert.title}</h4>
-      <p className="mt-0.5 text-xs text-[hsl(var(--muted-foreground))]">{alert.message}</p>
-    </article>
-  )
-}
 
 const STAGGER = {
   hidden: {},
@@ -101,19 +40,25 @@ function InventoryHub() {
   const selectedLocal = useSelectedLocal(localId)
 
   const nav = (path) => navigate(`/local/${localId}/${path}`, { state: { local: selectedLocal } })
+  // Sin backend de proveedores / compras semanales no se ofrecen esos accesos.
+  const suppliersEnabled = isV2FeatureEnabled('suppliers')
+  const purchasesEnabled = isV2FeatureEnabled('weeklyPurchases')
+  const guideSections = [
+    'Menú (los productos del local)',
+    'Control de stock (gestión detallada)',
+    ...(suppliersEnabled ? ['Proveedores (gestión de proveedores)'] : []),
+    ...(isV2FeatureEnabled('recipes') ? ['Recetas (fórmulas y costos)'] : []),
+    ...(purchasesEnabled ? ['Compras Semanales (órdenes de compra)'] : []),
+  ]
+  const guideSectionsText = guideSections.length > 1
+    ? `${guideSections.slice(0, -1).join(', ')} y ${guideSections[guideSections.length - 1]}`
+    : guideSections[0]
 
   const [kpis, setKpis]           = useState(null)
   const [kpisLoading, setKL]      = useState(true)
   const [items, setItems]         = useState([])
   const [itemsLoading, setIL]     = useState(true)
   const [guideOpen, setGuideOpen] = useState(false)
-
-  const { alerts: hookAlerts, loading: alertsLoading } = useAlerts(localId)
-
-  const inventoryAlerts = useMemo(
-    () => hookAlerts.filter((a) => a.type === 'inventory_stock' && a.status === 'pending'),
-    [hookAlerts]
-  )
 
   const loadKpis = useCallback(async () => {
     if (!localId) { setKL(false); return }
@@ -194,8 +139,8 @@ function InventoryHub() {
                   { icon: Package, color: 'text-[hsl(var(--primary))]', title: 'Resumen de inventario', desc: 'Los indicadores superiores muestran la cantidad total de productos, cuántos tienen stock óptimo, cuántos están bajos, cuántos en estado crítico y el valor total del inventario.' },
                   { icon: TrendingDown, color: 'text-amber-600', title: 'Distribución de stock', desc: 'Gráfico de barras que muestra cuántos productos están en cada nivel de stock (Óptimo, Bajo, Crítico) para ver de un vistazo la situación general.' },
                   { icon: AlertTriangle, color: 'text-red-600', title: 'Productos críticos', desc: 'Lista los 5 productos con menor stock comparando su cantidad actual contra el mínimo definido. Los más urgentes aparecen primero.' },
-                  { icon: ShoppingCart, color: 'text-blue-600', title: 'Alertas de inventario', desc: 'Notificaciones automáticas de productos que necesitan reposición urgente. Haz clic en "Ir a Pedidos" para crear una orden de compra.' },
-                  { icon: ArrowRight, color: 'text-[hsl(var(--primary))]', title: 'Secciones del inventario', highlight: true, desc: 'Desde el menú lateral accedes a: Stock (gestión detallada), Proveedores (gestión de proveedores), Recetas (fórmulas y costos) y Compras Semanales (órdenes de compra).' },
+                  ...(purchasesEnabled ? [{ icon: ShoppingCart, color: 'text-blue-600', title: 'Pedidos', desc: 'Haz clic en "Ir a Pedidos" para crear una orden de compra.' }] : []),
+                  { icon: ArrowRight, color: 'text-[hsl(var(--primary))]', title: 'Secciones del inventario', highlight: true, desc: `Desde el menú lateral accedes a: ${guideSectionsText}.` },
                 ].map(({ icon: Icon, color, title, desc, highlight }) => (
                   <div key={title} className={`flex gap-3 rounded-xl p-3 ${highlight ? 'bg-[hsl(var(--primary)/0.08)] border border-[hsl(var(--primary)/0.2)]' : 'bg-[hsl(var(--muted)/0.4)]'}`}>
                     <div className={`mt-0.5 shrink-0 ${color}`}><Icon size={15} /></div>
@@ -331,39 +276,14 @@ function InventoryHub() {
               </Card>
             </div>
 
-            {/* Alertas de inventario — misma lógica y diseño que AdministrativeModule */}
-            <Card>
-              <CardHeader className="pb-3">
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-base flex items-center gap-2">
-                    <AlertTriangle size={18} className="text-amber-500" />
-                    Alertas de inventario
-                    {inventoryAlerts.length > 0 && (
-                      <Badge variant="destructive" className="text-xs px-2 py-0.5">{inventoryAlerts.length}</Badge>
-                    )}
-                  </CardTitle>
-                  <Button type="button" variant="ghost" size="sm" onClick={() => nav('inventario/compras-semanales')} className="gap-1 text-sm">
-                    Ir a Pedidos <ArrowRight size={14} />
-                  </Button>
-                </div>
-              </CardHeader>
-              <CardContent className="pt-0">
-                {alertsLoading ? (
-                  <LoadingSpinner message="Cargando alertas..." />
-                ) : inventoryAlerts.length === 0 ? (
-                  <div className="flex items-center gap-2 py-4 text-sm text-emerald-600">
-                    <CheckCircle size={16} />
-                    Todo el inventario está en niveles óptimos.
-                  </div>
-                ) : (
-                  <div className="flex flex-col gap-2">
-                    {inventoryAlerts.map((alert) => (
-                      <AlertCard key={alert.id} alert={alert} />
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+            {/* T-39: el motor de alertas (/alerts) no existe en V2; queda solo el acceso a Pedidos. */}
+            {purchasesEnabled && (
+              <div className="flex justify-end">
+                <Button type="button" variant="ghost" size="sm" onClick={() => nav('inventario/compras-semanales')} className="gap-1 text-sm">
+                  Ir a Pedidos <ArrowRight size={14} />
+                </Button>
+              </div>
+            )}
           </>
         )}
       </div>

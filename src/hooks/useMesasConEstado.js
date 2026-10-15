@@ -2,12 +2,14 @@ import { useState, useEffect, useCallback } from 'react'
 import {
   createMesa as createMesaV2,
   deleteMesa as deleteMesaV2,
-  listMesas,
+  listMesasConTotales,
   updateMesa as updateMesaV2,
 } from '../lib/salesApi'
 
 /**
- * Mesas con estado (libre/ocupada). V2: status available|occupied mapeado a state.
+ * Mesas con estado (libre/ocupada) y el total de su pedido en curso.
+ * V2: status available|occupied mapeado a state; el importe sale de las órdenes
+ * abiertas del local, porque MesaOut no trae totales.
  */
 export function useMesasConEstado(localId) {
   const [mesas, setMesas] = useState([])
@@ -19,7 +21,7 @@ export function useMesasConEstado(localId) {
     try {
       setLoading(true)
       setError(null)
-      setMesas(await listMesas(localId))
+      setMesas(await listMesasConTotales(localId))
     } catch (err) {
       console.error('Error al cargar mesas:', err)
       let errorMessage = err.message || 'Error al cargar mesas'
@@ -45,17 +47,14 @@ export function useMesasConEstado(localId) {
   }, [localId, fetchMesas])
 
   const updateMesa = useCallback(async ({ id, name, capacidad, zona, is_active }) => {
-    void capacidad
-    void zona
-    void is_active
-    const data = await updateMesaV2(id, { name })
+    // A-05: la zona y el estado activo ahora se guardan.
+    const data = await updateMesaV2(id, { name, capacidad, zona, is_active })
     await fetchMesas()
     return data
   }, [fetchMesas])
 
   const deleteMesa = useCallback(async (id) => {
-    void id
-    await deleteMesaV2()
+    await deleteMesaV2(id)
     await fetchMesas()
   }, [fetchMesas])
 

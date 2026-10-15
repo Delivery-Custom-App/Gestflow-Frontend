@@ -5,7 +5,8 @@ import {
   ChevronDown, ChevronUp, Wifi,
   CheckCircle2, Link2, Settings2,
 } from 'lucide-react'
-import { apiRequest, setPointDeviceMode } from '../../lib/apiClient'
+import { apiRequest } from '../../lib/apiClient'
+import { ayudaDelModo, cambiarModoLector, listarLectores } from '../../lib/lectoresApi'
 import { isV2FeatureEnabled } from '../../lib/v2Features'
 import { toast } from 'sonner'
 
@@ -46,6 +47,7 @@ export default function MPConfigDrawer({ localId, onClose, open = true }) {
   const [manualForm, setManualForm]   = useState(EMPTY_MANUAL)
   const [saving, setSaving]           = useState(false)
   const [togglingMode, setTogglingMode] = useState(null)
+  const [lectores, setLectores] = useState([])   // inventario real del local (/pos-machines)
 
   const loading = mpStatus === undefined
 
@@ -63,6 +65,11 @@ export default function MPConfigDrawer({ localId, onClose, open = true }) {
       } else {
         setRegistered([])
       }
+
+      // Inventario real de lectores del local, el mismo que lee la app móvil.
+      const maquinas = await listarLectores(localId).catch(() => [])
+      if (isStale()) return
+      setLectores(maquinas)
     } catch (err) {
       if (isStale()) return
       setMpStatus(null)
@@ -271,7 +278,7 @@ export default function MPConfigDrawer({ localId, onClose, open = true }) {
     const nextMode = pos.operating_mode === 'PDV' ? 'STANDALONE' : 'PDV'
     setTogglingMode(pos.id)
     try {
-      await setPointDeviceMode(pos.mp_pos_id, nextMode)
+      await cambiarModoLector(pos.mp_pos_id, nextMode)
       toast.success(nextMode === 'PDV' ? 'Cobro automático activado' : 'Cobro manual activado')
       await fetchAll()
     } catch (err) {
@@ -503,6 +510,47 @@ export default function MPConfigDrawer({ localId, onClose, open = true }) {
                     ))}
                   </ul>
                 )}
+              </section>
+            </>
+          )}
+
+          {/* ── LECTORES DEL LOCAL (inventario real, /pos-machines) ── */}
+          {lectores.length > 0 && (
+            <>
+              <div className="border-t border-[hsl(var(--border))]" />
+              <section className="space-y-3">
+                <div>
+                  <p className="text-sm font-semibold text-[hsl(var(--foreground))]">Lectores del local</p>
+                  <p className="text-xs text-[hsl(var(--muted-foreground))]">
+                    Los que el sistema tiene registrados, con el modo en el que está cada uno.
+                  </p>
+                </div>
+                <ul className="space-y-2">
+                  {lectores.map((lector) => (
+                    <li key={lector.id} className="flex items-start justify-between gap-3 p-3 border border-[hsl(var(--border))] rounded-xl bg-[hsl(var(--card))]">
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-[hsl(var(--foreground))] truncate">
+                          {lector.name || 'Lector sin nombre'}
+                        </p>
+                        <p className="text-xs text-[hsl(var(--muted-foreground))]">
+                          {lector.modo}
+                          {ayudaDelModo(lector.operating_mode) ? ` · ${ayudaDelModo(lector.operating_mode)}` : ''}
+                        </p>
+                      </div>
+                      <span className={`shrink-0 text-[10px] font-semibold px-2 py-0.5 rounded-full ${
+                        lector.activo
+                          ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-400'
+                          : 'bg-[hsl(var(--muted))] text-[hsl(var(--muted-foreground))]'
+                      }`}>
+                        {lector.activo ? 'Activo' : 'Inactivo'}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+                <p className="text-xs text-[hsl(var(--muted-foreground))]">
+                  El modo se cambia desde la terminal registrada de arriba: el cambio viaja a MercadoPago
+                  y necesita la cuenta conectada.
+                </p>
               </section>
             </>
           )}

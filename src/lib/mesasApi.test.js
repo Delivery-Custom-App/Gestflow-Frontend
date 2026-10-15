@@ -1,0 +1,157 @@
+/**
+ * Mesas: el mapa mostraba datos que no eran reales.
+ *
+ * La capacidad venía del backend como `capacity` y el front leía `capacidad`,
+ * así que siempre caía al valor por defecto de la tarjeta. El alta exigía
+ * capacidad y zona, y las descartaba antes de enviar la petición. Y el total
+ * del pedido en curso no se mostraba nunca.
+ */
+import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { apiRequest } from './apiClient'
+import { createMesa, deleteMesa, listMesas, listMesasConTotales, mapMesaOut, reactivarMesa, updateMesa } from './salesApi'
+
+vi.mock('./apiClient', () => ({ apiRequest: vi.fn() }))
+
+const rutas = () => apiRequest.mock.calls.map(([p]) => String(p))
+
+describe('Mesas', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    apiRequest.mockResolvedValue([])
+  })
+
+  it('lee la capacidad que entrega el backend, no un valor por defecto', () => {
+    expect(mapMesaOut({ id: 'm1', nombre: 'Mesa 1', status: 'available', capacity: 6 }).capacidad).toBe(6)
+  })
+
+  it('sin capacidad registrada devuelve null en vez de inventar un número', () => {
+    expect(mapMesaOut({ id: 'm1', nombre: 'Mesa 1', status: 'available', capacity: null }).capacidad).toBeNull()
+  })
+
+  it('A-05: lee la zona y si está activa', () => {
+    expect(mapMesaOut({ id: 'm1', nombre: 'Mesa 1', status: 'available', zona: 'Terraza' }).zona).toBe('Terraza')
+    expect(mapMesaOut({ id: 'm1', nombre: 'Mesa 1', status: 'available', zona: null }).zona).toBeNull()
+    expect(mapMesaOut({ id: 'm1', nombre: 'Mesa 1', is_active: false }).is_active).toBe(false)
+    expect(mapMesaOut({ id: 'm1', nombre: 'Mesa 1' }).is_active).toBe(true)
+  })
+
+  it('A-05: listar dadas de baja, reactivar, crear y editar con zona', async () => {
+    apiRequest.mockResolvedValue([])
+    await listMesas('loc-1', { incluirInactivas: true })
+    expect(apiRequest).toHaveBeenLastCalledWith('/mesas?local_id=loc-1&include_inactive=true')
+
+    apiRequest.mockResolvedValue({ id: 'm1', nombre: 'Mesa 1', is_active: true })
+    await reactivarMesa('m1')
+    expect(apiRequest).toHaveBeenLastCalledWith('/mesas/m1', { method: 'PATCH', body: { is_active: true } })
+
+    await createMesa({ local_id: 'loc-1', name: 'Mesa 9', capacidad: '2', zona: 'Salón' })
+    expect(apiRequest.mock.lastCall[1].body).toMatchObject({ nombre: 'Mesa 9', zona: 'Salón' })
+
+    await updateMesa('m1', { name: 'Mesa 1', zona: '' })
+    expect(apiRequest.mock.lastCall[1].body).toEqual({ nombre: 'Mesa 1', zona: null })
+  })
+
+  it('crear una mesa guarda la capacidad en el backend', async () => {
+    apiRequest.mockResolvedValue({ id: 'm1', nombre: 'Mesa 5', status: 'available', capacity: 8 })
+
+    const mesa = await createMesa({ local_id: 'loc-1', name: 'Mesa 5', capacidad: '8' })
+
+    expect(apiRequest).toHaveBeenCalledWith('/mesas', {
+      method: 'POST',
+      body: { local_id: 'loc-1', nombre: 'Mesa 5', status: 'available', capacity: 8 },
+    })
+    expect(mesa.capacidad).toBe(8)
+  })
+
+  it('crear sin capacidad no manda el campo, en vez de mandar basura', async () => {
+    apiRequest.mockResolvedValue({ id: 'm1', nombre: 'Mesa 6', status: 'available' })
+
+    await createMesa({ local_id: 'loc-1', name: 'Mesa 6', capacidad: '' })
+
+    expect(apiRequest).toHaveBeenCalledWith('/mesas', {
+      method: 'POST',
+      body: { local_id: 'loc-1', nombre: 'Mesa 6', status: 'available' },
+    })
+  })
+
+  it('editar una mesa también guarda la capacidad', async () => {
+    apiRequest.mockResolvedValue({ id: 'm1', nombre: 'Mesa 1', status: 'available', capacity: 2 })
+
+    await updateMesa('m1', { name: 'Mesa 1', capacidad: 2 })
+
+    expect(apiRequest).toHaveBeenCalledWith('/mesas/m1', {
+      method: 'PATCH',
+      body: { nombre: 'Mesa 1', capacity: 2 },
+    })
+  })
+
+  it('una mesa ocupada muestra el total de su pedido en curso', async () => {
+    apiRequest.mockImplementation((path) => {
+      if (path.startsWith('/mesas')) {
+        return Promise.resolve([
+          { id: 'm1', nombre: 'Mesa 1', status: 'occupied', capacity: 4 },
+          { id: 'm2', nombre: 'Mesa 2', status: 'available', capacity: 2 },
+        ])
+      }
+      if (path.startsWith('/orders?')) {
+        const query = new URLSearchParams(path.split('?')[1])
+        const statuses = query.getAll('status')
+        if (statuses.length !== 3 || !statuses.includes('open')) return Promise.resolve([])
+        return Promise.resolve([
+          { id: 'o1', mesa_id: 'm1', status: 'open', total: '9400.00' },
+          { id: 'o2', mesa_id: 'm1', status: 'open', total: '600.00' },
+          { id: 'o3', mesa_id: 'm1', status: 'preparing', total: '1000.00' },
+        ])
+      }
+      return Promise.resolve([])
+    })
+
+    const mesas = await listMesasConTotales('loc-1')
+
+    // Solo pide las órdenes en curso, no el histórico del local.
+    const request = apiRequest.mock.calls.find(([path]) => String(path).startsWith('/orders?'))
+    const query = new URLSearchParams(request[0].split('?')[1])
+    expect(query.getAll('status')).toEqual(['open', 'preparing', 'ready'])
+    expect(query.get('limit')).toBe('500')
+    expect(request[1]).toEqual({ withTotal: true })
+    expect(rutas().some((r) => r.startsWith('/orders') && !r.includes('status='))).toBe(false)
+    expect(mesas[0]).toMatchObject({ nombre: 'Mesa 1', state: 'ocupada', capacidad: 4, total: 11000 })
+    expect(mesas[0].ordenes_en_curso.map((o) => o.id)).toEqual(['o1', 'o2', 'o3'])
+    expect(mesas[1].total).toBeNull()
+    expect(mesas[1].ordenes_en_curso).toEqual([])
+  })
+
+  it('si las órdenes no se pueden traer, las mesas se listan igual sin total', async () => {
+    apiRequest.mockImplementation((path) => {
+      if (path.startsWith('/mesas')) return Promise.resolve([{ id: 'm1', nombre: 'Mesa 1', status: 'occupied' }])
+      return Promise.reject(new Error('500'))
+    })
+
+    const mesas = await listMesasConTotales('loc-1')
+
+    expect(mesas).toHaveLength(1)
+    expect(mesas[0].total).toBeNull()
+  })
+})
+
+describe('Dar de baja una mesa (T-70)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    apiRequest.mockResolvedValue(null)
+  })
+
+  it('llama a DELETE /mesas/{id} con el id de la mesa', async () => {
+    await deleteMesa('m 7')
+    expect(apiRequest).toHaveBeenCalledWith('/mesas/m%207', { method: 'DELETE' })
+  })
+
+  it('sin id no llama a la API', async () => {
+    await expect(deleteMesa()).rejects.toThrow('Falta indicar qué mesa dar de baja')
+    expect(apiRequest).not.toHaveBeenCalled()
+  })
+
+  it('el 409 del backend llega tal cual a la pantalla', async () => {
+    apiRequest.mockRejectedValue(new Error('409: La mesa está dentro de un grupo'))
+    await expect(deleteMesa('m1')).rejects.toThrow('409: La mesa está dentro de un grupo')
+  })
+})

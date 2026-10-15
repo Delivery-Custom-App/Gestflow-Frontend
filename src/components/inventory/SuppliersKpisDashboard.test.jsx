@@ -6,6 +6,13 @@ import SuppliersKpisDashboard from './SuppliersKpisDashboard'
 import { AuthProvider } from '../../context/AuthContext'
 import * as providersApi from '../../lib/providersApi'
 
+// Estas pruebas describen la pantalla CON el módulo disponible: se fuerza la
+// bandera para que sigan siendo válidas cuando el backend exista.
+vi.mock('../../lib/v2Features', async (importOriginal) => ({
+  ...(await importOriginal()),
+  isV2FeatureEnabled: (key) => (key === 'suppliers' ? true : false),
+}))
+
 vi.mock('../../lib/apiClient', () => ({
   getAuthContext: vi.fn(() => Promise.resolve({ token: 'test-token', businessId: 'biz-1' })),
   getOptionalAuthContext: vi.fn(() => Promise.resolve({ token: 'test-token', businessId: 'biz-1' })),

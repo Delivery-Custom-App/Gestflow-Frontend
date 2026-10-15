@@ -4,6 +4,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
 
+// A-05: la zona es opcional, texto libre de hasta 50 caracteres («Terraza», «Salón»).
 const INITIAL_FORM = { name: '', capacidad: '', zona: '' }
 
 export default function CreateMesaModal({ mesas, onClose, onSubmit }) {
@@ -31,9 +32,6 @@ export default function CreateMesaModal({ mesas, onClose, onSubmit }) {
       next.capacidad = 'La capacidad es obligatoria'
     } else if (Number(form.capacidad) <= 0 || !Number.isInteger(Number(form.capacidad))) {
       next.capacidad = 'Ingresa un número entero mayor a 0'
-    }
-    if (!form.zona.trim()) {
-      next.zona = 'La zona es obligatoria'
     }
     return next
   }
@@ -113,20 +111,9 @@ export default function CreateMesaModal({ mesas, onClose, onSubmit }) {
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor="mesa-zona">
-              Zona <span className="text-[hsl(var(--destructive))]">*</span>
-            </Label>
-            <Input
-              id="mesa-zona"
-              name="zona"
-              type="text"
-              placeholder="Ingresar zona"
-              value={form.zona}
-              onChange={handleChange}
-              disabled={submitting}
-              className={cn(errors.zona && 'border-[hsl(var(--destructive))]')}
-            />
-            {errors.zona && <p className="text-xs text-[hsl(var(--destructive))]">{errors.zona}</p>}
+            <Label htmlFor="mesa-zona">Zona (opcional)</Label>
+            <Input id="mesa-zona" name="zona" type="text" maxLength={50} placeholder="Ej: Terraza, Salón"
+              value={form.zona} onChange={handleChange} disabled={submitting} />
           </div>
 
           {serverError && (

@@ -24,7 +24,7 @@ Guía: [`docs/referencia/INTEGRATION_BACKEND_V2.md`](docs/referencia/INTEGRATION
 | POS | `/local/:id/pos` | Cajero, Empleado, Admin, Admin Negocio, Superadmin |
 | Inventario | `/local/:id/inventario` | Admin, Admin Negocio, Superadmin |
 | Administrativo | `/local/:id/administrativo` | Admin, Admin Negocio, Superadmin (subset para workers) |
-| RRHH | `/local/:id/rrhh` | Todos — pero solo Admin Negocio/Superadmin gestionan fichas/turnos; Admin y workers solo piden permisos (ver `docs/manuales/MANUAL_RRHH.md`) |
+| RRHH | `/local/:id/rrhh` | ⚠ Apagado por ahora (bandera `hrModule` en `src/lib/v2Features.js`): sin menú ni ruta para ningún rol, código conservado (ver `docs/manuales/MANUAL_RRHH.md`) |
 | Tus Locales | `/admin` | Admin Negocio (dueño de franquicia) |
 | Gestor de Negocios | `/gestor/*` | Superadmin (ver `docs/manuales/MANUAL_GESTOR_NEGOCIOS.md`) |
 
@@ -33,7 +33,7 @@ Guía: [`docs/referencia/INTEGRATION_BACKEND_V2.md`](docs/referencia/INTEGRATION
 - **Superadmin** — plataforma completa, gestiona todos los negocios (`/gestor/*`)
 - **Admin Negocio** (Owner) — dueño de una franquicia, gestiona sus locales y usuarios (`/admin`, `/usuarios`)
 - **Admin** — gestiona un solo local asignado
-- **Cajero** / **Empleado** — operan el POS y RRHH de su local asignado
+- **Cajero** / **Empleado** — operan el POS de su local asignado
 
 ## Desarrollo local (Backend V2)
 

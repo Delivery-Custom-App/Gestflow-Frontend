@@ -5,45 +5,28 @@ import {
   postInventoryNewProduct,
 } from '../../lib/inventoryApi'
 import CategoryTypeaheadField from './CategoryTypeaheadField'
+import InterruptorSePrepara from './InterruptorSePrepara'
+import { modoDeStock } from '../../lib/tipoProducto'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
 import { X, Package } from 'lucide-react'
-
-const UNITS = [
-  { value: 'unidad', label: 'Unidad' },
-  { value: 'kg',     label: 'kg'     },
-  { value: 'g',      label: 'g'      },
-  { value: 'L',      label: 'L'      },
-  { value: 'ml',     label: 'ml'     },
-]
 
 const numInputCls =
   'h-9 w-full rounded-md border border-[hsl(var(--border))] px-3 text-sm shadow-sm ' +
   'focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary)/0.3)] ' +
   '[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none'
 
-const selectCls =
-  'h-9 w-full rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3 py-1 text-sm shadow-sm ' +
-  'focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary)/0.3)] disabled:cursor-not-allowed disabled:opacity-50'
-
 function NuevoProductoModal({ open, localId, onClose, onSuccess }) {
   const [submitting,       setSubmitting]       = useState(false)
   const [error,            setError]            = useState('')
   const [productName,      setProductName]      = useState('')
   const [categoryName,     setCategoryName]     = useState('')
-  const [unit,             setUnit]             = useState('unidad')
   const [currentStock,     setCurrentStock]     = useState('0')
   const [minStock,         setMinStock]         = useState('0')
   const [maxStock,         setMaxStock]         = useState('0')
   const [unitCost,         setUnitCost]         = useState('')
+  const [prepara,          setPrepara]          = useState(false)
   const [categories,       setCategories]       = useState([])
   const [catsLoading,      setCatsLoading]      = useState(false)
 
@@ -67,17 +50,26 @@ function NuevoProductoModal({ open, localId, onClose, onSuccess }) {
     if (!productName.trim())                    { setError('Ingresa el nombre del producto.'); return }
     if (!categoryName.trim())                   { setError('Escribe la categoría y pulsa Enter para confirmarla.'); return }
     if (!Number.isFinite(cost) || cost <= 0)    { setError('El costo unitario debe ser mayor que 0.'); return }
+    // Máximo en 0 = sin máximo. Uno menor que el mínimo lo rechaza la base (antes salía como "Sin conexión").
+    const maximo = Number(maxStock) || 0
+    if (!prepara && maximo > 0 && maximo < (Number(minStock) || 0)) {
+      setError('El stock máximo no puede ser menor que el mínimo. Déjalo en 0 si no tiene máximo.')
+      return
+    }
 
     setSubmitting(true)
     try {
       await postInventoryNewProduct(localId, {
         productName: productName.trim(),
         category:    categoryName.trim(),
-        unit,
-        currentStock: Number(currentStock) || 0,
-        minStock:     Number(minStock)     || 0,
-        maxStock:     Number(maxStock)     || 0,
+        // Si se prepara no lleva stock: las cantidades no se piden ni se envían.
+        ...(prepara ? {} : {
+          currentStock: Number(currentStock) || 0,
+          minStock:     Number(minStock)     || 0,
+          maxStock:     Number(maxStock)     || null,
+        }),
         unitCost:     Math.round(cost),
+        stock_deduction_mode: modoDeStock(prepara),
       })
       onSuccess?.()
       resetForm()
@@ -94,7 +86,7 @@ function NuevoProductoModal({ open, localId, onClose, onSuccess }) {
     setError('')
     setProductName('')
     setCategoryName('')
-    setUnit('unidad')
+    setPrepara(false)
     setCurrentStock('0')
     setMinStock('0')
     setMaxStock('0')
@@ -195,20 +187,15 @@ function NuevoProductoModal({ open, localId, onClose, onSuccess }) {
             </div>
           </div>
 
-          {/* Formato + Costo unitario */}
+          <InterruptorSePrepara id="np-se-prepara" checked={prepara} onChange={setPrepara} disabled={submitting} />
+
+          {/* Formato + Costo unitario. El stock se lleva solo por unidades (sin kg, g, L ni ml). */}
           <div className="grid grid-cols-2 gap-4">
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="np-unit">Formato del Producto</Label>
-              <Select value={unit} onValueChange={setUnit} disabled={submitting}>
-                <SelectTrigger id="np-unit" className="h-9 text-sm">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent className="z-[600]">
-                  {UNITS.map((u) => (
-                    <SelectItem key={u.value} value={u.value}>{u.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <span className="text-sm font-medium text-[hsl(var(--foreground))]">Formato</span>
+              <p className="flex h-9 items-center rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--muted)/0.4)] px-3 text-sm text-[hsl(var(--foreground))]">
+                Unidad
+              </p>
             </div>
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="np-unit-cost">Costo unitario (CLP) <span className="text-red-500">*</span></Label>
@@ -226,7 +213,8 @@ function NuevoProductoModal({ open, localId, onClose, onSuccess }) {
             </div>
           </div>
 
-          {/* Niveles de stock */}
+          {/* Niveles de stock: solo para lo que se cuenta por unidades. */}
+          {!prepara && (
           <fieldset className="border border-[hsl(var(--border))] rounded-lg px-4 pb-4 pt-2">
             <legend className="text-xs font-semibold text-[hsl(var(--muted-foreground))] uppercase tracking-wide px-1">
               Niveles de stock actuales
@@ -270,17 +258,7 @@ function NuevoProductoModal({ open, localId, onClose, onSuccess }) {
               </div>
             </div>
           </fieldset>
-
-          {/* Proveedor (opcional — módulo aún no disponible en Backend V2) */}
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="np-supplier">Proveedor</Label>
-            <select id="np-supplier" value="" disabled className={selectCls}>
-              <option value="">Proveedores no disponibles aún (Backend V2)</option>
-            </select>
-            <p className="text-xs text-[hsl(var(--muted-foreground))]">
-              El módulo de proveedores todavía no está disponible en Backend V2 — podés crear el producto sin asignarle uno.
-            </p>
-          </div>
+          )}
 
         </form>
 

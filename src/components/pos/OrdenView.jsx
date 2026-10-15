@@ -5,12 +5,14 @@ import { useOrderManagement } from '../../hooks/useOrderManagement'
 import { useOrderTotals } from '../../hooks/useOrderTotals'
 import { getSplitPaymentSummary } from '../../lib/apiClient'
 import { setMesaLibre } from '../../lib/salesApi'
+import LiberarMesaModal from './LiberarMesaModal'
+import { useAuth } from '../../context/AuthContext'
 import { isV2FeatureEnabled } from '../../lib/v2Features'
 import MesaDetailModal from './MesaDetailModal'
 import MultiPaymentModal from './MultiPaymentModal'
 import MercadoPagoModal from './MercadoPagoModal'
 import { Button } from '@/components/ui/button'
-import { cn } from '@/lib/utils'
+import { cn, formatCantidad } from '@/lib/utils'
 import {
   STATUS_BADGE,
   STATUS_LABEL,
@@ -22,6 +24,7 @@ import {
 } from './order-panel/orderPrint'
 
 function OrdenView({ mesa, localId, onBack, onTableUpdated }) {
+  const { isWorker } = useAuth()
   const { detail, loading, error: mesaError, refresh } = useMesaDetail(mesa.id)
   const { updateOrderStatus } = useOrderManagement()
   const [cancelLoading, setCancelLoading]       = useState(false)
@@ -32,6 +35,8 @@ function OrdenView({ mesa, localId, onBack, onTableUpdated }) {
   const [splitFullyPaid, setSplitFullyPaid]     = useState(false)
   const [hasSplits, setHasSplits]               = useState(false)
   const [showMPModal, setShowMPModal]           = useState(false)
+  const [showLiberarModal, setShowLiberarModal] = useState(false)
+  const [offerLiberar, setOfferLiberar]         = useState(false)
   const [showMobileMenu, setShowMobileMenu]     = useState(false)
 
   const { allItems, subtotal, iva, total, firstOrder } = useOrderTotals(detail)
@@ -80,19 +85,27 @@ function OrdenView({ mesa, localId, onBack, onTableUpdated }) {
   }, [detail, hasSplits, splitFullyPaid])
 
   // Llamado por MercadoPagoModal al aprobar el pago (order ya COMPLETED vía simulate)
-  const handlePaymentSuccess = useCallback(async () => {
+  const handlePaymentSuccess = useCallback(async (_paymentMethod, tipAmount = 0) => {
     setShowMPModal(false)
     setCobrarLoading(true)
     try {
       await setMesaLibre(mesa.id)
-      openPrintWindow({ mesa, firstOrder, allItems, subtotal, iva, total })
+      openPrintWindow({ mesa, firstOrder, allItems, subtotal, iva, total, tipAmount, totalWithTip: total + Number(tipAmount || 0) })
       onTableUpdated?.()
       onBack()
     } catch (err) {
       setErrorMsg(err.message || 'Error al finalizar el cobro')
+      if (Number(err?.status) === 409 && !isWorker) setOfferLiberar(true)
       setCobrarLoading(false)
     }
-  }, [mesa, firstOrder, allItems, subtotal, iva, total, onTableUpdated, onBack])
+  }, [mesa, firstOrder, allItems, subtotal, iva, total, onTableUpdated, onBack, isWorker])
+
+  const handleMesaLiberada = useCallback(() => {
+    setShowLiberarModal(false)
+    setOfferLiberar(false)
+    onTableUpdated?.()
+    onBack()
+  }, [onTableUpdated, onBack])
 
   const handlePrintChargeDetail = useCallback(() => {
     if (!detail?.active_orders?.length) return
@@ -142,10 +155,20 @@ function OrdenView({ mesa, localId, onBack, onTableUpdated }) {
         />
       )}
 
+      {showLiberarModal && (
+        <LiberarMesaModal
+          mesa={mesa}
+          totalPendiente={total}
+          onClose={() => setShowLiberarModal(false)}
+          onDone={handleMesaLiberada}
+        />
+      )}
+
       {firstOrder && (
         <MercadoPagoModal
           open={showMPModal}
           orderId={firstOrder.id}
+          createdAt={firstOrder.created_at}
           total={total}
           description={`Mesa ${mesa.name || mesa.numero || ''}`.trim()}
           onSuccess={handlePaymentSuccess}
@@ -180,6 +203,17 @@ function OrdenView({ mesa, localId, onBack, onTableUpdated }) {
           {/* Acciones principales */}
           <div className="px-4 lg:px-6 pb-4">
             <div className="flex flex-wrap gap-2">
+              {!isWorker && (detail?.active_orders?.length > 0 || mesa.state === 'ocupada') && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => { setErrorMsg(''); setOfferLiberar(false); setShowLiberarModal(true) }}
+                  disabled={cobrarLoading || cancelLoading}
+                  className="h-11 rounded-xl"
+                >
+                  Liberar mesa
+                </Button>
+              )}
               {/* Acción principal: Cobrar */}
               <Button
                 onClick={handleCobrar}
@@ -308,8 +342,13 @@ function OrdenView({ mesa, localId, onBack, onTableUpdated }) {
         </div>
 
         {visibleError && (
-          <div className="mx-6 mt-3 px-3 py-2 rounded-lg bg-red-50 border border-red-200 text-sm text-red-600">
+          <div role="alert" className="mx-6 mt-3 px-3 py-2 rounded-lg bg-red-50 border border-red-200 text-sm text-red-600">
             {visibleError}
+            {offerLiberar && !isWorker && (
+              <Button type="button" variant="outline" size="sm" className="ml-3" onClick={() => setShowLiberarModal(true)}>
+                Liberar mesa
+              </Button>
+            )}
           </div>
         )}
 
@@ -421,7 +460,7 @@ function OrdenView({ mesa, localId, onBack, onTableUpdated }) {
                         {allItems.map((item) => (
                           <tr key={item.id} className="border-b border-[hsl(var(--border))] last:border-0">
                             <td className="px-3 py-2.5 font-medium text-[hsl(var(--foreground))]">
-                              {item.quantity}
+                              {formatCantidad(item.quantity)}
                             </td>
                             <td className="px-3 py-2.5 text-[hsl(var(--foreground))]">
                               <div className="space-y-0.5">
@@ -450,7 +489,7 @@ function OrdenView({ mesa, localId, onBack, onTableUpdated }) {
                     <h4 className="text-sm font-semibold text-[hsl(var(--foreground))] mb-3">Facturación</h4>
                     <div className="grid grid-cols-3 gap-4">
                       <div>
-                        <p className="text-xs text-[hsl(var(--muted-foreground))] mb-0.5">Subtotal</p>
+                        <p className="text-xs text-[hsl(var(--muted-foreground))] mb-0.5">Subtotal (neto)</p>
                         <p className="text-sm font-medium text-[hsl(var(--foreground))]">
                           ${subtotal.toLocaleString('es-CL')}
                         </p>

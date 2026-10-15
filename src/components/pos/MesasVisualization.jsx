@@ -1,5 +1,5 @@
 import { memo } from 'react'
-import { Pencil, Trash2, Users, DollarSign } from 'lucide-react'
+import { Pencil, Trash2, Users, DollarSign, Link2, Unlink, Check, UserRound } from 'lucide-react'
 import { formatCLP } from '../../lib/formatCLP'
 import { cn } from '@/lib/utils'
 
@@ -7,7 +7,11 @@ import { cn } from '@/lib/utils'
  * Grilla de mesas pulida inspirada en:
  * https://dribbble.com/shots/27183895-Restaurant-Dashboard-Table-Management
  */
-function MesasVisualization({ mesas = [], loading = false, onMesaSelect = null, onEditMesa = null, onDeleteMesa = null }) {
+function MesasVisualization({
+  mesas = [], loading = false, onMesaSelect = null, onEditMesa = null, onDeleteMesa = null,
+  gruposPorMesa = null, modoAgrupar = false, seleccionadas = null, onToggleSeleccion = null, onDeshacerGrupo = null,
+  atencionPorMesa = null,
+}) {
   if (loading) {
     return (
       <div className="p-8 flex items-center justify-center">
@@ -38,6 +42,12 @@ function MesasVisualization({ mesas = [], loading = false, onMesaSelect = null, 
           onMesaSelect={onMesaSelect}
           onEditMesa={onEditMesa}
           onDeleteMesa={onDeleteMesa}
+          grupo={gruposPorMesa?.get(String(mesa.id)) || null}
+          modoAgrupar={modoAgrupar}
+          seleccionada={Boolean(seleccionadas?.has(String(mesa.id)))}
+          onToggleSeleccion={onToggleSeleccion}
+          onDeshacerGrupo={onDeshacerGrupo}
+          atencion={atencionPorMesa?.get(String(mesa.id)) || null}
         />
       ))}
     </div>
@@ -77,8 +87,10 @@ const STATE_CONFIG = {
   },
 }
 
+/** Sin capacidad registrada no se inventa un tamaño. */
 function sizeLabel(capacidad) {
-  const n = Number(capacidad) || 4
+  const n = Number(capacidad)
+  if (!Number.isFinite(n) || n <= 0) return null
   if (n <= 2) return 'Pequeña'
   if (n <= 4) return 'Mediana'
   return 'Grande'
@@ -241,15 +253,28 @@ function TableIllustration({ chairs = 4, className, stateKey = 'libre' }) {
   )
 }
 
-const MesaCard = memo(function MesaCard({ mesa, index, onMesaSelect, onEditMesa, onDeleteMesa }) {
+const MesaCard = memo(function MesaCard({
+  mesa, index, onMesaSelect, onEditMesa, onDeleteMesa,
+  grupo = null, modoAgrupar = false, seleccionada = false, onToggleSeleccion = null, onDeshacerGrupo = null,
+  atencion = null,
+}) {
   const stateKey = mesa.is_active === false ? 'inactiva' : (mesa.state || 'libre')
   const stateConfig = STATE_CONFIG[stateKey] || STATE_CONFIG.libre
-  const capacidad = Number(mesa.capacidad) || 4
+  const capacidadNum = Number(mesa.capacidad)
+  const capacidad = Number.isFinite(capacidadNum) && capacidadNum > 0 ? capacidadNum : null
   const total = mesaTotal(mesa)
   const code = mesaCode(mesa, index)
   const staggerClass = `stagger-${Math.min((index % 6) + 1, 6)}`
 
+  // Solo se pueden juntar mesas libres y sin grupo: el backend lo rechaza, así
+  // que la tarjeta no deja seleccionar lo que no se puede.
+  const seleccionable = modoAgrupar && stateKey === 'libre' && !grupo
+
   const handleOpen = () => {
+    if (modoAgrupar) {
+      if (seleccionable) onToggleSeleccion?.(mesa)
+      return
+    }
     if (stateKey !== 'inactiva') onMesaSelect?.(mesa)
   }
 
@@ -263,10 +288,42 @@ const MesaCard = memo(function MesaCard({ mesa, index, onMesaSelect, onEditMesa,
         'shadow-sm hover:shadow-lg',
         stateConfig.border,
         stateKey === 'inactiva' ? 'opacity-50' : 'hover:-translate-y-1',
+        seleccionada && 'ring-2 ring-[hsl(var(--primary))] ring-offset-2',
+        modoAgrupar && !seleccionable && 'opacity-60',
       )}
     >
+      {grupo && (
+        <div className="flex items-center justify-between gap-2 rounded-t-2xl bg-[hsl(var(--primary)/0.1)] px-4 py-1.5">
+          <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-[hsl(var(--primary))]">
+            <Link2 size={12} />
+            {grupo.etiqueta} · {grupo.mesaIds.length} mesas
+            {grupo.capacidad ? ` · ${grupo.capacidad} personas` : ''}
+          </span>
+          {onDeshacerGrupo && !modoAgrupar && (
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onDeshacerGrupo(grupo) }}
+              className="inline-flex items-center gap-1 text-xs font-medium text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--primary))] transition-colors"
+              title="Separar el grupo"
+            >
+              <Unlink size={12} />
+              Separar
+            </button>
+          )}
+        </div>
+      )}
+
+      {seleccionada && (
+        <span className="absolute right-3 top-3 z-10 flex h-6 w-6 items-center justify-center rounded-full bg-[hsl(var(--primary))] text-white shadow">
+          <Check size={14} />
+        </span>
+      )}
+
       <div className="flex items-start justify-between gap-2 p-4 pb-2">
-        <div className="flex items-center gap-1.5 opacity-0 transition-opacity group-hover:opacity-100">
+        <div className={cn(
+          'flex items-center gap-1.5 transition-opacity',
+          modoAgrupar ? 'invisible' : 'opacity-0 group-hover:opacity-100',
+        )}>
           {onEditMesa && (
             <button
               type="button"
@@ -306,13 +363,14 @@ const MesaCard = memo(function MesaCard({ mesa, index, onMesaSelect, onEditMesa,
         className="flex flex-1 flex-col items-center px-4 pb-4 pt-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--primary))]/50 focus-visible:ring-offset-2 disabled:cursor-not-allowed"
       >
         <div className="relative mb-4 text-[hsl(var(--muted-foreground))]">
-          <TableIllustration className="h-32 w-32" chairs={capacidad} stateKey={stateKey} />
+          <TableIllustration className="h-32 w-32" chairs={capacidad ?? 4} stateKey={stateKey} />
           <div className="absolute inset-0 flex items-center justify-center">
             <span className="text-base font-bold tracking-wider text-[hsl(var(--foreground))] drop-shadow-sm">
               {code}
             </span>
           </div>
         </div>
+        {mesa.zona && <p className="-mt-2 mb-2 text-xs text-[hsl(var(--muted-foreground))]" data-testid="zona-mesa">{mesa.zona}</p>}
 
         <div className="w-full space-y-2">
           <div className="flex items-center justify-between rounded-lg bg-[hsl(var(--muted))]/30 px-3 py-2">
@@ -320,7 +378,9 @@ const MesaCard = memo(function MesaCard({ mesa, index, onMesaSelect, onEditMesa,
               <Users size={14} />
               <span className="text-xs font-medium">Capacidad</span>
             </div>
-            <span className="text-sm font-bold text-[hsl(var(--foreground))]">{capacidad}</span>
+            <span className={cn('text-sm font-bold', capacidad == null ? 'text-[hsl(var(--muted-foreground))]' : 'text-[hsl(var(--foreground))]')}>
+              {capacidad ?? 'Sin definir'}
+            </span>
           </div>
           
           <div className="flex items-center justify-between rounded-lg bg-[hsl(var(--muted))]/30 px-3 py-2">
@@ -332,13 +392,31 @@ const MesaCard = memo(function MesaCard({ mesa, index, onMesaSelect, onEditMesa,
               {total != null ? `$${formatCLP(total)}` : '—'}
             </span>
           </div>
+
+          {/* Quién atiende la mesa en curso (y quién la atendía, si se traspasó). */}
+          {atencion && (
+            <div className="flex items-center justify-between gap-2 rounded-lg bg-[hsl(var(--muted))]/30 px-3 py-2">
+              <div className="flex items-center gap-2 text-[hsl(var(--muted-foreground))]">
+                <UserRound size={14} />
+                <span className="text-xs font-medium">Atiende</span>
+              </div>
+              <span className="min-w-0 text-right">
+                <span className="block truncate text-sm font-bold text-[hsl(var(--foreground))]">{atencion.atiende}</span>
+                {atencion.antes && (
+                  <span className="block truncate text-[10px] text-[hsl(var(--muted-foreground))]">antes: {atencion.antes}</span>
+                )}
+              </span>
+            </div>
+          )}
         </div>
 
-        <div className="mt-3 w-full text-center">
-          <span className="inline-block rounded-full bg-[hsl(var(--muted))]/40 px-3 py-1 text-[10px] font-medium uppercase tracking-wider text-[hsl(var(--muted-foreground))]">
-            {sizeLabel(capacidad)}
-          </span>
-        </div>
+        {sizeLabel(capacidad) && (
+          <div className="mt-3 w-full text-center">
+            <span className="inline-block rounded-full bg-[hsl(var(--muted))]/40 px-3 py-1 text-[10px] font-medium uppercase tracking-wider text-[hsl(var(--muted-foreground))]">
+              {sizeLabel(capacidad)}
+            </span>
+          </div>
+        )}
       </button>
     </div>
   )

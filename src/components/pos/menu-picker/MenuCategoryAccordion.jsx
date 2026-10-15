@@ -12,7 +12,7 @@ const ChevronIcon = ({ open }) => (
  * `renderItem` es opcional: si se pasa, reemplaza el `MenuItemRow` por defecto
  * para permitir insertar contenido extra (ej. customizador inline) por fila.
  */
-export default function MenuCategoryAccordion({ label, items = [], selectedQtys, onAdd, onRemove, renderItem, defaultOpen = true }) {
+export default function MenuCategoryAccordion({ label, color = null, items = [], selectedQtys, onAdd, onRemove, renderItem, defaultOpen = true }) {
   const [open, setOpen] = useState(defaultOpen)
   const count = items.reduce((s, it) => s + (selectedQtys[it.key] || 0), 0)
   return (
@@ -20,7 +20,8 @@ export default function MenuCategoryAccordion({ label, items = [], selectedQtys,
       <button onClick={() => setOpen(o => !o)}
         className="flex min-h-[58px] w-full items-center justify-between bg-[hsl(var(--accent))] px-4 py-3 transition-colors hover:bg-[hsl(var(--accent))]/80">
         <div className="flex items-center gap-3">
-          <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-[hsl(var(--primary))]/10 text-sm font-black text-[hsl(var(--primary))] shadow-sm">
+          <span data-testid="color-categoria" style={color ? { backgroundColor: color, color: '#fff' } : undefined}
+            className="flex h-10 w-10 items-center justify-center rounded-xl bg-[hsl(var(--primary))]/10 text-sm font-black text-[hsl(var(--primary))] shadow-sm">
             {label.slice(0, 2).toUpperCase()}
           </span>
           <div className="text-left">

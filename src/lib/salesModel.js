@@ -9,7 +9,7 @@ export const SALES_MODEL_LABEL = {
   AL_PASO: 'Comida al paso (caja + menú)',
 }
 
-/** Etiqueta corta para columnas de tabla (ej. "Tipo de local" en Tus Franquicias). */
+/** Etiqueta corta para columnas de tabla (ej. "Tipo de local" en el Inicio del dueño). */
 export const SALES_MODEL_SHORT_LABEL = {
   RESTAURANT: 'Restaurante',
   AL_PASO: 'Al paso',

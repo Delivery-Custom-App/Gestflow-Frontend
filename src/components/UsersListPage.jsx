@@ -1,60 +1,71 @@
 import { useState, useEffect, useCallback } from 'react'
 import { m, AnimatePresence } from 'framer-motion'
-import { Users, Store, Plus, Trash2, ChevronDown, X, UserPlus, Loader2, Eye, EyeOff, Shield, HelpCircle, KeyRound, Building2 } from 'lucide-react'
+import { Users, Store, Plus, X, UserPlus, Loader2, Eye, EyeOff, Shield, HelpCircle, KeyRound, Filter, MapPin, Pencil, UserX, UserCheck, MonitorSmartphone } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { isSuperAdminRole } from '../auth/roleLabel'
 import { isInventoryAdminRole } from '../utils/inventoryAccess'
 import { useLocals } from '../hooks/useLocals'
-import { listUsers, deleteUser, createUser, getOptionalAuthContext } from '../lib/apiClient'
+import { listUsers, createUser, getOptionalAuthContext } from '../lib/apiClient'
+import { SIN_LOCAL, usuariosVisibles } from '../lib/listaUsuarios'
+import { puedeTenerVariosLocales } from '../lib/localesAsignados'
+import LocalesAsignadosDialog from './LocalesAsignadosDialog'
+import EditarUsuarioDialog from './EditarUsuarioDialog'
+import ClaveTemporalDialog from './ClaveTemporalDialog'
+import SesionesEmpleadoDialog from './SesionesEmpleadoDialog'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import {
+  cambiarEstadoUsuario, puedeGestionar, restablecerClave, separarPorEstado, textoDeError,
+} from '../lib/gestionUsuarios'
+import {
+  AVISO_VENDEDOR, LARGO_MINIMO_CONTRASENA, exigeCambioDeClave, ROL_LABEL, datosDeAlta, formatearRut, pideRut,
+  esEncargadoDeLocal, localFijoDelAlta, puedeCrearUsuarios, rolConLocal, rolesAsignables, validarAlta,
+} from '../lib/altaUsuario'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { useNavigate } from 'react-router'
+import { useNavigate, useParams } from 'react-router'
 
-// Roles ordenados Superadmin → Dueño → Admin → Trabajador
-const ROLES_SUPERADMIN = [
-  { value: 'SUPERADMIN', label: 'Super Administrador' },
-  { value: 'ADMIN_NEGOCIO', label: 'Dueño de Negocio' },
-  { value: 'ADMIN',      label: 'Administrador' },
-  { value: 'EMPLEADO',   label: 'Trabajador' },
-]
-// Dueño de negocio puede crear sub-admins y trabajadores de su franquicia
-const ROLES_OWNER = [
-  { value: 'ADMIN',    label: 'Administrador' },
-  { value: 'EMPLEADO', label: 'Trabajador' },
-]
-// Admin solo puede crear Trabajadores
-const ROLES_ADMIN = [
-  { value: 'EMPLEADO', label: 'Trabajador' },
-]
+const FORM_VACIO = { nombre: '', apellido: '', rut: '', email: '', password: '', role: 'EMPLEADO', local_id: '' }
+
+const ORDEN_ROL = { SUPERADMIN: 0, ADMIN_NEGOCIO: 1, ADMIN: 2, EMPLEADO: 3 }
+
+/*
+ * ¿Quién ve qué? (el backend ya filtra por permisos en GET /users):
+ * - El dueño ve a las personas de todos sus locales, con columna y filtro por
+ *   local; dentro de una franquicia (/local/:localId/usuarios), solo las de ese
+ *   local, sin salir de ella.
+ * - El encargado ve solo a las de su local, y no crea ni elimina: el backend
+ *   no le permite crear usuarios (403).
+ */
 
 function roleBadge(role) {
   const r = String(role || '').toUpperCase()
-  if (r === 'SUPERADMIN') return <Badge>{role}</Badge>
-  if (r === 'ADMIN_NEGOCIO') return <Badge>{role}</Badge>
-  if (r === 'ADMIN')      return <Badge variant="info">{role}</Badge>
-  if (r === 'EMPLEADO')   return <Badge variant="secondary">{role}</Badge>
-  return <Badge variant="outline">{role}</Badge>
+  const label = ROL_LABEL[r] || role
+  if (r === 'SUPERADMIN') return <Badge>{label}</Badge>
+  if (r === 'ADMIN_NEGOCIO') return <Badge>{label}</Badge>
+  if (r === 'ADMIN')      return <Badge variant="info">{label}</Badge>
+  if (r === 'EMPLEADO')   return <Badge variant="secondary">{label}</Badge>
+  return <Badge variant="outline">{label}</Badge>
 }
 
 // ── Drawer crear usuario ─────────────────────────────────────────────────────
-function CreateUserDrawer({ isOpen, onClose, onSuccess, locales, localesLoading, userRole }) {
-  const [form, setForm]       = useState({ name: '', email: '', password: '', role: 'EMPLEADO', local_id: '' })
+export function CreateUserDrawer({ isOpen, onClose, onSuccess, locales, localesLoading, userRole, localIdPorDefecto = '', localFijo = '' }) {
+  // Abierto desde una franquicia, el alta llega con ese local elegido. El
+  // encargado (T-47) solo crea vendedores de su local: rol y local fijos.
+  const formInicial = { ...FORM_VACIO, local_id: localFijo || localIdPorDefecto || '' }
+  const [form, setForm]       = useState(formInicial)
   const [loading, setLoading] = useState(false)
   const [err, setErr]         = useState('')
   const [showPwd, setShowPwd] = useState(false)
 
-  const availableRoles = isSuperAdminRole(userRole)
-    ? ROLES_SUPERADMIN
-    : String(userRole || '').toLowerCase().replace(/\s+/g, '') === 'adminnegocio'
-      ? ROLES_OWNER
-      : ROLES_ADMIN
+  const availableRoles = rolesAsignables(userRole)
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }))
+  const setRut = (e) => setForm((f) => ({ ...f, rut: formatearRut(e.target.value) }))
 
   const reset = () => {
-    setForm({ name: '', email: '', password: '', role: 'EMPLEADO', local_id: '' })
+    setForm(formInicial)
     setErr('')
     setShowPwd(false)
   }
@@ -64,20 +75,12 @@ function CreateUserDrawer({ isOpen, onClose, onSuccess, locales, localesLoading,
   const onSubmit = async (e) => {
     e.preventDefault()
     setErr('')
-    if (!form.name || !form.email || !form.password) { setErr('Completa nombre, correo y contraseña.'); return }
-    if (form.password.length < 8) { setErr('La contraseña debe tener al menos 8 caracteres.'); return }
-    if (form.role !== 'SUPERADMIN' && !form.local_id) { setErr('Selecciona el local al que pertenece este usuario.'); return }
+    const problema = validarAlta(form)
+    if (problema) { setErr(problema); return }
     setLoading(true)
     try {
       const local = locales.find((l) => String(l.id) === String(form.local_id))
-      await createUser({
-        name: form.name.trim(),
-        email: form.email.trim(),
-        password: form.password,
-        role: form.role,
-        local_id: form.local_id || null,
-        business_id: local?.business_id || null,
-      })
+      await createUser(datosDeAlta(form, local))
       reset()
       onSuccess()
       onClose()
@@ -117,10 +120,23 @@ function CreateUserDrawer({ isOpen, onClose, onSuccess, locales, localesLoading,
 
         {/* Form */}
         <form onSubmit={onSubmit} className="flex flex-col gap-5 px-6 py-6 flex-1 overflow-y-auto no-scrollbar">
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="u-name">Nombre <span className="text-red-500">*</span></Label>
-            <Input id="u-name" placeholder="Ingrese el nombre" value={form.name} onChange={set('name')} disabled={loading} />
+          <div className="grid grid-cols-2 gap-3">
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="u-name">Nombre <span className="text-red-500">*</span></Label>
+              <Input id="u-name" placeholder="Ej: Juan" value={form.nombre} onChange={set('nombre')} disabled={loading} />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="u-apellido">Apellido</Label>
+              <Input id="u-apellido" placeholder="Ej: Pérez" value={form.apellido} onChange={set('apellido')} disabled={loading} />
+            </div>
           </div>
+
+          {pideRut() && (
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="u-rut">RUT <span className="text-red-500">*</span></Label>
+              <Input id="u-rut" placeholder="12.345.678-5" value={form.rut} onChange={setRut} disabled={loading} inputMode="text" />
+            </div>
+          )}
 
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="u-email">Correo electrónico <span className="text-red-500">*</span></Label>
@@ -130,7 +146,7 @@ function CreateUserDrawer({ isOpen, onClose, onSuccess, locales, localesLoading,
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="u-pwd">Contraseña <span className="text-red-500">*</span></Label>
             <div className="relative">
-              <Input id="u-pwd" type={showPwd ? 'text' : 'password'} placeholder="Mínimo 6 caracteres" value={form.password} onChange={set('password')} disabled={loading} className="pr-9" />
+              <Input id="u-pwd" type={showPwd ? 'text' : 'password'} placeholder={`Mínimo ${LARGO_MINIMO_CONTRASENA} caracteres`} value={form.password} onChange={set('password')} disabled={loading} className="pr-9" />
               <button aria-label={showPwd ? 'Ocultar contraseña' : 'Mostrar contraseña'} type="button" onClick={() => setShowPwd((v) => !v)} className="absolute right-2.5 top-2.5 text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]">
                 {showPwd ? <EyeOff size={16} /> : <Eye size={16} />}
               </button>
@@ -143,28 +159,36 @@ function CreateUserDrawer({ isOpen, onClose, onSuccess, locales, localesLoading,
               id="u-role"
               value={form.role}
               onChange={set('role')}
-              disabled={loading}
+              disabled={loading || availableRoles.length <= 1}
               className="w-full rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3 py-2 text-sm text-[hsl(var(--foreground))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary))]/40"
             >
-              {availableRoles.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
+              {availableRoles.map((r) => <option key={r} value={r}>{ROL_LABEL[r]}</option>)}
             </select>
           </div>
 
-          {form.role !== 'SUPERADMIN' && (
+          {rolConLocal(form.role) && (
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="u-local">Local asignado <span className="text-red-500">*</span></Label>
               <select
                 id="u-local"
                 value={form.local_id}
                 onChange={set('local_id')}
-                disabled={loading || localesLoading}
+                disabled={loading || localesLoading || Boolean(localFijo)}
                 className="w-full rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3 py-2 text-sm text-[hsl(var(--foreground))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary))]/40"
               >
                 <option value="">{localesLoading ? 'Cargando locales…' : 'Selecciona un Local'}</option>
                 {locales.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
               </select>
-              <p className="text-xs text-[hsl(var(--muted-foreground))]">El usuario solo tendrá acceso a este local.</p>
+              <p className="text-xs text-[hsl(var(--muted-foreground))]">
+                {localFijo ? 'Como encargado, creas vendedores de tu local.' : 'El usuario solo tendrá acceso a este local.'}
+              </p>
             </div>
+          )}
+
+          {exigeCambioDeClave(form.role) && (
+            <p className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-800 dark:border-sky-800/50 dark:bg-sky-950/30 dark:text-sky-300">
+              {AVISO_VENDEDOR}
+            </p>
           )}
 
           {err && <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{err}</p>}
@@ -192,7 +216,19 @@ export default function UsersListPage() {
   const [err, setErr]             = useState('')
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [guideOpen,  setGuideOpen]  = useState(false)
-  const [openGroups, setOpenGroups] = useState(new Set(['__superadmin__']))
+  const [filtroLocal, setFiltroLocal] = useState('')
+  const [localesDe, setLocalesDe] = useState(null) // usuario cuyos locales asignados se ven (T-72)
+  // Gestión (T-32): pestaña de activos o inactivos, edición y confirmaciones.
+  const [pestana, setPestana] = useState('activos')
+  const [editando, setEditando] = useState(null)
+  const [confirmando, setConfirmando] = useState(null) // { usuario, accion: 'desactivar'|'reactivar'|'clave' }
+  const [ocupado, setOcupado] = useState(false)
+  const [aviso, setAviso] = useState('')
+  // Clave temporal (T-61): solo en memoria mientras el diálogo está abierto.
+  const [claveTemporal, setClaveTemporal] = useState(null) // { nombre, clave, correoEnviado }
+  const [sesionesDe, setSesionesDe] = useState(null) // usuario cuyas sesiones se ven (T-53)
+  // Dentro de una franquicia (/local/:localId/usuarios) la lista es la de ese local.
+  const { localId } = useParams()
 
   const loadUsers = useCallback(async () => {
     setLoading(true)
@@ -203,16 +239,7 @@ export default function UsersListPage() {
         businessId = ctx.businessId
       }
       const data = await listUsers(businessId)
-      const list = Array.isArray(data) ? data : []
-      setUsers(list)
-      // Abrir todos los grupos por defecto al cargar (incluyendo __superadmin__)
-      const ids = new Set(['__superadmin__'])
-      for (const u of list) {
-        const role = String(u.role || '').toUpperCase()
-        const lid = role === 'SUPERADMIN' ? '__superadmin__' : u.local_id ? String(u.local_id) : '__none__'
-        ids.add(lid)
-      }
-      setOpenGroups(ids)
+      setUsers(Array.isArray(data) ? data : [])
     } catch (e) {
       setErr(e.detail || e.message || 'Error al cargar usuarios')
       setUsers([])
@@ -239,59 +266,57 @@ export default function UsersListPage() {
     )
   }
 
-  const canDelete = (targetUser) => {
-    const me = String(user?.id || '')
-    const myRole = String(userRole || '').toUpperCase().replace(/[\s_-]+/g, '')
-    const targetRole = String(targetUser.role || '').toUpperCase().replace(/[\s_-]+/g, '')
-    if (me === String(targetUser.id)) return false
-    if (targetRole === 'SUPERADMIN') return false
-    if (targetRole === 'ADMINNEGOCIO' && myRole !== 'SUPERADMIN') return false
-    if (targetRole === 'ADMIN' && myRole !== 'SUPERADMIN' && myRole !== 'ADMINNEGOCIO') return false
-    return myRole === 'SUPERADMIN' || myRole === 'ADMINNEGOCIO' || myRole === 'ADMIN'
-  }
+  const puedeCrear = puedeCrearUsuarios(userRole)
+  // El encargado (T-47) crea y gestiona a los vendedores de su local; asignar
+  // varios locales y ver todo el negocio queda para el dueño y el superadmin.
+  const encargado = esEncargadoDeLocal(userRole)
+  const miLocalId = user?.local_id || null
+  const puedeVerNegocio = puedeCrear && !encargado
 
-  const onDelete = async (u) => {
-    if (!window.confirm(`¿Eliminar al usuario ${u.email}?`)) return
-    try { await deleteUser(u.id); loadUsers() }
-    catch (e2) { setErr(e2.detail || e2.message || 'Error al eliminar usuario') }
-  }
+  // No hay borrado de usuarios: se desactiva (conserva su historial). Nunca la cuenta propia.
+  const gestionable = (u) => puedeGestionar(userRole, user?.id, u, miLocalId)
+  const nombreDe = (u) => u.name || u.email
 
-  const toggleGroup = (lid) => {
-    setOpenGroups((prev) => {
-      const next = new Set(prev)
-      next.has(lid) ? next.delete(lid) : next.add(lid)
-      return next
-    })
-  }
-
-  const ROLE_ORDER = { SUPERADMIN: 0, ADMIN: 1, CAJERO: 2, EMPLEADO: 3 }
-  const sortByRole = (a, b) => {
-    const ra = ROLE_ORDER[String(a.role || '').toUpperCase()] ?? 99
-    const rb = ROLE_ORDER[String(b.role || '').toUpperCase()] ?? 99
-    return ra - rb
+  const confirmar = async () => {
+    if (!confirmando) return
+    const { usuario: u, accion } = confirmando
+    setOcupado(true)
+    setErr('')
+    try {
+      if (accion === 'clave') {
+        const r = await restablecerClave(u.id)
+        setClaveTemporal({ nombre: nombreDe(u), clave: r?.temporary_password || '', correoEnviado: Boolean(r?.email_sent) })
+      } else {
+        await cambiarEstadoUsuario(u.id, accion === 'reactivar')
+        setAviso(accion === 'reactivar' ? `${nombreDe(u)} puede volver a entrar.` : `${nombreDe(u)} quedó desactivado.`)
+      }
+      setConfirmando(null)
+      loadUsers()
+    } catch (e2) {
+      setErr(textoDeError(e2))
+      setConfirmando(null)
+    } finally {
+      setOcupado(false)
+    }
   }
 
   const localNameById = Object.fromEntries(locales.map((l) => [String(l.id), l.name]))
-  const groupsMap = new Map()
-  for (const u of users) {
-    const role = String(u.role || '').toUpperCase()
-    const lid = role === 'SUPERADMIN' ? '__superadmin__' : u.local_id ? String(u.local_id) : '__none__'
-    if (!groupsMap.has(lid)) groupsMap.set(lid, [])
-    groupsMap.get(lid).push(u)
-  }
-  const groups = Array.from(groupsMap.entries())
-    .map(([lid, us]) => ({
-      localId: lid,
-      localName: lid === '__superadmin__' ? 'SuperAdministradores' : lid === '__none__' ? 'Sin local asignado' : (localNameById[lid] || `Local ${lid.slice(0, 8)}…`),
-      users: [...us].sort(sortByRole),
-    }))
-    .sort((a, b) => {
-      if (a.localId === '__superadmin__') return -1
-      if (b.localId === '__superadmin__') return 1
-      if (a.localId === '__none__') return 1
-      if (b.localId === '__none__') return -1
-      return a.localName.localeCompare(b.localName)
-    })
+  const nombreLocal = (id) => (id ? localNameById[String(id)] || `Local ${String(id).slice(0, 8)}…` : 'Sin local')
+  const ordenRol = (u) => ORDEN_ROL[String(u.role || '').toUpperCase()] ?? 99
+
+  // Por local (sin local al final) y, dentro de cada uno, del rol más alto al vendedor.
+  const porEstado = separarPorEstado(usuariosVisibles(users, { localId, filtroLocal }))
+  const visibles = [...porEstado[pestana]].sort((a, b) => {
+    if (!a.local_id !== !b.local_id) return a.local_id ? -1 : 1
+    const porLocal = nombreLocal(a.local_id).localeCompare(nombreLocal(b.local_id))
+    return porLocal || ordenRol(a) - ordenRol(b)
+  })
+  // El filtro solo tiene sentido en la vista de todo el negocio, con más de un local.
+  // "Sin local" (el dueño, por ejemplo) es una opción del filtro, pero no cuenta como local.
+  const localesConUsuarios = [...new Set(users.map((u) => (u.local_id ? String(u.local_id) : SIN_LOCAL)))]
+  const cantidadLocales = localesConUsuarios.filter((id) => id !== SIN_LOCAL).length
+  const mostrarFiltro = !localId && cantidadLocales > 1
+  const titulo = localId ? `Usuarios de ${nombreLocal(localId)}` : 'Gestión de usuarios'
 
   return (
     <>
@@ -330,32 +355,39 @@ export default function UsersListPage() {
                   icon: Users,
                   color: 'text-[hsl(var(--primary))]',
                   title: 'Lista de usuarios',
-                  desc: 'Muestra todos los usuarios de tu negocio agrupados por franquicia. Cada grupo se puede abrir o cerrar haciendo clic en el encabezado.',
+                  desc: localId
+                    ? 'Muestra a las personas de esta franquicia. Sigues dentro de ella: el menú lateral es el del local.'
+                    : 'Muestra a las personas de todas tus franquicias, con el local de cada una.',
                 },
                 {
                   icon: Shield,
                   color: 'text-violet-600',
                   title: 'Roles',
-                  desc: 'Cada usuario tiene un rol: Super Administrador (acceso total), Administrador (gestiona su franquicia) o Trabajador (acceso operativo básico).',
+                  desc: 'Cada usuario tiene un rol: Dueño de negocio (todas sus franquicias), Encargado de local (gestiona su franquicia) o Vendedor (el punto de venta de su local).',
                 },
-                {
-                  icon: Building2,
+                // El filtro por local es de la vista de todo el negocio (el dueño).
+                ...(puedeVerNegocio ? [{
+                  icon: Filter,
                   color: 'text-[hsl(var(--primary))]',
-                  title: 'Grupos por franquicia',
-                  desc: 'Los usuarios se organizan automáticamente según la franquicia a la que pertenecen. Los Super Administradores aparecen en su propio grupo.',
-                },
-                {
+                  title: 'Filtrar por local',
+                  desc: 'En la vista de todo el negocio, el filtro deja ver solo a las personas de una franquicia. Dentro de una franquicia, la lista ya es la de ese local.',
+                }] : []),
+                ...(puedeCrear ? [{
                   icon: UserPlus,
                   color: 'text-[hsl(var(--primary))]',
                   title: 'Crear usuario',
-                  desc: 'Registra un nuevo usuario asignándole nombre, correo, contraseña, rol y la franquicia a la que pertenece.',
+                  desc: encargado
+                    ? 'Registra un vendedor de tu local con su nombre, correo y contraseña. También puedes editar su nombre, desactivarlo o reactivarlo.'
+                    : 'Registra un nuevo usuario con su nombre, correo, contraseña, rol y la franquicia a la que pertenece. Dentro de una franquicia, llega con ese local elegido.',
                   highlight: true,
-                },
+                }] : []),
                 {
                   icon: KeyRound,
                   color: 'text-amber-600',
                   title: 'Contraseña',
-                  desc: 'La contraseña se define al crear el usuario. Debe tener al menos 6 caracteres. El usuario puede cambiarla desde su perfil.',
+                  desc: puedeCrear
+                    ? `La contraseña se define al crear el usuario. Debe tener al menos ${LARGO_MINIMO_CONTRASENA} caracteres. Un vendedor la cambia en su primer ingreso; cualquiera puede cambiarla después desde Configuración.`
+                    : 'Cada persona cambia su propia contraseña desde Configuración. Las cuentas nuevas las crea el dueño del negocio.',
                 },
               ].map(({ icon: Icon, color, title, desc, highlight }) => (
                 <div
@@ -390,16 +422,27 @@ export default function UsersListPage() {
               <Users size={22} />
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-[hsl(var(--foreground))]">Gestión de usuarios</h1>
+              <h1 className="text-2xl font-bold text-[hsl(var(--foreground))]">{titulo}</h1>
               <p className="text-sm text-[hsl(var(--muted-foreground))]">
-                {users.length} usuario{users.length === 1 ? '' : 's'} · {groups.length} grupo{groups.length === 1 ? '' : 's'} por local
+                {visibles.length} usuario{visibles.length === 1 ? '' : 's'}
+                {!localId && ` · ${cantidadLocales} local${cantidadLocales === 1 ? '' : 'es'}`}
+                {localId && puedeVerNegocio && (
+                  <>
+                    {' · '}
+                    <button type="button" onClick={() => navigate('/usuarios')} className="font-medium text-[hsl(var(--primary))] hover:underline">
+                      Ver todo el negocio
+                    </button>
+                  </>
+                )}
               </p>
             </div>
           </div>
           <div className="flex flex-col items-end gap-1.5">
-            <Button size="sm" onClick={() => setDrawerOpen(true)}>
-              <Plus size={16} /> Crear usuario
-            </Button>
+            {puedeCrear && (
+              <Button size="sm" onClick={() => setDrawerOpen(true)}>
+                <Plus size={16} /> Crear usuario
+              </Button>
+            )}
             <button
               onClick={() => setGuideOpen(true)}
               className="flex items-center gap-1.5 text-xs text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--primary))] transition-colors"
@@ -410,85 +453,197 @@ export default function UsersListPage() {
           </div>
         </div>
 
-        {err && <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{err}</div>}
+        {err && <div role="alert" className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{err}</div>}
+        {aviso && <div role="status" className="text-sm text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2">{aviso}</div>}
 
-        {/* Lista acordeón */}
+        <div role="tablist" aria-label="Estado de los usuarios" className="inline-flex rounded-lg border border-[hsl(var(--border))] p-0.5">
+          {[['activos', 'Activos'], ['inactivos', 'Inactivos']].map(([clave, texto]) => (
+            <button key={clave} type="button" role="tab" aria-selected={pestana === clave} onClick={() => setPestana(clave)}
+              className={`rounded-md px-3 py-1.5 text-sm font-medium ${pestana === clave ? 'bg-[hsl(var(--primary))] text-white' : 'text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))]'}`}>
+              {texto} ({porEstado[clave].length})
+            </button>
+          ))}
+        </div>
+
+        {mostrarFiltro && (
+          <div className="flex items-center gap-2">
+            <label htmlFor="usuarios-filtro-local" className="flex items-center gap-1.5 text-sm text-[hsl(var(--muted-foreground))]">
+              <Filter size={14} /> Local
+            </label>
+            <select
+              id="usuarios-filtro-local"
+              value={filtroLocal}
+              onChange={(e) => setFiltroLocal(e.target.value)}
+              className="rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3 py-1.5 text-sm text-[hsl(var(--foreground))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary))]/40"
+            >
+              <option value="">Todos los locales</option>
+              {localesConUsuarios
+                .filter((id) => id !== SIN_LOCAL)
+                .sort((a, b) => nombreLocal(a).localeCompare(nombreLocal(b)))
+                .map((id) => <option key={id} value={id}>{nombreLocal(id)}</option>)}
+              {localesConUsuarios.includes(SIN_LOCAL) && <option value={SIN_LOCAL}>Sin local</option>}
+            </select>
+          </div>
+        )}
+
         {loading ? (
           <p className="text-sm text-[hsl(var(--muted-foreground))]">Cargando usuarios…</p>
-        ) : users.length === 0 ? (
-          <Card><CardContent className="p-8 text-center text-[hsl(var(--muted-foreground))]">No hay usuarios.</CardContent></Card>
+        ) : visibles.length === 0 ? (
+          <Card><CardContent className="p-8 text-center text-[hsl(var(--muted-foreground))]">
+            {pestana === 'inactivos' ? 'No hay usuarios desactivados.' : localId ? 'Este local todavía no tiene usuarios.' : 'No hay usuarios.'}
+          </CardContent></Card>
         ) : (
-          <div className="flex flex-col gap-2">
-            {groups.map((g) => {
-              const isOpen = openGroups.has(g.localId)
-              return (
-                <Card key={g.localId} className="overflow-hidden">
-                  {/* Cabecera clickeable */}
-                  <button
-                    type="button"
-                    onClick={() => toggleGroup(g.localId)}
-                    className="w-full flex items-center justify-between px-5 py-4 bg-[hsl(var(--muted))]/40 hover:bg-[hsl(var(--muted))]/70 transition-colors"
-                  >
-                    <div className="flex items-center gap-2">
-                      {g.localId === '__superadmin__'
-                        ? <Shield size={17} className="text-violet-600 shrink-0" />
-                        : <Store size={17} className="text-[hsl(var(--primary))] shrink-0" />
-                      }
-                      <span className="text-sm font-semibold text-[hsl(var(--foreground))]">{g.localName}</span>
-                      <Badge variant="secondary">{g.users.length}</Badge>
-                    </div>
-                    <ChevronDown
-                      size={17}
-                      className={`text-[hsl(var(--muted-foreground))] transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}
-                    />
-                  </button>
-
-                  {/* Contenido expandible */}
-                  {isOpen && (
-                    <CardContent className="p-0">
-                      <table className="w-full text-sm">
-                        <thead>
-                          <tr className="text-left text-[hsl(var(--muted-foreground))] border-b border-[hsl(var(--border))]">
-                            <th className="py-2 px-5 font-medium">Nombre</th>
-                            <th className="py-2 px-5 font-medium">Correo</th>
-                            <th className="py-2 px-5 font-medium">Rol</th>
-                            <th className="py-2 px-5 font-medium text-right">Acción</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {g.users.map((u) => (
-                            <tr key={u.id} className="border-b border-[hsl(var(--border))] last:border-0 hover:bg-[hsl(var(--muted))]/30">
-                              <td className="py-2.5 px-5 font-medium text-[hsl(var(--foreground))]">{u.name || '—'}</td>
-                              <td className="py-2.5 px-5 text-[hsl(var(--muted-foreground))]">{u.email}</td>
-                              <td className="py-2.5 px-5">{roleBadge(u.role)}</td>
-                              <td className="py-2.5 px-5 text-right">
-                                {canDelete(u) && (
-                                  <Button variant="danger" size="sm" onClick={() => onDelete(u)}>
-                                    <Trash2 size={14} /> Eliminar
+          <Card className="overflow-hidden">
+            <CardContent className="p-0 overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-left text-[hsl(var(--muted-foreground))] border-b border-[hsl(var(--border))] bg-[hsl(var(--muted))]/40">
+                    <th className="py-2.5 px-5 font-medium">Nombre</th>
+                    <th className="py-2.5 px-5 font-medium">Correo</th>
+                    <th className="py-2.5 px-5 font-medium">Rol</th>
+                    <th className="py-2.5 px-5 font-medium">Local</th>
+                    {puedeCrear && <th className="py-2.5 px-5 font-medium text-right">Acción</th>}
+                  </tr>
+                </thead>
+                <tbody>
+                  {visibles.map((u) => (
+                    <tr key={u.id} className="border-b border-[hsl(var(--border))] last:border-0 hover:bg-[hsl(var(--muted))]/30">
+                      <td className="py-2.5 px-5 font-medium text-[hsl(var(--foreground))]">
+                        {u.name || '—'}
+                        {u.is_active === false && <Badge variant="outline" className="ml-2">Inactivo</Badge>}
+                      </td>
+                      <td className="py-2.5 px-5 text-[hsl(var(--muted-foreground))]">{u.email}</td>
+                      <td className="py-2.5 px-5">{roleBadge(u.role)}</td>
+                      <td className="py-2.5 px-5 text-[hsl(var(--muted-foreground))]">
+                        <span className="inline-flex items-center gap-1.5">
+                          {u.local_id
+                            ? <Store size={14} className="shrink-0 text-[hsl(var(--primary))]" />
+                            : <Shield size={14} className="shrink-0 text-violet-600" />}
+                          {nombreLocal(u.local_id)}
+                        </span>
+                      </td>
+                      {puedeCrear && (
+                        <td className="py-2.5 px-5 text-right">
+                          <span className="inline-flex items-center gap-2">
+                            {puedeVerNegocio && puedeTenerVariosLocales(u.role) && (
+                              <Button variant="outline" size="sm" onClick={() => setLocalesDe(u)}
+                                aria-label={`Locales de ${u.name || u.email}`}>
+                                <MapPin size={14} /> Locales
+                              </Button>
+                            )}
+                            {gestionable(u) && (
+                              <>
+                                <Button variant="outline" size="sm" onClick={() => setEditando(u)} aria-label={`Editar a ${nombreDe(u)}`}>
+                                  <Pencil size={14} /> Editar
+                                </Button>
+                                <Button variant="outline" size="sm" onClick={() => setSesionesDe(u)} aria-label={`Sesiones de ${nombreDe(u)}`}>
+                                  <MonitorSmartphone size={14} /> Sesiones
+                                </Button>
+                                {u.is_active !== false && (
+                                  <Button variant="outline" size="sm" onClick={() => setConfirmando({ usuario: u, accion: 'clave' })}
+                                    aria-label={`Restablecer la clave de ${nombreDe(u)}`}>
+                                    <KeyRound size={14} /> Restablecer clave
                                   </Button>
                                 )}
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </CardContent>
-                  )}
-                </Card>
-              )
-            })}
-          </div>
+                                {u.is_active === false ? (
+                                  <Button variant="outline" size="sm" onClick={() => setConfirmando({ usuario: u, accion: 'reactivar' })}
+                                    aria-label={`Reactivar a ${nombreDe(u)}`}>
+                                    <UserCheck size={14} /> Reactivar
+                                  </Button>
+                                ) : (
+                                  <Button variant="danger" size="sm" onClick={() => setConfirmando({ usuario: u, accion: 'desactivar' })}
+                                    aria-label={`Desactivar a ${nombreDe(u)}`}>
+                                    <UserX size={14} /> Desactivar
+                                  </Button>
+                                )}
+                              </>
+                            )}
+                          </span>
+                        </td>
+                      )}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </CardContent>
+          </Card>
         )}
       </div>
 
-      <CreateUserDrawer
-        isOpen={drawerOpen}
-        onClose={() => setDrawerOpen(false)}
-        onSuccess={loadUsers}
-        locales={locales}
-        localesLoading={localesLoading}
-        userRole={userRole}
-      />
+      {editando && (
+        <EditarUsuarioDialog
+          usuario={editando}
+          locales={locales}
+          miRol={userRole}
+          onClose={() => setEditando(null)}
+          onGuardado={() => { setEditando(null); setAviso(`Se guardaron los cambios de ${nombreDe(editando)}.`); loadUsers() }}
+        />
+      )}
+
+      {sesionesDe && (
+        <SesionesEmpleadoDialog
+          usuario={sesionesDe}
+          onClose={() => setSesionesDe(null)}
+          nombreDeUsuario={(id) => {
+            const quien = users.find((x) => String(x.id) === String(id))
+            return quien ? nombreDe(quien) : String(id) === String(user?.id) ? 'ti' : `Usuario ${String(id).slice(0, 8)}…`
+          }}
+        />
+      )}
+
+      {claveTemporal && (
+        <ClaveTemporalDialog
+          nombre={claveTemporal.nombre}
+          clave={claveTemporal.clave}
+          correoEnviado={claveTemporal.correoEnviado}
+          onClose={() => setClaveTemporal(null)}
+        />
+      )}
+
+      {confirmando && (
+        <Dialog open onOpenChange={(abierto) => { if (!abierto && !ocupado) setConfirmando(null) }}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>
+                {confirmando.accion === 'desactivar' ? `¿Desactivar a ${nombreDe(confirmando.usuario)}?`
+                  : confirmando.accion === 'reactivar' ? `¿Reactivar a ${nombreDe(confirmando.usuario)}?`
+                    : `¿Restablecer la clave de ${nombreDe(confirmando.usuario)}?`}
+              </DialogTitle>
+              <DialogDescription>
+                {confirmando.accion === 'desactivar'
+                  ? 'No podrá entrar a GestFlow y se cerrarán sus sesiones. Su historial de turnos y ventas se conserva, y se puede reactivar cuando quieras.'
+                  : confirmando.accion === 'reactivar'
+                    ? 'Podrá volver a entrar con su clave.'
+                    : 'Se genera una clave temporal, se cierran sus sesiones y deberá cambiarla al entrar.'}
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setConfirmando(null)} disabled={ocupado}>Cancelar</Button>
+              <Button variant={confirmando.accion === 'desactivar' ? 'danger' : 'default'} onClick={confirmar} disabled={ocupado}>
+                {ocupado ? 'Un momento…' : confirmando.accion === 'desactivar' ? 'Desactivar' : confirmando.accion === 'reactivar' ? 'Reactivar' : 'Restablecer'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {puedeVerNegocio && localesDe && (
+        <LocalesAsignadosDialog usuario={localesDe} locales={locales} onClose={() => setLocalesDe(null)} />
+      )}
+
+      {puedeCrear && (
+        <CreateUserDrawer
+          key={localId || 'negocio'}
+          isOpen={drawerOpen}
+          onClose={() => setDrawerOpen(false)}
+          onSuccess={loadUsers}
+          locales={locales}
+          localesLoading={localesLoading}
+          userRole={userRole}
+          localIdPorDefecto={localId}
+          localFijo={localFijoDelAlta(userRole, miLocalId)}
+        />
+      )}
     </div>
     </>
   )

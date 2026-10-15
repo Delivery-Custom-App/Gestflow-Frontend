@@ -9,9 +9,11 @@ import {
 import { Button } from '@/components/ui/button'
 
 /**
- * Modal de confirmación para borrar una mesa
- * Solo superadmin puede borrar mesas
- * Muestra error del backend si hay órdenes activas
+ * Confirmación para dar de baja una mesa (`DELETE /mesas/{id}`). Es una baja
+ * lógica: la mesa deja el plano, sus pedidos anteriores se conservan y se
+ * puede reactivar. La ven el encargado y el dueño (el empleado no). Si el
+ * backend la rechaza (409: en uso o dentro de un grupo) el motivo aparece aquí
+ * y la mesa sigue.
  */
 export default function DeleteMesaModal({ mesa, onClose, onConfirm, isDeleting = false, error = null }) {
   const [showError] = useState(error)
@@ -25,12 +27,13 @@ export default function DeleteMesaModal({ mesa, onClose, onConfirm, isDeleting =
           </DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-4 py-1">
+        <div className="space-y-4 px-6 py-5">
           <p className="text-sm text-[hsl(var(--foreground))]">
             ¿Estás seguro que deseas eliminar la mesa <strong>{mesa.name}</strong>?
           </p>
           <p className="text-sm text-[hsl(var(--muted-foreground))]">
-            Esta acción <strong>no se puede deshacer</strong>. Se eliminarán todos los datos asociados.
+            La mesa deja de aparecer en el plano. <strong>Sus pedidos anteriores se conservan</strong> y
+            se puede reactivar más adelante.
           </p>
 
           {/* Info de la mesa */}

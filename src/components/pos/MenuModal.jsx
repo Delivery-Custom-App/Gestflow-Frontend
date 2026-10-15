@@ -54,7 +54,7 @@ export default function MenuModal({ localId, onClose }) {
 
         {/* Chips por categoría */}
         {data?.categories?.length > 0 && (
-          <div className="flex flex-wrap gap-2 pb-1" role="group" aria-label="Filtrar por categoría">
+          <div className="flex flex-wrap gap-2 px-6 pt-4 pb-1" role="group" aria-label="Filtrar por categoría">
             <button
               className={`px-3 py-1 rounded-full text-xs font-medium transition-colors border ${
                 selectedCat === 'all'
@@ -83,7 +83,7 @@ export default function MenuModal({ localId, onClose }) {
 
         {/* Búsqueda y filtro */}
         {data && !loading && !error && (
-          <div className="flex gap-2">
+          <div className="flex gap-2 px-6 pt-3">
             <div className="relative flex-1">
               <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[hsl(var(--muted-foreground))]" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                 <circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="1.8"/>
@@ -113,7 +113,7 @@ export default function MenuModal({ localId, onClose }) {
         )}
 
         {/* Body */}
-        <div className="flex-1 overflow-y-auto space-y-4 pr-1">
+        <div className="flex-1 overflow-y-auto space-y-4 px-6 py-4">
           {loading && (
             <div className="flex flex-col items-center gap-2 py-8 text-[hsl(var(--muted-foreground))]">
               <div className="w-6 h-6 border-2 border-[hsl(var(--primary))] border-t-transparent rounded-full animate-spin" aria-label="Cargando..." />

@@ -40,9 +40,9 @@ export default function ReportesPage() {
               </div>
               <div className="px-5 py-4 space-y-3">
                 {[
-                  { icon: TrendingUp, color: 'text-[hsl(var(--primary))]', title: 'Receta y bebestible más vendido', desc: 'Destaca el producto y la bebida con más unidades vendidas en el período, para identificar los favoritos de los clientes.' },
+                  { icon: TrendingUp, color: 'text-[hsl(var(--primary))]', title: 'Producto más vendido y ventas del período', desc: 'El producto con más unidades vendidas, y el total facturado junto a la cantidad de órdenes completadas.' },
                   { icon: BarChart2, color: 'text-amber-600', title: 'Top 5 productos', desc: 'Lista los 5 productos más vendidos con su cantidad de unidades y el ingreso generado. La barra de progreso compara visualmente cada uno contra el primero.' },
-                  { icon: HelpCircle, color: 'text-blue-600', title: 'Período analizado', desc: 'Los datos muestran las ventas del período actual del local. Si no aparecen datos, significa que aún no hay ventas registradas.' },
+                  { icon: HelpCircle, color: 'text-blue-600', title: 'Período analizado', desc: 'Los datos corresponden al mes en curso, desde el día 1 hasta hoy. Si no aparecen datos, significa que aún no hay ventas registradas en ese período.' },
                 ].map(({ icon: Icon, color, title, desc }) => (
                   <div key={title} className="flex gap-3 rounded-xl p-3 bg-[hsl(var(--muted)/0.4)]">
                     <div className={`mt-0.5 shrink-0 ${color}`}><Icon size={15} /></div>
@@ -92,28 +92,26 @@ export default function ReportesPage() {
 
         {error && (
           <div className="p-4 rounded-lg bg-red-50 border border-red-200 text-sm text-[hsl(var(--destructive))] space-y-2">
-            <p>Error al cargar reportes: {error}</p>
+            <p>{error}</p>
             <Button size="sm" variant="destructive" onClick={fetch}>Reintentar</Button>
           </div>
         )}
 
         {!loading && !error && data && (
           <div className="space-y-6 max-w-2xl">
+            <p className="text-xs text-[hsl(var(--muted-foreground))]">
+              Período: {formatPeriodo(data.periodo)}
+            </p>
+
             <section className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <DestacadoCard
-                titulo="Receta más vendida"
+                titulo="Producto más vendido"
                 icono="🍽️"
                 metric={data.top_producto}
                 colorClass="border-[hsl(var(--primary))]/30 bg-[hsl(var(--primary))]/5"
-                emptyMsg="Sin recetas vendidas"
+                emptyMsg="Sin ventas en el período"
               />
-              <DestacadoCard
-                titulo="Bebestible más vendido"
-                icono="🥤"
-                metric={data.top_bebida}
-                colorClass="border-blue-200 bg-blue-50"
-                emptyMsg="Sin bebestibles vendidos"
-              />
+              <VentasCard total={data.total_ventas} ordenes={data.total_ordenes} />
             </section>
 
             <section className="space-y-2">
@@ -141,6 +139,33 @@ export default function ReportesPage() {
         )}
       </main>
     </>
+  )
+}
+
+/** "01-09-2026 al 26-09-2026" a partir de las fechas ISO del reporte. */
+function formatPeriodo({ desde, hasta } = {}) {
+  const dmy = (iso) => {
+    if (!iso) return '—'
+    const [a, m, d] = String(iso).split('-')
+    return `${d}-${m}-${a}`
+  }
+  return `${dmy(desde)} al ${dmy(hasta)}`
+}
+
+function VentasCard({ total, ordenes }) {
+  return (
+    <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 space-y-2">
+      <div className="flex items-center gap-2">
+        <span className="text-xl" aria-hidden="true">💰</span>
+        <p className="text-xs font-semibold text-[hsl(var(--muted-foreground))] uppercase tracking-wide">Ventas del período</p>
+      </div>
+      <div>
+        <p className="text-sm font-bold text-[hsl(var(--foreground))]">${formatCLP(total)}</p>
+        <p className="text-xs text-[hsl(var(--muted-foreground))] mt-0.5">
+          {ordenes} {ordenes === 1 ? 'orden completada' : 'órdenes completadas'}
+        </p>
+      </div>
+    </div>
   )
 }
 

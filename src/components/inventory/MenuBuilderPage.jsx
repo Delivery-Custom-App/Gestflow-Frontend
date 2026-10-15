@@ -6,19 +6,25 @@ import {
   patchCategory,
   patchProduct,
   postCategory,
+  removeFromLocalMenu,
 } from '../../lib/inventoryApi'
 import { fetchLocalMenuCatalog } from '../../lib/salesApi'
+import { cambiarColorCategoria, esColorValido, guardarOrden, moverCategoria, ordenarCategorias } from '../../lib/categoriasOrden'
 import { apiRequest } from '../../lib/apiClient'
 import { formatCLPCurrency as formatMoney } from '../../lib/formatCLP'
 import InventoryShell from './InventoryShell'
 import NuevoProductoModal from './NuevoProductoModal'
+import EditarProductoModal from './EditarProductoModal'
+import { sePrepara } from '../../lib/tipoProducto'
+import ImportarCatalogoDrawer from './ImportarCatalogoDrawer'
+import ImportarPlanillaDialog from './ImportarPlanillaDialog'
 import LoadingSpinner from '../LoadingSpinner'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
-import {
+import { ArrowUp, ArrowDown, Palette,
   GripVertical, Plus, Pencil, Trash2, MoreHorizontal,
-  Eye, ArrowUpDown, Sparkles, UtensilsCrossed, Search,
+  Eye, UtensilsCrossed, Search, PackagePlus, FileSpreadsheet,
 } from 'lucide-react'
 
 function MenuBuilderPage() {
@@ -31,15 +37,18 @@ function MenuBuilderPage() {
   const [products, setProducts] = useState([])
   const [selectedCategoryId, setSelectedCategoryId] = useState('')
   const [search, setSearch] = useState('')
-  const [topTab, setTopTab] = useState('edit') // edit | preview | settings
 
   const [menuOpenId, setMenuOpenId] = useState('')
+  const [importarAbierto, setImportarAbierto] = useState(false)
+  // T-60: importar productos desde una planilla (.xlsx o .csv).
+  const [planillaAbierta, setPlanillaAbierta] = useState(false)
   const [editingCategoryId, setEditingCategoryId] = useState('')
   const [editingCategoryName, setEditingCategoryName] = useState('')
   const [newCategoryName, setNewCategoryName] = useState('')
   const [categorySaving, setCategorySaving] = useState(false)
   const [togglingId, setTogglingId] = useState('')
   const [modalOpen, setModalOpen] = useState(false)
+  const [editando, setEditando] = useState(null)
 
   const load = useCallback(async () => {
     if (!localId) {
@@ -117,24 +126,6 @@ function MenuBuilderPage() {
     return map
   }, [products])
 
-  const previewCategories = useMemo(() => {
-    const categoryNameById = new Map(categories.map((c) => [c.id, c.name]))
-    const map = new Map()
-    for (const p of products) {
-      if (!p.is_active) continue
-      const key = String(p.category_id || '__none__')
-      if (!map.has(key)) {
-        map.set(key, {
-          id: key,
-          name: p.category_name || categoryNameById.get(key) || 'Sin categoría',
-          products: [],
-        })
-      }
-      map.get(key).products.push(p)
-    }
-    return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name, 'es'))
-  }, [products, categories])
-
   async function handleCreateCategory(e) {
     e.preventDefault()
     const name = newCategoryName.trim()
@@ -147,6 +138,35 @@ function MenuBuilderPage() {
       await load()
     } catch (err) {
       toast.error(err?.message || 'No se pudo crear la categoría')
+    } finally {
+      setCategorySaving(false)
+    }
+  }
+
+  // A-08: subir o bajar una categoría (sort_order) y cambiar o quitar su color.
+  async function handleMoverCategoria(cat, direccion) {
+    const cambios = moverCategoria(categories, cat.id, direccion)
+    setMenuOpenId('')
+    if (!cambios.length) return
+    setCategorySaving(true)
+    try {
+      await guardarOrden(cambios)
+      await load()
+    } catch (err) {
+      toast.error(err?.message || 'No se pudo cambiar el orden')
+    } finally {
+      setCategorySaving(false)
+    }
+  }
+
+  async function handleColorCategoria(cat, color) {
+    if (color && !esColorValido(color)) { toast.error('El color debe ser #RRGGBB'); return }
+    setCategorySaving(true)
+    try {
+      await cambiarColorCategoria(cat.id, color || null)
+      await load()
+    } catch (err) {
+      toast.error(String(err?.detail || err?.message || 'No se pudo cambiar el color').replace(/^\d{3}:\s*/, ''))
     } finally {
       setCategorySaving(false)
     }
@@ -168,6 +188,22 @@ function MenuBuilderPage() {
       toast.error(err?.message || 'No se pudo renombrar')
     } finally {
       setCategorySaving(false)
+    }
+  }
+
+  async function handleQuitarDelMenu(item) {
+    const nombre = item.product_name || item.name || 'este producto'
+    if (!item.local_product_id) {
+      toast.error('Este producto no está en el menú de este local.')
+      return
+    }
+    if (!window.confirm(`¿Quitar "${nombre}" del menú de este local? El producto sigue existiendo en el negocio y en los otros locales.`)) return
+    try {
+      await removeFromLocalMenu(item.local_product_id)
+      setProducts((prev) => prev.filter((row) => String(row.local_product_id) !== String(item.local_product_id)))
+      toast.success(`"${nombre}" se quitó del menú de este local`)
+    } catch (err) {
+      toast.error(err?.message || 'No se pudo quitar del menú')
     }
   }
 
@@ -225,28 +261,10 @@ function MenuBuilderPage() {
                 </div>
               </div>
             </div>
-            {[
-              { id: 'edit', label: 'Edición de menú' },
-              { id: 'preview', label: 'Vista previa' },
-              { id: 'settings', label: 'Ajustes' },
-            ].map((tab) => (
-              <button
-                key={tab.id}
-                type="button"
-                onClick={() => setTopTab(tab.id)}
-                className={cn(
-                  'relative pb-3 text-sm font-semibold transition-colors',
-                  topTab === tab.id
-                    ? 'text-[hsl(var(--primary))]'
-                    : 'text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]',
-                )}
-              >
-                {tab.label}
-                {topTab === tab.id && (
-                  <span className="absolute inset-x-0 -bottom-px h-0.5 rounded-full bg-[hsl(var(--primary))]" />
-                )}
-              </button>
-            ))}
+            <span className="relative pb-3 text-sm font-semibold text-[hsl(var(--primary))]">
+              Edición de menú
+              <span className="absolute inset-x-0 -bottom-px h-0.5 rounded-full bg-[hsl(var(--primary))]" />
+            </span>
           </div>
         </div>
 
@@ -259,45 +277,6 @@ function MenuBuilderPage() {
         {loading && !products.length && !categories.length ? (
           <div className="flex flex-1 items-center justify-center p-10">
             <LoadingSpinner message="Cargando menú..." />
-          </div>
-        ) : topTab === 'settings' ? (
-          <div className="flex flex-1 items-center justify-center p-10 text-sm text-[hsl(var(--muted-foreground))]">
-            Ajustes del menú (visibilidad pública, orden, etc.) llegarán en una siguiente iteración.
-          </div>
-        ) : topTab === 'preview' ? (
-          <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6">
-            <div className="mb-4 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-4 py-3 text-xs text-[hsl(var(--muted-foreground))]">
-              Vista previa de lo que aparece al pedir en <span className="font-semibold text-[hsl(var(--foreground))]">Mesas</span>
-              {' '}(solo platos en venta).
-            </div>
-            {previewCategories.length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-[hsl(var(--border))] px-6 py-12 text-center text-sm text-[hsl(var(--muted-foreground))]">
-                No hay platos en venta. Activa “En venta” en Edición de menú.
-              </div>
-            ) : (
-              <div className="mx-auto max-w-2xl space-y-5">
-                {previewCategories.map((cat) => (
-                  <section key={cat.id}>
-                    <h2 className="mb-2 text-sm font-bold text-[hsl(var(--foreground))]">{cat.name}</h2>
-                    <div className="space-y-2">
-                      {cat.products.map((p) => (
-                        <div
-                          key={p.id}
-                          className="flex items-center justify-between gap-3 rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-4 py-3"
-                        >
-                          <div className="min-w-0">
-                            <p className="truncate text-sm font-bold">{p.name}</p>
-                          </div>
-                          <p className="shrink-0 text-sm font-black text-[hsl(var(--primary))]">
-                            {formatMoney(Number(p.price) || 0)}
-                          </p>
-                        </div>
-                      ))}
-                    </div>
-                  </section>
-                ))}
-              </div>
-            )}
           </div>
         ) : (
           <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[220px_minmax(0,1fr)_min(240px,28%)]">
@@ -315,7 +294,7 @@ function MenuBuilderPage() {
                     Aún no hay categorías.
                   </p>
                 ) : (
-                  categories.map((cat) => {
+                  ordenarCategorias(categories).map((cat, posicion, ordenadas) => {
                     const active = cat.id === selectedCategoryId
                     const count = countsByCategory.get(cat.id) || 0
                     return (
@@ -353,6 +332,7 @@ function MenuBuilderPage() {
                               className="flex min-w-0 flex-1 items-center gap-2 py-2.5 pl-2.5 text-left"
                             >
                               <GripVertical className="h-3.5 w-3.5 shrink-0 opacity-35" />
+                              {cat.color && <span data-testid={`color-${cat.id}`} className="h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: cat.color }} />}
                               <span className="min-w-0 flex-1 truncate">{cat.name}</span>
                               <span className={cn('text-[10px] tabular-nums', active ? 'opacity-80' : 'text-[hsl(var(--muted-foreground))]')}>
                                 {count}
@@ -382,6 +362,27 @@ function MenuBuilderPage() {
                             >
                               <Pencil className="h-3 w-3" /> Editar
                             </button>
+                            <button type="button" disabled={posicion === 0 || categorySaving}
+                              className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-medium hover:bg-[hsl(var(--muted)/0.6)] disabled:opacity-40"
+                              onClick={() => handleMoverCategoria(cat, 'arriba')}>
+                              <ArrowUp className="h-3 w-3" /> Subir
+                            </button>
+                            <button type="button" disabled={posicion === ordenadas.length - 1 || categorySaving}
+                              className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-medium hover:bg-[hsl(var(--muted)/0.6)] disabled:opacity-40"
+                              onClick={() => handleMoverCategoria(cat, 'abajo')}>
+                              <ArrowDown className="h-3 w-3" /> Bajar
+                            </button>
+                            <label className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-medium hover:bg-[hsl(var(--muted)/0.6)]">
+                              <Palette className="h-3 w-3" /> Color
+                              <input type="color" aria-label={`Color de ${cat.name}`} value={cat.color || '#888888'}
+                                onChange={(e) => handleColorCategoria(cat, e.target.value)} className="ml-auto h-5 w-6 cursor-pointer border-0 bg-transparent p-0" />
+                            </label>
+                            {cat.color && (
+                              <button type="button" className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-medium hover:bg-[hsl(var(--muted)/0.6)]"
+                                onClick={() => handleColorCategoria(cat, null)}>
+                                Quitar color
+                              </button>
+                            )}
                             <button
                               type="button"
                               className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-medium text-red-600 hover:bg-red-50"
@@ -474,8 +475,13 @@ function MenuBuilderPage() {
                           <UtensilsCrossed className="h-5 w-5" />
                         </div>
                         <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-bold text-[hsl(var(--foreground))]">
-                            {item.product_name || item.name}
+                          <p className="flex min-w-0 items-center gap-2 text-sm font-bold text-[hsl(var(--foreground))]">
+                            <span className="truncate">{item.product_name || item.name}</span>
+                            {sePrepara(item) && (
+                              <span className="shrink-0 rounded-full bg-[hsl(var(--primary)/0.12)] px-2 py-0.5 text-[10px] font-semibold text-[hsl(var(--primary))]">
+                                Se prepara
+                              </span>
+                            )}
                           </p>
                           <p className="mt-0.5 line-clamp-1 text-xs text-[hsl(var(--muted-foreground))]">
                             {item.is_active ? 'Disponible en mesas' : 'Oculto en mesas'}
@@ -511,16 +517,18 @@ function MenuBuilderPage() {
                             <button
                               type="button"
                               className="text-xs font-semibold text-[hsl(var(--primary))] hover:underline"
-                              onClick={() => toast.info('Edición rápida de plato próximamente. Usa inventario para costos/stock.')}
+                              aria-label={`Editar ${item.product_name || item.name}`}
+                              onClick={() => setEditando(item)}
                             >
                               Editar
                             </button>
                             <button
                               type="button"
                               className="text-xs font-semibold text-red-600 hover:underline"
-                              onClick={() => toast.info('Eliminar plato próximamente.')}
+                              aria-label={`Quitar ${item.product_name || item.name} del menú`}
+                              onClick={() => handleQuitarDelMenu(item)}
                             >
-                              Eliminar
+                              Quitar del menú
                             </button>
                           </div>
                         </div>
@@ -547,27 +555,59 @@ function MenuBuilderPage() {
               <Button
                 variant="outline"
                 className="h-auto min-h-11 w-full justify-start gap-2 whitespace-normal px-3 py-2.5 text-left text-sm leading-snug"
-                onClick={() => toast.info('Reconocimiento de carta con IA aún no está disponible.')}
+                onClick={() => setImportarAbierto(true)}
+                disabled={!localId}
               >
-                <Sparkles className="h-4 w-4 shrink-0" />
-                <span>Continuar reconocimiento</span>
+                <PackagePlus className="h-4 w-4 shrink-0" />
+                <span>Importar del catálogo</span>
               </Button>
               <Button
                 variant="outline"
                 className="h-auto min-h-11 w-full justify-start gap-2 whitespace-normal px-3 py-2.5 text-left text-sm leading-snug"
-                onClick={() => toast.info('Ordenamiento manual de platos llegará pronto.')}
+                onClick={() => setPlanillaAbierta(true)}
+                disabled={!localId}
               >
-                <ArrowUpDown className="h-4 w-4 shrink-0" />
-                <span>Ordenar platos</span>
+                <FileSpreadsheet className="h-4 w-4 shrink-0" />
+                <span>Importar desde planilla</span>
               </Button>
               <div className="mt-auto rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] p-3 text-[11px] leading-relaxed text-[hsl(var(--muted-foreground))]">
                 Los platos con “En venta” son exactamente los que aparecen al tomar pedido en Mesas.
-                Stock y costos se gestionan en Control de stock / Recetas.
+                Stock y costos se gestionan en Control de stock.
               </div>
             </aside>
           </div>
         )}
       </div>
+
+      {planillaAbierta && (
+        <ImportarPlanillaDialog localId={localId} onClose={() => setPlanillaAbierta(false)} onImportado={load} />
+      )}
+
+      {importarAbierto && (
+        <ImportarCatalogoDrawer
+          localId={localId}
+          salesModel={selectedLocal?.sales_model}
+          yaEnElMenu={products.map((p) => p.name)}
+          onClose={() => setImportarAbierto(false)}
+          onImportado={load}
+        />
+      )}
+
+      {editando && (
+        <EditarProductoModal
+          localId={localId}
+          producto={editando}
+          onClose={() => setEditando(null)}
+          onSaved={(actualizado) => {
+            setEditando(null)
+            setProducts((prev) => prev.map((p) =>
+              String(p.product_id || p.id) === String(actualizado.product_id || actualizado.id)
+                ? { ...p, stock_deduction_mode: actualizado.stock_deduction_mode }
+                : p))
+            toast.success('Producto actualizado')
+          }}
+        />
+      )}
 
       <NuevoProductoModal
         open={modalOpen}

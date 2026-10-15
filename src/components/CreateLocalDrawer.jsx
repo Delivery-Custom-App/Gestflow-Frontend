@@ -4,37 +4,9 @@ import { apiRequest, getAuthContext } from '../lib/apiClient'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-
-// Expands Chilean street abbreviations and removes postal codes so Nominatim understands them
-function normalizeChileanAddress(address) {
-  return address
-    .replace(/\bNte\b\.?/gi,  'Norte')
-    .replace(/\bOte\b\.?/gi,  'Oriente')
-    .replace(/\bPte\b\.?/gi,  'Poniente')
-    .replace(/\bAv\b\.?/gi,   'Avenida')
-    .replace(/\bPsje\b\.?/gi, 'Pasaje')
-    .replace(/\bPje\b\.?/gi,  'Pasaje')
-    .replace(/\bPob\b\.?/gi,  'Población')
-    .replace(/\bVlla\b\.?/gi, 'Villa')
-    .replace(/\b\d{4,7}\b/g,  '')   // strip postal codes like 2520000
-    .replace(/\s{2,}/g,       ' ')
-    .trim()
-}
-
-async function geocodeAddress(address) {
-  const normalized = normalizeChileanAddress(address)
-  const queries = [`${normalized}, Chile`, `${address}, Chile`, address]
-  for (const q of queries) {
-    try {
-      const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&limit=1&countrycodes=cl`
-      const res = await fetch(url, { headers: { 'User-Agent': 'Gestflow/1.0' } })
-      if (!res.ok) continue
-      const data = await res.json()
-      if (data.length > 0) return { lat: parseFloat(data[0].lat), lng: parseFloat(data[0].lon) }
-    } catch { /* continue */ }
-  }
-  return null
-}
+import { TELEFONO_MAX, normalizarTelefono, validarTelefono } from '../lib/localsApi'
+import { invalidarLocales } from '../lib/cacheLocales'
+import { geocodeAddress, normalizeChileanAddress, ubicacionDesdeNominatim } from '../lib/geocoding'
 
 function CreateLocalDrawer({ isOpen, onClose, onSuccess }) {
   const [formData, setFormData]       = useState({ name: '', address: '', phone: '', sales_model: 'RESTAURANT' })
@@ -42,6 +14,7 @@ function CreateLocalDrawer({ isOpen, onClose, onSuccess }) {
   const [geocoding, setGeocoding]     = useState(false)
   const [geocodeOk, setGeocodeOk]     = useState(null)   // true | false | null
   const [error, setError]             = useState(null)
+  const [sinUbicacion, setSinUbicacion] = useState(false)  // creado, pero sin punto en el mapa
 
   const [suggestions, setSuggestions]           = useState([])
   const [showSuggestions, setShowSuggestions]   = useState(false)
@@ -72,7 +45,7 @@ function CreateLocalDrawer({ isOpen, onClose, onSuccess }) {
     debounceTimer.current = setTimeout(async () => {
       try {
         const normalized = normalizeChileanAddress(value)
-        const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(normalized + ', Chile')}&format=json&limit=6&countrycodes=cl`
+        const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(normalized + ', Chile')}&format=json&limit=6&countrycodes=cl&addressdetails=1`
         const res = await fetch(url, { headers: { 'User-Agent': 'Gestflow/1.0' } })
         if (!res.ok) throw new Error(`Nominatim respondió ${res.status}`)
         const data = await res.json()
@@ -89,7 +62,7 @@ function CreateLocalDrawer({ isOpen, onClose, onSuccess }) {
 
   const handleSelectSuggestion = (suggestion) => {
     setFormData((prev) => ({ ...prev, address: suggestion.display_name }))
-    selectedCoordsRef.current = { lat: parseFloat(suggestion.lat), lng: parseFloat(suggestion.lon) }
+    selectedCoordsRef.current = ubicacionDesdeNominatim(suggestion)
     setGeocodeOk(true)
     setSuggestions([])
     setShowSuggestions(false)
@@ -102,7 +75,9 @@ function CreateLocalDrawer({ isOpen, onClose, onSuccess }) {
     try {
       if (!formData.name.trim())    throw new Error('El nombre del local es requerido')
       if (!formData.address.trim()) throw new Error('La dirección es requerida')
-      if (!formData.phone.trim())   throw new Error('El teléfono es requerido')
+      // T-38: el teléfono es opcional y se guarda tal como se escribe.
+      const problemaTelefono = validarTelefono(formData.phone)
+      if (problemaTelefono) throw new Error(problemaTelefono)
 
       const { token, businessId } = await getAuthContext()
       if (!businessId) throw new Error('No se encontró business_id en el token')
@@ -116,22 +91,34 @@ function CreateLocalDrawer({ isOpen, onClose, onSuccess }) {
         setGeocodeOk(coords !== null)
       }
 
-      // V2 LocalCreate: business_id, name, sales_model (address/phone aún no en schema).
       const salesModel =
         formData.sales_model === 'AL_PASO' ? 'AL_PASO' : 'RESTAURANT'
 
+      // LocalCreate acepta la ubicación: street_name, city_name, state_name,
+      // latitude y longitude. Sin ella el local queda sin dirección y nunca
+      // aparece en el mapa de locales.
       const body = {
         business_id: businessId,
         name: formData.name.trim(),
         sales_model: salesModel,
         promotions_autonomy: false,
+        ...(normalizarTelefono(formData.phone) ? { phone: normalizarTelefono(formData.phone) } : {}),
+        street_name: (coords?.street || formData.address.trim()).slice(0, 200),
+        ...(coords?.city ? { city_name: coords.city.slice(0, 200) } : {}),
+        ...(coords?.state ? { state_name: coords.state.slice(0, 200) } : {}),
+        ...(coords ? { latitude: coords.lat, longitude: coords.lng } : {}),
       }
-      void coords // geocode OK para UX; coords no se persisten en V2 aún
 
       await apiRequest('/locals', { method: 'POST', token, body })
+      invalidarLocales()
 
       setFormData({ name: '', address: '', phone: '', sales_model: 'RESTAURANT' })
       selectedCoordsRef.current = null
+      // Sin coordenadas el local existe igual, pero no se puede ubicar en el
+      // mapa: se dice antes de cerrar, en vez de dejarlo como una sorpresa.
+      // El refresco de la lista espera a que el aviso se lea, porque al
+      // refrescar el panel padre muestra su spinner y desmonta este cajón.
+      if (!coords) { setSinUbicacion(true); return }
       setGeocodeOk(null)
       onSuccess()
       onClose()
@@ -146,6 +133,7 @@ function CreateLocalDrawer({ isOpen, onClose, onSuccess }) {
   const handleClose = () => {
     if (!loading) {
       setError(null)
+      setSinUbicacion(false)
       setGeocodeOk(null)
       selectedCoordsRef.current = null
       setSuggestions([])
@@ -179,7 +167,7 @@ function CreateLocalDrawer({ isOpen, onClose, onSuccess }) {
               <Building2 className="h-4 w-4 text-[hsl(var(--primary))]" />
             </div>
             <div>
-              <h2 className="text-base font-bold text-[hsl(var(--foreground))]">Nueva Franquicia</h2>
+              <h2 className="text-base font-bold text-[hsl(var(--foreground))]">Nuevo local</h2>
               <p className="text-xs text-[hsl(var(--muted-foreground))]">Completa los datos del nuevo local</p>
             </div>
           </div>
@@ -193,13 +181,27 @@ function CreateLocalDrawer({ isOpen, onClose, onSuccess }) {
           </button>
         </div>
 
+        {sinUbicacion && (
+          <div className="flex flex-col gap-4 px-6 py-6">
+            <div className="rounded-lg border border-amber-200 bg-amber-50 dark:border-amber-800/50 dark:bg-amber-950/30 p-4">
+              <p className="text-sm font-semibold text-amber-800 dark:text-amber-300">El local se creó, pero quedó sin ubicación</p>
+              <p className="mt-1 text-xs text-amber-700 dark:text-amber-400">
+                No pudimos encontrar esa dirección en el mapa, así que el local no aparecerá en
+                «Ubicación de tus locales». Puedes corregir la dirección más adelante.
+              </p>
+            </div>
+            <Button type="button" onClick={() => { onSuccess(); handleClose() }} className="self-end rounded-xl">Entendido</Button>
+          </div>
+        )}
+
         {/* Form */}
+        {!sinUbicacion && (
         <form onSubmit={handleSubmit} className="flex flex-col gap-5 px-6 py-6 flex-1 overflow-y-auto">
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="name">Nombre del local <span className="text-red-500">*</span></Label>
             <Input
               id="name" name="name"
-              placeholder="Ej: Franquicia Centro"
+              placeholder="Ej: Local Centro"
               value={formData.name}
               onChange={handleChange}
               disabled={isBusy}
@@ -261,10 +263,10 @@ function CreateLocalDrawer({ isOpen, onClose, onSuccess }) {
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="phone">Teléfono <span className="text-red-500">*</span></Label>
+            <Label htmlFor="phone">Teléfono (opcional)</Label>
             <Input
-              id="phone" name="phone" type="tel"
-              placeholder="Ej: +56912345678"
+              id="phone" name="phone" type="tel" maxLength={TELEFONO_MAX}
+              placeholder="Ej: 9 1234 5678"
               value={formData.phone}
               onChange={handleChange}
               disabled={isBusy}
@@ -295,16 +297,19 @@ function CreateLocalDrawer({ isOpen, onClose, onSuccess }) {
             <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>
           )}
         </form>
+        )}
 
-        {/* Footer */}
+        {/* Footer — no se muestra sobre el aviso: ahí la única acción es cerrarlo. */}
+        {!sinUbicacion && (
         <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-[hsl(var(--border))]">
           <Button variant="outline" onClick={handleClose} disabled={isBusy}>Cancelar</Button>
           <Button onClick={handleSubmit} disabled={isBusy}>
             {geocoding ? (
               <span className="flex items-center gap-2"><Loader2 className="h-3.5 w-3.5 animate-spin" />Ubicando…</span>
-            ) : loading ? 'Creando…' : 'Crear Franquicia'}
+            ) : loading ? 'Creando…' : 'Crear local'}
           </Button>
         </div>
+        )}
       </div>
     </>
   )

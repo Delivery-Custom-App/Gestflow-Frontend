@@ -3,159 +3,13 @@ import { Settings, Trash2, AlertTriangle, Loader2, ChevronRight } from 'lucide-r
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { apiRequest, getOptionalAuthContext } from '../lib/apiClient'
+import { eliminarLocal, getResumenBorradoLocal } from '../lib/localsApi'
 
 // ── Summary row labels ──────────────────────────────────────
+// Solo estos dos se pueden contar de verdad: sus listados filtran por local.
 const SUMMARY_LABELS = {
-  mesas:          { label: 'Mesas',           icon: '🪑' },
-  categorias:     { label: 'Categorías',       icon: '📂' },
-  productos:      { label: 'Productos',        icon: '📦' },
-  recetas:        { label: 'Recetas / Menú',   icon: '🍽' },
-  proveedores:    { label: 'Proveedores',      icon: '🚚' },
-  inventario:     { label: 'Registros inventario', icon: '📊' },
-  ordenes:        { label: 'Órdenes',          icon: '🛒' },
-  gastos:         { label: 'Gastos',           icon: '💸' },
-  transferencias: { label: 'Transferencias',   icon: '🔄' },
-  cajas:          { label: 'Cajas',            icon: '🗄' },
-  alertas:        { label: 'Alertas',          icon: '🔔' },
-}
-
-// ── Thresholds section ──────────────────────────────────────
-function ThresholdsSection({ thresholds, onSave }) {
-  const [medium,   setMedium]   = useState(String(thresholds.medium))
-  const [high,     setHigh]     = useState(String(thresholds.high))
-  const [salesDays, setSalesDays] = useState(String(thresholds.salesDays ?? 1))
-  const [error,    setError]    = useState(null)
-  const [saved,    setSaved]    = useState(false)
-
-  const handleSave = () => {
-    const m = parseInt(medium, 10)
-    const h = parseInt(high, 10)
-    const d = parseInt(salesDays, 10)
-    if (isNaN(m) || isNaN(h) || m < 1 || h < 1) {
-      setError('Los valores de umbral deben ser enteros positivos')
-      return
-    }
-    if (m >= h) {
-      setError('El umbral "Flujo medio" debe ser menor que "Alto flujo"')
-      return
-    }
-    if (isNaN(d) || d < 1) {
-      setError('El período debe ser un entero positivo (días)')
-      return
-    }
-    onSave({ medium: m, high: h, salesDays: d })
-    setError(null)
-    setSaved(true)
-    setTimeout(() => setSaved(false), 2000)
-  }
-
-  return (
-    <div className="flex flex-col gap-5">
-      {/* ── Período de ventas ── */}
-      <div className="flex flex-col gap-3">
-        <div>
-          <h3 className="text-xs font-bold text-[hsl(var(--muted-foreground))] uppercase tracking-widest mb-1">
-            Período de ventas
-          </h3>
-          <p className="text-xs text-[hsl(var(--muted-foreground))]">
-            Días a acumular en el indicador de flujo (entero).
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Input
-            type="number"
-            min="1"
-            max="365"
-            step="1"
-            value={salesDays}
-            onChange={(e) => { setError(null); setSalesDays(e.target.value) }}
-            onKeyDown={(e) => { if (e.key === '.' || e.key === ',') e.preventDefault() }}
-          />
-          <span className="text-xs text-[hsl(var(--muted-foreground))] whitespace-nowrap">días</span>
-        </div>
-      </div>
-
-      <div className="h-px bg-[hsl(var(--border))]" />
-
-      {/* ── Umbrales de color ── */}
-      <div className="flex flex-col gap-3">
-        <div>
-          <h3 className="text-xs font-bold text-[hsl(var(--muted-foreground))] uppercase tracking-widest mb-1">
-            Umbrales de flujo
-          </h3>
-          <p className="text-xs text-[hsl(var(--muted-foreground))]">
-            Cuántas ventas acumuladas determinan el color de cada franquicia.
-          </p>
-        </div>
-
-        {/* Preview */}
-        <div className="flex flex-wrap gap-2">
-          <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold bg-green-50 text-green-700 border border-green-200">
-            <span className="h-2 w-2 rounded-full bg-green-500" />
-            0 – {medium || '?'} · Flujo bajo
-          </span>
-          <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold bg-yellow-50 text-yellow-700 border border-yellow-200">
-            <span className="h-2 w-2 rounded-full bg-yellow-500" />
-            {medium || '?'} – {high || '?'} · Flujo medio
-          </span>
-          <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold bg-red-50 text-red-700 border border-red-200">
-            <span className="h-2 w-2 rounded-full bg-red-500" />
-            ≥ {high || '?'} · Alto flujo
-          </span>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-2 gap-3">
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="thr-medium" className="text-xs">Umbral flujo medio</Label>
-          <Input
-            id="thr-medium"
-            type="number"
-            min="1"
-            value={medium}
-            onChange={(e) => {
-              setError(null); setSaved(false)
-              const val = e.target.value
-              setMedium(val)
-              const m = parseInt(val, 10)
-              const h = parseInt(high, 10)
-              if (!isNaN(m) && !isNaN(h) && m >= h) setHigh(String(m + 1))
-            }}
-          />
-          <p className="text-xs text-[hsl(var(--muted-foreground))]">ventas → amarillo</p>
-        </div>
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="thr-high" className="text-xs">Umbral alto flujo</Label>
-          <Input
-            id="thr-high"
-            type="number"
-            min="1"
-            value={high}
-            onChange={(e) => {
-              setError(null); setSaved(false)
-              const val = e.target.value
-              setHigh(val)
-              const h = parseInt(val, 10)
-              const m = parseInt(medium, 10)
-              if (!isNaN(h) && !isNaN(m) && h <= m) {
-                setMedium(String(Math.max(0, h - 1)))
-              }
-            }}
-          />
-          <p className="text-xs text-[hsl(var(--muted-foreground))]">ventas → rojo</p>
-        </div>
-      </div>
-
-      {error && (
-        <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{error}</p>
-      )}
-
-      <Button size="sm" onClick={handleSave} className="self-end">
-        {saved ? '✓ Guardado' : 'Guardar umbrales'}
-      </Button>
-    </div>
-  )
+  mesas:         { label: 'Mesas',         icon: '🪑' },
+  cajas_fisicas: { label: 'Cajas físicas', icon: '🗄' },
 }
 
 // ── Delete section ──────────────────────────────────────────
@@ -174,8 +28,7 @@ function DeleteSection({ locales, onDeleteDone }) {
   const handleConfirm1 = async () => {
     setStep('loading')
     try {
-      const { token } = await getOptionalAuthContext()
-      const data = await apiRequest(`/locals/${target.id}/deletion-summary`, { token })
+      const data = await getResumenBorradoLocal(target.id)
       setSummary(data)
       setStep('confirm2')
     } catch (err) {
@@ -187,8 +40,7 @@ function DeleteSection({ locales, onDeleteDone }) {
   const handleFinalDelete = async () => {
     setStep('deleting')
     try {
-      const { token } = await getOptionalAuthContext()
-      await apiRequest(`/locals/${target.id}/cascade`, { method: 'DELETE', token })
+      await eliminarLocal(target.id)
       setStep('list')
       setTarget(null)
       setSummary(null)
@@ -210,13 +62,13 @@ function DeleteSection({ locales, onDeleteDone }) {
     return (
       <div className="flex flex-col gap-3">
         <h3 className="text-xs font-bold text-[hsl(var(--muted-foreground))] uppercase tracking-widest">
-          Eliminar franquicia
+          Eliminar local
         </h3>
         <p className="text-xs text-[hsl(var(--muted-foreground))]">
-          Selecciona la franquicia que deseas eliminar permanentemente.
+          Selecciona el local que deseas eliminar permanentemente.
         </p>
         {locales.length === 0 ? (
-          <p className="text-xs text-[hsl(var(--muted-foreground))] italic">No hay franquicias registradas.</p>
+          <p className="text-xs text-[hsl(var(--muted-foreground))] italic">No hay locales registrados.</p>
         ) : (
           <div className="flex flex-col gap-1">
             {locales.map((local) => (
@@ -245,7 +97,7 @@ function DeleteSection({ locales, onDeleteDone }) {
     return (
       <div className="flex flex-col gap-4">
         <h3 className="text-xs font-bold text-[hsl(var(--muted-foreground))] uppercase tracking-widest">
-          Eliminar franquicia
+          Eliminar local
         </h3>
 
         <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-4 flex gap-3">
@@ -291,6 +143,7 @@ function DeleteSection({ locales, onDeleteDone }) {
 
   if (step === 'confirm2' || step === 'deleting') {
     const isDeleting = step === 'deleting'
+    const hayTurnosAbiertos = (summary?.turnosAbiertos || 0) > 0
     return (
       <div className="flex flex-col gap-4">
         <h3 className="text-xs font-bold text-[hsl(var(--muted-foreground))] uppercase tracking-widest">
@@ -311,7 +164,7 @@ function DeleteSection({ locales, onDeleteDone }) {
         {summary && (
           <div className="rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] overflow-hidden">
             {Object.entries(SUMMARY_LABELS).map(([key, { label, icon }]) => {
-              const val = summary[key]
+              const val = summary.conteos?.[key]
               if (val === undefined || val === null) return null
               return (
                 <div
@@ -330,6 +183,34 @@ function DeleteSection({ locales, onDeleteDone }) {
           </div>
         )}
 
+        {summary && (
+          <div className="space-y-2 text-xs">
+            <div>
+              <p className="font-bold text-[hsl(var(--foreground))]">También se elimina</p>
+              <ul className="mt-1 list-disc pl-4 text-[hsl(var(--muted-foreground))] space-y-0.5">
+                {summary.se_elimina.map((linea) => <li key={linea}>{linea}</li>)}
+              </ul>
+            </div>
+            <div>
+              <p className="font-bold text-[hsl(var(--foreground))]">Se conserva</p>
+              <ul className="mt-1 list-disc pl-4 text-[hsl(var(--muted-foreground))] space-y-0.5">
+                {summary.se_conserva.map((linea) => <li key={linea}>{linea}</li>)}
+              </ul>
+            </div>
+            <p className="text-[hsl(var(--muted-foreground))]">
+              El local se desactiva y se elimina en el mismo paso. Es permanente: no se puede deshacer.
+            </p>
+          </div>
+        )}
+
+        {hayTurnosAbiertos && (
+          <p className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+            Este local tiene {summary.turnosAbiertos} turno{summary.turnosAbiertos !== 1 ? 's' : ''} de caja
+            abierto{summary.turnosAbiertos !== 1 ? 's' : ''}. Ciérralo{summary.turnosAbiertos !== 1 ? 's' : ''} antes
+            de eliminar el local: el servidor rechaza el borrado mientras queden abiertos.
+          </p>
+        )}
+
         {deleteError && (
           <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{deleteError}</p>
         )}
@@ -342,7 +223,7 @@ function DeleteSection({ locales, onDeleteDone }) {
             size="sm"
             className="flex-1 bg-red-600 hover:bg-red-700 text-white"
             onClick={handleFinalDelete}
-            disabled={isDeleting}
+            disabled={isDeleting || hayTurnosAbiertos}
           >
             {isDeleting ? (
               <span className="flex items-center gap-2">
@@ -360,7 +241,7 @@ function DeleteSection({ locales, onDeleteDone }) {
 }
 
 // ── Main drawer ─────────────────────────────────────────────
-function OpcionesDrawer({ isOpen, onClose, locales, thresholds, onSaveThresholds, isSuperAdmin, onDeleteDone }) {
+function OpcionesDrawer({ isOpen, onClose, locales, onDeleteDone }) {
   return (
     <>
       {/* Backdrop */}
@@ -389,14 +270,8 @@ function OpcionesDrawer({ isOpen, onClose, locales, thresholds, onSaveThresholds
 
         {/* Body — scrollable; key forces remount on open so unsaved changes are discarded */}
         <div key={String(isOpen)} className="flex-1 overflow-y-auto px-6 py-6 flex flex-col gap-8 no-scrollbar">
-          <ThresholdsSection thresholds={thresholds} onSave={onSaveThresholds} />
-
-          {isSuperAdmin && (
-            <>
-              <div className="h-px bg-[hsl(var(--border))]" />
-              <DeleteSection locales={locales} onDeleteDone={onDeleteDone} />
-            </>
-          )}
+          {/* El umbral de flujo tiene su propio botón en Inicio (UmbralFlujoDrawer). */}
+          <DeleteSection locales={locales} onDeleteDone={onDeleteDone} />
         </div>
       </div>
     </>

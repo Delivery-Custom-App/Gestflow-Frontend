@@ -1,6 +1,7 @@
 import {
   listCajas,
-  listOrders,
+  listOrdersPage,
+  toV2OrderStatus,
   createCajaV2,
   getCajaResumen,
   getMovimientosCaja,
@@ -8,20 +9,10 @@ import {
   getResumenDiario,
 } from './salesApi'
 import { apiRequest } from './apiClient'
-import { isV2FeatureEnabled } from './v2Features'
+import { getProductsReport, getSalesReport } from './reportsApi'
+import { CHILE_TZ } from '../utils/chileDateTime'
 
-function withQuery(path, params) {
-  const query = new URLSearchParams()
-
-  Object.entries(params).forEach(([key, value]) => {
-    if (value !== undefined && value !== null && value !== '') {
-      query.set(key, String(value))
-    }
-  })
-
-  const queryString = query.toString()
-  return queryString ? `${path}?${queryString}` : path
-}
+const safeList = (v) => (Array.isArray(v) ? v : [])
 
 function orderAmount(order) {
   const n = Number(order?.total_amount ?? order?.total ?? order?.amount ?? order?.subtotal ?? 0)
@@ -115,26 +106,238 @@ export function buildDashboardFromOrders(orders = [], { localCount = 1 } = {}) {
 
 export async function getLocalDashboard(localId, token) {
   void token
-  if (!isV2FeatureEnabled('adminDashboard')) {
-    const orders = await listOrders(localId)
-    return buildDashboardFromOrders(orders, { localCount: 1 })
+  // Calculado desde /reports (T-39: /dashboard/local no existe en V2).
+  const endDate = todayInChileIso()
+  const startDate = `${endDate.slice(0, 7)}-01`
+  const report = await getSalesReport(localId, { startDate, endDate })
+  const byDay = safeList(report?.by_day)
+  const dailySales = nullableNumber(byDay.find((row) => row.date === endDate)?.total_sales) ?? 0
+  const monthlySales = nullableNumber(report?.total_sales) ?? 0
+  return {
+    daily_sales: dailySales,
+    monthly_sales: monthlySales,
+    monthly_cash_flow: monthlySales,
+    monthly_expenses: 0,
+    active_alerts: 0,
+    avg_ticket: nullableNumber(report?.avg_ticket) ?? 0,
+    stock_critical_count: 0,
+    stock_low_count: 0,
+    stock_out_count: 0,
+    inventory_total_value: 0,
+    active_cajas_count: 0,
+    cajas_count: 0,
+    peak_hour: null,
+    local_count: 1,
+    top_products: [],
+    payment_breakdown: safeList(report?.by_payment_method),
+    week_comparison: null,
+    monthly_goal: { target_amount: 0, current_amount: monthlySales, progress_pct: 0 },
+    petty_cash: { active_cajas: 0, total_cajas: 0, pending_expenses_amount: 0 },
+    daily_income_trend: byDay.map((row) => ({ date: row.date, ingresos: nullableNumber(row.total_sales) ?? 0 })),
+    expenses_breakdown: [],
+    _source: 'reports_v2',
   }
-  return apiRequest(`/dashboard/local/${localId}`, { token })
 }
 
-export function getOrdersByLocal(localId, token, status) {
+function todayInChileIso(now = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: CHILE_TZ,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(now)
+  const values = Object.fromEntries(parts.map(({ type, value }) => [type, value]))
+  return `${values.year}-${values.month}-${values.day}`
+}
+
+function shiftIsoDate(isoDate, amount) {
+  const date = new Date(`${isoDate}T00:00:00Z`)
+  date.setUTCDate(date.getUTCDate() + amount)
+  return date.toISOString().slice(0, 10)
+}
+
+function nullableNumber(value) {
+  if (value === null || value === undefined || value === '') return null
+  const number = Number(value)
+  return Number.isFinite(number) ? number : null
+}
+
+function reportDateLabel(isoDate) {
+  const [, month, day] = String(isoDate || '').slice(0, 10).split('-')
+  return month && day ? `${day}/${month}` : '—'
+}
+
+/** Normaliza el reporte de ventas V2 para el dashboard local (T-31). */
+export function mapDashboardSalesReport(report) {
+  const byDay = safeList(report?.by_day).map((row) => ({
+    date: reportDateLabel(row.date),
+    ingresos: nullableNumber(row.total_sales) ?? 0,
+    ordenes: nullableNumber(row.total_orders) ?? 0,
+  }))
+  const currentSales = nullableNumber(report?.total_sales)
+  const previousSales = nullableNumber(report?.previous_period?.total_sales)
+  const changePct = previousSales > 0 && currentSales !== null
+    ? ((currentSales - previousSales) / previousSales) * 100
+    : null
+
+  return {
+    total_sales: currentSales,
+    total_orders: nullableNumber(report?.total_orders),
+    daily_sales: byDay.length ? byDay[byDay.length - 1].ingresos : null,
+    avg_ticket: nullableNumber(report?.avg_ticket),
+    cancelled_orders: nullableNumber(report?.cancelled_orders),
+    by_day: byDay,
+    payment_breakdown: safeList(report?.by_payment_method).map((row) => ({
+      method: String(row.method || ''),
+      total: nullableNumber(row.total) ?? 0,
+      count: nullableNumber(row.count) ?? 0,
+    })),
+    week_comparison: currentSales !== null && previousSales !== null
+      ? {
+          current_week_sales: currentSales,
+          prev_week_sales: previousSales,
+          change_pct: changePct,
+        }
+      : null,
+  }
+}
+
+/** Una llamada agregada para los indicadores de los últimos siete días (T-31). */
+export async function getDashboardSalesReport(localId, now = new Date()) {
+  const endDate = todayInChileIso(now)
+  const startDate = shiftIsoDate(endDate, -6)
+  const report = await getSalesReport(localId, { startDate, endDate })
+  return mapDashboardSalesReport(report)
+}
+
+export function getOrdersByLocal(localId, token, filters = {}) {
   void token
-  return listOrders(localId, { status })
+  const requested = filters.status ?? ['open', 'preparing', 'ready', 'completed']
+  const status = Array.isArray(requested)
+    ? requested.map(toV2OrderStatus)
+    : toV2OrderStatus(requested)
+  return listOrdersPage(localId, { ...filters, status, limit: filters.limit ?? 50 })
 }
 
 export async function getCajasByLocal(localId, token) {
   void token
-  const [cajas, mpStatuses] = await Promise.all([
-    listCajas(localId),
-    apiRequest(`/locals/${encodeURIComponent(localId)}/mp/cajas-status`).catch(() => []),
+  return listCajas(localId)
+}
+
+/** Últimos 7 días (hoy incluido) como fechas YYYY-MM-DD. */
+function ultimos7Dias(hoy = new Date()) {
+  const pad = (n) => String(n).padStart(2, '0')
+  return Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(hoy)
+    d.setDate(d.getDate() - (6 - i))
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+  })
+}
+
+/** 'dd/mm' para el eje del gráfico. */
+function etiquetaDia(iso) {
+  const [, m, d] = iso.split('-')
+  return `${d}/${m}`
+}
+
+const METODOS_TARJETA = new Set(['debit', 'credit', 'card', 'debito', 'credito', 'tarjeta'])
+
+/**
+ * Indicadores de la sección Ventas, calculados por el backend.
+ *
+ * Antes la pantalla se bajaba TODAS las órdenes del local y sumaba en el
+ * navegador. Ahora usa los reportes agregados (`/reports/sales` por día y
+ * `/reports/products`) más el arqueo del día (`/cajas/resumen-diario`), que ya
+ * trae el desglose por método de pago.
+ *
+ * El detalle orden por orden sigue necesitando `/orders`, pero se carga solo si
+ * el usuario lo pide: ya no se descarga para pintar indicadores.
+ */
+export async function getVentasIndicadores(localId) {
+  const dias = ultimos7Dias()
+  const [porDia, productos, resumen] = await Promise.all([
+    Promise.all(dias.map((d) => getSalesReport(localId, { startDate: d, endDate: d }).catch(() => null))),
+    getProductsReport(localId, { startDate: dias[0], endDate: dias[dias.length - 1] }).catch(() => null),
+    getResumenDiario(localId).catch(() => null),
   ])
-  const statusByCaja = new Map((mpStatuses || []).map((s) => [String(s.caja_id), s]))
-  return cajas.map((c) => ({ ...c, mp: statusByCaja.get(String(c.id)) || null }))
+
+  const tendenciaBruta = dias.map((iso, i) => ({
+    date: etiquetaDia(iso),
+    ingresos: Number(porDia[i]?.total_sales) || 0,
+  }))
+  const promedio = Math.round(tendenciaBruta.reduce((s, p) => s + p.ingresos, 0) / dias.length)
+
+  const porMetodo = { efectivo: 0, tarjetas: 0, otros: 0 }
+  for (const fila of safeList(resumen?.por_metodo)) {
+    const metodo = String(fila.payment_method || '').toLowerCase()
+    const monto = Number(fila.total) || 0
+    if (metodo === 'cash' || metodo === 'efectivo') porMetodo.efectivo += monto
+    else if (METODOS_TARJETA.has(metodo)) porMetodo.tarjetas += monto
+    else porMetodo.otros += monto
+  }
+
+  const hoy = porDia[porDia.length - 1]
+  return {
+    hoy: {
+      total: Number(resumen?.total_ingresos) || Number(hoy?.total_sales) || 0,
+      ordenes: Number(hoy?.total_orders) || 0,
+    },
+    porMetodo,
+    tendencia: tendenciaBruta.map((p) => ({ ...p, promedio })),
+    topProductos: safeList(productos?.ranking).map((p) => ({
+      product_id: p.product_id,
+      product_name: p.product_name,
+      units_sold: Number(p.quantity_sold) || 0,
+      revenue: Number(p.revenue) || 0,
+    })),
+  }
+}
+
+/**
+ * Cajas físicas del local con su estado de vinculación a MercadoPago.
+ *
+ * El terminal Point se vincula a la **caja física** (el mueble donde está el
+ * hardware), no al turno de caja: en V2 el device cuelga de
+ * `pos_machines.caja_fisica_id` y los endpoints viven bajo `/cajas-fisicas/...`.
+ * Un turno dura un día; la terminal sigue ahí mañana.
+ *
+ * V2 expone el nombre como `nombre`; se normaliza a `name` para el resto de la UI.
+ */
+/**
+ * Solo el listado de cajas físicas, sin el estado de MercadoPago. Lo usa la
+ * apertura de turno, que necesita saber sobre qué caja física se abre: el
+ * estado MP está restringido a ADMIN y superiores, y quien abre el turno
+ * suele ser el empleado del mostrador.
+ */
+export async function listarCajasFisicas(localId) {
+  const rows = await apiRequest(`/cajas-fisicas?local_id=${encodeURIComponent(localId)}`)
+  // Las desactivadas (archivadas, T-75) no se ofrecen para abrir un turno: el
+  // backend las sigue listando y no impide abrir sobre ellas.
+  return safeList(rows)
+    .filter((c) => c.is_active !== false)
+    .map((c) => ({ ...c, name: c.nombre ?? c.name ?? null }))
+}
+
+export async function getCajasFisicasByLocal(localId) {
+  const pedirEstadoMp = apiRequest(`/locals/${encodeURIComponent(localId)}/mp/cajas-fisicas-status`)
+    // Se distingue "no hay vinculación" de "no se pudo consultar": tragarse el
+    // error y devolver lista vacía hacía que la columna dijera "Sin vincular",
+    // que es un estado falso.
+    .then((filas) => ({ filas, disponible: true }))
+    .catch(() => ({ filas: [], disponible: false }))
+
+  const [cajasFisicas, estadoMp] = await Promise.all([
+    apiRequest(`/cajas-fisicas?local_id=${encodeURIComponent(localId)}`),
+    pedirEstadoMp,
+  ])
+
+  const statusByCajaFisica = new Map(safeList(estadoMp.filas).map((s) => [String(s.caja_fisica_id), s]))
+  return safeList(cajasFisicas).map((c) => ({
+    ...c,
+    name: c.nombre ?? c.name ?? null,
+    mp: statusByCajaFisica.get(String(c.id)) || null,
+    mpDisponible: estadoMp.disponible,
+  }))
 }
 
 export function createCaja(body) {
@@ -143,12 +346,62 @@ export function createCaja(body) {
 
 export { getCajaResumen, getMovimientosCaja, closeCaja, getResumenDiario }
 
-export function provisionCajaMp(cajaId) {
-  return apiRequest(`/cajas/${cajaId}/mp/provision`, { method: 'POST' })
+/**
+ * Tipo de caja (A-02, R6): `fisica` (por defecto) o `digital`. Es solo un
+ * dato: las dos abren turno con cualquier monto, también 0.
+ */
+export const TIPOS_CAJA_FISICA = { fisica: 'Física', digital: 'Digital' }
+
+/** Alta de caja física. El backend responde 409 si el nombre ya existe en el local. */
+export async function crearCajaFisica(localId, nombre, tipo = 'fisica') {
+  const row = await apiRequest('/cajas-fisicas', {
+    method: 'POST',
+    body: { local_id: localId, nombre: String(nombre || '').trim(), tipo: tipo === 'digital' ? 'digital' : 'fisica' },
+  })
+  return { ...row, name: row?.nombre ?? null }
 }
 
-export function verifyCajaMpPairing(cajaId) {
-  return apiRequest(`/cajas/${cajaId}/mp/verify-pairing`, { method: 'POST' })
+/**
+ * Renombra una caja física y, si viene, cambia su tipo. Misma regla de nombre
+ * único por local. Cambiar el tipo no toca los turnos abiertos.
+ */
+export async function renombrarCajaFisica(cajaFisicaId, nombre, tipo) {
+  const row = await apiRequest(`/cajas-fisicas/${encodeURIComponent(String(cajaFisicaId))}`, {
+    method: 'PATCH',
+    body: { nombre: String(nombre || '').trim(), ...(tipo ? { tipo } : {}) },
+  })
+  return { ...row, name: row?.nombre ?? null }
+}
+
+/**
+ * Activa o desactiva una caja física (`PATCH is_active`, T-75). Desactivar es
+ * archivarla: deja de ofrecerse al abrir turnos y conserva su historial. Es el
+ * primer paso para eliminarla.
+ */
+export async function cambiarEstadoCajaFisica(cajaFisicaId, activa) {
+  const row = await apiRequest(`/cajas-fisicas/${encodeURIComponent(String(cajaFisicaId))}`, {
+    method: 'PATCH',
+    body: { is_active: Boolean(activa) },
+  })
+  return { ...row, name: row?.nombre ?? null }
+}
+
+/**
+ * Elimina una caja física para siempre (`DELETE /cajas-fisicas/{id}`, T-75).
+ * El backend solo lo permite si ya está desactivada, nunca tuvo turnos y no
+ * tiene lectores POS anclados; si no, responde 400 con el motivo ("Esta caja
+ * física tiene turnos históricos…", "Reasigná estos lectores POS…").
+ */
+export async function eliminarCajaFisica(cajaFisicaId) {
+  await apiRequest(`/cajas-fisicas/${encodeURIComponent(String(cajaFisicaId))}`, { method: 'DELETE' })
+}
+
+export function provisionCajaFisicaMp(cajaFisicaId) {
+  return apiRequest(`/cajas-fisicas/${cajaFisicaId}/mp/provision`, { method: 'POST' })
+}
+
+export function verifyCajaFisicaMpPairing(cajaFisicaId) {
+  return apiRequest(`/cajas-fisicas/${cajaFisicaId}/mp/verify-pairing`, { method: 'POST' })
 }
 
 export function putLocalMpLocation(localId, body) {
@@ -159,17 +412,9 @@ export function getAvailableMpPos(localId) {
   return apiRequest(`/locals/${localId}/mp/available-pos`)
 }
 
-export function assignExistingMpPos(cajaId, mercadopagoPosId) {
-  return apiRequest(`/cajas/${cajaId}/mp/assign-existing`, {
+export function assignExistingMpPos(cajaFisicaId, mercadopagoPosId) {
+  return apiRequest(`/cajas-fisicas/${cajaFisicaId}/mp/assign-existing`, {
     method: 'POST',
     body: { mercadopago_pos_id: mercadopagoPosId },
   })
-}
-
-export async function getIncomeTrend(localId, token, days = 7) {
-  void token
-  void days
-  if (!isV2FeatureEnabled('adminDashboard')) return []
-  const path = withQuery(`/dashboard/local/${localId}/trend`, { days })
-  return apiRequest(path, { token })
 }

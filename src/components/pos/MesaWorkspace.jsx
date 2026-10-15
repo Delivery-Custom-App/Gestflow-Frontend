@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ArrowLeft, DollarSign, Menu as MenuIcon, Printer, Receipt, Split, X } from 'lucide-react'
+import { ArrowLeft, DollarSign, Menu as MenuIcon, Minus, Plus, Printer, Receipt, Split, Trash2, X } from 'lucide-react'
 import { useMenuPOS } from '../../hooks/useMenuPOS'
 import { useMesaDetail } from '../../hooks/useMesaDetail'
 import { useOrderTotals } from '../../hooks/useOrderTotals'
 import { useOrderManagement } from '../../hooks/useOrderManagement'
-import { addOrderItem, createOrder, setMesaLibre } from '../../lib/salesApi'
+import { addOrderItem, createOrder, removeOrderItem, setMesaLibre, updateOrderItem } from '../../lib/salesApi'
+import { obtenerClaveIdempotencia } from '../../lib/idempotency'
 import { getSplitPaymentSummary } from '../../lib/apiClient'
 import { isV2FeatureEnabled } from '../../lib/v2Features'
 import { formatCLP } from '../../lib/formatCLP'
@@ -16,6 +17,9 @@ import RecipeCustomizer from './menu-picker/RecipeCustomizer'
 import { calcItemPrice, isCompleto, productKey } from './menu-picker/menuPricing'
 import MultiPaymentModal from './MultiPaymentModal'
 import MercadoPagoModal from './MercadoPagoModal'
+import LiberarMesaModal from './LiberarMesaModal'
+import ComandaActions from './ComandaActions'
+import { formatCantidad } from '@/lib/utils'
 import {
   STATUS_BADGE,
   STATUS_LABEL,
@@ -28,13 +32,16 @@ import {
 
 const EMPTY_CUSTOMIZATION = { embutido: null, agregados: [] }
 
-export default function MesaWorkspace({ mesa, localId, cajaId, onBack, onTableUpdated }) {
-  const { detail, loading, error: mesaError, refresh } = useMesaDetail(mesa.id)
+const formatItemName = (item) => item.item_name || item.product_name || '—'
+
+export default function MesaWorkspace({ mesa, atencion = null, localId, cajaId, puedeCobrar = true, puedeLiberarMesa = false, onBack, onTableUpdated }) {
+  const { detail, loading, error: mesaError, refresh, updateAfterItemRemoval } = useMesaDetail(mesa.id)
   const { updateOrderStatus } = useOrderManagement()
   const { data: menuData, loading: menuLoading, fetch: fetchMenu } = useMenuPOS(localId)
   const { allItems, subtotal, iva, total, firstOrder } = useOrderTotals(detail)
 
   const [selectedQtys, setSelectedQtys] = useState({})
+  const [guests, setGuests] = useState('1')
   const [customizations, setCustomizations] = useState({})
   const [expandedKeys, setExpandedKeys] = useState(() => new Set())
   const [submitting, setSubmitting] = useState(false)
@@ -46,9 +53,12 @@ export default function MesaWorkspace({ mesa, localId, cajaId, onBack, onTableUp
   const [splitFullyPaid, setSplitFullyPaid] = useState(false)
   const [hasSplits, setHasSplits] = useState(false)
   const [showMPModal, setShowMPModal] = useState(false)
+  const [showLiberarModal, setShowLiberarModal] = useState(false)
+  const [offerLiberar, setOfferLiberar] = useState(false)
   const [mobileTab, setMobileTab] = useState('menu') // 'menu' | 'pedido'
 
   const submittingRef = useRef(false)
+  const idempotencyKeyRef = useRef(null)
 
   useEffect(() => { fetchMenu() }, [fetchMenu])
 
@@ -74,6 +84,7 @@ export default function MesaWorkspace({ mesa, localId, cajaId, onBack, onTableUp
     return (menuData?.categories ?? [])
       .map((cat) => ({
         name: cat.name || 'Sin categoría',
+        color: cat.color || null,
         items: (cat.products || []).map((p) => ({
           key: productKey(p.id),
           id: p.id,
@@ -135,6 +146,10 @@ export default function MesaWorkspace({ mesa, localId, cajaId, onBack, onTableUp
 
   const handleAgregarAlPedido = useCallback(async () => {
     if (!totalItems || submittingRef.current) return
+    if (!firstOrder && (!Number.isInteger(Number(guests)) || Number(guests) < 1)) {
+      setErrorMsg('Ingresa una cantidad válida de comensales.')
+      return
+    }
     const sandwichSinProteina = menuItemsSelected
       .filter(it => !isCompleto(it))
       .find(it => !(customizations[it.key]?.embutido))
@@ -146,6 +161,7 @@ export default function MesaWorkspace({ mesa, localId, cajaId, onBack, onTableUp
     setSubmitting(true)
     setErrorMsg('')
     try {
+      const idempotencyKey = obtenerClaveIdempotencia(idempotencyKeyRef)
       const items = Object.entries(selectedQtys).map(([key, quantity]) => {
         const it = allMenuItems.find(i => i.key === key)
         const cust = customizations[key]
@@ -153,14 +169,15 @@ export default function MesaWorkspace({ mesa, localId, cajaId, onBack, onTableUp
         return { product_id: it?.id, quantity, unit_price: unitPrice }
       })
       if (firstOrder) {
-        for (const item of items) {
+        for (const [index, item] of items.entries()) {
           // Secuencial a propósito: conserva el orden de los ítems/comanda y evita escrituras concurrentes sobre la misma orden/mesa.
           // oxlint-disable-next-line react-doctor/async-await-in-loop
-          await addOrderItem(firstOrder.id, item, firstOrder.created_at)
+          await addOrderItem(firstOrder.id, item, firstOrder.created_at, `${idempotencyKey}:item:${index}`)
         }
       } else {
-        await createOrder({ local_id: localId, mesa_id: mesa.id, caja_id: cajaId || null, source: 'dine_in', items })
+        await createOrder({ local_id: localId, mesa_id: mesa.id, caja_id: cajaId || null, source: 'dine_in', guests: Number(guests), items, idempotency_key: idempotencyKey })
       }
+      idempotencyKeyRef.current = null
       setSelectedQtys({})
       setCustomizations({})
       setExpandedKeys(new Set())
@@ -172,7 +189,7 @@ export default function MesaWorkspace({ mesa, localId, cajaId, onBack, onTableUp
       submittingRef.current = false
       setSubmitting(false)
     }
-  }, [totalItems, menuItemsSelected, customizations, selectedQtys, allMenuItems, firstOrder, localId, mesa.id, cajaId, refresh, onTableUpdated])
+  }, [totalItems, firstOrder, guests, menuItemsSelected, customizations, selectedQtys, allMenuItems, localId, mesa.id, cajaId, refresh, onTableUpdated])
 
   /* ─── cobro / acciones (trasladado de OrdenView) ─── */
   const handleCancelOrder = useCallback(async () => {
@@ -204,26 +221,79 @@ export default function MesaWorkspace({ mesa, localId, cajaId, onBack, onTableUp
     setShowMPModal(true)
   }, [detail, hasSplits, splitFullyPaid])
 
-  const handlePaymentSuccess = useCallback(async () => {
+  const handlePaymentSuccess = useCallback(async (_paymentMethod, tipAmount = 0) => {
     setShowMPModal(false)
     setCobrarLoading(true)
     try {
       await setMesaLibre(mesa.id)
-      openPrintWindow({ mesa, firstOrder, allItems, subtotal, iva, total })
+      openPrintWindow({ mesa, firstOrder, allItems, subtotal, iva, total, tipAmount, totalWithTip: total + Number(tipAmount || 0) })
       onTableUpdated?.()
       onBack()
     } catch (err) {
       setErrorMsg(err.message || 'Error al finalizar el cobro')
+      if (Number(err?.status) === 409 && puedeLiberarMesa) setOfferLiberar(true)
       setCobrarLoading(false)
     }
-  }, [mesa, firstOrder, allItems, subtotal, iva, total, onTableUpdated, onBack])
+  }, [mesa, firstOrder, allItems, subtotal, iva, total, onTableUpdated, onBack, puedeLiberarMesa])
+
+  const handleMesaLiberada = useCallback(() => {
+    setShowLiberarModal(false)
+    setOfferLiberar(false)
+    onTableUpdated?.()
+    onBack()
+  }, [onTableUpdated, onBack])
 
   const handlePrintChargeDetail = useCallback(() => {
     if (!detail?.active_orders?.length) return
     openPrintWindow({ mesa, firstOrder, allItems, subtotal, iva, total, label: 'DETALLE DE COBRO' })
   }, [detail?.active_orders?.length, mesa, firstOrder, allItems, subtotal, iva, total])
 
-  const formatItemName = (item) => item.item_name || item.product_name || '—'
+
+  // Editar la cantidad o quitar un ítem ya enviado (T-30): PATCH solo con la
+  // cantidad (el precio lo pone el backend) y DELETE; luego se recarga la mesa.
+  const [itemOcupado, setItemOcupado] = useState('')
+  // A-06: nota del ítem; vaciarla la borra (PATCH notes: null).
+  const [editandoNota, setEditandoNota] = useState(null) // { item, texto }
+  const ordenDelItem = useCallback(
+    (item) => (detail?.active_orders || []).find((o) => (o.items || []).some((it) => it.id === item.id)),
+    [detail],
+  )
+  const cambiarItem = useCallback(async (item, accion) => {
+    const orden = ordenDelItem(item)
+    if (!orden) return
+    const nueva = Number(item.quantity) + (accion === 'mas' ? 1 : -1)
+    if (accion === 'quitar' && !window.confirm(`¿Quitar ${formatItemName(item)} del pedido?`)) return
+    if (accion === 'nota') {
+      setItemOcupado(item.id)
+      setErrorMsg('')
+      try {
+        await updateOrderItem(orden.id, item.id, { notes: String(editandoNota?.texto || '').trim() || null }, orden.created_at)
+        setEditandoNota(null)
+        await refresh()
+      } catch (e) {
+        setErrorMsg(e?.message || 'No se pudo guardar la nota')
+      } finally {
+        setItemOcupado('')
+      }
+      return
+    }
+    setItemOcupado(item.id)
+    setErrorMsg('')
+    try {
+      if (accion === 'quitar' || nueva <= 0) {
+        const result = await removeOrderItem(orden.id, item.id, orden.created_at)
+        if (result?.orderTotal != null) updateAfterItemRemoval(orden.id, item.id, result.orderTotal)
+        else await refresh()
+      } else {
+        await updateOrderItem(orden.id, item.id, { quantity: nueva }, orden.created_at)
+        await refresh()
+      }
+    } catch (e) {
+      setErrorMsg(e?.message || 'No se pudo cambiar el pedido')
+    } finally {
+      setItemOcupado('')
+    }
+  }, [ordenDelItem, refresh, updateAfterItemRemoval, editandoNota])
   const visibleError = errorMsg || mesaError
 
   /* ─── fila de menú, con customizador inline para recetas ─── */
@@ -276,6 +346,7 @@ export default function MesaWorkspace({ mesa, localId, cajaId, onBack, onTableUp
             <MenuCategoryAccordion
               key={cat.name}
               label={cat.name}
+              color={cat.color}
               items={cat.items}
               selectedQtys={selectedQtys}
               onAdd={handleAddItem}
@@ -321,8 +392,35 @@ export default function MesaWorkspace({ mesa, localId, cajaId, onBack, onTableUp
   const orderPanel = (
     <div className="flex h-full min-h-0 flex-col">
       <div className="px-4 lg:px-5 py-4 border-b border-[hsl(var(--border))] shrink-0 space-y-3">
+        {!detail?.active_orders?.length ? (
+          <div className="flex items-center gap-3">
+            <label htmlFor="mesa-comensales" className="text-sm font-medium">Comensales</label>
+            <input
+              id="mesa-comensales"
+              type="number"
+              min="1"
+              step="1"
+              value={guests}
+              onChange={(event) => setGuests(event.target.value)}
+              className="w-20 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-2 py-1.5 text-sm"
+            />
+          </div>
+        ) : firstOrder?.guests != null ? (
+          <p className="text-xs text-[hsl(var(--muted-foreground))]">Comensales: {firstOrder.guests}</p>
+        ) : null}
         <div className="flex flex-wrap gap-2">
-          <Button
+          {puedeLiberarMesa && (detail?.active_orders?.length > 0 || mesa.state === 'ocupada') && (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => { setErrorMsg(''); setOfferLiberar(false); setShowLiberarModal(true) }}
+              disabled={cobrarLoading || cancelLoading}
+              className="h-11 rounded-xl"
+            >
+              Liberar mesa
+            </Button>
+          )}
+          {puedeCobrar && <Button
             onClick={handleCobrar}
             disabled={cobrarLoading || cancelLoading || !detail?.active_orders?.length || (hasSplits && !splitFullyPaid)}
             className="flex-1 min-w-[120px] h-11 rounded-xl font-semibold shadow-sm bg-[hsl(var(--primary))] hover:bg-[hsl(var(--primary))]/90 text-white disabled:opacity-50"
@@ -330,7 +428,7 @@ export default function MesaWorkspace({ mesa, localId, cajaId, onBack, onTableUp
           >
             <DollarSign size={18} className="mr-2" />
             {cobrarLoading ? 'Procesando...' : 'Cobrar'}
-          </Button>
+          </Button>}
           <Button
             onClick={handlePrintChargeDetail}
             disabled={!detail?.active_orders?.length}
@@ -341,6 +439,12 @@ export default function MesaWorkspace({ mesa, localId, cajaId, onBack, onTableUp
           >
             <Printer size={18} />
           </Button>
+          {/* La comanda de cocina se ve e imprime desde la mesa: la pantalla de Cocina está apagada (`kitchenView`). */}
+          <ComandaActions
+            orderId={firstOrder?.id}
+            createdAt={firstOrder?.created_at}
+            className="h-11 rounded-xl"
+          />
           {isV2FeatureEnabled('splitPayments') && firstOrder?.id && (
             <Button
               onClick={() => setShowSplitModal(true)}
@@ -368,6 +472,12 @@ export default function MesaWorkspace({ mesa, localId, cajaId, onBack, onTableUp
             <X size={18} />
           </Button>
         </div>
+        {!puedeCobrar && (
+          <p className="text-xs text-[hsl(var(--muted-foreground))]">
+            En restaurante el administrador no cobra: cobra quien abrió la mesa. Puedes cancelar la orden o traspasar la mesa.
+          </p>
+        )}
+      
       </div>
 
       <div className="flex-1 overflow-y-auto min-h-0 px-4 lg:px-5 py-4 space-y-4">
@@ -409,15 +519,52 @@ export default function MesaWorkspace({ mesa, localId, cajaId, onBack, onTableUp
                 <tr className="bg-[hsl(var(--accent))]">
                   <th className="text-left text-xs font-medium text-[hsl(var(--muted-foreground))] px-2 py-2 rounded-l-lg w-12">Cant.</th>
                   <th className="text-left text-xs font-medium text-[hsl(var(--muted-foreground))] px-2 py-2">Nombre</th>
-                  <th className="text-right text-xs font-medium text-[hsl(var(--muted-foreground))] px-2 py-2 rounded-r-lg">Total</th>
+                  <th className="text-right text-xs font-medium text-[hsl(var(--muted-foreground))] px-2 py-2">Total</th>
+                  <th className="px-2 py-2 rounded-r-lg"><span className="sr-only">Acciones</span></th>
                 </tr>
               </thead>
               <tbody>
                 {allItems.map((item) => (
                   <tr key={item.id} className="border-b border-[hsl(var(--border))] last:border-0">
-                    <td className="px-2 py-2 font-medium text-[hsl(var(--foreground))]">{item.quantity}</td>
-                    <td className="px-2 py-2 text-[hsl(var(--foreground))]">{formatItemName(item)}</td>
+                    <td className="px-2 py-2 font-medium text-[hsl(var(--foreground))]">{formatCantidad(item.quantity)}</td>
+                    <td className="px-2 py-2 text-[hsl(var(--foreground))]">
+                      {formatItemName(item)}
+                      {editandoNota?.item.id === item.id ? (
+                        <form className="mt-1 flex gap-1" onSubmit={(e) => { e.preventDefault(); cambiarItem(item, 'nota') }}>
+                          <input aria-label={`Nota de ${formatItemName(item)}`} maxLength={200} value={editandoNota.texto}
+                            onChange={(e) => setEditandoNota({ item, texto: e.target.value })} placeholder="Ej: sin cebolla"
+                            className="h-7 flex-1 rounded border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-2 text-xs" />
+                          <button type="submit" disabled={itemOcupado === item.id} className="rounded px-2 text-xs font-semibold text-[hsl(var(--primary))]">Guardar</button>
+                          <button type="button" onClick={() => setEditandoNota(null)} className="rounded px-1 text-xs">✕</button>
+                        </form>
+                      ) : (
+                        <button type="button" onClick={() => setEditandoNota({ item, texto: item.notes || '' })}
+                          className="block text-left text-xs text-[hsl(var(--muted-foreground))] hover:underline"
+                          aria-label={`${item.notes ? 'Editar' : 'Agregar'} nota de ${formatItemName(item)}`}>
+                          {item.notes ? `Nota: ${item.notes}` : '+ nota'}
+                        </button>
+                      )}
+                    </td>
                     <td className="px-2 py-2 text-right font-medium text-[hsl(var(--foreground))]">${(item.total_price || 0).toLocaleString('es-CL')}</td>
+                    <td className="px-1 py-2">
+                      <div className="flex items-center justify-end gap-0.5">
+                        <button type="button" disabled={itemOcupado === item.id || Number(item.quantity) <= 1}
+                          onClick={() => cambiarItem(item, 'menos')} aria-label={`Restar uno de ${formatItemName(item)}`}
+                          className="h-7 w-7 inline-flex items-center justify-center rounded-md text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--accent))] disabled:opacity-40">
+                          <Minus size={14} />
+                        </button>
+                        <button type="button" disabled={itemOcupado === item.id}
+                          onClick={() => cambiarItem(item, 'mas')} aria-label={`Sumar uno de ${formatItemName(item)}`}
+                          className="h-7 w-7 inline-flex items-center justify-center rounded-md text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--accent))] disabled:opacity-40">
+                          <Plus size={14} />
+                        </button>
+                        <button type="button" disabled={itemOcupado === item.id}
+                          onClick={() => cambiarItem(item, 'quitar')} aria-label={`Quitar ${formatItemName(item)} del pedido`}
+                          className="h-7 w-7 inline-flex items-center justify-center rounded-md text-red-600 hover:bg-red-50 disabled:opacity-40">
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -429,7 +576,7 @@ export default function MesaWorkspace({ mesa, localId, cajaId, onBack, onTableUp
       <div className="shrink-0 px-4 lg:px-5 py-4 border-t border-[hsl(var(--border))] bg-[hsl(var(--card))]">
         <div className="grid grid-cols-3 gap-3 text-sm mb-2">
           <div>
-            <p className="text-xs text-[hsl(var(--muted-foreground))]">Subtotal</p>
+            <p className="text-xs text-[hsl(var(--muted-foreground))]">Subtotal (neto)</p>
             <p className="font-medium text-[hsl(var(--foreground))]">${subtotal.toLocaleString('es-CL')}</p>
           </div>
           <div>
@@ -460,10 +607,20 @@ export default function MesaWorkspace({ mesa, localId, cajaId, onBack, onTableUp
         />
       )}
 
+      {showLiberarModal && (
+        <LiberarMesaModal
+          mesa={mesa}
+          totalPendiente={total}
+          onClose={() => setShowLiberarModal(false)}
+          onDone={handleMesaLiberada}
+        />
+      )}
+
       {firstOrder && (
         <MercadoPagoModal
           open={showMPModal}
           orderId={firstOrder.id}
+          createdAt={firstOrder.created_at}
           total={total}
           description={`Mesa ${mesa.name || mesa.numero || ''}`.trim()}
           onSuccess={handlePaymentSuccess}
@@ -486,6 +643,12 @@ export default function MesaWorkspace({ mesa, localId, cajaId, onBack, onTableUp
                 <span className="hidden md:inline text-xs text-[hsl(var(--muted-foreground))]">{mesa.zona}</span>
               </>
             )}
+            {atencion && (
+              <span className="ml-auto truncate text-xs text-[hsl(var(--muted-foreground))]">
+                Atiende: <span className="font-semibold text-[hsl(var(--foreground))]">{atencion.atiende}</span>
+                {atencion.antes && <> · antes: {atencion.antes}</>}
+              </span>
+            )}
           </div>
 
           {/* Tabs mobile */}
@@ -506,8 +669,13 @@ export default function MesaWorkspace({ mesa, localId, cajaId, onBack, onTableUp
         </div>
 
         {visibleError && (
-          <div className="mx-4 lg:mx-6 mt-3 px-3 py-2 rounded-lg bg-red-50 border border-red-200 text-sm text-red-600 shrink-0">
+          <div role="alert" className="mx-4 lg:mx-6 mt-3 px-3 py-2 rounded-lg bg-red-50 border border-red-200 text-sm text-red-600 shrink-0">
             {visibleError}
+            {offerLiberar && puedeLiberarMesa && (
+              <Button type="button" variant="outline" size="sm" className="ml-3" onClick={() => setShowLiberarModal(true)}>
+                Liberar mesa
+              </Button>
+            )}
           </div>
         )}
 

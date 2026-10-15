@@ -10,6 +10,7 @@ import {
   patchSupplier,
 } from '../../lib/providersApi'
 import { useAuth } from '../../context/AuthContext'
+import { isV2FeatureEnabled } from '../../lib/v2Features'
 import { isInventoryAdminRole } from '../../utils/inventoryAccess'
 import { formatCLPDisplay as formatMoneyClp } from '../../lib/formatCLP'
 import InventoryShell from './InventoryShell'
@@ -22,7 +23,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import {
   Table, TableHeader, TableBody, TableRow, TableHead, TableCell,
 } from '@/components/ui/table'
-import { Users, CheckCircle, DollarSign, Store, Settings2, HelpCircle, X } from 'lucide-react'
+import { Users, CheckCircle, DollarSign, Store, Settings2, HelpCircle, X, Info } from 'lucide-react'
 
 const MONTH_NAMES = [
   'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
@@ -51,6 +52,9 @@ function supplierAvatar(name, index) {
 
 function SuppliersKpisDashboard() {
   const { isInventoryAdmin: canAccess, userRole } = useAuth()
+  // V2 no tiene el módulo de proveedores: sin él, la pantalla lo dice en vez
+  // de pintar ceros que se leen como datos reales.
+  const moduloDisponible = isV2FeatureEnabled('suppliers')
   const canEdit = isInventoryAdminRole(userRole)
   const { localId } = useParams()
 
@@ -227,7 +231,7 @@ function SuppliersKpisDashboard() {
             </div>
           </header>
 
-          {canEdit && (
+          {moduloDisponible && canEdit && (
             <div className="flex items-center gap-3 flex-wrap">
               {resolvedBusinessId && (
                 <Button
@@ -243,22 +247,42 @@ function SuppliersKpisDashboard() {
           )}
         </div>
 
+        {/* ── Módulo sin backend ── */}
+        {!moduloDisponible && (
+          <div className="rounded-xl border border-amber-300 bg-amber-50 px-5 py-4 flex gap-3">
+            <Info className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
+            <div className="space-y-1">
+              <p className="text-sm font-bold text-amber-900">
+                El módulo de proveedores todavía no está disponible
+              </p>
+              <p className="text-sm text-amber-800">
+                El sistema aún no guarda proveedores ni compras, así que esta pantalla no tiene datos
+                que mostrar. Los ceros que aparecían antes no eran un dato real: eran la ausencia del
+                módulo.
+              </p>
+              <p className="text-sm text-amber-800">
+                El inventario y el control de stock funcionan con normalidad mientras tanto.
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* ── Access error ── */}
-        {!canAccess && (
+        {moduloDisponible && !canAccess && (
           <div className="rounded-lg border border-red-200 bg-red-50 text-red-700 px-4 py-3">
             Solo administradores pueden ver los KPIs de proveedores.
           </div>
         )}
 
         {/* ── KPI error ── */}
-        {canAccess && error && (
+        {moduloDisponible && canAccess && error && (
           <div className="rounded-lg border border-red-200 bg-red-50 text-red-700 px-4 py-3">
             {error}
           </div>
         )}
 
         {/* ── KPI cards ── */}
-        {canAccess && (
+        {moduloDisponible && canAccess && (
           <m.div
             className="grid grid-cols-1 sm:grid-cols-3 gap-4"
             variants={STAGGER} initial="hidden" animate="visible"
@@ -285,7 +309,7 @@ function SuppliersKpisDashboard() {
         )}
 
         {/* ── Suppliers table ── */}
-        {canAccess && (
+        {moduloDisponible && canAccess && (
           <Card>
             <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b border-[hsl(var(--border))]">
               <div>
@@ -368,7 +392,7 @@ function SuppliersKpisDashboard() {
                           <TableCell className={`text-right tabular-nums text-base font-semibold py-4 ${inactive ? 'text-gray-400' : 'text-[hsl(var(--primary))]'}`}>
                             {formatMoneyClp(row.supplier_purchases_total_clp)}
                           </TableCell>
-                          {canEdit && (
+                          {moduloDisponible && canEdit && (
                             <TableCell className="pr-6 py-3 text-right">
                               <button
                                 type="button"

@@ -4,6 +4,7 @@ import { getUserRole } from '../utils/jwt'
 import { WORKER_ROLES } from '../constants/roles'
 import { formatRoleLabel } from '../auth/roleLabel'
 import { isInventoryAdminRole } from '../utils/inventoryAccess'
+import { mensajeDeCierre } from '../lib/sesiones'
 
 const AuthContext = createContext(null)
 
@@ -90,17 +91,27 @@ export function AppAuthProvider({ children }) {
   }, [clearPreviousSession])
 
   useEffect(() => {
-    const handleSessionExpired = () => {
+    const handleSessionExpired = (event) => {
       clearAuthState()
       setEmail('')
       setPassword('')
-      setErrorMessage('Tu sesion expiro. Ingresa nuevamente.')
+      // T-52: el motivo según X-Account-Status (la cerró el administrador,
+      // venció por inactividad, cuenta desactivada…); sin estado, el de siempre.
+      setErrorMessage(mensajeDeCierre(event?.detail || {}))
       setSuccessMessage('')
     }
 
     window.addEventListener('auth:session-expired', handleSessionExpired)
     return () => window.removeEventListener('auth:session-expired', handleSessionExpired)
   }, [clearAuthState])
+
+  // T-62: un 403 con X-Account-Status `password_change_required` lleva a la
+  // pantalla de cambio obligatorio, sea cual sea el rol (la decide la marca).
+  useEffect(() => {
+    const exigirCambio = () => setUser((u) => (u && !u.must_change_password ? { ...u, must_change_password: true } : u))
+    window.addEventListener('auth:password-change-required', exigirCambio)
+    return () => window.removeEventListener('auth:password-change-required', exigirCambio)
+  }, [])
 
   const handleSubmit = useCallback(async (event) => {
     event.preventDefault()
@@ -174,6 +185,9 @@ export function AppAuthProvider({ children }) {
       user: user ?? null,
       userRole: role,
       assignedLocalId: getAssignedLocalId(user),
+      // #29: el backend bloquea toda la API mientras esto sea true, así que
+      // la sesión tiene que resolverlo antes de dejar operar.
+      mustChangePassword: Boolean(user?.must_change_password),
       logout,
       refreshUser,
       isWorker: role != null && WORKER_ROLES.includes(role),
@@ -218,13 +232,16 @@ export function useAuth() {
 }
 
 /** Tests / montajes aislados: contexto estático sin backend de auth. */
-export function AuthProvider({ user, userRole, logout, children }) {
+export function AuthProvider({ user, userRole, logout, refreshUser, children }) {
   const value = useMemo(() => {
     const role = userRole ?? null
     return {
       user: user ?? null,
       userRole: role,
+      assignedLocalId: getAssignedLocalId(user),
+      mustChangePassword: Boolean(user?.must_change_password),
       logout,
+      refreshUser: refreshUser ?? (() => Promise.resolve(null)),
       isWorker: role != null && WORKER_ROLES.includes(role),
       isInventoryAdmin: isInventoryAdminRole(role),
       appLoading: false,
@@ -239,7 +256,7 @@ export function AuthProvider({ user, userRole, logout, children }) {
         handleSubmit: (event) => event?.preventDefault?.(),
       },
     }
-  }, [user, userRole, logout])
+  }, [user, userRole, logout, refreshUser])
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }

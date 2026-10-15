@@ -4,7 +4,7 @@ import { formatCLP } from '../../lib/formatCLP'
 import ProductDetailModal from './ProductDetailModal'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { cn } from '@/lib/utils'
+import { cn, formatCantidad } from '@/lib/utils'
 
 /** Validación pura de un producto. A nivel de módulo para no recrearla por render. */
 function validateProduct(product) {
@@ -22,14 +22,16 @@ function validateProduct(product) {
   }
 }
 
-/** Lista de productos de la orden con edición de cantidad/precio y detalle. */
+/**
+ * Lista de productos de la orden: editar la cantidad (PATCH, sin precio: lo
+ * pone el backend) y quitar el ítem (DELETE) — T-30.
+ */
 const NO_PRODUCTS = []
 
-function ProductList({ products = NO_PRODUCTS, orderId = null, onProductsChanged = null, className = '' }) {
-  const { updateItem, deleteItem, loading, error } = useOrderItems(orderId)
+function ProductList({ products = NO_PRODUCTS, orderId = null, createdAt = null, onProductsChanged = null, onItemRemoved = null, className = '' }) {
+  const { updateItem, deleteItem, loading, error } = useOrderItems(orderId, createdAt)
   const [editingId, setEditingId] = useState(null)
   const [editQuantity, setEditQuantity] = useState('')
-  const [editPrice, setEditPrice] = useState('')
   const [localError, setLocalError] = useState(null)
   const [selectedProduct, setSelectedProduct] = useState(null)
 
@@ -40,39 +42,35 @@ function ProductList({ products = NO_PRODUCTS, orderId = null, onProductsChanged
 
   const handleEditStart = useCallback((product) => {
     setEditingId(product.id)
-    setEditQuantity(product.quantity.toString())
-    setEditPrice(product.unit_price.toString())
+    setEditQuantity(String(Number(product.quantity)))
     setLocalError(null)
   }, [])
 
   const handleEditSave = useCallback(async (product) => {
     setLocalError(null)
 
-    if (!editQuantity || editQuantity <= 0) {
-      setLocalError('Cantidad debe ser mayor a 0')
+    const cantidad = Number(editQuantity)
+    if (!(cantidad > 0)) {
+      setLocalError('La cantidad debe ser mayor a 0')
       return
     }
 
-    if (!editPrice || editPrice <= 0) {
-      setLocalError('Precio debe ser mayor a 0')
-      return
-    }
-
-    const success = await updateItem(product.id, parseInt(editQuantity), parseFloat(editPrice))
+    const success = await updateItem(product.id, cantidad)
     if (success) {
       setEditingId(null)
       if (onProductsChanged) onProductsChanged()
     }
-  }, [editQuantity, editPrice, updateItem, onProductsChanged])
+  }, [editQuantity, updateItem, onProductsChanged])
 
   const handleDelete = useCallback(async (product) => {
-    if (window.confirm(`¿Eliminar ${product.product_name}?`)) {
+    if (window.confirm(`¿Quitar ${product.product_name || 'este producto'} del pedido?`)) {
       const success = await deleteItem(product.id)
       if (success) {
-        if (onProductsChanged) onProductsChanged()
+        if (success.orderTotal != null && onItemRemoved) onItemRemoved(product.id, success.orderTotal)
+        else if (onProductsChanged) onProductsChanged()
       }
     }
-  }, [deleteItem, onProductsChanged])
+  }, [deleteItem, onItemRemoved, onProductsChanged])
 
   if (!products || products.length === 0) {
     return (
@@ -135,6 +133,7 @@ function ProductList({ products = NO_PRODUCTS, orderId = null, onProductsChanged
                   <Input
                     type="number"
                     min="1"
+                    aria-label={`Cantidad de ${product.product_name || 'producto'}`}
                     value={editQuantity}
                     onChange={(e) => setEditQuantity(e.target.value)}
                     className="w-14 h-6 text-xs text-right"
@@ -142,28 +141,16 @@ function ProductList({ products = NO_PRODUCTS, orderId = null, onProductsChanged
                   />
                 ) : (
                   <span className={cn('text-xs', !validation.hasQuantity && 'text-orange-500')}>
-                    {validation.hasQuantity ? `x${product.quantity}` : '—'}
+                    {validation.hasQuantity ? `x${formatCantidad(product.quantity)}` : '—'}
                   </span>
                 )}
               </div>
 
               {/* Precio unitario */}
               <div className="text-right">
-                {isEditing ? (
-                  <Input
-                    type="number"
-                    step="0.01"
-                    min="0.01"
-                    value={editPrice}
-                    onChange={(e) => setEditPrice(e.target.value)}
-                    className="w-20 h-6 text-xs text-right"
-                    disabled={loading}
-                  />
-                ) : (
-                  <span className={cn('text-xs', !validation.hasPrice && 'text-orange-500')}>
-                    ${formatCLP(product.unit_price || 0)}
-                  </span>
-                )}
+                <span className={cn('text-xs', !validation.hasPrice && 'text-orange-500')}>
+                  ${formatCLP(product.unit_price || 0)}
+                </span>
               </div>
 
               {/* Total */}
@@ -182,6 +169,7 @@ function ProductList({ products = NO_PRODUCTS, orderId = null, onProductsChanged
                       disabled={loading}
                       className="w-6 h-6 flex items-center justify-center rounded text-green-600 hover:bg-green-100 text-xs transition-colors disabled:opacity-50"
                       title="Guardar cambios"
+                      aria-label="Guardar cantidad"
                     >
                       ✓
                     </button>
@@ -200,7 +188,8 @@ function ProductList({ products = NO_PRODUCTS, orderId = null, onProductsChanged
                       onClick={() => handleEditStart(product)}
                       disabled={loading}
                       className="w-6 h-6 flex items-center justify-center rounded text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--primary))] hover:bg-[hsl(var(--accent))] text-xs transition-colors disabled:opacity-50"
-                      title="Editar"
+                      title="Editar cantidad"
+                      aria-label={`Editar cantidad de ${product.product_name || 'producto'}`}
                     >
                       ✎
                     </button>
@@ -208,7 +197,8 @@ function ProductList({ products = NO_PRODUCTS, orderId = null, onProductsChanged
                       onClick={() => handleDelete(product)}
                       disabled={loading}
                       className="w-6 h-6 flex items-center justify-center rounded text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--destructive))] hover:bg-red-50 text-xs transition-colors disabled:opacity-50"
-                      title="Eliminar"
+                      title="Quitar del pedido"
+                      aria-label={`Quitar ${product.product_name || 'producto'} del pedido`}
                     >
                       🗑
                     </button>

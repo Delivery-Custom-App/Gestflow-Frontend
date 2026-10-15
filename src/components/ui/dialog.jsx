@@ -52,6 +52,11 @@ function DialogHeader({ className, ...props }) {
   )
 }
 
+/** Cuerpo del diálogo: el mismo margen lateral que el encabezado y el pie. */
+function DialogBody({ className, ...props }) {
+  return <div className={cn('flex flex-col gap-4 px-6 py-5', className)} {...props} />
+}
+
 function DialogFooter({ className, ...props }) {
   return (
     <div
@@ -81,5 +86,5 @@ function DialogDescription({ className, ...props }) {
 
 export {
   Dialog, DialogPortal, DialogOverlay, DialogClose, DialogTrigger,
-  DialogContent, DialogHeader, DialogFooter, DialogTitle, DialogDescription,
+  DialogContent, DialogHeader, DialogBody, DialogFooter, DialogTitle, DialogDescription,
 }

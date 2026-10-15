@@ -1,11 +1,11 @@
-import { useMemo } from 'react'
 import { Search, X } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
 
-import { EMPTY_MESA_FILTERS } from './filterMesas'
+import { EMPTY_MESA_FILTERS, SIN_ZONA, zonasDe } from './filterMesas'
 
-const ESTADO_OPTIONS = ['libre', 'ocupada', 'en_cobro']
+// V2 solo maneja available/occupied: no existe un estado "en cobro".
+const ESTADO_OPTIONS = ['libre', 'ocupada']
 const NO_MESAS = []
 
 const selectCls = cn(
@@ -16,14 +16,11 @@ const selectCls = cn(
 
 /** Filtros de mesas (controlado): el padre guarda `filters` y calcula `filteredCount`. */
 export default function MesasFilters({ mesas = NO_MESAS, filters, onFiltersChange, filteredCount }) {
-  const zonaOptions = useMemo(() => {
-    const zonas = new Set(mesas.map((m) => m.zona).filter(Boolean))
-    return Array.from(zonas).sort()
-  }, [mesas])
 
   const handleFiltersChange = onFiltersChange
   const handleLimpiarFiltros = () => handleFiltersChange(EMPTY_MESA_FILTERS)
   const activeCount = [filters.nombre.trim(), filters.estado, filters.zona].filter(Boolean).length
+  const zonas = zonasDe(mesas)
 
   return (
     <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
@@ -63,23 +60,23 @@ export default function MesasFilters({ mesas = NO_MESAS, filters, onFiltersChang
             <option key={estado} value={estado}>
               {estado === 'libre' && 'Disponible'}
               {estado === 'ocupada' && 'Ocupada'}
-              {estado === 'en_cobro' && 'En cobro'}
             </option>
           ))}
         </select>
 
-        <select
-          value={filters.zona}
-          onChange={(e) => handleFiltersChange({ ...filters, zona: e.target.value })}
-          className={selectCls}
-          aria-label="Filtrar por zona"
-          disabled={zonaOptions.length === 0}
-        >
-          <option value="">Todas las zonas</option>
-          {zonaOptions.map((zona) => (
-            <option key={zona} value={zona}>{zona}</option>
-          ))}
-        </select>
+
+        {zonas.length > 0 && (
+          <select
+            value={filters.zona || ''}
+            onChange={(e) => handleFiltersChange({ ...filters, zona: e.target.value })}
+            className={selectCls}
+            aria-label="Filtrar por zona"
+          >
+            <option value="">Todas las zonas</option>
+            {zonas.map((z) => <option key={z} value={z}>{z}</option>)}
+            <option value={SIN_ZONA}>Sin zona</option>
+          </select>
+        )}
 
         {activeCount > 0 && (
           <button

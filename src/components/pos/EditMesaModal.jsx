@@ -12,14 +12,15 @@ import { Label } from '@/components/ui/label'
 
 /**
  * Modal para editar una mesa existente
- * Permite cambiar: nombre, capacidad, zona, estado activo/inactivo
+ * Permite cambiar: nombre, capacidad, estado activo/inactivo.
+ * Zona (A-05): texto libre de hasta 50 caracteres; vaciarla la quita.
  */
 export default function EditMesaModal({ mesa, onClose, onSubmit }) {
   const [form, setForm] = useState({
     name: mesa.name || '',
     capacidad: mesa.capacidad || 4,
-    zona: mesa.zona || '',
     is_active: mesa.is_active !== false,
+    zona: mesa.zona || '',
   })
 
   const [errors, setErrors] = useState({})
@@ -36,9 +37,6 @@ export default function EditMesaModal({ mesa, onClose, onSubmit }) {
       next.capacidad = 'La capacidad debe estar entre 1 y 100'
     }
 
-    if (!form.zona.trim()) {
-      next.zona = 'La zona es obligatoria'
-    }
 
     return Object.keys(next).length === 0 ? {} : next
   }
@@ -69,8 +67,8 @@ export default function EditMesaModal({ mesa, onClose, onSubmit }) {
         id: mesa.id,
         name: form.name.trim(),
         capacidad: form.capacidad,
-        zona: form.zona.trim(),
         is_active: form.is_active,
+        zona: form.zona.trim(),
       })
     } finally {
       setIsSubmitting(false)
@@ -84,7 +82,7 @@ export default function EditMesaModal({ mesa, onClose, onSubmit }) {
           <DialogTitle>Editar Mesa</DialogTitle>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-4 pt-1">
+        <form onSubmit={handleSubmit} className="space-y-4 px-6 pt-5">
           {/* Nombre */}
           <div className="space-y-1.5">
             <Label htmlFor="edit-mesa-name">
@@ -122,19 +120,9 @@ export default function EditMesaModal({ mesa, onClose, onSubmit }) {
 
           {/* Zona */}
           <div className="space-y-1.5">
-            <Label htmlFor="edit-mesa-zona">
-              Zona <span className="text-[hsl(var(--destructive))]">*</span>
-            </Label>
-            <Input
-              id="edit-mesa-zona"
-              type="text"
-              name="zona"
-              value={form.zona}
-              onChange={handleChange}
-              placeholder="Ej: Salón, Patio, Terraza"
-              className={errors.zona ? 'border-[hsl(var(--destructive))]' : ''}
-            />
-            {errors.zona && <p className="text-xs text-[hsl(var(--destructive))]">{errors.zona}</p>}
+            <Label htmlFor="edit-mesa-zona">Zona</Label>
+            <Input id="edit-mesa-zona" type="text" name="zona" maxLength={50} value={form.zona}
+              onChange={handleChange} placeholder="Ej: Terraza (vacío = sin zona)" />
           </div>
 
           {/* Estado activo/inactivo */}
@@ -157,7 +145,7 @@ export default function EditMesaModal({ mesa, onClose, onSubmit }) {
             </p>
           </div>
 
-          <DialogFooter>
+          <DialogFooter className="-mx-6">
             <Button type="button" variant="outline" onClick={onClose} disabled={isSubmitting}>
               Cancelar
             </Button>

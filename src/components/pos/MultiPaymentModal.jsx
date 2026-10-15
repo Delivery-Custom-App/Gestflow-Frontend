@@ -5,11 +5,9 @@ import {
   deleteSplitPayment,
   getSplitPaymentSummary,
   updateSplitPayment,
-  createPointCharge,
-  getPointOrderStatus,
-  cancelPointCharge,
-  printComanda,
 } from '../../lib/apiClient'
+import { createPointCharge, getPointOrderStatus, cancelPointCharge } from '../../lib/cobroTarjeta'
+import TicketModal from './TicketModal'
 
 const PAYMENT_METHODS = [
   { value: 'CASH',               label: 'Efectivo' },
@@ -74,7 +72,8 @@ export default function MultiPaymentModal({ order, orderTotal, onClose, onFullyP
   // pointIntent: { splitId, intentId, deviceId, terminalState }
   const pollRef = useRef(null)
   const [lastApprovedOrderId, setLastApprovedOrderId] = useState(null)
-  const [printing, setPrinting] = useState(false)
+  const [printing] = useState(false)
+  const [verBoleta, setVerBoleta] = useState(false)
 
   const loadSummary = useCallback(async () => {
     try {
@@ -207,17 +206,8 @@ export default function MultiPaymentModal({ order, orderTotal, onClose, onFullyP
     }
   }
 
-  const handlePrintBoleta = async () => {
-    setPrinting(true)
-    try {
-      await printComanda(order.id)
-      setLastApprovedOrderId(null)
-    } catch (err) {
-      setError(err.message || 'Error al imprimir boleta')
-    } finally {
-      setPrinting(false)
-    }
-  }
+  // La boleta la entrega `/orders/{id}/boleta` y se imprime desde el navegador.
+  const handlePrintBoleta = () => setVerBoleta(true)
 
   const handlePointCancel = async () => {
     if (!pointIntent) return
@@ -503,6 +493,15 @@ export default function MultiPaymentModal({ order, orderTotal, onClose, onFullyP
         </div>
 
       </div>
+
+      {verBoleta && (
+        <TicketModal
+          tipo="boleta"
+          orderId={order.id}
+          createdAt={order.created_at}
+          onClose={() => { setVerBoleta(false); setLastApprovedOrderId(null) }}
+        />
+      )}
     </div>
   )
 }

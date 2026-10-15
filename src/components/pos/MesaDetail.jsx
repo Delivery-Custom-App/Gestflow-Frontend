@@ -4,6 +4,7 @@ import { useMesaDetail } from '../../hooks/useMesaDetail'
 import { useMenuPOS } from '../../hooks/useMenuPOS'
 import { formatCLP } from '../../lib/formatCLP'
 import { addOrderItem, createOrder } from '../../lib/salesApi'
+import { obtenerClaveIdempotencia } from '../../lib/idempotency'
 import { useCajaActiva } from '../../hooks/useCajaActiva'
 import ProductList from './ProductList'
 import { Button } from '@/components/ui/button'
@@ -26,16 +27,18 @@ const EXTRAS_DISPONIBLES = [
 export default function MesaDetail() {
   const navigate = useNavigate()
   const { mesaId, localId } = useParams()
-  const { detail, loading, error, refresh } = useMesaDetail(mesaId)
+  const { detail, loading, error, refresh, updateAfterItemRemoval } = useMesaDetail(mesaId)
   const { data: menuData, fetch: fetchMenu } = useMenuPOS(localId)
   const { cajaId } = useCajaActiva(localId)
 
   const [agregados, setAgregados] = useState({})
+  const [guests, setGuests] = useState('1')
   const [showPicker, setShowPicker] = useState(false)
   const pickerOrderIdRef = useRef(null) // orden destino del picker; solo se lee al agregar
   const [pickerSearch, setPickerSearch] = useState('')
   const [addingProduct, setAddingProduct] = useState(false)
   const [addError, setAddError] = useState(null)
+  const idempotencyKeyRef = useRef(null)
 
   useEffect(() => {
     fetchMenu()
@@ -62,6 +65,7 @@ export default function MesaDetail() {
 
   const handleOpenPicker = (orderId = null) => {
     pickerOrderIdRef.current = orderId
+    idempotencyKeyRef.current = null
     setAddError(null)
     setPickerSearch('')
     fetchMenu()
@@ -73,26 +77,38 @@ export default function MesaDetail() {
     setAddError(null)
     try {
       let orderId = pickerOrderIdRef.current
+      const idempotencyKey = obtenerClaveIdempotencia(idempotencyKeyRef)
+      let itemKey = idempotencyKey
+      let orderCreatedAt
 
       if (!orderId) {
+        if (!Number.isInteger(Number(guests)) || Number(guests) < 1) {
+          setAddError('Ingresa una cantidad válida de comensales.')
+          return
+        }
         const newOrder = await createOrder({
           local_id: localId,
           mesa_id: mesaId,
           caja_id: cajaId || null,
           source: 'dine_in',
+          guests: Number(guests),
+          idempotency_key: idempotencyKey,
           items: [],
         })
         orderId = newOrder.id
+        orderCreatedAt = newOrder.created_at
+        itemKey = `${idempotencyKey}:item:0`
       }
 
       await addOrderItem(orderId, {
         product_id: product.id,
         quantity: 1,
         unit_price: product.price,
-      })
+      }, orderCreatedAt, itemKey)
 
       setShowPicker(false)
       setPickerSearch('')
+      idempotencyKeyRef.current = null
       fetchMenu()
       await refresh()
     } catch (err) {
@@ -100,7 +116,7 @@ export default function MesaDetail() {
     } finally {
       setAddingProduct(false)
     }
-  }, [localId, mesaId, cajaId, refresh, fetchMenu])
+  }, [localId, mesaId, cajaId, guests, refresh, fetchMenu])
 
   const pickerMenu = (menuData?.categories || []).filter((cat) => (cat.products?.length || 0) > 0)
   const handleGoBack = () => navigate(`/local/${localId}/pos`)
@@ -218,6 +234,20 @@ export default function MesaDetail() {
 
         {/* Órdenes + Agregados */}
         <section className="bg-[hsl(var(--card))] rounded-xl border border-[hsl(var(--border))] p-4 space-y-4">
+          {!hasOrders && (
+            <div className="flex items-center gap-3">
+              <label htmlFor="mesa-detail-comensales" className="text-sm font-medium">Comensales</label>
+              <Input
+                id="mesa-detail-comensales"
+                type="number"
+                min="1"
+                step="1"
+                value={guests}
+                onChange={(event) => setGuests(event.target.value)}
+                className="w-20"
+              />
+            </div>
+          )}
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-semibold text-[hsl(var(--foreground))]">Órdenes Activas</h2>
             <Button
@@ -242,7 +272,13 @@ export default function MesaDetail() {
                   </div>
                   <div className="p-3 space-y-2">
                     <p className="text-xs font-medium text-[hsl(var(--muted-foreground))] uppercase tracking-wide">Productos</p>
-                    <ProductList products={order.items || []} orderId={order.id} onProductsChanged={refresh} />
+                    <ProductList
+                      products={order.items || []}
+                      orderId={order.id}
+                      createdAt={order.created_at}
+                      onProductsChanged={refresh}
+                      onItemRemoved={(itemId, orderTotal) => updateAfterItemRemoval(order.id, itemId, orderTotal)}
+                    />
                   </div>
                   <div className="px-3 py-2 border-t border-[hsl(var(--border))] text-right">
                     <span className="text-xs text-[hsl(var(--muted-foreground))]">Subtotal: ${formatCLP(order.subtotal)}</span>

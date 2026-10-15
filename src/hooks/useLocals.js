@@ -1,5 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
-import { apiRequest, getOptionalAuthContext } from '../lib/apiClient'
+import { getOptionalAuthContext } from '../lib/apiClient'
+import { mapLocalOut } from '../lib/localsApi'
+import { invalidarLocales, obtenerLocales } from '../lib/cacheLocales'
 
 /**
  * Hook para obtener locales del backend
@@ -10,7 +12,7 @@ export function useLocals() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
 
-  const fetchLocals = useCallback(async () => {
+  const fetchLocals = useCallback(async (forzar = false) => {
     try {
       setLoading(true)
       setError(null)
@@ -25,8 +27,11 @@ export function useLocals() {
       // V2: RLS filtra; business_id es filtro opcional (SUPERADMIN ve todos).
       const url = businessId ? `/locals?business_id=${businessId}` : '/locals'
 
-      const dataLocales = await apiRequest(url, { token })
-      setLocales(Array.isArray(dataLocales) ? dataLocales : [])
+      // T-35: una vez por sesión (5 minutos en memoria); refetch los vuelve a pedir.
+      if (forzar) invalidarLocales()
+      const dataLocales = await obtenerLocales(url)
+      // Traduce la ubicación del backend a lo que muestran la lista y el mapa.
+      setLocales(Array.isArray(dataLocales) ? dataLocales.map(mapLocalOut) : [])
     } catch (err) {
       console.error('Error obteniendo locales:', err)
       setError(err.message)
@@ -40,5 +45,6 @@ export function useLocals() {
     fetchLocals()
   }, [fetchLocals])
 
-  return { locales, loading, error, refetch: fetchLocals }
+  const refetch = useCallback(() => fetchLocals(true), [fetchLocals])
+  return { locales, loading, error, refetch }
 }

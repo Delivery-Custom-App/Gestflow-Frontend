@@ -1,14 +1,18 @@
 import { useEffect, useState } from 'react'
 import {
-  provisionCajaMp,
-  verifyCajaMpPairing,
+  provisionCajaFisicaMp,
+  verifyCajaFisicaMpPairing,
   putLocalMpLocation,
   getAvailableMpPos,
   assignExistingMpPos,
 } from '../../lib/administrativeApi'
+import MPConfigDrawer from './MPConfigDrawer'
+
+/** El backend responde 400 «Conectá la cuenta MercadoPago del local antes de…». */
+const faltaCuentaMp = (msg) => /conect\S*\s+la\s+cuenta\s+mercado\s?pago/i.test(msg || '')
 
 // step machine: 'choose_method' | 'loading_available' | 'choose_existing' | 'provisioning'
-//             | 'needs_location' | 'awaiting_pairing' | 'verifying' | 'paired' | 'error'
+//             | 'needs_account' | 'needs_location' | 'awaiting_pairing' | 'verifying' | 'paired' | 'error'
 export default function CajaMpPairingModal({ caja, localId, onClose, onUpdated }) {
   const [step, setStep]           = useState('choose_method')
   const [error, setError]         = useState(null)
@@ -18,17 +22,21 @@ export default function CajaMpPairingModal({ caja, localId, onClose, onUpdated }
   const [location, setLocation]   = useState({ street_name: '', city_name: '', state_name: '', latitude: '', longitude: '' })
   const [availablePos, setAvailablePos] = useState([])
   const [assigning, setAssigning] = useState(false)
+  const [conectandoCuenta, setConectandoCuenta] = useState(false)
 
   const handleProvision = async () => {
     setStep('provisioning')
     setError(null)
     try {
-      await provisionCajaMp(caja.id)
+      await provisionCajaFisicaMp(caja.id)
       onUpdated()
       setStep('awaiting_pairing')
     } catch (e) {
       const msg = e?.message || 'Error al provisionar en MercadoPago'
-      if (msg.toLowerCase().includes('direccion')) {
+      if (faltaCuentaMp(msg)) {
+        setError(null)
+        setStep('needs_account')
+      } else if (msg.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().includes('direccion')) {
         setError(null)
         setStep('needs_location')
       } else {
@@ -46,6 +54,11 @@ export default function CajaMpPairingModal({ caja, localId, onClose, onUpdated }
       setAvailablePos(list || [])
       setStep('choose_existing')
     } catch (e) {
+      if (faltaCuentaMp(e?.message)) {
+        setError(null)
+        setStep('needs_account')
+        return
+      }
       setError(e?.message || 'No se pudieron cargar los POS disponibles')
       setStep('error')
     }
@@ -102,14 +115,14 @@ export default function CajaMpPairingModal({ caja, localId, onClose, onUpdated }
     setError(null)
     setInfo(null)
     try {
-      const res = await verifyCajaMpPairing(caja.id)
+      const res = await verifyCajaFisicaMpPairing(caja.id)
       if (res.pairing_status === 'paired') {
         setTerminalId(res.terminal_id)
         setStep('paired')
         onUpdated()
       } else {
         setStep('awaiting_pairing')
-        setInfo('Todavía no detectamos la terminal. Verifica que hayas elegido esta Caja en la terminal y volvé a intentar.')
+        setInfo('Todavía no detectamos la terminal. Verifica que hayas elegido esta caja física en la terminal y volvé a intentar.')
       }
     } catch (e) {
       setError(e?.message || 'Error al verificar el emparejamiento')
@@ -128,7 +141,7 @@ export default function CajaMpPairingModal({ caja, localId, onClose, onUpdated }
         <div className="flex items-center justify-between px-6 py-4 border-b border-[hsl(var(--border))]">
           <div>
             <h2 className="font-semibold text-[hsl(var(--foreground))] text-sm">Vincular MercadoPago</h2>
-            <p className="text-xs text-[hsl(var(--muted-foreground))]">Caja: <span className="font-bold text-[hsl(var(--foreground))]">{caja?.name}</span></p>
+            <p className="text-xs text-[hsl(var(--muted-foreground))]">Caja física: <span className="font-bold text-[hsl(var(--foreground))]">{caja?.name}</span></p>
           </div>
           <button type="button" aria-label="Cerrar"
             onClick={onClose}
@@ -211,6 +224,20 @@ export default function CajaMpPairingModal({ caja, localId, onClose, onUpdated }
             </div>
           )}
 
+          {step === 'needs_account' && (
+            <div className="space-y-3">
+              <p className="text-xs text-[hsl(var(--muted-foreground))]">
+                Este local todavía no tiene una cuenta de MercadoPago conectada. Conéctala y vuelve a intentar.
+              </p>
+              <button type="button" onClick={() => setConectandoCuenta(true)} className="w-full py-2.5 rounded-xl bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))] text-sm font-semibold hover:opacity-90 transition-opacity">
+                Conectar cuenta de MercadoPago
+              </button>
+              <button type="button" onClick={() => setStep('choose_method')} className="w-full py-2 rounded-lg border border-[hsl(var(--border))] text-sm text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))] transition-colors">
+                Volver
+              </button>
+            </div>
+          )}
+
           {step === 'error' && (
             <div className="space-y-3">
               <p className="text-xs text-red-600">{error}</p>
@@ -264,7 +291,7 @@ export default function CajaMpPairingModal({ caja, localId, onClose, onUpdated }
                   <li>Enciende la terminal Point Smart.</li>
                   <li>Desde tu celular, abrí la app de Mercado Pago con la cuenta conectada.</li>
                   <li>Escaneá el código QR que muestra la terminal.</li>
-                  <li>En la terminal, seleccioná la Caja: <span className="font-bold">{caja?.name}</span>.</li>
+                  <li>En la terminal, seleccioná la caja física: <span className="font-bold">{caja?.name}</span>.</li>
                 </ol>
               </div>
               {info && <p className="text-xs text-[hsl(var(--muted-foreground))]">{info}</p>}
@@ -289,7 +316,7 @@ export default function CajaMpPairingModal({ caja, localId, onClose, onUpdated }
           {step === 'paired' && (
             <div className="space-y-3 text-center py-2">
               <p className="text-3xl">✅</p>
-              <p className="text-sm font-semibold text-[hsl(var(--foreground))]">Caja vinculada</p>
+              <p className="text-sm font-semibold text-[hsl(var(--foreground))]">Caja física vinculada</p>
               {terminalId && <p className="text-xs text-[hsl(var(--muted-foreground))] font-mono break-all">Terminal: {terminalId}</p>}
               <button onClick={onClose} className="w-full py-2.5 rounded-xl border border-[hsl(var(--border))] text-sm text-[hsl(var(--foreground))] hover:bg-[hsl(var(--accent))] transition-colors">
                 Cerrar
@@ -298,6 +325,12 @@ export default function CajaMpPairingModal({ caja, localId, onClose, onUpdated }
           )}
         </div>
       </div>
+
+      <MPConfigDrawer
+        open={conectandoCuenta}
+        localId={localId}
+        onClose={() => { setConectandoCuenta(false); setStep('choose_method') }}
+      />
     </div>
   )
 }
