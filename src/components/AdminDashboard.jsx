@@ -7,7 +7,10 @@ import CreateLocalDrawer from './CreateLocalDrawer'
 import LocalsGrid from './LocalsGrid'
 import LoadingSpinner from './LoadingSpinner'
 import { apiRequest, getOptionalAuthContext } from '../lib/apiClient'
-import { REFRESCO_FLUJO_MS, cargarUmbral, guardarUmbral, rangoDelPeriodo } from '../lib/umbralFlujo'
+import {
+  REFRESCO_FLUJO_MS, UMBRAL_POR_DEFECTO, guardarUmbralEnNegocio, leerUmbralDelNegocio, olvidarUmbralLocal,
+  rangoDelPeriodo, umbralLocalParaSubir,
+} from '../lib/umbralFlujo'
 
 const ESTADOS_NO_CANCELADOS = ['open', 'preparing', 'ready', 'completed']
 
@@ -40,8 +43,11 @@ function AdminDashboard() {
   const [isDrawerOpen, setIsDrawerOpen] = useState(false)
   const [salesCounts, setSalesCounts]   = useState({})
   const [deltaCounts, setDeltaCounts]   = useState({})
-  // Umbral de flujo: uno solo para todos los locales, guardado en este navegador (B-07).
-  const [umbral, setUmbral]             = useState(cargarUmbral)
+  // Umbral de flujo: uno solo para todo el negocio, guardado en el backend (T-59).
+  const [umbral, setUmbral]             = useState(UMBRAL_POR_DEFECTO)
+  const [businessId, setBusinessId]     = useState(null)
+  const [umbralParaSubir, setUmbralParaSubir] = useState(null)
+  const puedeEditarUmbral = esDueno || isSuperAdminRole(userRole)
   const { locales, loading, error, refetch } = useLocals()
 
   /** Ventas (órdenes no canceladas) de cada local en el período del umbral. */
@@ -106,8 +112,39 @@ function AdminDashboard() {
     return () => { clearInterval(intervalo); window.removeEventListener('focus', contar) }
   }, [loading, locales, umbral.horas, fetchSalesCounts, fetchDeltaCounts])
 
-  const handleGuardarUmbral = useCallback((nuevo) => {
-    setUmbral(guardarUmbral(nuevo))
+  useEffect(() => {
+    let ignore = false
+    getOptionalAuthContext()
+      .then(({ businessId: id }) => {
+        if (!id) return null
+        setBusinessId(id)
+        return leerUmbralDelNegocio(id)
+      })
+      .then((delNegocio) => {
+        if (ignore || !delNegocio) return
+        setUmbral(delNegocio)
+        if (puedeEditarUmbral) setUmbralParaSubir(umbralLocalParaSubir(delNegocio))
+      })
+      .catch(() => { /* sin ajustes: se usan los valores por defecto */ })
+    return () => { ignore = true }
+  }, [puedeEditarUmbral])
+
+  const handleGuardarUmbral = useCallback(async (nuevo) => {
+    setUmbral(await guardarUmbralEnNegocio(businessId, nuevo))
+  }, [businessId])
+
+  const subirUmbralLocal = useCallback(async () => {
+    try {
+      setUmbral(await guardarUmbralEnNegocio(businessId, umbralParaSubir))
+    } finally {
+      olvidarUmbralLocal()
+      setUmbralParaSubir(null)
+    }
+  }, [businessId, umbralParaSubir])
+
+  const descartarUmbralLocal = useCallback(() => {
+    olvidarUmbralLocal()
+    setUmbralParaSubir(null)
   }, [])
 
   useEffect(() => {
@@ -161,6 +198,15 @@ function AdminDashboard() {
   return (
     <>
       <div className="flex-1 overflow-y-auto no-scrollbar">
+          {umbralParaSubir && (
+            <div role="note" aria-label="Umbral de este navegador" className="mx-4 mt-4 flex flex-wrap items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 sm:mx-6">
+              <span className="flex-1">
+                En este navegador tenías un umbral de flujo propio (medio desde {umbralParaSubir.medium}, alto desde {umbralParaSubir.high}, en {umbralParaSubir.horas} h). Ahora es uno solo para todo el negocio: ¿lo guardas para todos?
+              </span>
+              <button type="button" onClick={subirUmbralLocal} className="rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white">Guardar para el negocio</button>
+              <button type="button" onClick={descartarUmbralLocal} className="rounded-lg px-3 py-1.5 text-xs font-semibold">No, descartar</button>
+            </div>
+          )}
           <LocalsGrid
             locales={locales}
             onLocalSelect={(local) => navigate(`/local/${local.id}/dashboard`, { state: { local } })}
@@ -169,7 +215,7 @@ function AdminDashboard() {
             salesCounts={salesCounts}
             deltaCounts={deltaCounts}
             umbral={umbral}
-            onGuardarUmbral={handleGuardarUmbral}
+            onGuardarUmbral={puedeEditarUmbral && businessId ? handleGuardarUmbral : undefined}
             canDeleteLocals={puedeEliminarLocales}
             onRefresh={handleRefresh}
           />

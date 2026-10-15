@@ -15,18 +15,33 @@ const datosLocales = vi.hoisted(() => ({ locales: [{ id: 'loc-1', name: 'Sucursa
 vi.mock('../hooks/useLocals', () => ({ useLocals: () => datosLocales }))
 vi.mock('../lib/apiClient', () => ({
   apiRequest: vi.fn(),
-  getOptionalAuthContext: vi.fn(() => Promise.resolve({ token: 't' })),
+  getOptionalAuthContext: vi.fn(() => Promise.resolve({ token: 't', businessId: 'b1' })),
 }))
 vi.mock('./CreateLocalDrawer', () => ({ default: () => null }))
 // Lo que importa es qué recibe la grilla.
 vi.mock('./LocalsGrid', () => ({
-  default: ({ salesCounts, umbral, canDeleteLocals }) => (
+  default: ({ salesCounts, umbral, canDeleteLocals, onGuardarUmbral }) => (
     <>
       <p>ventas {salesCounts['loc-1'] ?? '-'} · período {umbral.horas} h</p>
       <p>{canDeleteLocals ? 'puede eliminar franquicias' : 'no puede eliminar franquicias'}</p>
+      {onGuardarUmbral && <button type="button" onClick={() => onGuardarUmbral({ horas: 2, medium: 8, high: 25 })}>guardar umbral</button>}
     </>
   ),
 }))
+
+// T-59: el umbral sale de /businesses/{id}/settings.
+let SETTINGS
+function responder() {
+  apiRequest.mockImplementation(async (path, opciones = {}) => {
+    if (String(path).startsWith('/businesses/b1/settings')) {
+      if (opciones.method === 'PATCH') {
+        SETTINGS = { ...SETTINGS, flow_threshold_medium: opciones.body.flow_threshold_medium, flow_threshold_high: opciones.body.flow_threshold_high, flow_period_hours: opciones.body.flow_period_hours, updated_at: 'ahora' }
+      }
+      return SETTINGS
+    }
+    return { data: [], total: 2 }
+  })
+}
 
 const AHORA = new Date('2026-10-05T15:00:00Z')
 const rutasDeConteo = () => apiRequest.mock.calls.map(([r]) => r)
@@ -37,7 +52,8 @@ beforeEach(() => {
   vi.setSystemTime(AHORA)
   localStorage.clear()
   sesion.userRole = 'Admin Negocio'
-  apiRequest.mockResolvedValue({ data: [], total: 2 })
+  SETTINGS = { business_id: 'b1', flow_threshold_medium: 5, flow_threshold_high: 15, flow_period_hours: 1, updated_at: null }
+  responder()
 })
 afterEach(() => vi.useRealTimers())
 
@@ -53,8 +69,8 @@ describe('AdminDashboard · flujo', () => {
     expect(request[1]).toMatchObject({ withTotal: true })
   })
 
-  it('usa de verdad el período guardado en horas', async () => {
-    localStorage.setItem('gestflow_flow_thresholds', JSON.stringify({ horas: 3, medium: 5, high: 15 }))
+  it('usa de verdad el período guardado en el negocio (en horas)', async () => {
+    SETTINGS = { ...SETTINGS, flow_period_hours: 3, updated_at: '2026-10-01T00:00:00Z' }
     render(<AdminDashboard />)
     expect(await screen.findByText('ventas 2 · período 3 h')).toBeInTheDocument()
     expect(rutasDeConteo().some((r) => r.includes(encodeURIComponent('2026-10-05T12:00:00.000Z')))).toBe(true)
@@ -64,7 +80,7 @@ describe('AdminDashboard · flujo', () => {
     render(<AdminDashboard />)
     await screen.findByText('ventas 2 · período 1 h')
 
-    apiRequest.mockResolvedValue({ data: [], total: 1 })
+    apiRequest.mockImplementation(async (path) => (String(path).startsWith('/businesses/') ? SETTINGS : { data: [], total: 1 }))
     await act(async () => { await vi.advanceTimersByTimeAsync(60_000) })
     await waitFor(() => expect(screen.getByText('ventas 1 · período 1 h')).toBeInTheDocument())
   })
@@ -89,5 +105,38 @@ describe('AdminDashboard · eliminar franquicias', () => {
     sesion.userRole = 'Superadmin'
     render(<AdminDashboard />)
     expect(await screen.findByText('puede eliminar franquicias')).toBeInTheDocument()
+  })
+})
+
+describe('AdminDashboard · umbral en el negocio (T-59)', () => {
+  it('guardar el umbral usa PATCH /businesses/{id}/settings', async () => {
+    render(<AdminDashboard />)
+    await screen.findByText('ventas 2 · período 1 h')
+    await act(async () => { screen.getByRole('button', { name: 'guardar umbral' }).click() })
+    expect(apiRequest).toHaveBeenCalledWith('/businesses/b1/settings', {
+      method: 'PATCH', body: { flow_threshold_medium: 8, flow_threshold_high: 25, flow_period_hours: 2 },
+    })
+    expect(await screen.findByText('ventas 2 · período 2 h')).toBeInTheDocument()
+  })
+
+  it('si el negocio nunca guardó y hay uno distinto en el navegador, ofrece subirlo una vez y borra la clave local', async () => {
+    localStorage.setItem('gestflow_flow_thresholds', JSON.stringify({ horas: 3, medium: 7, high: 20 }))
+    render(<AdminDashboard />)
+    const aviso = await screen.findByRole('note', { name: 'Umbral de este navegador' })
+    expect(aviso).toHaveTextContent('medio desde 7, alto desde 20, en 3 h')
+    await act(async () => { screen.getByRole('button', { name: 'Guardar para el negocio' }).click() })
+    expect(apiRequest).toHaveBeenCalledWith('/businesses/b1/settings', {
+      method: 'PATCH', body: { flow_threshold_medium: 7, flow_threshold_high: 20, flow_period_hours: 3 },
+    })
+    expect(localStorage.getItem('gestflow_flow_thresholds')).toBeNull()
+    await waitFor(() => expect(screen.queryByRole('note', { name: 'Umbral de este navegador' })).not.toBeInTheDocument())
+  })
+
+  it('si el negocio ya guardó, no ofrece subir el del navegador', async () => {
+    SETTINGS = { ...SETTINGS, updated_at: '2026-10-01T00:00:00Z' }
+    localStorage.setItem('gestflow_flow_thresholds', JSON.stringify({ horas: 3, medium: 7, high: 20 }))
+    render(<AdminDashboard />)
+    await screen.findByText('ventas 2 · período 1 h')
+    expect(screen.queryByRole('note', { name: 'Umbral de este navegador' })).not.toBeInTheDocument()
   })
 })

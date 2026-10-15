@@ -30,8 +30,9 @@ function LocalsGrid({
   // T-38: editar el nombre y el teléfono del local.
   const [editandoLocal, setEditandoLocal] = useState(null)
 
-  const handleGuardarUmbral = (nuevo) => {
-    onGuardarUmbral?.(nuevo)
+  const handleGuardarUmbral = async (nuevo) => {
+    // Si falla, el error queda en el formulario y no se cierra.
+    await onGuardarUmbral?.(nuevo)
     setShowUmbral(false)
   }
 
@@ -191,10 +192,12 @@ function LocalsGrid({
                     Usuarios
                   </Button>
                 )}
+{onGuardarUmbral && (
                 <Button variant="outline" onClick={() => setShowUmbral(true)} className="gap-2 rounded-xl">
                   <Gauge className="h-4 w-4" />
                   Umbral de flujo
                 </Button>
+                )}
                 {/* Eliminar franquicias (solo quien puede hacerlo). */}
                 {canDeleteLocals && (
                   <Button variant="outline" onClick={() => setShowOpciones(true)} className="gap-2 rounded-xl">

@@ -2,10 +2,14 @@
  * Umbral de flujo de Inicio: cuántas ventas en el período marcan cada
  * franquicia en flujo bajo (verde), medio (amarillo) o alto (rojo).
  *
- * Es uno solo para todos los locales. Se guarda en este navegador: para que
- * sea el mismo en todos los equipos y para todas las personas hay que
- * guardarlo en el backend (B-07).
+ * Es uno solo para todo el negocio y se guarda en el backend (T-59, B-07):
+ * `GET` y `PATCH /businesses/{id}/settings` con `flow_threshold_medium`,
+ * `flow_threshold_high` y `flow_period_hours` (1 a 168). Antes vivía en este
+ * navegador (`gestflow_flow_thresholds`); si el negocio nunca guardó
+ * (`updated_at` null) y aquí hay uno distinto del por defecto, se ofrece
+ * subirlo una sola vez y después se borra la clave local.
  */
+import { apiRequest } from './apiClient'
 
 export const UMBRAL_KEY = 'gestflow_flow_thresholds'
 
@@ -39,6 +43,44 @@ export function guardarUmbral(umbral) {
   const limpio = { horas: umbral.horas, medium: umbral.medium, high: umbral.high }
   try { localStorage.setItem(UMBRAL_KEY, JSON.stringify(limpio)) } catch { /* sin storage: vale solo esta sesión */ }
   return limpio
+}
+
+/** Lo que guarda el backend, con los nombres de la pantalla. */
+export function umbralDesdeSettings(s) {
+  return {
+    horas: Number(s?.flow_period_hours) || UMBRAL_POR_DEFECTO.horas,
+    medium: Number(s?.flow_threshold_medium) || UMBRAL_POR_DEFECTO.medium,
+    high: Number(s?.flow_threshold_high) || UMBRAL_POR_DEFECTO.high,
+    guardadoEnNegocio: Boolean(s?.updated_at),
+  }
+}
+
+export async function leerUmbralDelNegocio(businessId) {
+  return umbralDesdeSettings(await apiRequest(`/businesses/${encodeURIComponent(String(businessId))}/settings`))
+}
+
+export async function guardarUmbralEnNegocio(businessId, umbral) {
+  return umbralDesdeSettings(await apiRequest(`/businesses/${encodeURIComponent(String(businessId))}/settings`, {
+    method: 'PATCH',
+    body: { flow_threshold_medium: umbral.medium, flow_threshold_high: umbral.high, flow_period_hours: umbral.horas },
+  }))
+}
+
+const igual = (a, b) => a.horas === b.horas && a.medium === b.medium && a.high === b.high
+
+/** El umbral de este navegador para ofrecer subirlo, o null si no corresponde. */
+export function umbralLocalParaSubir(delNegocio) {
+  if (delNegocio?.guardadoEnNegocio) return null
+  let hay = false
+  try { hay = Boolean(localStorage.getItem(UMBRAL_KEY)) } catch { hay = false }
+  if (!hay) return null
+  const local = cargarUmbral()
+  return igual(local, UMBRAL_POR_DEFECTO) ? null : local
+}
+
+/** Deja de usar el umbral de este navegador. */
+export function olvidarUmbralLocal() {
+  try { localStorage.removeItem(UMBRAL_KEY) } catch { /* sin storage */ }
 }
 
 /** Validación del formulario; devuelve el mensaje de error o null. */

@@ -77,7 +77,7 @@ describe('LocalsGrid — Inicio del dueño', () => {
   })
 
   it('"Eliminar franquicia": sin permiso, no aparece', () => {
-    montar()
+    montar({ onGuardarUmbral: vi.fn() })
     expect(screen.getByRole('button', { name: 'Umbral de flujo' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Eliminar franquicia' })).not.toBeInTheDocument()
   })
@@ -117,5 +117,12 @@ describe('LocalsGrid — Inicio del dueño', () => {
     const fila = (nombre) => screen.getAllByRole('row').find((r) => r.textContent.includes(nombre))
     expect(fila('Sucursal Centro')).toHaveTextContent(/Alto/)
     expect(fila('Mostrador Express')).toHaveTextContent(/Bajo/)
+  })
+})
+
+describe('LocalsGrid · umbral de flujo (T-59)', () => {
+  it('sin onGuardarUmbral (no puede editarlo) no ofrece el botón', () => {
+    montar()
+    expect(screen.queryByRole('button', { name: 'Umbral de flujo' })).not.toBeInTheDocument()
   })
 })

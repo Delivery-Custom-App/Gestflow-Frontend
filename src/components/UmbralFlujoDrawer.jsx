@@ -18,12 +18,17 @@ export default function UmbralFlujoDrawer({ umbral, onGuardar, onClose }) {
   const [high, setHigh] = useState(String(umbral.high))
   const [error, setError] = useState(null)
 
-  const guardar = (e) => {
+  const guardar = async (e) => {
     e.preventDefault()
     const nuevo = { horas: enteroDe(horas), medium: enteroDe(medium), high: enteroDe(high) }
     const problema = errorDeUmbral(nuevo)
     if (problema) { setError(problema); return }
-    onGuardar(nuevo)
+    try {
+      await onGuardar(nuevo)
+    } catch (err) {
+      // T-59: el 422 del backend («el medio debe ser menor que el alto»).
+      setError(String(err?.detail || err?.message || 'No se pudo guardar el umbral').replace(/^\d{3}:\s*/, ''))
+    }
   }
 
   const periodo = textoDelPeriodo(Number(umbral.horas))
