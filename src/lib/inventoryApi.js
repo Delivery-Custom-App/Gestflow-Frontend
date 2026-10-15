@@ -1,4 +1,5 @@
 import { apiRequest } from './apiClient'
+import { registrarMovimientoStock } from './movimientosStock'
 import {
   getCachedCategories,
   mergeCategoryIntoCache,
@@ -367,23 +368,29 @@ export async function patchInventoryStock(_localId, inventoryId, body) {
  * Suma unidades (por ejemplo, llegó mercadería). No hay endpoint de ingreso:
  * se lee el stock actual recién consultado, se le suma y se guarda.
  */
-export async function sumarUnidades(inventoryId, cantidad) {
+/**
+ * Llegó mercadería: un movimiento `ingreso` (T-58). Es atómico en el backend,
+ * así que dos personas sumando a la vez ya no se pisan (antes se leía el
+ * stock y se escribía el valor calculado con un PATCH).
+ */
+export async function sumarUnidades(inventoryId, cantidad, motivo = '') {
   const n = Number(cantidad)
   if (!Number.isFinite(n) || n <= 0) throw new Error('Indica cuántas unidades llegaron.')
-  const ruta = `/inventory/${encodeURIComponent(String(inventoryId))}`
-  const fila = await apiRequest(ruta)
-  const actual = Number(fila?.stock_actual) || 0
-  return apiRequest(ruta, { method: 'PATCH', body: { stock_actual: actual + n } })
+  return registrarMovimientoStock(inventoryId, { tipo: 'ingreso', cantidad: n, motivo })
 }
 
-/** Corrige el conteo: el stock pasa a ser lo que se contó. */
-export async function corregirConteo(inventoryId, contado) {
+/** Corrige el conteo: un movimiento `ajuste` (el stock pasa a ser lo contado), con motivo (T-58). */
+export async function corregirConteo(inventoryId, contado, motivo) {
   const n = Number(contado)
   if (!Number.isFinite(n) || n < 0) throw new Error('Indica cuántas unidades contaste.')
-  return apiRequest(`/inventory/${encodeURIComponent(String(inventoryId))}`, {
-    method: 'PATCH',
-    body: { stock_actual: n },
-  })
+  return registrarMovimientoStock(inventoryId, { tipo: 'ajuste', cantidad: n, motivo })
+}
+
+/** Se perdió o venció mercadería: un movimiento `merma`, con motivo (T-58). */
+export async function registrarMerma(inventoryId, cantidad, motivo) {
+  const n = Number(cantidad)
+  if (!Number.isFinite(n) || n <= 0) throw new Error('Indica cuántas unidades se perdieron.')
+  return registrarMovimientoStock(inventoryId, { tipo: 'merma', cantidad: n, motivo })
 }
 
 /** Empieza a controlar el stock de un producto que todavía no lo tiene en el local. */
@@ -410,14 +417,31 @@ export async function patchInventoryProductUnitCost(_localId, productId, body) {
   })
 }
 
-/** Soft: desactiva el producto (V2 no tiene DELETE de inventario). */
-export async function deleteInventoryItem(_localId, inventoryId) {
-  const inv = await apiRequest(`/inventory/${encodeURIComponent(String(inventoryId))}`)
-  if (inv?.product_id) {
-    await apiRequest(`/products/${encodeURIComponent(String(inv.product_id))}`, {
-      method: 'DELETE',
-    })
+/** Mensaje legible para un 403 al quitar algo de un local. */
+function conPermiso(err, accion) {
+  if (Number(err?.status) === 403) {
+    const e = new Error(`No tienes permiso para ${accion} en este local.`)
+    e.status = 403
+    throw e
   }
+  throw err
+}
+
+/**
+ * Deja de controlar el stock del producto en ese local (T-29, B-11):
+ * `DELETE /inventory/{id}` responde 204 y no toca el producto del negocio ni
+ * los otros locales. Antes se borraba el producto en todo el negocio (E3).
+ */
+export async function deleteInventoryItem(_localId, inventoryId) {
+  await apiRequest(`/inventory/${encodeURIComponent(String(inventoryId))}`, { method: 'DELETE' })
+    .catch((e) => conPermiso(e, 'quitar productos del stock'))
+  return null
+}
+
+/** Saca el producto del menú de ese local (`DELETE /local-products/{id}`, T-29). */
+export async function removeFromLocalMenu(localProductId) {
+  await apiRequest(`/local-products/${encodeURIComponent(String(localProductId))}`, { method: 'DELETE' })
+    .catch((e) => conPermiso(e, 'quitar productos del menú'))
   return null
 }
 

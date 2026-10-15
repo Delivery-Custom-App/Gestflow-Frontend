@@ -1,17 +1,24 @@
 import { useState, useEffect, useCallback } from 'react'
 import { m, AnimatePresence } from 'framer-motion'
-import { Users, Store, Plus, Trash2, X, UserPlus, Loader2, Eye, EyeOff, Shield, HelpCircle, KeyRound, Filter, MapPin } from 'lucide-react'
+import { Users, Store, Plus, X, UserPlus, Loader2, Eye, EyeOff, Shield, HelpCircle, KeyRound, Filter, MapPin, Pencil, UserX, UserCheck, MonitorSmartphone } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { isSuperAdminRole } from '../auth/roleLabel'
 import { isInventoryAdminRole } from '../utils/inventoryAccess'
 import { useLocals } from '../hooks/useLocals'
-import { listUsers, deleteUser, createUser, getOptionalAuthContext } from '../lib/apiClient'
+import { listUsers, createUser, getOptionalAuthContext } from '../lib/apiClient'
 import { SIN_LOCAL, usuariosVisibles } from '../lib/listaUsuarios'
 import { puedeTenerVariosLocales } from '../lib/localesAsignados'
 import LocalesAsignadosDialog from './LocalesAsignadosDialog'
+import EditarUsuarioDialog from './EditarUsuarioDialog'
+import ClaveTemporalDialog from './ClaveTemporalDialog'
+import SesionesEmpleadoDialog from './SesionesEmpleadoDialog'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import {
-  AVISO_VENDEDOR, LARGO_MINIMO_CONTRASENA, ROL_LABEL, datosDeAlta, formatearRut, pideRut,
-  puedeCrearUsuarios, rolConLocal, rolesAsignables, validarAlta,
+  cambiarEstadoUsuario, puedeGestionar, restablecerClave, separarPorEstado, textoDeError,
+} from '../lib/gestionUsuarios'
+import {
+  AVISO_VENDEDOR, LARGO_MINIMO_CONTRASENA, exigeCambioDeClave, ROL_LABEL, datosDeAlta, formatearRut, pideRut,
+  esEncargadoDeLocal, localFijoDelAlta, puedeCrearUsuarios, rolConLocal, rolesAsignables, validarAlta,
 } from '../lib/altaUsuario'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -44,9 +51,10 @@ function roleBadge(role) {
 }
 
 // ── Drawer crear usuario ─────────────────────────────────────────────────────
-export function CreateUserDrawer({ isOpen, onClose, onSuccess, locales, localesLoading, userRole, localIdPorDefecto = '' }) {
-  // Abierto desde una franquicia, el alta llega con ese local elegido.
-  const formInicial = { ...FORM_VACIO, local_id: localIdPorDefecto || '' }
+export function CreateUserDrawer({ isOpen, onClose, onSuccess, locales, localesLoading, userRole, localIdPorDefecto = '', localFijo = '' }) {
+  // Abierto desde una franquicia, el alta llega con ese local elegido. El
+  // encargado (T-47) solo crea vendedores de su local: rol y local fijos.
+  const formInicial = { ...FORM_VACIO, local_id: localFijo || localIdPorDefecto || '' }
   const [form, setForm]       = useState(formInicial)
   const [loading, setLoading] = useState(false)
   const [err, setErr]         = useState('')
@@ -151,7 +159,7 @@ export function CreateUserDrawer({ isOpen, onClose, onSuccess, locales, localesL
               id="u-role"
               value={form.role}
               onChange={set('role')}
-              disabled={loading}
+              disabled={loading || availableRoles.length <= 1}
               className="w-full rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3 py-2 text-sm text-[hsl(var(--foreground))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary))]/40"
             >
               {availableRoles.map((r) => <option key={r} value={r}>{ROL_LABEL[r]}</option>)}
@@ -165,17 +173,19 @@ export function CreateUserDrawer({ isOpen, onClose, onSuccess, locales, localesL
                 id="u-local"
                 value={form.local_id}
                 onChange={set('local_id')}
-                disabled={loading || localesLoading}
+                disabled={loading || localesLoading || Boolean(localFijo)}
                 className="w-full rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3 py-2 text-sm text-[hsl(var(--foreground))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary))]/40"
               >
                 <option value="">{localesLoading ? 'Cargando locales…' : 'Selecciona un Local'}</option>
                 {locales.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
               </select>
-              <p className="text-xs text-[hsl(var(--muted-foreground))]">El usuario solo tendrá acceso a este local.</p>
+              <p className="text-xs text-[hsl(var(--muted-foreground))]">
+                {localFijo ? 'Como encargado, creas vendedores de tu local.' : 'El usuario solo tendrá acceso a este local.'}
+              </p>
             </div>
           )}
 
-          {form.role === 'EMPLEADO' && (
+          {exigeCambioDeClave(form.role) && (
             <p className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-800 dark:border-sky-800/50 dark:bg-sky-950/30 dark:text-sky-300">
               {AVISO_VENDEDOR}
             </p>
@@ -208,6 +218,15 @@ export default function UsersListPage() {
   const [guideOpen,  setGuideOpen]  = useState(false)
   const [filtroLocal, setFiltroLocal] = useState('')
   const [localesDe, setLocalesDe] = useState(null) // usuario cuyos locales asignados se ven (T-72)
+  // Gestión (T-32): pestaña de activos o inactivos, edición y confirmaciones.
+  const [pestana, setPestana] = useState('activos')
+  const [editando, setEditando] = useState(null)
+  const [confirmando, setConfirmando] = useState(null) // { usuario, accion: 'desactivar'|'reactivar'|'clave' }
+  const [ocupado, setOcupado] = useState(false)
+  const [aviso, setAviso] = useState('')
+  // Clave temporal (T-61): solo en memoria mientras el diálogo está abierto.
+  const [claveTemporal, setClaveTemporal] = useState(null) // { nombre, clave, correoEnviado }
+  const [sesionesDe, setSesionesDe] = useState(null) // usuario cuyas sesiones se ven (T-53)
   // Dentro de una franquicia (/local/:localId/usuarios) la lista es la de ese local.
   const { localId } = useParams()
 
@@ -248,24 +267,37 @@ export default function UsersListPage() {
   }
 
   const puedeCrear = puedeCrearUsuarios(userRole)
+  // El encargado (T-47) crea y gestiona a los vendedores de su local; asignar
+  // varios locales y ver todo el negocio queda para el dueño y el superadmin.
+  const encargado = esEncargadoDeLocal(userRole)
+  const miLocalId = user?.local_id || null
+  const puedeVerNegocio = puedeCrear && !encargado
 
-  const canDelete = (targetUser) => {
-    // El encargado solo consulta la lista: no crea ni elimina usuarios.
-    if (!puedeCrear) return false
-    const me = String(user?.id || '')
-    const myRole = String(userRole || '').toUpperCase().replace(/[\s_-]+/g, '')
-    const targetRole = String(targetUser.role || '').toUpperCase().replace(/[\s_-]+/g, '')
-    if (me === String(targetUser.id)) return false
-    if (targetRole === 'SUPERADMIN') return false
-    if (targetRole === 'ADMINNEGOCIO' && myRole !== 'SUPERADMIN') return false
-    if (targetRole === 'ADMIN' && myRole !== 'SUPERADMIN' && myRole !== 'ADMINNEGOCIO') return false
-    return myRole === 'SUPERADMIN' || myRole === 'ADMINNEGOCIO' || myRole === 'ADMIN'
-  }
+  // No hay borrado de usuarios: se desactiva (conserva su historial). Nunca la cuenta propia.
+  const gestionable = (u) => puedeGestionar(userRole, user?.id, u, miLocalId)
+  const nombreDe = (u) => u.name || u.email
 
-  const onDelete = async (u) => {
-    if (!window.confirm(`¿Eliminar al usuario ${u.email}?`)) return
-    try { await deleteUser(u.id); loadUsers() }
-    catch (e2) { setErr(e2.detail || e2.message || 'Error al eliminar usuario') }
+  const confirmar = async () => {
+    if (!confirmando) return
+    const { usuario: u, accion } = confirmando
+    setOcupado(true)
+    setErr('')
+    try {
+      if (accion === 'clave') {
+        const r = await restablecerClave(u.id)
+        setClaveTemporal({ nombre: nombreDe(u), clave: r?.temporary_password || '', correoEnviado: Boolean(r?.email_sent) })
+      } else {
+        await cambiarEstadoUsuario(u.id, accion === 'reactivar')
+        setAviso(accion === 'reactivar' ? `${nombreDe(u)} puede volver a entrar.` : `${nombreDe(u)} quedó desactivado.`)
+      }
+      setConfirmando(null)
+      loadUsers()
+    } catch (e2) {
+      setErr(textoDeError(e2))
+      setConfirmando(null)
+    } finally {
+      setOcupado(false)
+    }
   }
 
   const localNameById = Object.fromEntries(locales.map((l) => [String(l.id), l.name]))
@@ -273,7 +305,8 @@ export default function UsersListPage() {
   const ordenRol = (u) => ORDEN_ROL[String(u.role || '').toUpperCase()] ?? 99
 
   // Por local (sin local al final) y, dentro de cada uno, del rol más alto al vendedor.
-  const visibles = [...usuariosVisibles(users, { localId, filtroLocal })].sort((a, b) => {
+  const porEstado = separarPorEstado(usuariosVisibles(users, { localId, filtroLocal }))
+  const visibles = [...porEstado[pestana]].sort((a, b) => {
     if (!a.local_id !== !b.local_id) return a.local_id ? -1 : 1
     const porLocal = nombreLocal(a.local_id).localeCompare(nombreLocal(b.local_id))
     return porLocal || ordenRol(a) - ordenRol(b)
@@ -332,8 +365,8 @@ export default function UsersListPage() {
                   title: 'Roles',
                   desc: 'Cada usuario tiene un rol: Dueño de negocio (todas sus franquicias), Encargado de local (gestiona su franquicia) o Vendedor (el punto de venta de su local).',
                 },
-                // El encargado solo consulta la lista de su local: sin filtro ni alta.
-                ...(puedeCrear ? [{
+                // El filtro por local es de la vista de todo el negocio (el dueño).
+                ...(puedeVerNegocio ? [{
                   icon: Filter,
                   color: 'text-[hsl(var(--primary))]',
                   title: 'Filtrar por local',
@@ -343,7 +376,9 @@ export default function UsersListPage() {
                   icon: UserPlus,
                   color: 'text-[hsl(var(--primary))]',
                   title: 'Crear usuario',
-                  desc: 'Registra un nuevo usuario con su nombre, correo, contraseña, rol y la franquicia a la que pertenece. Dentro de una franquicia, llega con ese local elegido.',
+                  desc: encargado
+                    ? 'Registra un vendedor de tu local con su nombre, correo y contraseña. También puedes editar su nombre, desactivarlo o reactivarlo.'
+                    : 'Registra un nuevo usuario con su nombre, correo, contraseña, rol y la franquicia a la que pertenece. Dentro de una franquicia, llega con ese local elegido.',
                   highlight: true,
                 }] : []),
                 {
@@ -391,7 +426,7 @@ export default function UsersListPage() {
               <p className="text-sm text-[hsl(var(--muted-foreground))]">
                 {visibles.length} usuario{visibles.length === 1 ? '' : 's'}
                 {!localId && ` · ${cantidadLocales} local${cantidadLocales === 1 ? '' : 'es'}`}
-                {localId && puedeCrear && (
+                {localId && puedeVerNegocio && (
                   <>
                     {' · '}
                     <button type="button" onClick={() => navigate('/usuarios')} className="font-medium text-[hsl(var(--primary))] hover:underline">
@@ -418,7 +453,17 @@ export default function UsersListPage() {
           </div>
         </div>
 
-        {err && <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{err}</div>}
+        {err && <div role="alert" className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{err}</div>}
+        {aviso && <div role="status" className="text-sm text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2">{aviso}</div>}
+
+        <div role="tablist" aria-label="Estado de los usuarios" className="inline-flex rounded-lg border border-[hsl(var(--border))] p-0.5">
+          {[['activos', 'Activos'], ['inactivos', 'Inactivos']].map(([clave, texto]) => (
+            <button key={clave} type="button" role="tab" aria-selected={pestana === clave} onClick={() => setPestana(clave)}
+              className={`rounded-md px-3 py-1.5 text-sm font-medium ${pestana === clave ? 'bg-[hsl(var(--primary))] text-white' : 'text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))]'}`}>
+              {texto} ({porEstado[clave].length})
+            </button>
+          ))}
+        </div>
 
         {mostrarFiltro && (
           <div className="flex items-center gap-2">
@@ -445,7 +490,7 @@ export default function UsersListPage() {
           <p className="text-sm text-[hsl(var(--muted-foreground))]">Cargando usuarios…</p>
         ) : visibles.length === 0 ? (
           <Card><CardContent className="p-8 text-center text-[hsl(var(--muted-foreground))]">
-            {localId ? 'Este local todavía no tiene usuarios.' : 'No hay usuarios.'}
+            {pestana === 'inactivos' ? 'No hay usuarios desactivados.' : localId ? 'Este local todavía no tiene usuarios.' : 'No hay usuarios.'}
           </CardContent></Card>
         ) : (
           <Card className="overflow-hidden">
@@ -463,7 +508,10 @@ export default function UsersListPage() {
                 <tbody>
                   {visibles.map((u) => (
                     <tr key={u.id} className="border-b border-[hsl(var(--border))] last:border-0 hover:bg-[hsl(var(--muted))]/30">
-                      <td className="py-2.5 px-5 font-medium text-[hsl(var(--foreground))]">{u.name || '—'}</td>
+                      <td className="py-2.5 px-5 font-medium text-[hsl(var(--foreground))]">
+                        {u.name || '—'}
+                        {u.is_active === false && <Badge variant="outline" className="ml-2">Inactivo</Badge>}
+                      </td>
                       <td className="py-2.5 px-5 text-[hsl(var(--muted-foreground))]">{u.email}</td>
                       <td className="py-2.5 px-5">{roleBadge(u.role)}</td>
                       <td className="py-2.5 px-5 text-[hsl(var(--muted-foreground))]">
@@ -477,16 +525,38 @@ export default function UsersListPage() {
                       {puedeCrear && (
                         <td className="py-2.5 px-5 text-right">
                           <span className="inline-flex items-center gap-2">
-                            {puedeTenerVariosLocales(u.role) && (
+                            {puedeVerNegocio && puedeTenerVariosLocales(u.role) && (
                               <Button variant="outline" size="sm" onClick={() => setLocalesDe(u)}
                                 aria-label={`Locales de ${u.name || u.email}`}>
                                 <MapPin size={14} /> Locales
                               </Button>
                             )}
-                            {canDelete(u) && (
-                              <Button variant="danger" size="sm" onClick={() => onDelete(u)}>
-                                <Trash2 size={14} /> Eliminar
-                              </Button>
+                            {gestionable(u) && (
+                              <>
+                                <Button variant="outline" size="sm" onClick={() => setEditando(u)} aria-label={`Editar a ${nombreDe(u)}`}>
+                                  <Pencil size={14} /> Editar
+                                </Button>
+                                <Button variant="outline" size="sm" onClick={() => setSesionesDe(u)} aria-label={`Sesiones de ${nombreDe(u)}`}>
+                                  <MonitorSmartphone size={14} /> Sesiones
+                                </Button>
+                                {u.is_active !== false && (
+                                  <Button variant="outline" size="sm" onClick={() => setConfirmando({ usuario: u, accion: 'clave' })}
+                                    aria-label={`Restablecer la clave de ${nombreDe(u)}`}>
+                                    <KeyRound size={14} /> Restablecer clave
+                                  </Button>
+                                )}
+                                {u.is_active === false ? (
+                                  <Button variant="outline" size="sm" onClick={() => setConfirmando({ usuario: u, accion: 'reactivar' })}
+                                    aria-label={`Reactivar a ${nombreDe(u)}`}>
+                                    <UserCheck size={14} /> Reactivar
+                                  </Button>
+                                ) : (
+                                  <Button variant="danger" size="sm" onClick={() => setConfirmando({ usuario: u, accion: 'desactivar' })}
+                                    aria-label={`Desactivar a ${nombreDe(u)}`}>
+                                    <UserX size={14} /> Desactivar
+                                  </Button>
+                                )}
+                              </>
                             )}
                           </span>
                         </td>
@@ -500,7 +570,64 @@ export default function UsersListPage() {
         )}
       </div>
 
-      {puedeCrear && localesDe && (
+      {editando && (
+        <EditarUsuarioDialog
+          usuario={editando}
+          locales={locales}
+          miRol={userRole}
+          onClose={() => setEditando(null)}
+          onGuardado={() => { setEditando(null); setAviso(`Se guardaron los cambios de ${nombreDe(editando)}.`); loadUsers() }}
+        />
+      )}
+
+      {sesionesDe && (
+        <SesionesEmpleadoDialog
+          usuario={sesionesDe}
+          onClose={() => setSesionesDe(null)}
+          nombreDeUsuario={(id) => {
+            const quien = users.find((x) => String(x.id) === String(id))
+            return quien ? nombreDe(quien) : String(id) === String(user?.id) ? 'ti' : `Usuario ${String(id).slice(0, 8)}…`
+          }}
+        />
+      )}
+
+      {claveTemporal && (
+        <ClaveTemporalDialog
+          nombre={claveTemporal.nombre}
+          clave={claveTemporal.clave}
+          correoEnviado={claveTemporal.correoEnviado}
+          onClose={() => setClaveTemporal(null)}
+        />
+      )}
+
+      {confirmando && (
+        <Dialog open onOpenChange={(abierto) => { if (!abierto && !ocupado) setConfirmando(null) }}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>
+                {confirmando.accion === 'desactivar' ? `¿Desactivar a ${nombreDe(confirmando.usuario)}?`
+                  : confirmando.accion === 'reactivar' ? `¿Reactivar a ${nombreDe(confirmando.usuario)}?`
+                    : `¿Restablecer la clave de ${nombreDe(confirmando.usuario)}?`}
+              </DialogTitle>
+              <DialogDescription>
+                {confirmando.accion === 'desactivar'
+                  ? 'No podrá entrar a GestFlow y se cerrarán sus sesiones. Su historial de turnos y ventas se conserva, y se puede reactivar cuando quieras.'
+                  : confirmando.accion === 'reactivar'
+                    ? 'Podrá volver a entrar con su clave.'
+                    : 'Se genera una clave temporal, se cierran sus sesiones y deberá cambiarla al entrar.'}
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setConfirmando(null)} disabled={ocupado}>Cancelar</Button>
+              <Button variant={confirmando.accion === 'desactivar' ? 'danger' : 'default'} onClick={confirmar} disabled={ocupado}>
+                {ocupado ? 'Un momento…' : confirmando.accion === 'desactivar' ? 'Desactivar' : confirmando.accion === 'reactivar' ? 'Reactivar' : 'Restablecer'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {puedeVerNegocio && localesDe && (
         <LocalesAsignadosDialog usuario={localesDe} locales={locales} onClose={() => setLocalesDe(null)} />
       )}
 
@@ -514,6 +641,7 @@ export default function UsersListPage() {
           localesLoading={localesLoading}
           userRole={userRole}
           localIdPorDefecto={localId}
+          localFijo={localFijoDelAlta(userRole, miLocalId)}
         />
       )}
     </div>

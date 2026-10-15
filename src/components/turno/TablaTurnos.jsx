@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { formatCLPCurrency as formatMoney } from '../../lib/formatCLP'
-import { TURNOS_POR_PAGINA, horaDe, useTotalesVendidos } from '../../lib/registroTurnos'
+import { TURNOS_POR_PAGINA, horaDe, totalVendidoDe } from '../../lib/registroTurnos'
 
 /** "YYYY-MM-DD" → "dd/mm/yyyy" sin pasar por Date: es un día calendario, no un instante. */
 function fechaDelTurno(value) {
@@ -10,24 +10,22 @@ function fechaDelTurno(value) {
 }
 
 function TotalVendido({ valor }) {
-  if (valor === undefined) return <span className="text-[hsl(var(--muted-foreground))]">…</span>
-  if (valor === false) return <span className="text-[hsl(var(--muted-foreground))]" title="No se pudo consultar">—</span>
+  if (valor === null) return <span className="text-[hsl(var(--muted-foreground))]" title="Sin dato">—</span>
   return formatMoney(valor)
 }
 
 /**
  * Tabla de turnos: fecha, hora de apertura y de cierre, total vendido y
  * estado. Con `cajaFisicaDe` agrega el turno y su caja física; con
- * `vendedorDe`, quién lo abrió. La máquina usada no se muestra mientras el
- * turno no la guarde (B-03).
+ * `vendedorDe`, quién lo abrió. El total vendido viene en cada turno de
+ * `GET /cajas` (A-01): no se pide un resumen por fila.
  *
- * Se muestran de a TURNOS_POR_PAGINA: cada fila pide su total vendido.
+ * Se muestran de a TURNOS_POR_PAGINA.
  */
 export default function TablaTurnos({ turnos, vendedorDe, cajaFisicaDe, onVer, textoVer = 'Ver resumen', vacio }) {
   const [visibles, setVisibles] = useState(TURNOS_POR_PAGINA)
   const lista = Array.isArray(turnos) ? turnos : []
   const pagina = lista.slice(0, visibles)
-  const totales = useTotalesVendidos(pagina)
 
   const encabezados = [
     ...(cajaFisicaDe ? ['Turno'] : []),
@@ -67,7 +65,7 @@ export default function TablaTurnos({ turnos, vendedorDe, cajaFisicaDe, onVer, t
                   <td className="px-4 py-3 whitespace-nowrap">{fechaDelTurno(t.business_date)}</td>
                   <td className="px-4 py-3 whitespace-nowrap">{horaDe(t.opened_at) || '—'}</td>
                   <td className="px-4 py-3 whitespace-nowrap">{abierto ? '—' : (horaDe(t.closed_at) || '—')}</td>
-                  <td className="px-4 py-3 whitespace-nowrap font-semibold"><TotalVendido valor={totales.get(String(t.id))} /></td>
+                  <td className="px-4 py-3 whitespace-nowrap font-semibold"><TotalVendido valor={totalVendidoDe(t)} /></td>
                   <td className="px-4 py-3">{abierto ? 'Abierto' : 'Cerrado'}</td>
                   {onVer && (
                     <td className="px-4 py-3">

@@ -1,5 +1,6 @@
 import { clearStoredSession, getStoredSession, refreshSession } from './authClient'
 import { getBusinessId } from '../utils/jwt'
+import { cachedRequest } from './apiCache'
 
 const apiBaseUrl = import.meta.env.VITE_API_URL || ''
 
@@ -132,6 +133,31 @@ export async function getOptionalAuthContext() {
   }
 }
 
+export const MENSAJE_503 = 'No se pudo verificar tu cuenta en este momento. Reintenta en unos segundos.'
+export const MENSAJE_429 = 'Demasiados intentos, espera un minuto.'
+const MAX_ESPERA_503_MS = 10_000
+
+/** Segundos de `Retry-After` en milisegundos (5 s si no viene; máximo 10 s). */
+export function esperaRetryAfter(response) {
+  const valor = response?.headers?.get?.('Retry-After')
+  const s = valor == null || valor === '' ? NaN : Number(valor)
+  return Math.min(Number.isFinite(s) && s >= 0 ? s * 1000 : 5000, MAX_ESPERA_503_MS)
+}
+
+/** Espera configurable (los tests la reemplazan). */
+export const reloj = { esperar: (ms) => new Promise((r) => setTimeout(r, ms)) }
+
+/**
+ * Cierra la sesión local y avisa a la app con el motivo que mandó el backend
+ * (`X-Account-Status` y `detail`), para que el login lo muestre.
+ */
+function terminarSesion(accountStatus, detail) {
+  clearStoredSession()
+  window.dispatchEvent(new CustomEvent('auth:session-expired', {
+    detail: { accountStatus: accountStatus || null, message: detail || null },
+  }))
+}
+
 export async function apiRequest(path, options = {}) {
   const {
     method = 'GET',
@@ -142,6 +168,8 @@ export async function apiRequest(path, options = {}) {
     // Con `withTotal` devuelve { data, total }: `total` sale del encabezado X-Total-Count
     // de las listas paginadas (null si no viene).
     withTotal = false,
+    // Para DELETE de ítems devuelve { data, orderTotal } desde X-Order-Total.
+    withOrderTotal = false,
   } = options
 
   const token = providedToken || (await getSession()).access_token
@@ -171,23 +199,68 @@ export async function apiRequest(path, options = {}) {
     throw err
   }
 
-  if (response.status === 401 && retryOnUnauthorized) {
+  // T-66: un 503 sin X-Account-Status es temporal (el servidor no pudo
+  // verificar la cuenta): nunca cierra la sesión. Un GET se reintenta una vez
+  // después de Retry-After; un POST, PATCH o DELETE no se reintenta solo.
+  if (response.status === 503 && method === 'GET' && !response.headers.get('X-Account-Status')) {
+    await reloj.esperar(esperaRetryAfter(response))
     try {
-      const refreshedSession = await getSession(true)
-      response = await makeRequest(refreshedSession.access_token)
-    } catch (authErr) {
-      clearStoredSession()
-      window.dispatchEvent(new CustomEvent('auth:session-expired'))
-      throw authErr
+      response = await makeRequest(token)
+    } catch {
+      /* se informa abajo como 503 */
+    }
+  }
+
+  if (response.status === 401 && retryOnUnauthorized) {
+    // Con X-Account-Status la sesión ya está cerrada o vencida (T-52): no
+    // sirve renovar. Sin él, el access_token venció: se renueva una vez y se
+    // reintenta (T-51).
+    if (!response.headers.get('X-Account-Status')) {
+      try {
+        const refreshedSession = await getSession(true)
+        response = await makeRequest(refreshedSession.access_token)
+      } catch (authErr) {
+        terminarSesion(authErr?.accountStatus, authErr?.detail)
+        throw authErr
+      }
+    }
+    if (response.status === 401) {
+      const detail = await parseErrorResponse(response)
+      const accountStatus = response.headers.get('X-Account-Status')
+      terminarSesion(accountStatus, detail)
+      const err = new Error(`401: ${detail}`)
+      err.status = 401
+      err.detail = detail
+      if (accountStatus) err.accountStatus = accountStatus
+      throw err
     }
   }
 
   if (!response.ok) {
-    const detail = await parseErrorResponse(response)
+    let detail = await parseErrorResponse(response)
+    // T-66: textos claros para el 503 temporal y el límite de intentos (429:
+    // el cuerpo trae `error`, no `detail`).
+    if (response.status === 503 && !response.headers.get('X-Account-Status')) detail = MENSAJE_503
+    if (response.status === 429) detail = MENSAJE_429
     const message = detail ? `${response.status}: ${detail}` : `${response.status} ${response.statusText}`
     const err = new Error(message)
     err.status = response.status
     err.detail = detail
+    // Estado de la cuenta que manda el backend (X-Account-Status): con
+    // `password_change_required` la app pasa a la pantalla de cambio de
+    // clave obligatorio aunque la marca de /auth/me no haya llegado (T-62).
+    const accountStatus = response.headers.get('X-Account-Status')
+    if (accountStatus) {
+      err.accountStatus = accountStatus
+      if (response.status === 403 && accountStatus === 'password_change_required') {
+        window.dispatchEvent(new CustomEvent('auth:password-change-required'))
+      }
+      // Cuenta desactivada o inexistente (tokens anteriores a las sesiones): se
+      // cierra la sesión y el login lo explica (T-52).
+      if (response.status === 403 && (accountStatus === 'inactive' || accountStatus === 'not_found')) {
+        terminarSesion(accountStatus, detail)
+      }
+    }
     throw err
   }
 
@@ -197,6 +270,11 @@ export async function apiRequest(path, options = {}) {
   if (withTotal) {
     const total = Number(response.headers.get('X-Total-Count'))
     return { data, total: response.headers.get('X-Total-Count') != null && Number.isFinite(total) ? total : null }
+  }
+  if (withOrderTotal) {
+    const rawTotal = response.headers.get('X-Order-Total')
+    const orderTotal = Number(rawTotal)
+    return { data, orderTotal: rawTotal != null && Number.isFinite(orderTotal) ? orderTotal : null }
   }
   return data
 }
@@ -266,13 +344,10 @@ export async function listUsers(businessId) {
   return filtered.map((u) => ({ ...u, name: displayNameFromUser(u) }))
 }
 
-export async function deleteUser() {
-  throw new Error('Eliminar usuarios aún no está disponible en Backend V2')
-}
-
+/** El negocio, guardado en memoria 5 minutos (T-35): se pedía en cada pantalla. */
 export async function getBusiness(businessId) {
   if (!businessId) return null
-  return apiRequest(`/businesses/${businessId}`)
+  return cachedRequest(`business:${businessId}`, () => apiRequest(`/businesses/${businessId}`), 5 * 60 * 1000)
 }
 
 export async function changeMyPassword({ current_password, new_password }) {
@@ -280,39 +355,6 @@ export async function changeMyPassword({ current_password, new_password }) {
     method: 'POST',
     body: { current_password, new_password },
   })
-}
-
-// ─── Printers (OP-02) ─────────────────────────────────────────────────────────
-// Ninguna de estas rutas existe en Backend V2. Se conservan, sin uso, detrás
-// de la bandera `printers`, para cuando exista un servicio de impresión.
-
-export async function listPrinters(localId) {
-  return apiRequest(`/printers?local_id=${localId}`)
-}
-
-export async function createPrinter({ local_id, name, model, connection_type, ip_address, port, bluetooth_name, is_active }) {
-  return apiRequest('/printers', {
-    method: 'POST',
-    body: {
-      local_id, name, model, connection_type,
-      ip_address: connection_type === 'bluetooth' ? null : ip_address,
-      port: connection_type === 'bluetooth' ? null : Number(port),
-      bluetooth_name: connection_type === 'bluetooth' ? (bluetooth_name || null) : null,
-      is_active,
-    },
-  })
-}
-
-export async function updatePrinter(id, updates) {
-  return apiRequest(`/printers/${id}`, { method: 'PATCH', body: updates })
-}
-
-export async function deletePrinter(id) {
-  return apiRequest(`/printers/${id}`, { method: 'DELETE' })
-}
-
-export async function testPrinterConnection(id) {
-  return apiRequest(`/printers/${id}/test`, { method: 'POST' })
 }
 
 // ─── Comandas ─────────────────────────────────────────────────────────────────

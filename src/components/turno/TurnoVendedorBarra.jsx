@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Clock3, CreditCard, LogOut } from 'lucide-react'
 import { toast } from 'sonner'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { useAuth } from '../../context/AuthContext'
 import { useTurnoVendedor } from '../../context/turnoVendedor'
-import { closeCaja, getCaja } from '../../lib/salesApi'
-import { mensajeCierreTurno } from '../../lib/turnos'
+import { getCaja, terminarTurno } from '../../lib/salesApi'
+import { mensajeTerminarTurno, turnoTerminado } from '../../lib/turnos'
 import { elegirMaquinaDelTurno, listarMaquinasDelLocal, maquinaDelTurno, webCobraCon } from '../../lib/maquinasCobro'
 import { isAlPasoLocal } from '../../lib/salesModel'
 import { isV2FeatureEnabled } from '../../lib/v2Features'
@@ -32,7 +32,7 @@ const BOTON = 'inline-flex items-center gap-1.5 rounded-full border border-[hsl(
  * puede liberarle la máquina durante el turno. En restaurante, con la bandera
  * `eleccionMaquinaVendedor`, puede elegir o cambiar la máquina desde aquí.
  */
-function MaquinaDelTurno({ turnoInicial, alPaso }) {
+function MaquinaDelTurno({ turnoInicial, alPaso, onTerminado }) {
   const [turno, setTurno] = useState(turnoInicial)
   const [maquinas, setMaquinas] = useState(null) // null = sin dato (cargando o no se pudo consultar)
   const [eligiendo, setEligiendo] = useState(false)
@@ -46,10 +46,12 @@ function MaquinaDelTurno({ turnoInicial, alPaso }) {
       .then(([fresco, filas]) => {
         if (fresco) setTurno(fresco)
         setMaquinas(filas)
+        // T-41: si el administrador le terminó el turno, se avisa con el motivo.
+        if (fresco && turnoTerminado(fresco)) onTerminado?.(fresco)
       })
       // Si no se pueden consultar, no se afirma nada.
       .catch(() => setMaquinas(null))
-  }, [turnoInicial.id, turnoInicial.local_id])
+  }, [turnoInicial.id, turnoInicial.local_id, onTerminado])
 
   useEffect(() => {
     revisar()
@@ -109,13 +111,15 @@ function MaquinaDelTurno({ turnoInicial, alPaso }) {
             <DialogHeader>
               <DialogTitle>{maquina ? 'Cambiar de máquina' : 'Elegir máquina de cobro'}</DialogTitle>
             </DialogHeader>
-            <ElegirMaquina
-              localId={turno.local_id}
-              maquinaActualId={maquina?.id || null}
-              onConfirmar={cambiar}
-              onSinMaquina={() => setEligiendo(false)}
-              textoSinMaquina="Cancelar"
-            />
+            <DialogBody>
+              <ElegirMaquina
+                localId={turno.local_id}
+                maquinaActualId={maquina?.id || null}
+                onConfirmar={cambiar}
+                onSinMaquina={() => setEligiendo(false)}
+                textoSinMaquina="Cancelar"
+              />
+            </DialogBody>
           </DialogContent>
         </Dialog>
       )}
@@ -124,28 +128,36 @@ function MaquinaDelTurno({ turnoInicial, alPaso }) {
 }
 
 /**
- * En la vista del vendedor: su turno abierto y, cuando el backend defina la
- * opción, el botón para cerrarlo (bandera `cierreTurnoVendedor`). Fuera de la
- * vista del vendedor no hay turno en contexto y no se muestra nada.
+ * En la vista del vendedor: su turno abierto, la máquina con que cobra y
+ * «Terminar mi turno» (T-41): suelta la máquina y deja la caja abierta para que
+ * el administrador la cuente y la cierre (el vendedor no cierra la caja, A-03).
+ * Como el servidor no sabe cuándo se va, se le recuerda terminar su turno.
+ * Fuera de la vista del vendedor no hay turno en contexto y no se muestra nada.
  */
 export default function TurnoVendedorBarra() {
   const contexto = useTurnoVendedor()
   const { user } = useAuth()
-  const [cerrando, setCerrando] = useState(false)
+  const [confirmando, setConfirmando] = useState(false)
+  const [terminando, setTerminando] = useState(false)
+  const [error, setError] = useState('')
+  const alTerminar = contexto?.alTerminar
+  const avisarTerminado = useCallback((t) => { alTerminar?.(t) }, [alTerminar])
   if (!contexto?.turno) return null
-  const { turno, alCerrar } = contexto
+  const { turno } = contexto
   const desde = horaDe(turno.opened_at)
 
-  const cerrarTurno = async () => {
-    if (!window.confirm('¿Cerrar tu turno? Es el cierre del arqueo del día: no se puede reabrir.')) return
-    setCerrando(true)
+  const terminar = async () => {
+    setTerminando(true)
+    setError('')
     try {
-      await closeCaja(turno.id)
-      toast.success('Turno cerrado')
-      alCerrar()
+      const actualizado = await terminarTurno(turno.id)
+      setConfirmando(false)
+      toast.success('Terminaste tu turno')
+      avisarTerminado(actualizado)
     } catch (err) {
-      toast.error(mensajeCierreTurno(err))
-      setCerrando(false)
+      setError(mensajeTerminarTurno(err))
+    } finally {
+      setTerminando(false)
     }
   }
 
@@ -154,16 +166,35 @@ export default function TurnoVendedorBarra() {
       <span className="hidden sm:inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
         <Clock3 size={13} /> Turno abierto{desde ? ` desde las ${desde}` : ''}
       </span>
-      <MaquinaDelTurno key={turno.id} turnoInicial={turno} alPaso={isAlPasoLocal(user?.local_sales_model)} />
-      {isV2FeatureEnabled('cierreTurnoVendedor') && (
-        <button
-          type="button"
-          onClick={cerrarTurno}
-          disabled={cerrando}
-          className="inline-flex items-center gap-1.5 rounded-full border border-[hsl(var(--border))] px-3 py-1 text-xs font-semibold text-[hsl(var(--foreground))] hover:bg-[hsl(var(--accent))] transition-colors disabled:opacity-50"
-        >
-          <LogOut size={13} /> {cerrando ? 'Cerrando…' : 'Cerrar turno'}
-        </button>
+      <span className="hidden lg:inline text-[11px] text-[hsl(var(--muted-foreground))]" data-testid="recordatorio-terminar">
+        Al terminar tu jornada, termina tu turno
+      </span>
+      <MaquinaDelTurno key={turno.id} turnoInicial={turno} alPaso={isAlPasoLocal(user?.local_sales_model)} onTerminado={avisarTerminado} />
+      <button type="button" onClick={() => { setConfirmando(true); setError('') }} className={BOTON}
+        title="Al terminar tu jornada, termina tu turno">
+        <LogOut size={13} /> Terminar mi turno
+      </button>
+      {confirmando && (
+        <Dialog open onOpenChange={(abierto) => { if (!abierto && !terminando) setConfirmando(false) }}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>¿Terminar tu turno?</DialogTitle>
+            </DialogHeader>
+            <DialogBody>
+            <p className="text-sm text-[hsl(var(--muted-foreground))]">
+              Se suelta tu máquina de cobro y ya no podrás vender en este turno. La caja queda abierta: la cuenta y la cierra el administrador.
+            </p>
+            {error && <p role="alert" className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
+            </DialogBody>
+            <DialogFooter>
+              <button type="button" onClick={() => setConfirmando(false)} disabled={terminando} className={BOTON}>Cancelar</button>
+              <button type="button" onClick={terminar} disabled={terminando}
+                className="inline-flex items-center gap-1.5 rounded-full bg-red-600 px-3 py-1 text-xs font-semibold text-white hover:bg-red-700 disabled:opacity-50">
+                {terminando ? 'Terminando…' : 'Terminar turno'}
+              </button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       )}
     </div>
   )

@@ -47,7 +47,7 @@ export function fmtTime(dateStr) {
 
 let _printInProgress = false
 
-export function openPrintWindow({ mesa, firstOrder, allItems, subtotal, iva, total, label = 'BOLETA' }) {
+export function openPrintWindow({ mesa, firstOrder, allItems, subtotal, iva, total, tipAmount = 0, totalWithTip = Number(total || 0) + Number(tipAmount || 0), label = 'BOLETA' }) {
   if (_printInProgress) return
   _printInProgress = true
 
@@ -94,6 +94,7 @@ export function openPrintWindow({ mesa, firstOrder, allItems, subtotal, iva, tot
   </div>
   <hr/>
   <div class="row"><span>ATENCION:</span><span>${mesa.name || '—'}</span></div>
+  ${firstOrder?.guests ? `<div class="row"><span>COMENSALES:</span><span>${firstOrder.guests}</span></div>` : ''}
   <hr/>
   <table>
     <thead>
@@ -109,7 +110,9 @@ export function openPrintWindow({ mesa, firstOrder, allItems, subtotal, iva, tot
   <hr/>
   <div class="row"><span>Subtotal (neto):</span><span>$ ${formatCLP(subtotal)}</span></div>
   <div class="row"><span>IVA 19%:</span><span>$ ${formatCLP(iva)}</span></div>
-  <div class="row total"><span>TOTAL:</span><span>$ ${formatCLP(total)}</span></div>
+  <div class="row"><span>Consumo:</span><span>$ ${formatCLP(total)}</span></div>
+  <div class="row"><span>Propina:</span><span>$ ${formatCLP(tipAmount)}</span></div>
+  <div class="row total"><span>TOTAL:</span><span>$ ${formatCLP(totalWithTip)}</span></div>
   <p class="small">Fecha: ${dateStr} ${timeStr}</p>
 </body>
 </html>`

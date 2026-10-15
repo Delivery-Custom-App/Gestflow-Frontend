@@ -23,7 +23,7 @@ export default function ProductDetailModal({ product, onClose }) {
           <DialogTitle>{product.product_name || 'Producto'}</DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-4 py-1">
+        <div className="space-y-4 px-6 py-5">
           {/* Descripción */}
           <section className="space-y-1">
             <p className="text-xs font-semibold uppercase tracking-widest text-[hsl(var(--muted-foreground))]">Descripción</p>

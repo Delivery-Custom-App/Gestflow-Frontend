@@ -3,17 +3,20 @@
  * Normaliza enums, shapes y flujos legacy (items nested, caja activa, mesa detail).
  */
 import { apiRequest, getOptionalAuthContext } from './apiClient'
-import { fetchProductsMap } from './v2CatalogApi'
+import { fetchProductsMap, productoDeFila } from './v2CatalogApi'
+import { traducirErrorCobro } from './supervision'
 
 /**
- * Backend V2 solo devuelve product_id en order_items (sin nombre embebido).
- * Resuelve nombre + total_price contra el catálogo para las pantallas que
- * esperan el shape legacy (item_name/product_name/total_price).
+ * Ítems del pedido con el shape que esperan las pantallas
+ * (item_name/product_name/total_price). Desde B-20 cada ítem trae
+ * `product_name` (el nombre con que se agregó: no cambia si después se
+ * renombra el producto) y `notes`; el catálogo queda solo como respaldo para
+ * ítems antiguos sin nombre (A-06).
  */
-function enrichItemsWithProducts(items, productsMap) {
+function enrichItemsWithProducts(items, productsMap = new Map()) {
   return (Array.isArray(items) ? items : []).map((item) => {
     const product = productsMap.get(String(item.product_id))
-    const name = product?.name || null
+    const name = item.product_name || product?.name || null
     return {
       ...item,
       quantity: Number(item.quantity),
@@ -21,6 +24,7 @@ function enrichItemsWithProducts(items, productsMap) {
       ...(item.subtotal != null && { subtotal: Number(item.subtotal) }),
       product_name: name,
       item_name: name,
+      notes: item.notes || null,
       total_price: Number(item.subtotal ?? Number(item.quantity) * Number(item.unit_price)) || 0,
     }
   })
@@ -58,6 +62,7 @@ const SOURCE_TO_V2 = {
 }
 
 const ACTIVE_ORDER_STATUSES = new Set(['open', 'preparing', 'ready', 'PENDING', 'PREPARING', 'READY'])
+const ACTIVE_ORDER_STATUS_FILTERS = ['open', 'preparing', 'ready']
 
 export function toUiOrderStatus(status) {
   const key = String(status || '')
@@ -100,12 +105,12 @@ export function mapMesaOut(mesa) {
     name: mesa.nombre || mesa.name || 'Mesa',
     nombre: mesa.nombre || mesa.name,
     state,
-    is_active: true,
+    // A-05 (B-19): baja lógica y zona («Terraza», «Salón»); `null` sin zona.
+    is_active: mesa.is_active !== false,
     // V2 entrega `capacity`; la UI la lee como `capacidad`. Leer solo el nombre
     // en español hacía que siempre cayera al valor por defecto de la tarjeta.
     capacidad: mesa.capacity ?? mesa.capacidad ?? null,
-    // El backend no tiene zonas: se expone null explícito, no un dato inventado.
-    zona: null,
+    zona: mesa.zona ? String(mesa.zona) : null,
   }
 }
 
@@ -162,8 +167,17 @@ export async function getMiTurnoDeHoy(localId) {
   return mio ? mapCajaOut(mio) : null
 }
 
-export async function listCajas(localId) {
-  const rows = await apiRequest(`/cajas?local_id=${encodeURIComponent(String(localId))}`)
+/**
+ * Turnos del local. Los filtros los resuelve el servidor (A-01, B-17):
+ * `business_date`, `status` (open | closed) y `cashier_user_id`. Cada turno
+ * trae `total_ingresos` y `total_esperado`, sin pedir un resumen por turno.
+ */
+export async function listCajas(localId, { businessDate, status, cashierUserId } = {}) {
+  const qs = new URLSearchParams({ local_id: String(localId) })
+  if (businessDate) qs.set('business_date', businessDate)
+  if (status) qs.set('status', status)
+  if (cashierUserId) qs.set('cashier_user_id', String(cashierUserId))
+  const rows = await apiRequest(`/cajas?${qs.toString()}`)
   return (Array.isArray(rows) ? rows : []).map(mapCajaOut)
 }
 
@@ -197,6 +211,15 @@ export async function createCajaV2({
   return mapCajaOut(row)
 }
 
+/**
+ * El vendedor termina su turno (T-41, sección 5b): suelta la máquina y deja la
+ * caja abierta para que el administrador la cuente y la cierre. 409 si tiene
+ * mesas o pedidos abiertos o si ya terminó; 403 si no es su turno.
+ */
+export async function terminarTurno(cajaId) {
+  return mapCajaOut(await apiRequest(`/cajas/${encodeURIComponent(String(cajaId))}/terminar-turno`, { method: 'POST' }))
+}
+
 /** Un turno por id (`GET /cajas/{id}`), con su máquina y si se la soltaron. */
 export async function getCaja(cajaId) {
   return mapCajaOut(await apiRequest(`/cajas/${encodeURIComponent(String(cajaId))}`))
@@ -207,11 +230,22 @@ export async function getCajaResumen(cajaId) {
   return apiRequest(`/cajas/${encodeURIComponent(String(cajaId))}/resumen`)
 }
 
-/** Cierra una caja (arqueo del día ya hecho). No se puede reabrir después. */
-export async function closeCaja(cajaId) {
+/**
+ * Cierra un turno (arqueo del día). No se puede reabrir después. Con el
+ * efectivo contado (T-55) manda `monto_cierre_declarado` y, si viene,
+ * `nota_cierre`: el backend calcula la diferencia contra lo esperado y, si no
+ * coincide y falta la nota, responde 400 sin cerrar.
+ */
+export async function closeCaja(cajaId, { montoCierreDeclarado, notaCierre } = {}) {
+  const body = { status: 'closed' }
+  if (montoCierreDeclarado !== undefined && montoCierreDeclarado !== null) {
+    body.monto_cierre_declarado = Number(montoCierreDeclarado).toFixed(2)
+  }
+  const nota = String(notaCierre || '').trim()
+  if (nota) body.nota_cierre = nota
   const row = await apiRequest(`/cajas/${encodeURIComponent(String(cajaId))}`, {
     method: 'PATCH',
-    body: { status: 'closed' },
+    body,
   })
   return mapCajaOut(row)
 }
@@ -229,9 +263,86 @@ export async function getMovimientosCaja(cajaId, { limit = 100, offset = 0 } = {
   return Array.isArray(rows) ? rows : []
 }
 
-export async function listMesas(localId) {
-  const rows = await apiRequest(`/mesas?local_id=${encodeURIComponent(String(localId))}`)
+const ORDER_PAGE_SIZE = 500
+
+function appendOrderFilters(query, filters = {}) {
+  const values = {
+    local_id: filters.localId,
+    mesa_id: filters.mesaId,
+    caja_id: filters.cajaId,
+    waiter_user_id: filters.waiterUserId,
+    date_from: filters.dateFrom instanceof Date ? filters.dateFrom.toISOString() : filters.dateFrom,
+    date_to: filters.dateTo instanceof Date ? filters.dateTo.toISOString() : filters.dateTo,
+    business_date: filters.businessDate,
+  }
+  Object.entries(values).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== '') query.set(key, String(value))
+  })
+  const statuses = Array.isArray(filters.status) ? filters.status : filters.status ? [filters.status] : []
+  statuses.forEach((status) => query.append('status', String(status)))
+}
+
+async function fetchOrdersPage(filters = {}) {
+  const limit = Math.min(Math.max(Number(filters.limit) || 50, 1), ORDER_PAGE_SIZE)
+  const offset = Math.max(Number(filters.offset) || 0, 0)
+  const query = new URLSearchParams({ limit: String(limit), offset: String(offset) })
+  appendOrderFilters(query, filters)
+  const response = await apiRequest(`/orders?${query.toString()}`, { withTotal: true })
+  const data = Array.isArray(response) ? response : response?.data
+  const total = Array.isArray(response) ? null : response?.total ?? null
+  return { rows: Array.isArray(data) ? data : [], total, limit, offset }
+}
+
+/** Una página de órdenes y el total del filtro, sin descargar el historial completo. */
+export async function listOrdersPage(localId, filters = {}) {
+  const page = await fetchOrdersPage({ ...filters, localId })
+  return { orders: page.rows.map(mapOrderOut), total: page.total, limit: page.limit, offset: page.offset }
+}
+
+async function fetchAllMatchingOrders(filters = {}) {
+  const rows = []
+  let offset = 0
+  let total = null
+  while (total === null || offset < total) {
+    // Cada consulta trae solo hasta 500 órdenes que ya cumplen los filtros del servidor.
+    // oxlint-disable-next-line react-doctor/async-await-in-loop
+    const page = await fetchOrdersPage({ ...filters, limit: ORDER_PAGE_SIZE, offset })
+    rows.push(...page.rows)
+    total = page.total
+    offset += page.rows.length
+    if (page.rows.length < ORDER_PAGE_SIZE) break
+  }
+  return rows
+}
+
+/** Órdenes activas de cocina; los estados se filtran y paginan en el servidor. */
+export async function listOrders(localId, { status = ACTIVE_ORDER_STATUS_FILTERS, ...filters } = {}) {
+  const statuses = Array.isArray(status) ? status.map(toV2OrderStatus) : status ? toV2OrderStatus(status) : status
+  const rows = await fetchAllMatchingOrders({ ...filters, localId, status: statuses })
+  return rows.map(mapOrderOut)
+}
+
+/** Órdenes de un turno, obtenidas por páginas para no traer el historial del local. */
+export async function listOrdenesDelTurno(cajaId) {
+  const rows = await fetchAllMatchingOrders({ cajaId })
+  return rows.map(mapOrderOut)
+}
+
+export const ZONA_MAX = 50
+
+/** Mesas del local; con `incluirInactivas` también las dadas de baja (A-05). */
+export async function listMesas(localId, { incluirInactivas = false } = {}) {
+  const qs = incluirInactivas ? '&include_inactive=true' : ''
+  const rows = await apiRequest(`/mesas?local_id=${encodeURIComponent(String(localId))}${qs}`)
   return (Array.isArray(rows) ? rows : []).map(mapMesaOut)
+}
+
+/** Reactiva una mesa dada de baja (`PATCH /mesas/{id}` con `is_active: true`). */
+export async function reactivarMesa(mesaId) {
+  return mapMesaOut(await apiRequest(`/mesas/${encodeURIComponent(String(mesaId))}`, {
+    method: 'PATCH',
+    body: { is_active: true },
+  }))
 }
 
 /**
@@ -241,14 +352,13 @@ export async function listMesas(localId) {
  * local: una sola consulta filtrada por estado, no el histórico completo.
  */
 export async function listMesasConTotales(localId) {
-  const local = encodeURIComponent(String(localId))
   // En curso = abierta, en preparación o lista: todavía no se cobra ni se cancela.
-  const [mesas, ...porEstado] = await Promise.all([
+  const [mesas, ordenesEnCurso] = await Promise.all([
     listMesas(localId),
-    ...['open', 'preparing', 'ready'].map((estado) => apiRequest(`/orders?local_id=${local}&status=${estado}`).catch(() => [])),
+    fetchAllMatchingOrders({ localId, status: ACTIVE_ORDER_STATUS_FILTERS }).catch(() => []),
   ])
   const enCursoPorMesa = new Map()
-  for (const orden of porEstado.flatMap((filas) => (Array.isArray(filas) ? filas : []))) {
+  for (const orden of ordenesEnCurso) {
     if (!orden?.mesa_id) continue
     const clave = String(orden.mesa_id)
     if (!enCursoPorMesa.has(clave)) enCursoPorMesa.set(clave, [])
@@ -265,14 +375,16 @@ export async function listMesasConTotales(localId) {
   })
 }
 
-export async function createMesa({ local_id, name, nombre, capacidad }) {
+export async function createMesa({ local_id, name, nombre, capacidad, zona }) {
   const capacity = Number(capacidad)
+  const zonaLimpia = String(zona || '').trim()
   const row = await apiRequest('/mesas', {
     method: 'POST',
     body: {
       local_id,
       nombre: String(nombre || name || '').trim(),
       status: 'available',
+      ...(zonaLimpia ? { zona: zonaLimpia } : {}),
       // V2 acepta capacidad desde la migración 0025.
       ...(Number.isFinite(capacity) && capacity > 0 ? { capacity } : {}),
     },
@@ -289,6 +401,9 @@ export async function updateMesa(mesaId, body = {}) {
     const capacity = Number(body.capacity ?? body.capacidad)
     if (Number.isFinite(capacity) && capacity > 0) patch.capacity = capacity
   }
+  // A-05: zona (vacía la quita) y reactivar o dar de baja.
+  if (body.zona !== undefined) patch.zona = String(body.zona || '').trim() || null
+  if (body.is_active !== undefined) patch.is_active = Boolean(body.is_active)
   if (body.status != null) patch.status = body.status
   if (body.state === 'libre') patch.status = 'available'
   if (body.state === 'ocupada' || body.state === 'en_cobro') patch.status = 'occupied'
@@ -301,6 +416,15 @@ export async function updateMesa(mesaId, body = {}) {
 
 export async function setMesaLibre(mesaId) {
   return updateMesa(mesaId, { status: 'available' })
+}
+
+/** Libera una mesa dejando registro y cancelando sus pedidos abiertos sin cobrar. */
+export async function liberarMesa(mesaId, motivo) {
+  if (!mesaId) throw new Error('Falta indicar qué mesa liberar')
+  return apiRequest(`/mesas/${encodeURIComponent(String(mesaId))}/liberar`, {
+    method: 'POST',
+    body: { motivo: String(motivo || '').trim() },
+  })
 }
 
 /**
@@ -318,11 +442,11 @@ export async function deleteMesa(mesaId) {
  */
 export async function getMesaDetail(mesaId) {
   const mesa = mapMesaOut(await apiRequest(`/mesas/${encodeURIComponent(String(mesaId))}`))
-  const [orders, productsMap] = await Promise.all([
-    apiRequest(`/orders?local_id=${encodeURIComponent(String(mesa.local_id))}`),
+  const [ordersByStatus, productsMap] = await Promise.all([
+    Promise.all(ACTIVE_ORDER_STATUS_FILTERS.map((status) => fetchAllMatchingOrders({ mesaId, status }))),
     fetchProductsMap().catch(() => new Map()),
   ])
-  const active = (Array.isArray(orders) ? orders : []).filter(
+  const active = ordersByStatus.flatMap((orders) => Array.isArray(orders) ? orders : []).filter(
     (o) => String(o.mesa_id) === String(mesaId) && ACTIVE_ORDER_STATUSES.has(String(o.status)),
   )
 
@@ -354,33 +478,70 @@ export async function getMesaDetail(mesaId) {
   }
 }
 
-export async function listOrders(localId, { status } = {}) {
-  const rows = await apiRequest(`/orders?local_id=${encodeURIComponent(String(localId))}`)
-  let list = (Array.isArray(rows) ? rows : []).map(mapOrderOut)
-  if (status) {
-    const wanted = toUiOrderStatus(status)
-    list = list.filter((o) => o.status === wanted || String(o.status_v2) === String(status).toLowerCase())
-  }
-  return list
-}
-
 export async function listOrderItems(orderId, createdAt) {
-  const [items, productsMap] = await Promise.all([
-    apiRequest(orderResourcePath(orderId, createdAt, '/items')),
-    fetchProductsMap().catch(() => new Map()),
-  ])
+  const items = await apiRequest(orderResourcePath(orderId, createdAt, '/items'))
+  // A-06: el nombre viene en cada ítem; el catálogo solo para ítems antiguos sin él.
+  const faltaNombre = (Array.isArray(items) ? items : []).some((it) => !it.product_name)
+  const productsMap = faltaNombre ? await fetchProductsMap().catch(() => new Map()) : new Map()
   return enrichItemsWithProducts(items, productsMap)
 }
 
-export async function addOrderItem(orderId, body, createdAt) {
-  return apiRequest(orderResourcePath(orderId, createdAt, '/items'), {
+/**
+ * Un 400 por orden cerrada («No se pueden … ítems de una orden cerrada») se
+ * muestra como «El pedido ya está cerrado»; el resto pasa tal cual.
+ */
+function errorDeItem(err) {
+  if (Number(err?.status) === 400 && /cerrad/i.test(String(err?.detail || err?.message || ''))) {
+    const e = new Error('El pedido ya está cerrado')
+    e.status = 400
+    e.detail = err.detail
+    throw e
+  }
+  throw err
+}
+
+/**
+ * Agrega un ítem. El precio lo pone el backend (el del menú del local): no se
+ * manda `unit_price` (T-30).
+ */
+export const NOTA_ITEM_MAX = 200
+
+export async function addOrderItem(orderId, body, createdAt, key) {
+  const nota = String(body.notes || '').trim()
+  const options = {
     method: 'POST',
     body: {
       product_id: body.product_id,
       quantity: Number(body.quantity) || 1,
-      unit_price: Number(body.unit_price) || 0,
+      // A-06: nota del ítem (por ejemplo «sin cebolla»), hasta 200 caracteres.
+      ...(nota ? { notes: nota.slice(0, NOTA_ITEM_MAX) } : {}),
     },
-  })
+  }
+  if (key) options.headers = { 'Idempotency-Key': key }
+  return apiRequest(orderResourcePath(orderId, createdAt, '/items'), options).catch(errorDeItem)
+}
+
+/**
+ * Cambia la cantidad (y la nota, si viene) de un ítem:
+ * `PATCH /orders/{id}/items/{item_id}`. Nunca manda el precio (T-30).
+ */
+export async function updateOrderItem(orderId, itemId, { quantity, notes } = {}, createdAt) {
+  const body = {}
+  if (quantity != null) body.quantity = Number(quantity)
+  if (notes !== undefined) body.notes = notes
+  return apiRequest(orderResourcePath(orderId, createdAt, `/items/${encodeURIComponent(String(itemId))}`), {
+    method: 'PATCH',
+    body,
+  }).catch(errorDeItem)
+}
+
+/** Quita un ítem del pedido: `DELETE /orders/{id}/items/{item_id}` (204). */
+export async function removeOrderItem(orderId, itemId, createdAt) {
+  const result = await apiRequest(orderResourcePath(orderId, createdAt, `/items/${encodeURIComponent(String(itemId))}`), {
+    method: 'DELETE',
+    withOrderTotal: true,
+  }).catch(errorDeItem)
+  return { orderTotal: result?.orderTotal ?? null }
 }
 
 /**
@@ -402,6 +563,11 @@ export async function createOrder(orderData = {}) {
     source: toV2Source(orderData.source || 'mostrador'),
     mesa_id: orderData.mesa_id || null,
   }
+  if (orderData.guests != null) {
+    const guests = Number(orderData.guests)
+    if (!Number.isInteger(guests) || guests < 1) throw new Error('La cantidad de comensales debe ser un entero mayor que cero.')
+    payload.guests = guests
+  }
   // Al abrir una mesa queda registrado quién la atiende: quien la abre. El
   // backend solo acepta mesero en locales con mesas, y las mesas solo existen ahí.
   if (payload.mesa_id) {
@@ -409,11 +575,22 @@ export async function createOrder(orderData = {}) {
     if (meseroId) payload.waiter_user_id = meseroId
   }
 
-  const order = await apiRequest('/orders', { method: 'POST', body: payload })
+  const idempotencyKey = orderData.idempotency_key
+  const createOptions = { method: 'POST', body: payload }
+  if (idempotencyKey) createOptions.headers = { 'Idempotency-Key': `${idempotencyKey}:crear` }
+  const order = await apiRequest('/orders', createOptions).catch((err) => {
+    // T-41: con el turno ya terminado el backend responde 400; se explica.
+    if (/turno de esta caja ya terminó/i.test(String(err?.detail || err?.message || ''))) {
+      const e = new Error('Tu turno ya terminó: no puedes crear pedidos. Si sigues trabajando, pide al administrador que te abra uno nuevo.')
+      e.status = 400
+      throw e
+    }
+    throw err
+  })
   const items = Array.isArray(orderData.items) ? orderData.items : []
   const createdItems = []
 
-  for (const raw of items) {
+  for (const [index, raw] of items.entries()) {
     const productId = raw.product_id || raw.recipe_id
     if (!productId) continue
     // Secuencial a propósito: conserva el orden de los ítems/comanda y evita escrituras concurrentes sobre la misma orden/mesa.
@@ -423,9 +600,10 @@ export async function createOrder(orderData = {}) {
       {
         product_id: productId,
         quantity: raw.quantity,
-        unit_price: raw.unit_price,
+        notes: raw.notes,
       },
       order.created_at,
+      idempotencyKey ? `${idempotencyKey}:item:${index}` : undefined,
     )
     createdItems.push(item)
   }
@@ -439,10 +617,11 @@ export async function createOrder(orderData = {}) {
     }
   }
 
-  // `order` es la orden vacía devuelta por POST /orders (total=0); el backend
-  // recalcula order.total recién al agregar cada ítem, pero ese valor nunca
-  // vuelve en la respuesta de /items — lo recomputamos acá con los subtotales.
-  const computedTotal = createdItems.reduce(
+  // `order` es la orden vacía devuelta por POST /orders (total=0). Cada ítem
+  // trae `order_total` (B-20): el del último es el total del pedido (A-06).
+  // Sin él (backend anterior), se suma con los subtotales.
+  const ultimoTotal = createdItems.length ? createdItems[createdItems.length - 1]?.order_total : null
+  const computedTotal = ultimoTotal != null ? Number(ultimoTotal) : createdItems.reduce(
     (s, it) => s + (Number(it.subtotal) || (Number(it.unit_price) || 0) * (Number(it.quantity) || 0)),
     0,
   )
@@ -453,7 +632,17 @@ export async function createOrder(orderData = {}) {
 export async function updateOrderStatus(orderId, status, createdAt, extra = {}) {
   const body = { status: toV2OrderStatus(status), ...extra }
   const path = orderResourcePath(orderId, createdAt)
-  const updated = await apiRequest(path, { method: 'PATCH', body })
+  // T-42: el 403 «Solo quien abrió la mesa puede cobrarla» con la sugerencia de pedir la reasignación.
+  const updated = await apiRequest(path, { method: 'PATCH', body }).catch((err) => { throw traducirErrorCobro(err) })
+  return mapOrderOut(updated)
+}
+
+/** Actualiza datos del pedido sin alterar su estado. */
+export async function updateOrderFields(orderId, fields = {}, createdAt) {
+  const updated = await apiRequest(orderResourcePath(orderId, createdAt), {
+    method: 'PATCH',
+    body: fields,
+  }).catch((err) => { throw traducirErrorCobro(err) })
   return mapOrderOut(updated)
 }
 
@@ -462,22 +651,22 @@ export async function updateOrderStatus(orderId, status, createdAt, extra = {}) 
  * caminar open→preparing→ready→completed, así que ante un 400 por transición
  * inválida se recorren los estados intermedios y se reintenta.
  */
-export async function completeOrder(orderId, paymentMethod, createdAt) {
-  const extra = { payment_method: paymentMethod }
+export async function completeOrder(orderId, paymentMethod, createdAt, extra = {}) {
+  const fields = { payment_method: paymentMethod, ...extra }
   try {
-    return await updateOrderStatus(orderId, 'completed', createdAt, extra)
+    return await updateOrderStatus(orderId, 'completed', createdAt, fields)
   } catch (err) {
     const msg = String(err?.message || err?.detail || '')
     if (!/transici[oó]n inv[aá]lida|400/i.test(msg)) throw err
     await updateOrderStatus(orderId, 'preparing', createdAt)
     await updateOrderStatus(orderId, 'ready', createdAt)
-    return updateOrderStatus(orderId, 'completed', createdAt, extra)
+    return updateOrderStatus(orderId, 'completed', createdAt, fields)
   }
 }
 
 /** Completa orden (cobro efectivo). */
-export async function completeOrderCash(orderId, _cashReceived, createdAt) {
-  return completeOrder(orderId, 'cash', createdAt)
+export async function completeOrderCash(orderId, _cashReceived, createdAt, tipAmount = 0) {
+  return completeOrder(orderId, 'cash', createdAt, { tip_amount: tipAmount })
 }
 
 /**
@@ -533,15 +722,22 @@ export async function computeMesasKpis(localId) {
  * Shape: { categories: [{ id, name, products: [...] }], local_id }
  */
 export async function fetchLocalMenuCatalog(localId, { search, includeInactive = false } = {}) {
+  const lid = encodeURIComponent(String(localId))
+  // A-07 (B-12): la carta para vender (venta directa y mesas) sale del menú del
+  // local con los datos del producto (`include=product`), sin bajar el catálogo
+  // completo. El Creador de menú (includeInactive) sigue leyendo el producto
+  // entero porque necesita saber si está activo en el negocio.
   const [localProducts, products, categories, inventory] = await Promise.all([
-    apiRequest('/local-products'),
-    apiRequest('/products'),
+    apiRequest(`/local-products?local_id=${lid}${includeInactive ? '' : '&include=product'}`),
+    includeInactive ? apiRequest('/products') : Promise.resolve(null),
     apiRequest('/categories'),
-    apiRequest('/inventory'),
+    apiRequest(`/inventory?local_id=${lid}`),
   ])
 
   const productMap = new Map(
-    (Array.isArray(products) ? products : []).map((p) => [String(p.id), p]),
+    Array.isArray(products)
+      ? products.map((p) => [String(p.id), p])
+      : (Array.isArray(localProducts) ? localProducts : []).filter((lp) => lp.product_name).map((lp) => [String(lp.product_id), productoDeFila(lp)]),
   )
   const categoryMap = new Map(
     (Array.isArray(categories) ? categories : []).map((c) => [String(c.id), c]),
@@ -575,7 +771,8 @@ export async function fetchLocalMenuCatalog(localId, { search, includeInactive =
       name: product.name,
       product_name: product.name,
       price: Number(product.price) || 0,
-      cost: Number(product.cost) || 0,
+      // El empleado recibe el costo en null: no se muestra.
+      cost: product.cost == null ? null : Number(product.cost) || 0,
       stock: stockMap.get(String(product.id)) || 0,
       category_id: product.category_id ? String(product.category_id) : null,
       stock_deduction_mode: product.stock_deduction_mode,
@@ -597,10 +794,13 @@ export async function fetchLocalMenuCatalog(localId, { search, includeInactive =
     categoryList.push({
       id: catId,
       name: cat?.name || 'Sin nombre',
+      // A-08: orden y color de la categoría (B-23).
+      sort_order: Number(cat?.sort_order) || 0,
+      color: cat?.color || null,
       products: prods.sort((a, b) => a.name.localeCompare(b.name, 'es')),
     })
   }
-  categoryList.sort((a, b) => a.name.localeCompare(b.name, 'es'))
+  categoryList.sort((a, b) => a.sort_order - b.sort_order || a.name.localeCompare(b.name, 'es'))
 
   return { categories: categoryList, local_id: localId }
 }

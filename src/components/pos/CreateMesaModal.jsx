@@ -4,9 +4,8 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
 
-// Sin zona: el backend no tiene zonas, así que pedirla era pedir un dato que
-// se descartaba antes de enviar la petición.
-const INITIAL_FORM = { name: '', capacidad: '' }
+// A-05: la zona es opcional, texto libre de hasta 50 caracteres («Terraza», «Salón»).
+const INITIAL_FORM = { name: '', capacidad: '', zona: '' }
 
 export default function CreateMesaModal({ mesas, onClose, onSubmit }) {
   const [form, setForm] = useState(INITIAL_FORM)
@@ -51,7 +50,7 @@ export default function CreateMesaModal({ mesas, onClose, onSubmit }) {
     setSubmitting(true)
     setServerError('')
     try {
-      await onSubmit({ name: form.name.trim(), capacidad: form.capacidad })
+      await onSubmit({ name: form.name.trim(), capacidad: form.capacidad, zona: form.zona.trim() })
       handleClose()
     } catch (err) {
       setServerError(err.message || 'Error al crear la mesa')
@@ -109,6 +108,12 @@ export default function CreateMesaModal({ mesas, onClose, onSubmit }) {
               className={cn(errors.capacidad && 'border-[hsl(var(--destructive))]')}
             />
             {errors.capacidad && <p className="text-xs text-[hsl(var(--destructive))]">{errors.capacidad}</p>}
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="mesa-zona">Zona (opcional)</Label>
+            <Input id="mesa-zona" name="zona" type="text" maxLength={50} placeholder="Ej: Terraza, Salón"
+              value={form.zona} onChange={handleChange} disabled={submitting} />
           </div>
 
           {serverError && (

@@ -1,49 +1,57 @@
 import { useState, useCallback } from 'react'
-import { addOrderItem } from '../lib/salesApi'
+import { addOrderItem, removeOrderItem, updateOrderItem } from '../lib/salesApi'
 
+/**
+ * Agregar, editar y quitar ítems de un pedido. Editar cambia solo la cantidad
+ * (el precio lo pone el backend) y quitar usa DELETE (T-30).
+ */
 export function useOrderItems(orderId, createdAt) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
 
+  const run = useCallback(async (accion, fallo, siFalla) => {
+    if (!orderId) {
+      setError('No hay orden activa')
+      return siFalla
+    }
+    setLoading(true)
+    setError(null)
+    try {
+      return await accion()
+    } catch (err) {
+      setError(err?.message || fallo)
+      return siFalla
+    } finally {
+      setLoading(false)
+    }
+  }, [orderId])
+
   const createItem = useCallback(
-    async (productId, quantity, unitPrice) => {
-      if (!orderId) {
-        setError('No hay orden activa')
-        return null
-      }
-
-      setLoading(true)
-      setError(null)
-
-      try {
-        return await addOrderItem(
-          orderId,
-          {
-            product_id: productId,
-            quantity: parseInt(quantity, 10),
-            unit_price: parseFloat(unitPrice),
-          },
-          createdAt,
-        )
-      } catch (err) {
-        setError(err.message || 'Error al agregar producto')
-        return null
-      } finally {
-        setLoading(false)
-      }
-    },
-    [orderId, createdAt],
+    (productId, quantity, key) => run(
+      () => addOrderItem(orderId, { product_id: productId, quantity: parseInt(quantity, 10) }, createdAt, key),
+      'Error al agregar producto',
+      false,
+    ),
+    [run, orderId, createdAt],
   )
 
-  const updateItem = useCallback(async () => {
-    setError('Editar ítems de orden aún no está disponible en Backend V2')
-    return null
-  }, [])
+  const updateItem = useCallback(
+    (itemId, quantity) => run(
+      () => updateOrderItem(orderId, itemId, { quantity }, createdAt),
+      'No se pudo cambiar la cantidad',
+      null,
+    ),
+    [run, orderId, createdAt],
+  )
 
-  const deleteItem = useCallback(async () => {
-    setError('Eliminar ítems de orden aún no está disponible en Backend V2')
-    return false
-  }, [])
+  const deleteItem = useCallback(
+    (itemId) => run(
+      () => removeOrderItem(orderId, itemId, createdAt),
+      'No se pudo quitar el producto',
+      null,
+    ),
+    [run, orderId, createdAt],
+  )
 
   return { createItem, updateItem, deleteItem, loading, error }
 }

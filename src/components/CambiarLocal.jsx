@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { ArrowLeftRight, Store } from 'lucide-react'
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogDescription, DialogBody, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { useAuth } from '../context/AuthContext'
 import { useTurnoVendedor } from '../context/turnoVendedor'
@@ -95,6 +95,7 @@ export default function CambiarLocal({ alCambiar = recargarEnInicio }) {
               <DialogTitle>Cambiar de local</DialogTitle>
               <DialogDescription>Ahora trabajas en {actual}. Tu sesión sigue abierta en el local que elijas.</DialogDescription>
             </DialogHeader>
+            <DialogBody>
 
             {error && (
               <p role="alert" className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600 dark:border-red-800/50 dark:bg-red-950/30 dark:text-red-400">{error}</p>
@@ -131,6 +132,7 @@ export default function CambiarLocal({ alCambiar = recargarEnInicio }) {
                 ))}
               </ul>
             )}
+          </DialogBody>
           </DialogContent>
         </Dialog>
       )}

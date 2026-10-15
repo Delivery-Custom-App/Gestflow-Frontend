@@ -1,10 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { getMovimientosCaja } from './salesApi'
+import { renderHook, waitFor } from '@testing-library/react'
+import { getMovimientosCaja, listCajas } from './salesApi'
 import {
-  filtrarTurnos, horaDe, movimientosDelTurno, nombreDeVendedor, opcionesDeVendedor, totalesDelTurno, turnosDe,
+  filtrarTurnos, horaDe, movimientosDelTurno, nombreDeVendedor, opcionesDeVendedor, totalesDelTurno, totalVendidoDe, turnosDe,
+  useTurnosFiltrados,
 } from './registroTurnos'
 
-vi.mock('./salesApi', () => ({ getMovimientosCaja: vi.fn(), getCajaResumen: vi.fn() }))
+vi.mock('./salesApi', () => ({ getMovimientosCaja: vi.fn(), getCajaResumen: vi.fn(), listCajas: vi.fn() }))
 
 const TURNOS = [
   { id: 't-1', cashier_user_id: 'ana', business_date: '2026-10-04' },
@@ -81,5 +83,28 @@ describe('horaDe', () => {
   it('sin fecha no inventa una hora', () => {
     expect(horaDe(null)).toBeNull()
     expect(horaDe('no es fecha')).toBeNull()
+  })
+})
+
+describe('A-01 · turnos con totales en una sola llamada', () => {
+  it('totalVendidoDe lee total_ingresos del turno; sin dato devuelve null', () => {
+    expect(totalVendidoDe({ total_ingresos: '13200.00' })).toBe(13200)
+    expect(totalVendidoDe({ total_ingresos: '0' })).toBe(0)
+    expect(totalVendidoDe({})).toBeNull()
+  })
+
+  it('sin filtros usa la lista ya cargada y no llama al backend', () => {
+    const { result } = renderHook(() => useTurnosFiltrados('loc-1', TURNOS, {}))
+    expect(result.current).toEqual({ turnos: TURNOS, cargando: false, error: '' })
+    expect(listCajas).not.toHaveBeenCalled()
+  })
+
+  it('con filtros pide al servidor por fecha y cajero', async () => {
+    listCajas.mockResolvedValue([TURNOS[0]])
+    const { result } = renderHook(() => useTurnosFiltrados('loc-1', TURNOS, { vendedorId: 'ana', fecha: '2026-10-04' }))
+    expect(result.current.cargando).toBe(true)
+    await waitFor(() => expect(result.current.cargando).toBe(false))
+    expect(result.current.turnos).toEqual([TURNOS[0]])
+    expect(listCajas).toHaveBeenCalledWith('loc-1', { businessDate: '2026-10-04', cashierUserId: 'ana' })
   })
 })

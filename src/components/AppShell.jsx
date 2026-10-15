@@ -6,7 +6,7 @@ import { useCurrentBusiness } from '../hooks/useCurrentBusiness'
 import { useTheme } from '../context/ThemeContext'
 import { m, AnimatePresence } from 'framer-motion'
 import { cn } from '@/lib/utils'
-import {
+import { CreditCard, ReceiptText,
   LayoutDashboard, House, ChevronDown, ChevronLeft, ChevronRight,
   DollarSign, FileText, BarChart3, Wallet,
   Table2, ChefHat, Moon, Sun, LifeBuoy,
@@ -34,9 +34,10 @@ import { isDirectSaleDemoUser } from '../constants/demoMode'
 import { formatShortAddress } from '../lib/formatAddress'
 import { isV2FeatureEnabled } from '../lib/v2Features'
 import { isAlPasoLocal, normalizeSalesModel } from '../lib/salesModel'
+import { textosNoCobradas } from '../lib/noCobradas'
 
 /* ── key sets for accordion auto-open ──────────────────────────── */
-const ADMIN_KEYS = new Set(['administracion', 'ventas', 'flujo-caja', 'fondo-emergencia'])
+const ADMIN_KEYS = new Set(['administracion', 'ventas', 'flujo-caja', 'no-cobradas', 'fondo-emergencia'])
 const POS_KEYS   = new Set(['pos', 'pos-mesas', 'pos-kitchen', 'pos-venta-directa', 'pos-mis-turnos'])
 const INV_KEYS   = new Set(['inv-hub', 'inv-prov', 'inv-stock', 'inv-stock-ctrl', 'inv-compras', 'inv-recetas'])
 
@@ -55,9 +56,11 @@ function deriveActiveKey(pathname) {
   if (pathname.includes('/administrativo/ventas'))        return 'ventas'
   if (pathname.includes('/administrativo/flujo-caja'))    return 'flujo-caja'
   if (pathname.includes('/administrativo/fondo-emergencia')) return 'fondo-emergencia'
+  if (pathname.includes('/administrativo/no-cobradas'))   return 'no-cobradas'
   if (pathname.includes('/administrativo'))               return 'administracion'
   if (pathname.includes('/rrhh'))                         return 'hr-hub'
   if (pathname.includes('/usuarios'))                    return 'usuarios'
+  if (pathname === '/maquinas')                          return 'maquinas'
   if (pathname.includes('/gestor/resumen'))              return 'gestor-resumen'
   if (pathname.includes('/gestor/negocios'))             return 'gestor'
   if (pathname.includes('/gestor/auditoria'))            return 'gestor-auditoria'
@@ -79,6 +82,7 @@ const ACCORDIONS = [
     items: [
       { key: 'ventas',      label: 'Ventas',        icon: DollarSign },
       { key: 'flujo-caja',  label: 'Caja y turnos', icon: Wallet     },
+      { key: 'no-cobradas', label: 'Mesas no cobradas', icon: ReceiptText },
       { key: 'fondo-emergencia', label: 'Fondo de emergencia', icon: LifeBuoy, feature: 'fondoEmergencia' },
     ],
   },
@@ -169,6 +173,7 @@ function Sidebar({ collapsed, onToggle, onClose }) {
       case 'locales':   navigate('/admin'); break
       // Dentro de una franquicia, los usuarios de ese local sin salir de ella.
       case 'usuarios':  navigate(localId ? `/local/${localId}/usuarios` : '/usuarios', { state: navState }); break
+      case 'maquinas':  navigate('/maquinas'); break
       case 'gestor':    navigate('/gestor'); break
       case 'gestor-resumen':       navigate('/gestor/resumen'); break
       case 'gestor-auditoria':     navigate('/gestor/auditoria'); break
@@ -204,6 +209,8 @@ function Sidebar({ collapsed, onToggle, onClose }) {
     // El dueño ve a los de todos sus locales; el encargado, a los del suyo
     // (sin local asignado no hay usuarios que mostrarle: el ítem no se ofrece).
     ...(isOwner || (isEncargado && (assignedLocalId || localId)) ? [{ key: 'usuarios', label: 'Usuarios', icon: Users }] : []),
+    // T-44: máquinas POS de todo el negocio, solo el dueño.
+    ...(isOwner ? [{ key: 'maquinas', label: 'Máquinas POS', icon: CreditCard }] : []),
     // RRHH está apagado con `hrModule` (src/lib/v2Features.js): ningún rol lo ve.
     ...(isV2FeatureEnabled('hrModule') && localId && !isWorker ? [{ key: 'hr-hub', label: 'RRHH', icon: Users }] : []),
     ...(!isWorker && localId ? [{ key: 'dashboard', label: 'Dashboard', icon: LayoutDashboard }] : []),
@@ -233,6 +240,9 @@ function Sidebar({ collapsed, onToggle, onClose }) {
     : isAlPaso
       ? availableAccordions.map((s) => {
           if (s.key === 'pos') return { ...s, label: 'Punto de venta', items: AL_PASO_POS_ITEMS }
+          if (s.key === 'administracion') {
+            return { ...s, items: s.items.map((i) => (i.key === 'no-cobradas' ? { ...i, label: textosNoCobradas(true).titulo } : i)) }
+          }
           if (s.key === 'inventario') {
             return {
               ...s,

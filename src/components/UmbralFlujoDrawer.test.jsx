@@ -16,7 +16,7 @@ describe('UmbralFlujoDrawer', () => {
     expect(explicacion).toHaveTextContent('Amarillo, flujo medio: desde 5 ventas.')
     expect(explicacion).toHaveTextContent('Rojo, flujo alto: desde 15 ventas.')
     expect(explicacion).toHaveTextContent(/flecha compara la última hora con la anterior/)
-    expect(explicacion).toHaveTextContent(/El mismo umbral vale para todas las franquicias/)
+    expect(explicacion).toHaveTextContent(/El mismo umbral vale para todos los locales/)
     expect(explicacion).toHaveTextContent(/Se actualiza solo/)
   })
 

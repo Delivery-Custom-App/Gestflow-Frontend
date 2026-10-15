@@ -8,7 +8,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { apiRequest } from './apiClient'
-import { createMesa, deleteMesa, listMesasConTotales, mapMesaOut, updateMesa } from './salesApi'
+import { createMesa, deleteMesa, listMesas, listMesasConTotales, mapMesaOut, reactivarMesa, updateMesa } from './salesApi'
 
 vi.mock('./apiClient', () => ({ apiRequest: vi.fn() }))
 
@@ -28,8 +28,27 @@ describe('Mesas', () => {
     expect(mapMesaOut({ id: 'm1', nombre: 'Mesa 1', status: 'available', capacity: null }).capacidad).toBeNull()
   })
 
-  it('no inventa zonas: el backend no las tiene', () => {
-    expect(mapMesaOut({ id: 'm1', nombre: 'Mesa 1', status: 'available', zona: 'Terraza' }).zona).toBeNull()
+  it('A-05: lee la zona y si está activa', () => {
+    expect(mapMesaOut({ id: 'm1', nombre: 'Mesa 1', status: 'available', zona: 'Terraza' }).zona).toBe('Terraza')
+    expect(mapMesaOut({ id: 'm1', nombre: 'Mesa 1', status: 'available', zona: null }).zona).toBeNull()
+    expect(mapMesaOut({ id: 'm1', nombre: 'Mesa 1', is_active: false }).is_active).toBe(false)
+    expect(mapMesaOut({ id: 'm1', nombre: 'Mesa 1' }).is_active).toBe(true)
+  })
+
+  it('A-05: listar dadas de baja, reactivar, crear y editar con zona', async () => {
+    apiRequest.mockResolvedValue([])
+    await listMesas('loc-1', { incluirInactivas: true })
+    expect(apiRequest).toHaveBeenLastCalledWith('/mesas?local_id=loc-1&include_inactive=true')
+
+    apiRequest.mockResolvedValue({ id: 'm1', nombre: 'Mesa 1', is_active: true })
+    await reactivarMesa('m1')
+    expect(apiRequest).toHaveBeenLastCalledWith('/mesas/m1', { method: 'PATCH', body: { is_active: true } })
+
+    await createMesa({ local_id: 'loc-1', name: 'Mesa 9', capacidad: '2', zona: 'Salón' })
+    expect(apiRequest.mock.lastCall[1].body).toMatchObject({ nombre: 'Mesa 9', zona: 'Salón' })
+
+    await updateMesa('m1', { name: 'Mesa 1', zona: '' })
+    expect(apiRequest.mock.lastCall[1].body).toEqual({ nombre: 'Mesa 1', zona: null })
   })
 
   it('crear una mesa guarda la capacidad en el backend', async () => {
@@ -74,15 +93,15 @@ describe('Mesas', () => {
           { id: 'm2', nombre: 'Mesa 2', status: 'available', capacity: 2 },
         ])
       }
-      if (path === '/orders?local_id=loc-1&status=open') {
+      if (path.startsWith('/orders?')) {
+        const query = new URLSearchParams(path.split('?')[1])
+        const statuses = query.getAll('status')
+        if (statuses.length !== 3 || !statuses.includes('open')) return Promise.resolve([])
         return Promise.resolve([
           { id: 'o1', mesa_id: 'm1', status: 'open', total: '9400.00' },
           { id: 'o2', mesa_id: 'm1', status: 'open', total: '600.00' },
+          { id: 'o3', mesa_id: 'm1', status: 'preparing', total: '1000.00' },
         ])
-      }
-      // En preparación también está en curso: suma a la mesa.
-      if (path === '/orders?local_id=loc-1&status=preparing') {
-        return Promise.resolve([{ id: 'o3', mesa_id: 'm1', status: 'preparing', total: '1000.00' }])
       }
       return Promise.resolve([])
     })
@@ -90,11 +109,11 @@ describe('Mesas', () => {
     const mesas = await listMesasConTotales('loc-1')
 
     // Solo pide las órdenes en curso, no el histórico del local.
-    expect(rutas()).toEqual(expect.arrayContaining([
-      '/orders?local_id=loc-1&status=open',
-      '/orders?local_id=loc-1&status=preparing',
-      '/orders?local_id=loc-1&status=ready',
-    ]))
+    const request = apiRequest.mock.calls.find(([path]) => String(path).startsWith('/orders?'))
+    const query = new URLSearchParams(request[0].split('?')[1])
+    expect(query.getAll('status')).toEqual(['open', 'preparing', 'ready'])
+    expect(query.get('limit')).toBe('500')
+    expect(request[1]).toEqual({ withTotal: true })
     expect(rutas().some((r) => r.startsWith('/orders') && !r.includes('status='))).toBe(false)
     expect(mesas[0]).toMatchObject({ nombre: 'Mesa 1', state: 'ocupada', capacidad: 4, total: 11000 })
     expect(mesas[0].ordenes_en_curso.map((o) => o.id)).toEqual(['o1', 'o2', 'o3'])

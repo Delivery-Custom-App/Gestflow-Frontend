@@ -370,6 +370,7 @@ const MesaCard = memo(function MesaCard({
             </span>
           </div>
         </div>
+        {mesa.zona && <p className="-mt-2 mb-2 text-xs text-[hsl(var(--muted-foreground))]" data-testid="zona-mesa">{mesa.zona}</p>}
 
         <div className="w-full space-y-2">
           <div className="flex items-center justify-between rounded-lg bg-[hsl(var(--muted))]/30 px-3 py-2">

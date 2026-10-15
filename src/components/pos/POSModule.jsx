@@ -13,20 +13,26 @@ import CreateMesaModal from './CreateMesaModal'
 import EditMesaModal from './EditMesaModal'
 import DeleteMesaModal from './DeleteMesaModal'
 import MesaWorkspace from './MesaWorkspace'
-import PrinterConfigModal from './PrinterConfigModal'
 import MPConfigDrawer from './MPConfigDrawer'
 import { useAuth } from '../../context/AuthContext'
 import { useCajaActiva } from '../../hooks/useCajaActiva'
 import { isV2FeatureEnabled } from '../../lib/v2Features'
 import {
-  atencionDeMesa, fueTraspasada, nombreDePersona, useDatosDeAtencion, vendedoresDelLocal,
+  atencionDeMesa, fueTraspasada, nombreDePersona, useDatosDeAtencion,
 } from '../../lib/atencionMesas'
 import TraspasarMesasModal from './TraspasarMesasModal'
+import MesasDadasDeBaja from './MesasDadasDeBaja'
 import { toast } from 'sonner'
-import { ArrowRightLeft, CreditCard, PlusCircle, Printer } from 'lucide-react'
+import { puedeVender } from '../../lib/rolesCaja'
+import { empleadosConTurnoHoy } from '../../lib/supervision'
+import { hoyEnChile } from '../../lib/fondoEmergencia'
+import { SALES_MODEL } from '../../lib/salesModel'
+import { ArrowRightLeft, CreditCard, PlusCircle } from 'lucide-react'
 
 export default function POSModule() {
-  const { isWorker, user } = useAuth()
+  const { isWorker, user, userRole } = useAuth()
+  // A-03: en restaurante el administrador no cobra (403); cancela y traspasa.
+  const puedeCobrar = puedeVender(userRole, SALES_MODEL.RESTAURANT)
   const { pathname } = useLocation()
   const { localId } = useParams()
   const { cajaId } = useCajaActiva(localId)
@@ -43,11 +49,12 @@ export default function POSModule() {
   const [isDeleting, setIsDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState(null)
   const [selectedMesa, setSelectedMesa] = useState(null)
-  const [showPrinterConfig, setShowPrinterConfig] = useState(false)
   const [showMPConfig, setShowMPConfig] = useState(false)
+  // A-05: ver las mesas dadas de baja y reactivarlas (encargado y dueño).
+  const [verDadasDeBaja, setVerDadasDeBaja] = useState(false)
 
   // ── Quién atiende cada mesa, y traspasar mesas (encargado y dueño) ───────
-  const { usuarios, usuariosPorId, duenoDeTurno, recargar: recargarAtencion } = useDatosDeAtencion(localId, { esVendedor: isWorker })
+  const { usuarios, usuariosPorId, duenoDeTurno, cajas: turnosDelLocal, recargar: recargarAtencion } = useDatosDeAtencion(localId, { esVendedor: isWorker })
   const [traspasando, setTraspasando] = useState(false)
   const nombre = useCallback(
     (id) => nombreDePersona(id, { yoId: user?.id, usuariosPorId }),
@@ -222,15 +229,10 @@ export default function POSModule() {
                     POS
                   </button>
                 )}
-                {isV2FeatureEnabled('printers') && (
-                  <button
-                    onClick={() => setShowPrinterConfig(true)}
-                    className="inline-flex h-10 items-center gap-2 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3 text-sm font-medium text-[hsl(var(--foreground))] hover:bg-[hsl(var(--muted))]"
-                  >
-                    <Printer size={16} />
-                    Impresora
-                  </button>
-                )}
+                <label className="inline-flex h-10 items-center gap-2 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3 text-sm text-[hsl(var(--foreground))]">
+                  <input type="checkbox" checked={verDadasDeBaja} onChange={(e) => setVerDadasDeBaja(e.target.checked)} />
+                  Ver dadas de baja
+                </label>
                 <button
                   onClick={() => setShowModal(true)}
                   className="inline-flex h-10 items-center gap-2 rounded-xl bg-[hsl(var(--primary))] px-4 text-sm font-semibold text-white shadow-sm hover:opacity-90"
@@ -248,11 +250,14 @@ export default function POSModule() {
             atencion={atencionPorMesa.get(String(selectedMesa.id)) || null}
             localId={localId}
             cajaId={cajaId}
+            puedeCobrar={puedeCobrar}
+            puedeLiberarMesa={!isWorker}
             onBack={handleWorkspaceBack}
             onTableUpdated={handleTableUpdated}
           />
         ) : activeView === 'mesas' ? (
           <div className="space-y-5">
+            {!isWorker && verDadasDeBaja && <MesasDadasDeBaja localId={localId} onReactivada={() => { refreshMesas(); refreshKpis() }} />}
             <MesasKPICards kpis={kpis} loading={kpisLoading} error={kpisError} />
             {mesasError ? (
               <div className="rounded-xl border-2 border-red-200 bg-red-50 p-8 text-red-700 dark:border-red-800/40 dark:bg-red-950/20 dark:text-red-400">
@@ -372,7 +377,7 @@ export default function POSModule() {
       {traspasando && (
         <TraspasarMesasModal
           mesas={mesasEnCurso}
-          vendedores={vendedoresDelLocal(usuarios, localId)}
+          vendedores={empleadosConTurnoHoy(usuarios, turnosDelLocal, { localId, hoy: hoyEnChile() })}
           nombre={nombre}
           onClose={() => setTraspasando(false)}
           onDone={handleTraspasoHecho}
@@ -410,14 +415,6 @@ export default function POSModule() {
           isDeleting={isDeleting}
           error={deleteError}
         />
-      )}
-
-      {isV2FeatureEnabled('printers') && (
-      <PrinterConfigModal
-        open={showPrinterConfig}
-        localId={localId}
-        onClose={() => setShowPrinterConfig(false)}
-      />
       )}
 
       {isV2FeatureEnabled('mpConfig') && (

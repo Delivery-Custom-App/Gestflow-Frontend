@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
+import { MOTIVO_STOCK_MAX, mensajeMovimientoStock, validarMovimientoStock } from '../../lib/movimientosStock'
 
 const CAMPO =
   'h-10 w-full rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 text-sm shadow-sm ' +
@@ -12,13 +13,17 @@ const soloDigitos = (val) => val.replace(/\D/g, '')
 const TITULO = {
   sumar: 'Sumar unidades',
   corregir: 'Corregir conteo',
+  merma: 'Registrar merma',
   empezar: 'Empezar a controlar stock',
 }
+
+const TIPO_DEL_MODO = { sumar: 'ingreso', corregir: 'ajuste', merma: 'merma' }
 
 /**
  * Registrar el stock por unidades de un producto:
  * - `sumar`: llegó mercadería; se suma a lo que hay, sin calcular a mano.
- * - `corregir`: el conteo físico no coincide; el stock pasa a ser lo contado.
+ * - `corregir`: el conteo físico no coincide; el stock pasa a ser lo contado (con motivo).
+ * - `merma`: se perdió o venció mercadería; se resta (con motivo, T-58).
  * - `empezar`: el producto todavía no tiene stock registrado en el local.
  * `onGuardar(datos)` hace la llamada; si falla, el error se muestra aquí.
  */
@@ -27,6 +32,7 @@ export default function RegistrarStockModal({ modo, row, onGuardar, onClose }) {
   const [cantidad, setCantidad] = useState('')
   const [minimo, setMinimo] = useState('0')
   const [critico, setCritico] = useState('')
+  const [motivo, setMotivo] = useState('')
   const [guardando, setGuardando] = useState(false)
   const [error, setError] = useState('')
 
@@ -35,8 +41,11 @@ export default function RegistrarStockModal({ modo, row, onGuardar, onClose }) {
   const guardar = async (e) => {
     e.preventDefault()
     setError('')
-    if (modo === 'sumar' && !(n > 0)) { setError('Indica cuántas unidades llegaron.'); return }
-    if (modo !== 'sumar' && n == null) { setError(modo === 'corregir' ? 'Indica cuántas unidades contaste.' : 'Indica cuántas unidades hay.'); return }
+    if (modo === 'empezar' && n == null) { setError('Indica cuántas unidades hay.'); return }
+    if (modo !== 'empezar') {
+      const problema = validarMovimientoStock({ tipo: TIPO_DEL_MODO[modo], cantidad: cantidad === '' ? null : n, motivo })
+      if (problema) { setError(problema); return }
+    }
     if (modo === 'empezar' && critico !== '' && Number(critico) > Number(minimo || 0)) {
       setError('El nivel crítico no puede ser mayor que el mínimo.'); return
     }
@@ -44,15 +53,17 @@ export default function RegistrarStockModal({ modo, row, onGuardar, onClose }) {
     try {
       await onGuardar(modo === 'empezar'
         ? { stockActual: n, stockMin: Number(minimo) || 0, stockCritical: critico === '' ? null : Number(critico) }
-        : { cantidad: n })
+        : { cantidad: n, motivo })
     } catch (err) {
-      setError(err?.message || 'No se pudo guardar.')
+      setError(mensajeMovimientoStock(err))
       setGuardando(false)
     }
   }
 
   const resultado = modo === 'sumar' && n > 0
     ? `Quedarán ${actual + n} unidades.`
+    : modo === 'merma' && n > 0
+      ? (n > actual ? 'No alcanza: el stock no puede quedar negativo.' : `Quedarán ${actual - n} unidades.`)
     : modo === 'corregir' && n != null
       ? (n === actual ? 'Coincide con el sistema.' : `Diferencia: ${n - actual > 0 ? '+' : ''}${n - actual} unidades.`)
       : null
@@ -84,13 +95,22 @@ export default function RegistrarStockModal({ modo, row, onGuardar, onClose }) {
 
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="registrar-stock-cantidad">
-              {modo === 'sumar' ? '¿Cuántas unidades llegaron?' : modo === 'corregir' ? '¿Cuántas unidades contaste?' : 'Unidades que hay hoy'}
+              {modo === 'sumar' ? '¿Cuántas unidades llegaron?' : modo === 'corregir' ? '¿Cuántas unidades contaste?' : modo === 'merma' ? '¿Cuántas unidades se perdieron?' : 'Unidades que hay hoy'}
             </Label>
             {/* oxlint-disable-next-line react-doctor/no-autofocus -- foco en el único dato que se pide */}
             <input id="registrar-stock-cantidad" type="text" inputMode="numeric" autoFocus value={cantidad}
               onChange={(e) => setCantidad(soloDigitos(e.target.value))} disabled={guardando} className={CAMPO} />
             {resultado && <p className="text-xs font-medium text-[hsl(var(--primary))]">{resultado}</p>}
           </div>
+
+          {modo !== 'empezar' && (
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="registrar-stock-motivo">{modo === 'sumar' ? 'Motivo (opcional)' : 'Motivo'}</Label>
+              <input id="registrar-stock-motivo" type="text" maxLength={MOTIVO_STOCK_MAX} value={motivo}
+                placeholder={modo === 'sumar' ? 'Ej: Llegó el camión de bebidas' : modo === 'merma' ? 'Ej: Se cayó la caja' : 'Ej: Conteo del domingo'}
+                onChange={(e) => setMotivo(e.target.value)} disabled={guardando} className={CAMPO} />
+            </div>
+          )}
 
           {modo === 'empezar' && (
             <div className="grid grid-cols-2 gap-3">

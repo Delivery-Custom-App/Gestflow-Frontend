@@ -71,7 +71,7 @@ function documento(titulo, cuerpo) {
 export function comandaHtml(comanda) {
   const items = Array.isArray(comanda?.items) ? comanda.items : []
   const filas = items.length
-    ? items.map((i) => `<tr><td class="cant">${esc(formatCantidad(i.quantity))}x</td><td>${esc(i.product_name)}</td></tr>`).join('')
+    ? items.map((i) => `<tr><td class="cant">${esc(formatCantidad(i.quantity))}x</td><td>${esc(i.product_name)}${i.notes ? `<br><span class="chico">Nota: ${esc(i.notes)}</span>` : ''}</td></tr>`).join('')
     : '<tr><td colspan="2">Sin ítems para preparar</td></tr>'
 
   return documento(`Comanda ${ordenCorta(comanda?.order_id)}`, `
@@ -112,9 +112,11 @@ export function boletaHtml(boleta) {
     <table><tbody>${filas}</tbody></table>
     <hr/>
     <table><tbody>
-      <tr><td class="total">TOTAL</td><td class="der total">${esc(money(boleta?.total))}</td></tr>
+      <tr><td>Consumo</td><td class="der">${esc(money(boleta?.total))}</td></tr>
       <tr><td class="chico">Neto</td><td class="der chico">${esc(money(boleta?.net_amount))}</td></tr>
       <tr><td class="chico">IVA incluido (19%)</td><td class="der chico">${esc(money(boleta?.iva_amount))}</td></tr>
+      <tr><td class="chico">Propina</td><td class="der chico">${esc(money(boleta?.tip_amount ?? 0))}</td></tr>
+      <tr><td class="total">TOTAL</td><td class="der total">${esc(money(Number(boleta?.total_with_tip) || (Number(boleta?.total || 0) + Number(boleta?.tip_amount || 0))))}</td></tr>
     </tbody></table>
     <hr/>
     <p class="centro chico">${boleta?.payment_method ? `Pagado con ${esc(metodoPagoLegible(boleta.payment_method))}` : 'Sin método de pago registrado'}</p>

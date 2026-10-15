@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { apiRequest, getOptionalAuthContext } from './apiClient'
-import { completeOrderMercadoPago, createCajaV2, createOrder, getActiveCaja, getBoleta, getMiTurnoDeHoy, todayIso } from './salesApi'
+import { addOrderItem, completeOrderCash, completeOrderMercadoPago, createCajaV2, createOrder, getActiveCaja, getBoleta, getMiTurnoDeHoy, listCajas, todayIso, closeCaja, terminarTurno, updateOrderFields } from './salesApi'
 
 vi.mock('./apiClient', () => ({
   apiRequest: vi.fn(),
@@ -173,6 +173,32 @@ describe('completeOrderMercadoPago — cierre del cobro por checkout', () => {
   })
 })
 
+describe('tip en el pago (T-33)', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('guarda la propina en el PATCH sin cambiar el estado de la orden', async () => {
+    apiRequest.mockResolvedValue({ id: 'ord-1', status: 'ready', tip_amount: '1200.00' })
+
+    await updateOrderFields('ord-1', { tip_amount: 1200 }, '2026-10-04T12:00:00Z')
+
+    expect(apiRequest).toHaveBeenCalledWith('/orders/ord-1?created_at=2026-10-04T12%3A00%3A00Z', {
+      method: 'PATCH',
+      body: { tip_amount: 1200 },
+    })
+  })
+
+  it('incluye la propina al cerrar el pago en efectivo', async () => {
+    apiRequest.mockResolvedValue({ id: 'ord-1', status: 'completed', payment_method: 'cash', tip_amount: 1000 })
+
+    await completeOrderCash('ord-1', 6000, undefined, 1000)
+
+    expect(apiRequest).toHaveBeenCalledWith('/orders/ord-1', {
+      method: 'PATCH',
+      body: { status: 'completed', payment_method: 'cash', tip_amount: 1000 },
+    })
+  })
+})
+
 describe('createCajaV2 — apertura de turno (contrato del ticket #40)', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -248,6 +274,11 @@ describe('createOrder — quién atiende la mesa', () => {
     expect(cuerpoDeLaOrden()).toMatchObject({ mesa_id: 'm1', waiter_user_id: 'u-ana' })
   })
 
+  it('guarda la cantidad de comensales al abrir la mesa', async () => {
+    await createOrder({ local_id: 'l1', caja_id: 'c1', mesa_id: 'm1', source: 'dine_in', guests: 4 })
+    expect(cuerpoDeLaOrden()).toMatchObject({ guests: 4 })
+  })
+
   it('se puede indicar otro mesero', async () => {
     await createOrder({ local_id: 'l1', caja_id: 'c1', mesa_id: 'm1', waiter_user_id: 'u-beto' })
     expect(cuerpoDeLaOrden().waiter_user_id).toBe('u-beto')
@@ -256,5 +287,99 @@ describe('createOrder — quién atiende la mesa', () => {
   it('una venta sin mesa no lleva mesero (el backend lo rechaza fuera de los locales con mesas)', async () => {
     await createOrder({ local_id: 'l1', caja_id: 'c1', source: 'mostrador' })
     expect(cuerpoDeLaOrden()).not.toHaveProperty('waiter_user_id')
+  })
+})
+
+describe('Idempotency-Key (T-64)', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('usa una clave distinta para crear la orden y cada ítem del lote', async () => {
+    apiRequest
+      .mockResolvedValueOnce({ id: 'ord-1', created_at: '2026-10-14T12:00:00Z' })
+      .mockResolvedValueOnce({ id: 'item-1', product_id: 'prod-1', quantity: 2, unit_price: 500, subtotal: 1000 })
+      .mockResolvedValueOnce({ id: 'item-2', product_id: 'prod-2', quantity: 1, unit_price: 800, subtotal: 800 })
+
+    await createOrder({
+      local_id: 'local-1',
+      caja_id: 'caja-1',
+      items: [{ product_id: 'prod-1', quantity: 2 }, { product_id: 'prod-2', quantity: 1 }],
+      idempotency_key: 'accion-1',
+    })
+
+    expect(apiRequest.mock.calls[0][1].headers).toEqual({ 'Idempotency-Key': 'accion-1:crear' })
+    expect(apiRequest.mock.calls[0][1].body).not.toHaveProperty('idempotency_key')
+    expect(apiRequest.mock.calls[1][1].headers).toEqual({ 'Idempotency-Key': 'accion-1:item:0' })
+    expect(apiRequest.mock.calls[2][1].headers).toEqual({ 'Idempotency-Key': 'accion-1:item:1' })
+  })
+
+  it('reutiliza la clave de un ítem en reintentos y omite la cabecera si no hay clave', async () => {
+    apiRequest.mockResolvedValue({ id: 'item-1', product_id: 'prod-1', quantity: 1, unit_price: 500, subtotal: 500 })
+
+    await addOrderItem('ord-1', { product_id: 'prod-1', quantity: 1 }, undefined, 'accion-2')
+    await addOrderItem('ord-1', { product_id: 'prod-1', quantity: 1 }, undefined, 'accion-2')
+    await addOrderItem('ord-1', { product_id: 'prod-1', quantity: 1 })
+
+    expect(apiRequest.mock.calls[0][1].headers).toEqual({ 'Idempotency-Key': 'accion-2' })
+    expect(apiRequest.mock.calls[1][1].headers).toEqual({ 'Idempotency-Key': 'accion-2' })
+    expect(apiRequest.mock.calls[2][1]).not.toHaveProperty('headers')
+  })
+
+  it('no manda la cabecera al crear una orden cuando no se entrega clave', async () => {
+    apiRequest.mockResolvedValue({ id: 'ord-1', created_at: '2026-10-14T12:00:00Z' })
+
+    await createOrder({ local_id: 'local-1', caja_id: 'caja-1' })
+
+    expect(apiRequest.mock.calls[0][1]).not.toHaveProperty('headers')
+  })
+})
+
+describe('listCajas (A-01): filtros en el servidor', () => {
+  beforeEach(() => { vi.clearAllMocks() })
+  it('manda business_date, status y cashier_user_id solo si vienen', async () => {
+    apiRequest.mockResolvedValue([{ id: 'c1', status: 'open', total_ingresos: '100.00' }])
+    await listCajas('loc-1')
+    await listCajas('loc-1', { businessDate: '2026-10-14', status: 'closed', cashierUserId: 'u1' })
+    expect(apiRequest.mock.calls.map(([p]) => p)).toEqual([
+      '/cajas?local_id=loc-1',
+      '/cajas?local_id=loc-1&business_date=2026-10-14&status=closed&cashier_user_id=u1',
+    ])
+  })
+})
+
+describe('closeCaja con arqueo (T-55)', () => {
+  beforeEach(() => { vi.clearAllMocks() })
+  it('sin conteo cierra como antes', async () => {
+    apiRequest.mockResolvedValue({ id: 'c1', status: 'closed' })
+    await closeCaja('c1')
+    expect(apiRequest).toHaveBeenCalledWith('/cajas/c1', { method: 'PATCH', body: { status: 'closed' } })
+  })
+  it('con el efectivo contado y la nota', async () => {
+    apiRequest.mockResolvedValue({ id: 'c1', status: 'closed' })
+    await closeCaja('c1', { montoCierreDeclarado: 8600, notaCierre: '  Vuelto mal dado ' })
+    expect(apiRequest).toHaveBeenCalledWith('/cajas/c1', {
+      method: 'PATCH', body: { status: 'closed', monto_cierre_declarado: '8600.00', nota_cierre: 'Vuelto mal dado' },
+    })
+  })
+  it('0 contado también se manda', async () => {
+    apiRequest.mockResolvedValue({ id: 'c1', status: 'closed' })
+    await closeCaja('c1', { montoCierreDeclarado: 0 })
+    expect(apiRequest.mock.calls[0][1].body).toEqual({ status: 'closed', monto_cierre_declarado: '0.00' })
+  })
+})
+
+describe('turno terminado (T-41)', () => {
+  beforeEach(() => { vi.clearAllMocks() })
+  it('terminarTurno llama a POST /cajas/{id}/terminar-turno', async () => {
+    apiRequest.mockResolvedValue({ id: 'c1', status: 'open', turno_terminado_at: '2026-10-14T20:00:00Z' })
+    const r = await terminarTurno('c1')
+    expect(apiRequest).toHaveBeenCalledWith('/cajas/c1/terminar-turno', { method: 'POST' })
+    expect(r.turno_terminado_at).toBe('2026-10-14T20:00:00Z')
+  })
+  it('crear un pedido con el turno terminado se explica', async () => {
+    getOptionalAuthContext.mockResolvedValue({ user: { id: 'u1' } })
+    apiRequest.mockRejectedValueOnce(Object.assign(new Error('400: El turno de esta caja ya terminó: inicia un turno nuevo'), {
+      status: 400, detail: 'El turno de esta caja ya terminó: inicia un turno nuevo',
+    }))
+    await expect(createOrder({ local_id: 'loc-1', caja_id: 'c1', items: [] })).rejects.toThrow(/Tu turno ya terminó/)
   })
 })

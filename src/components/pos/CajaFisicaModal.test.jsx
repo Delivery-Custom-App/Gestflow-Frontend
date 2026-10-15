@@ -14,6 +14,7 @@ import { crearCajaFisica, renombrarCajaFisica } from '../../lib/administrativeAp
 vi.mock('../../lib/administrativeApi', () => ({
   crearCajaFisica: vi.fn(),
   renombrarCajaFisica: vi.fn(),
+  TIPOS_CAJA_FISICA: { fisica: 'Física', digital: 'Digital' },
 }))
 
 describe('CajaFisicaModal', () => {
@@ -40,7 +41,7 @@ describe('CajaFisicaModal', () => {
     await user.type(screen.getByLabelText(/nombre/i), 'Caja 2')
     await user.click(screen.getByRole('button', { name: /crear caja física/i }))
 
-    expect(crearCajaFisica).toHaveBeenCalledWith('loc-1', 'Caja 2')
+    expect(crearCajaFisica).toHaveBeenCalledWith('loc-1', 'Caja 2', 'fisica')
     expect(onSaved).toHaveBeenCalled()
     expect(onClose).toHaveBeenCalled()
   })
@@ -54,9 +55,9 @@ describe('CajaFisicaModal', () => {
 
     await user.clear(campo)
     await user.type(campo, 'Mostrador')
-    await user.click(screen.getByRole('button', { name: /guardar nombre/i }))
+    await user.click(screen.getByRole('button', { name: /guardar cambios/i }))
 
-    expect(renombrarCajaFisica).toHaveBeenCalledWith('cf-1', 'Mostrador')
+    expect(renombrarCajaFisica).toHaveBeenCalledWith('cf-1', 'Mostrador', undefined)
     expect(crearCajaFisica).not.toHaveBeenCalled()
   })
 
@@ -92,6 +93,34 @@ describe('CajaFisicaModal', () => {
     await user.type(screen.getByLabelText(/nombre/i), '   Terraza   ')
     await user.click(screen.getByRole('button', { name: /crear caja física/i }))
 
-    expect(crearCajaFisica).toHaveBeenCalledWith('loc-1', 'Terraza')
+    expect(crearCajaFisica).toHaveBeenCalledWith('loc-1', 'Terraza', 'fisica')
+  })
+})
+
+describe('CajaFisicaModal · física o digital (A-02)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    crearCajaFisica.mockResolvedValue({ id: 'cf-9' })
+    renombrarCajaFisica.mockResolvedValue({ id: 'cf-1' })
+  })
+
+  it('al crear se elige el tipo (por defecto Física)', async () => {
+    const user = userEvent.setup()
+    render(<CajaFisicaModal localId="loc-1" onClose={() => {}} onSaved={() => {}} />)
+    expect(screen.getByLabelText('Tipo')).toHaveValue('fisica')
+    expect(screen.getByText(/abren turno con cualquier monto, también \$0/)).toBeInTheDocument()
+    await user.type(screen.getByLabelText(/nombre/i), 'Caja web')
+    await user.selectOptions(screen.getByLabelText('Tipo'), 'digital')
+    await user.click(screen.getByRole('button', { name: /crear caja física/i }))
+    expect(crearCajaFisica).toHaveBeenCalledWith('loc-1', 'Caja web', 'digital')
+  })
+
+  it('al editar parte del tipo actual y solo lo manda si cambió', async () => {
+    const user = userEvent.setup()
+    render(<CajaFisicaModal localId="loc-1" cajaFisica={{ id: 'cf-1', name: 'Caja web', tipo: 'digital' }} onClose={() => {}} onSaved={() => {}} />)
+    expect(screen.getByLabelText('Tipo')).toHaveValue('digital')
+    await user.selectOptions(screen.getByLabelText('Tipo'), 'fisica')
+    await user.click(screen.getByRole('button', { name: /guardar cambios/i }))
+    expect(renombrarCajaFisica).toHaveBeenCalledWith('cf-1', 'Caja web', 'fisica')
   })
 })

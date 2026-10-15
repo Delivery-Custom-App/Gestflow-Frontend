@@ -8,6 +8,8 @@ import { listUsers } from '../lib/apiClient'
 import { V2_FEATURES } from '../lib/v2Features'
 import { cambiarEstadoCajaFisica, createCaja, eliminarCajaFisica, getCajasByLocal, getCajasFisicasByLocal, getOrdersByLocal, getResumenDiario, getVentasIndicadores, listarCajasFisicas } from '../lib/administrativeApi'
 
+import { apiRequest } from '../lib/apiClient'
+
 vi.mock('../lib/apiClient', async (importOriginal) => ({
   ...(await importOriginal()),
   getAuthContext: vi.fn(() => Promise.resolve({ token: 'test-token' })),
@@ -91,7 +93,7 @@ const mockCajasFisicas = [
 
 vi.mock('../lib/administrativeApi', async (importOriginal) => ({
   ...(await importOriginal()),
-  getOrdersByLocal: vi.fn(() => Promise.resolve(mockOrders)),
+  getOrdersByLocal: vi.fn((_localId, _token, { limit = 50, offset = 0 } = {}) => Promise.resolve({ orders: mockOrders, total: 53, limit, offset })),
   getLocalDashboard: vi.fn(() => Promise.resolve({ monthly_sales: 120000 })),
   getCajasByLocal: vi.fn(() => Promise.resolve(mockCajas)),
   getCajasFisicasByLocal: vi.fn(() => Promise.resolve(mockCajasFisicas)),
@@ -177,12 +179,13 @@ describe('AdministrativeModule', () => {
 
     const boton = await screen.findByRole('button', { name: 'Cargar detalle de órdenes' })
     expect(getOrdersByLocal).not.toHaveBeenCalled()
-    expect(screen.queryByRole('heading', { name: 'Histórico y Consolidados' })).not.toBeInTheDocument()
+    expect(screen.queryByText(/Mostrando \d/)).not.toBeInTheDocument()
 
     await user.click(boton)
 
-    await waitFor(() => expect(getOrdersByLocal).toHaveBeenCalledWith('loc-1', 'test-token'))
-    expect(await screen.findByRole('heading', { name: 'Histórico y Consolidados' })).toBeInTheDocument()
+    await waitFor(() => expect(getOrdersByLocal).toHaveBeenCalledWith('loc-1', 'test-token', { limit: 50, offset: 0 }))
+    expect(await screen.findByRole('heading', { name: 'Detalle de órdenes' })).toBeInTheDocument()
+    expect(screen.getByText('Mostrando 1–2 de 53 órdenes.')).toBeInTheDocument()
   })
 
   it('el panel "Ventas del Día" ya no se muestra al cargar el detalle', async () => {
@@ -190,9 +193,28 @@ describe('AdministrativeModule', () => {
     renderAdmin('ventas')
 
     await user.click(await screen.findByRole('button', { name: 'Cargar detalle de órdenes' }))
-    expect(await screen.findByRole('heading', { name: 'Histórico y Consolidados' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Detalle de órdenes' })).toBeInTheDocument()
     expect(screen.queryByRole('heading', { name: 'Ventas del Día' })).not.toBeInTheDocument()
     expect(screen.queryByText(/últimas 24 h/)).not.toBeInTheDocument()
+  })
+
+  it('Ventas pagina el detalle y solicita la siguiente página usando offset', async () => {
+    const user = userEvent.setup()
+    getOrdersByLocal.mockImplementation((_localId, _token, { limit = 50, offset = 0 } = {}) => Promise.resolve({
+      orders: offset ? [mockOrders[0]] : mockOrders,
+      total: 53,
+      limit,
+      offset,
+    }))
+    renderAdmin('ventas')
+
+    await user.click(await screen.findByRole('button', { name: 'Cargar detalle de órdenes' }))
+    expect(await screen.findByText('Mostrando 1–2 de 53 órdenes.')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Siguiente' }))
+
+    await waitFor(() => expect(getOrdersByLocal).toHaveBeenLastCalledWith('loc-1', 'test-token', { limit: 50, offset: 50 }))
+    expect(await screen.findByText('Mostrando 51–51 de 53 órdenes.')).toBeInTheDocument()
+    expect(screen.getByText('Página 2')).toBeInTheDocument()
   })
 
   it('Caja y turnos vincula MercadoPago desde las cajas físicas, no desde los turnos', async () => {
@@ -221,6 +243,40 @@ describe('AdministrativeModule', () => {
     expect(within(resumen).getByText('Caja principal')).toBeInTheDocument()
     // Dos turnos del día, uno de ellos abierto.
     expect(within(resumen).getByText('2 · 1 abierto')).toBeInTheDocument()
+  })
+
+  it('T-63: egresos, efectivo esperado y diferencias del local, de cada caja física y de cada turno', async () => {
+    getResumenDiario.mockResolvedValueOnce({
+      ...mockResumenDiario,
+      total_egresos: '1000.00', efectivo_esperado: '108400.00', diferencia_total: '-300.00',
+      por_caja_fisica: [{
+        ...mockResumenDiario.por_caja_fisica[0], total_egresos: '1000.00', efectivo_esperado: '108400.00', diferencia_total: '-300.00',
+        cajas: [
+          { caja_id: 'caja-1', cashier_user_id: 'u-ana', status: 'open', total_egresos: '1000.00', efectivo_esperado: '58400.00', monto_cierre_declarado: null, diferencia: null },
+          { caja_id: 'caja-2', cashier_user_id: 'u-beto', status: 'closed', total_egresos: '0.00', efectivo_esperado: '50000.00', monto_cierre_declarado: '49700.00', diferencia: '-300.00' },
+          { caja_id: 'caja-3', cashier_user_id: 'u-beto', status: 'closed', total_egresos: '0.00', efectivo_esperado: '0.00', monto_cierre_declarado: null, diferencia: null },
+        ],
+      }],
+    })
+    renderAdmin('flujo-caja')
+
+    const resumen = (await screen.findByRole('heading', { name: 'Resumen del día' })).closest('article')
+    expect(within(resumen).getByTestId('egresos-dia')).toHaveTextContent('$1.000')
+    expect(within(resumen).getByTestId('efectivo-esperado-dia')).toHaveTextContent('$108.400')
+    expect(within(resumen).getByTestId('diferencia-dia')).toHaveTextContent('Faltan $300')
+    const turnos = within(resumen).getByRole('list', { name: 'Turnos del día' })
+    const filas = within(turnos).getAllByRole('listitem')
+    expect(filas).toHaveLength(3)
+    expect(filas[1]).toHaveAttribute('data-diferencia', 'si')
+    expect(filas[1]).toHaveTextContent('Contado $49.700 · Faltan $300')
+    expect(filas[0]).toHaveTextContent('Sin cerrar')
+    expect(filas[2]).toHaveTextContent('Sin arqueo')
+  })
+
+  it('sin arqueos del día, la diferencia dice «Sin arqueo»', async () => {
+    renderAdmin('flujo-caja')
+    const resumen = (await screen.findByRole('heading', { name: 'Resumen del día' })).closest('article')
+    expect(within(resumen).getByTestId('diferencia-dia')).toHaveTextContent('Sin arqueo')
   })
 
   it('avisa que no se abrió ningún turno solo cuando de verdad no hay turnos del día', async () => {
@@ -267,7 +323,7 @@ describe('AdministrativeModule', () => {
 
     const panel = (await screen.findByRole('heading', { name: 'Cajas físicas' })).closest('article')
     expect(within(panel).getByRole('button', { name: '+ Nueva caja física' })).toBeInTheDocument()
-    expect(within(panel).getAllByRole('button', { name: 'Renombrar' })).toHaveLength(mockCajasFisicas.length)
+    expect(within(panel).getAllByRole('button', { name: 'Editar' })).toHaveLength(mockCajasFisicas.length)
 
     await user.click(within(panel).getByRole('button', { name: '+ Nueva caja física' }))
     expect(await screen.findByText('modal de caja física')).toBeInTheDocument()
@@ -280,7 +336,7 @@ describe('AdministrativeModule', () => {
     expect(await screen.findByRole('heading', { name: 'Turnos de caja' })).toBeInTheDocument()
     expect(screen.queryByRole('heading', { name: 'Cajas físicas' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '+ Nueva caja física' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Renombrar' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Editar' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Desactivar' })).not.toBeInTheDocument()
     expect(screen.queryByText(/estado de MercadoPago/i)).not.toBeInTheDocument()
   })
@@ -313,14 +369,11 @@ describe('AdministrativeModule', () => {
     expect(getCajasByLocal).toHaveBeenCalledWith('loc-1', 'test-token')
   })
 
-  it('la boleta de cada venta se ve desde el detalle de órdenes del histórico', async () => {
+  it('la boleta de cada venta se ve desde la página de detalle de órdenes', async () => {
     const user = userEvent.setup()
     renderAdmin('ventas')
 
     await user.click(await screen.findByRole('button', { name: 'Cargar detalle de órdenes' }))
-    // Sin desplegar un período no hay órdenes a la vista.
-    expect(screen.queryByRole('button', { name: 'Boleta' })).not.toBeInTheDocument()
-    await user.click(await screen.findByRole('button', { name: /2 ventas/ }))
     const botones = await screen.findAllByRole('button', { name: 'Boleta' })
     expect(botones).toHaveLength(mockOrders.length)
 
@@ -509,14 +562,27 @@ describe('AdministrativeModule', () => {
     expect(within(tabla()).getByText('Beto Soto')).toBeInTheDocument()
     expect(filas()).toHaveLength(2)
 
-    await user.selectOptions(within(panel).getByLabelText('Vendedor'), 'u-beto')
-    expect(filas()).toHaveLength(1)
-    expect(within(filas()[0]).getByText('Beto Soto')).toBeInTheDocument()
+    // A-01: con filtros, la lista la entrega el servidor (GET /cajas con los parámetros).
+    apiRequest.mockImplementation(async (path) => {
+      if (!String(path).startsWith('/cajas?')) return []
+      const q = new URLSearchParams(String(path).split('?')[1])
+      return mockCajas.filter((c) => (!q.get('cashier_user_id') || c.cashier_user_id === q.get('cashier_user_id'))
+        && (!q.get('business_date') || c.business_date === q.get('business_date')))
+    })
+    try {
+      await user.selectOptions(within(panel).getByLabelText('Vendedor'), 'u-beto')
+      await waitFor(() => expect(filas()).toHaveLength(1))
+      expect(within(filas()[0]).getByText('Beto Soto')).toBeInTheDocument()
+      expect(apiRequest).toHaveBeenCalledWith('/cajas?local_id=loc-1&cashier_user_id=u-beto')
 
-    await user.selectOptions(within(panel).getByLabelText('Vendedor'), '')
-    await user.type(within(panel).getByLabelText('Fecha'), '2026-09-13')
-    expect(filas()).toHaveLength(1)
-    expect(within(filas()[0]).getByText('Ana Rojas')).toBeInTheDocument()
+      await user.selectOptions(within(panel).getByLabelText('Vendedor'), '')
+      await user.type(within(panel).getByLabelText('Fecha'), '2026-09-13')
+      await waitFor(() => expect(within(filas()[0]).getByText('Ana Rojas')).toBeInTheDocument())
+      expect(filas()).toHaveLength(1)
+      expect(apiRequest).toHaveBeenCalledWith('/cajas?local_id=loc-1&business_date=2026-09-13')
+    } finally {
+      apiRequest.mockImplementation(() => Promise.resolve([]))
+    }
   })
 
   it('al abrir un turno ve su resumen: ventas, ingresos, egresos y el arqueo para cerrarlo', async () => {
@@ -534,6 +600,40 @@ describe('AdministrativeModule', () => {
       expect(await within(lateral).findByText(cifra)).toBeInTheDocument()
     }
     expect(within(lateral).getByRole('button', { name: /Cerrar turno \(arqueo del día\)/ })).toBeInTheDocument()
+  })
+
+  it('T-56: en un turno abierto el encargado ve «Registrar movimiento»', async () => {
+    const user = userEvent.setup()
+    renderAdmin('flujo-caja', 'Admin')
+    const panel = (await screen.findByRole('heading', { name: 'Turnos de caja' })).closest('article')
+    const filaAna = (await within(within(panel).getByRole('table')).findByText('Ana Rojas')).closest('tr')
+    await user.click(within(filaAna).getByRole('button', { name: 'Ver resumen' }))
+    const lateral = (await screen.findByRole('heading', { name: 'Resumen del turno' })).closest('.fixed')
+    await user.click(within(lateral).getByRole('button', { name: 'Registrar movimiento' }))
+    expect(within(lateral).getByRole('form', { name: 'Registrar movimiento' })).toBeInTheDocument()
+  })
+
+  it('A-03: en restaurante el administrador no ve «Abrir turno de caja»; el dueño sí', async () => {
+    render(
+      <AuthProvider user={{ id: 'u-1', local_sales_model: 'RESTAURANT' }} userRole="Admin" logout={() => {}}>
+        <MemoryRouter initialEntries={['/local/loc-1/administrativo/flujo-caja']}>
+          <Routes><Route path="/local/:localId/administrativo/:sectionId?" element={<AdministrativeModule />} /></Routes>
+        </MemoryRouter>
+      </AuthProvider>,
+    )
+    await screen.findByRole('heading', { name: 'Turnos de caja' })
+    expect(screen.queryByRole('button', { name: /Abrir turno de caja/ })).not.toBeInTheDocument()
+  })
+
+  it('A-03: en al paso el administrador sí abre turno', async () => {
+    render(
+      <AuthProvider user={{ id: 'u-1', local_sales_model: 'AL_PASO' }} userRole="Admin" logout={() => {}}>
+        <MemoryRouter initialEntries={['/local/loc-1/administrativo/flujo-caja']}>
+          <Routes><Route path="/local/:localId/administrativo/:sectionId?" element={<AdministrativeModule />} /></Routes>
+        </MemoryRouter>
+      </AuthProvider>,
+    )
+    expect(await screen.findByRole('button', { name: /Abrir turno de caja/ })).toBeInTheDocument()
   })
 
   it('si no se pueden leer los nombres, la tabla igual distingue a cada vendedor', async () => {

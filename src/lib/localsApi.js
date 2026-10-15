@@ -1,4 +1,5 @@
 import { apiRequest } from './apiClient'
+import { invalidarLocales } from './cacheLocales'
 
 /**
  * Borrado de un local en Backend V2.
@@ -60,8 +61,12 @@ export async function getResumenBorradoLocal(localId) {
  */
 export async function eliminarLocal(localId) {
   const id = encodeURIComponent(String(localId))
-  await apiRequest(`/locals/${id}`, { method: 'PATCH', body: { is_active: false } })
-  await apiRequest(`/locals/${id}`, { method: 'DELETE' })
+  try {
+    await apiRequest(`/locals/${id}`, { method: 'PATCH', body: { is_active: false } })
+    await apiRequest(`/locals/${id}`, { method: 'DELETE' })
+  } finally {
+    invalidarLocales()
+  }
 }
 
 /**
@@ -80,4 +85,60 @@ export function mapLocalOut(local) {
     lat: local.latitude ?? null,
     lng: local.longitude ?? null,
   }
+}
+
+// ── Teléfono del local (T-38, B-13 sección 3.7) ──────────────────────────────
+// Se guarda tal como se escribe (solo se ordenan los espacios), hasta 32
+// caracteres y con al menos un dígito (422 si no). En PATCH, null o vacío lo
+// borran. Ya no se exige el formato internacional.
+
+export const TELEFONO_MAX = 32
+
+/** Espacios ordenados: ninguno en los extremos y uno solo entre palabras. */
+export function normalizarTelefono(valor) {
+  return String(valor || '').trim().replace(/\s+/g, ' ')
+}
+
+/** Problema del teléfono, o null. Vacío es válido (el teléfono es opcional). */
+export function validarTelefono(valor) {
+  const t = normalizarTelefono(valor)
+  if (!t) return null
+  if (t.length > TELEFONO_MAX) return `El teléfono puede tener hasta ${TELEFONO_MAX} caracteres.`
+  if (!/\d/.test(t)) return 'El teléfono debe tener al menos un número.'
+  return null
+}
+
+/** Cambia el nombre y el teléfono del local (`PATCH /locals/{id}`); teléfono vacío lo borra. */
+export async function actualizarLocal(localId, { name, phone }) {
+  const body = {}
+  if (name !== undefined) body.name = String(name).trim()
+  if (phone !== undefined) body.phone = normalizarTelefono(phone) || null
+  const r = await apiRequest(`/locals/${encodeURIComponent(String(localId))}`, { method: 'PATCH', body })
+  invalidarLocales()
+  return r
+}
+
+/**
+ * Guarda la ubicación del local (`PUT /locals/{id}/mp-location`): calle,
+ * comuna, región y el punto del mapa. Es la misma que pide Mercado Pago para
+ * crear la sucursal, y la que muestra el mapa de locales.
+ */
+export async function guardarUbicacionLocal(localId, { street_name, city_name, state_name, latitude, longitude }) {
+  const r = await apiRequest(`/locals/${encodeURIComponent(String(localId))}/mp-location`, {
+    method: 'PUT',
+    body: {
+      street_name: String(street_name).trim(),
+      city_name: String(city_name).trim(),
+      state_name: String(state_name).trim(),
+      latitude,
+      longitude,
+    },
+  })
+  invalidarLocales()
+  return r
+}
+
+/** Texto del backend sin el código. */
+export function mensajeLocal(err) {
+  return String(err?.detail || err?.message || 'No se pudo guardar el local').replace(/^\d{3}:\s*/, '')
 }

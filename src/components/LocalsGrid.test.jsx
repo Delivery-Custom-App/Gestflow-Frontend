@@ -27,7 +27,7 @@ describe('LocalsGrid — Inicio del dueño', () => {
     expect(screen.queryByText('Tus franquicias')).not.toBeInTheDocument()
   })
 
-  it('sigue llevando a cada franquicia', () => {
+  it('sigue llevando a cada local', () => {
     montar()
 
     expect(screen.getAllByText('Sucursal Centro').length).toBeGreaterThan(0)
@@ -76,46 +76,53 @@ describe('LocalsGrid — Inicio del dueño', () => {
     expect(screen.queryByRole('dialog', { name: 'Umbral de flujo' })).not.toBeInTheDocument()
   })
 
-  it('"Eliminar franquicia": sin permiso, no aparece', () => {
-    montar()
+  it('"Eliminar local": sin permiso, no aparece', () => {
+    montar({ onGuardarUmbral: vi.fn() })
     expect(screen.getByRole('button', { name: 'Umbral de flujo' })).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Eliminar franquicia' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Eliminar local' })).not.toBeInTheDocument()
   })
 
-  it('con permiso, el botón se llama "Eliminar franquicia" (antes "Opciones")', () => {
+  it('con permiso, el botón se llama "Eliminar local" (antes "Opciones")', () => {
     montar({ canDeleteLocals: true })
-    expect(screen.getByRole('button', { name: 'Eliminar franquicia' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Eliminar local' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Opciones' })).not.toBeInTheDocument()
   })
 
-  it('sin permiso para eliminar, la guía no menciona el botón Eliminar franquicia', async () => {
+  it('sin permiso para eliminar, la guía no menciona el botón Eliminar local', async () => {
     const user = userEvent.setup()
     montar()
 
     await user.click(screen.getByRole('button', { name: /cómo funciona esta pantalla/i }))
 
     expect(screen.getByText('Botón Umbral de flujo')).toBeInTheDocument()
-    expect(screen.queryByText('Botón Eliminar franquicia')).not.toBeInTheDocument()
+    expect(screen.queryByText('Botón Eliminar local')).not.toBeInTheDocument()
   })
 
-  it('con permiso para eliminar, la guía explica el botón Eliminar franquicia', async () => {
+  it('con permiso para eliminar, la guía explica el botón Eliminar local', async () => {
     const user = userEvent.setup()
     montar({ canDeleteLocals: true })
 
     await user.click(screen.getByRole('button', { name: /cómo funciona esta pantalla/i }))
 
-    expect(screen.getByText('Botón Eliminar franquicia')).toBeInTheDocument()
+    expect(screen.getByText('Botón Eliminar local')).toBeInTheDocument()
   })
 
-  it('"Mis franquicias" titula la lista, después de las ventas generales', () => {
+  it('"Mis locales" titula la lista, después de las ventas generales', () => {
     montar()
-    expect(screen.getByRole('heading', { name: 'Mis franquicias' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Mis locales' })).toBeInTheDocument()
   })
 
-  it('el color de cada franquicia sale del umbral recibido', () => {
+  it('el color de cada local sale del umbral recibido', () => {
     montar({ umbral: { horas: 1, medium: 2, high: 4 }, salesCounts: { 'loc-1': 4, 'loc-2': 1 } })
     const fila = (nombre) => screen.getAllByRole('row').find((r) => r.textContent.includes(nombre))
     expect(fila('Sucursal Centro')).toHaveTextContent(/Alto/)
     expect(fila('Mostrador Express')).toHaveTextContent(/Bajo/)
+  })
+})
+
+describe('LocalsGrid · umbral de flujo (T-59)', () => {
+  it('sin onGuardarUmbral (no puede editarlo) no ofrece el botón', () => {
+    montar()
+    expect(screen.queryByRole('button', { name: 'Umbral de flujo' })).not.toBeInTheDocument()
   })
 })

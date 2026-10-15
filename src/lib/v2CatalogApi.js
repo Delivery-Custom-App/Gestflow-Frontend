@@ -3,6 +3,7 @@
  * Compone endpoints planos V2 a las formas que esperan las pantallas legacy.
  */
 import { apiRequest } from './apiClient'
+import { invalidarLocales, obtenerLocal } from './cacheLocales'
 
 /**
  * Estado del stock por unidades: crítico sin unidades o en su nivel crítico
@@ -17,8 +18,9 @@ export function stockStatus(stockActual, stockMin, stockCritical = null) {
   return 'OPTIMO'
 }
 
+/** Un local, guardado en memoria (T-35). */
 export async function fetchLocal(localId) {
-  return apiRequest(`/locals/${localId}`)
+  return obtenerLocal(localId)
 }
 
 export async function listLocals(businessId) {
@@ -30,10 +32,29 @@ export async function listLocals(businessId) {
 }
 
 export async function updateLocal(localId, body) {
-  return apiRequest(`/locals/${encodeURIComponent(String(localId))}`, {
+  const r = await apiRequest(`/locals/${encodeURIComponent(String(localId))}`, {
     method: 'PATCH',
     body,
   })
+  invalidarLocales()
+  return r
+}
+
+/**
+ * Datos del producto que vienen dentro de una fila de inventario o de menú
+ * con `include=product` (B-12): nombre, categoría, precio, costo y modo de
+ * descuento. Solo trae los productos vinculados al local, que siguen vigentes.
+ */
+export function productoDeFila(fila) {
+  return {
+    id: fila.product_id,
+    name: fila.product_name,
+    category_id: fila.category_id || null,
+    price: fila.price,
+    cost: fila.cost ?? null,
+    stock_deduction_mode: fila.stock_deduction_mode,
+    is_active: true,
+  }
 }
 
 export async function fetchProductsMap() {
@@ -61,13 +82,20 @@ export async function fetchCategoriesForBusiness(businessId) {
  * stock". Los indicadores de Estado Inventario no los cuentan.
  */
 export async function fetchEnrichedInventoryForLocal(localId, filters = {}) {
-  const [inventory, productsMap, local, categories, localProducts] = await Promise.all([
-    apiRequest('/inventory'),
-    fetchProductsMap(),
+  const lid = encodeURIComponent(String(localId))
+  // A-07 (B-12): inventario y menú del local con los datos del producto dentro
+  // de cada fila (`include=product`): ya no se baja el catálogo completo ni el
+  // inventario de todos los locales. El empleado recibe `cost: null`.
+  const [inventory, local, categories, localProducts] = await Promise.all([
+    apiRequest(`/inventory?local_id=${lid}&include=product`),
     fetchLocal(localId),
     apiRequest('/categories').catch(() => []),
-    filters.incluirSinRegistro ? apiRequest('/local-products').catch(() => []) : Promise.resolve([]),
+    filters.incluirSinRegistro ? apiRequest(`/local-products?local_id=${lid}&include=product`).catch(() => []) : Promise.resolve([]),
   ])
+  const productsMap = new Map()
+  for (const fila of [...(Array.isArray(inventory) ? inventory : []), ...(Array.isArray(localProducts) ? localProducts : [])]) {
+    if (fila?.product_name) productsMap.set(String(fila.product_id), productoDeFila(fila))
+  }
   const categoryMap = new Map()
   for (const c of Array.isArray(categories) ? categories : []) {
     categoryMap.set(String(c.id), c.name)
@@ -81,7 +109,8 @@ export async function fetchEnrichedInventoryForLocal(localId, filters = {}) {
       const product = productsMap.get(String(row.product_id)) || {}
       const stockActual = Number(row.stock_actual) || 0
       const stockMin = Number(row.stock_min) || 0
-      const unitCost = Number(product.cost) || 0
+      // Sin costo (empleado: el backend lo manda null) no se inventa un 0.
+      const unitCost = product.cost == null ? null : Number(product.cost) || 0
       const price = Number(product.price) || 0
       const stockCritical = row.stock_critical != null ? Number(row.stock_critical) : null
       const status = stockStatus(stockActual, stockMin, stockCritical)
@@ -103,10 +132,10 @@ export async function fetchEnrichedInventoryForLocal(localId, filters = {}) {
         stock_max: row.stock_max != null ? Number(row.stock_max) : null,
         stock_critical: stockCritical,
         unit_cost: unitCost,
-        unit_cost_clp: Math.round(unitCost),
+        unit_cost_clp: unitCost == null ? null : Math.round(unitCost),
         cost: unitCost,
         price,
-        total_value: stockActual * unitCost,
+        total_value: unitCost == null ? null : stockActual * unitCost,
         status,
         stock_status: status,
         is_active: product.is_active !== false,
@@ -124,7 +153,7 @@ export async function fetchEnrichedInventoryForLocal(localId, filters = {}) {
       && p.stock_deduction_mode !== 'RECIPE_BASED' && !conFila.has(String(p.id)))
     .map((product) => {
       const categoryId = product.category_id || null
-      const unitCost = Number(product.cost) || 0
+      const unitCost = product.cost == null ? null : Number(product.cost) || 0
       return {
         id: `sin-registro-${product.id}`,
         inventory_id: null,
@@ -143,7 +172,7 @@ export async function fetchEnrichedInventoryForLocal(localId, filters = {}) {
         stock_max: null,
         stock_critical: null,
         unit_cost: unitCost,
-        unit_cost_clp: Math.round(unitCost),
+        unit_cost_clp: unitCost == null ? null : Math.round(unitCost),
         cost: unitCost,
         price: Number(product.price) || 0,
         total_value: null,

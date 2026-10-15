@@ -4,6 +4,7 @@ import { getUserRole } from '../utils/jwt'
 import { WORKER_ROLES } from '../constants/roles'
 import { formatRoleLabel } from '../auth/roleLabel'
 import { isInventoryAdminRole } from '../utils/inventoryAccess'
+import { mensajeDeCierre } from '../lib/sesiones'
 
 const AuthContext = createContext(null)
 
@@ -90,17 +91,27 @@ export function AppAuthProvider({ children }) {
   }, [clearPreviousSession])
 
   useEffect(() => {
-    const handleSessionExpired = () => {
+    const handleSessionExpired = (event) => {
       clearAuthState()
       setEmail('')
       setPassword('')
-      setErrorMessage('Tu sesion expiro. Ingresa nuevamente.')
+      // T-52: el motivo según X-Account-Status (la cerró el administrador,
+      // venció por inactividad, cuenta desactivada…); sin estado, el de siempre.
+      setErrorMessage(mensajeDeCierre(event?.detail || {}))
       setSuccessMessage('')
     }
 
     window.addEventListener('auth:session-expired', handleSessionExpired)
     return () => window.removeEventListener('auth:session-expired', handleSessionExpired)
   }, [clearAuthState])
+
+  // T-62: un 403 con X-Account-Status `password_change_required` lleva a la
+  // pantalla de cambio obligatorio, sea cual sea el rol (la decide la marca).
+  useEffect(() => {
+    const exigirCambio = () => setUser((u) => (u && !u.must_change_password ? { ...u, must_change_password: true } : u))
+    window.addEventListener('auth:password-change-required', exigirCambio)
+    return () => window.removeEventListener('auth:password-change-required', exigirCambio)
+  }, [])
 
   const handleSubmit = useCallback(async (event) => {
     event.preventDefault()

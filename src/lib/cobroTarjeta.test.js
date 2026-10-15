@@ -2,7 +2,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { apiRequest } from './apiClient'
 import { V2_FEATURES } from './v2Features'
-import {
+import { errorDeCobroTarjeta,
   MENSAJE_HAULMER, cancelPointCharge, createPointCharge, getPointOrderStatus, rutaBaseCobroTarjeta,
 } from './cobroTarjeta'
 
@@ -64,5 +64,20 @@ describe('con la bandera encendida: el punto único /payments/card', () => {
   it('un 409 del backend (la máquina está cobrando otra venta) sube tal cual', async () => {
     apiRequest.mockRejectedValue(new Error('409: La máquina está cobrando otra venta: espera unos segundos y vuelve a intentar'))
     await expect(createPointCharge('o-1', {})).rejects.toThrow('La máquina está cobrando otra venta')
+  })
+})
+
+describe('T-65 · cobro con el Point', () => {
+  it('nunca manda amount', async () => {
+    apiRequest.mockResolvedValue({ charge_id: 'c-1' })
+    await createPointCharge('o-1', { amount: 9999, description: 'Mesa 1' })
+    expect(apiRequest.mock.lastCall[1].body).toEqual({ description: 'Mesa 1' })
+  })
+  it('el 409 de máquina ocupada es reintentable; el de cobro anterior pide cancelar en el lector', () => {
+    const ocupada = errorDeCobroTarjeta({ status: 409, detail: 'La máquina está cobrando otra venta: espera unos segundos y vuelve a intentar' })
+    expect(ocupada.reintentable).toBe(true)
+    const anterior = errorDeCobroTarjeta({ status: 409, detail: 'Hay un cobro vigente en el lector que no se pudo cancelar' })
+    expect(anterior.reintentable).toBeUndefined()
+    expect(anterior.message).toMatch(/Cancélalo en el lector o espera/)
   })
 })

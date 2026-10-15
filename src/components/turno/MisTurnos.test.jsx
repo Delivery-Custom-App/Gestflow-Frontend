@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, within } from '@testing-library/react'
+import { waitFor, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router'
 import MisTurnos from './MisTurnos'
@@ -9,7 +9,7 @@ vi.mock('../../context/AuthContext', () => ({ useAuth: () => ({ user: { id: 'yo'
 vi.mock('../../lib/salesApi', () => ({ listCajas: vi.fn(), getCajaResumen: vi.fn(), getMovimientosCaja: vi.fn() }))
 
 const TURNOS = [
-  { id: 't-hoy', cashier_user_id: 'yo', business_date: '2026-10-04', status: 'open', is_active: true, opened_at: '2026-10-04T12:00:00', closed_at: null },
+  { id: 't-hoy', total_ingresos: '7000.00', cashier_user_id: 'yo', business_date: '2026-10-04', status: 'open', is_active: true, opened_at: '2026-10-04T12:00:00', closed_at: null },
   { id: 't-ayer', cashier_user_id: 'yo', business_date: '2026-10-03', status: 'closed', is_active: false, opened_at: '2026-10-03T12:00:00', closed_at: '2026-10-03T20:00:00' },
   { id: 't-otro', cashier_user_id: 'otro', business_date: '2026-10-04', status: 'open', is_active: true, opened_at: '2026-10-04T13:00:00', closed_at: null },
 ]
@@ -36,22 +36,24 @@ describe('MisTurnos', () => {
 
     expect(await screen.findByRole('heading', { name: 'Mis turnos' })).toBeInTheDocument()
     expect(await screen.findByText('04/10/2026')).toBeInTheDocument()
-    expect(listCajas).toHaveBeenCalledWith('loc-1')
+    expect(listCajas).toHaveBeenCalledWith('loc-1', { businessDate: undefined, cashierUserId: 'yo' })
     expect(filas()).toHaveLength(2)
     expect(screen.queryByRole('columnheader', { name: 'Vendedor' })).not.toBeInTheDocument()
   })
 
-  it('filtra por fecha', async () => {
+  it('filtra por fecha en el servidor (A-01)', async () => {
     const user = userEvent.setup()
+    listCajas.mockImplementation(async (_l, { businessDate } = {}) => TURNOS.filter((t) => !businessDate || t.business_date === businessDate))
     montar()
     await screen.findByText('04/10/2026')
 
     await user.type(screen.getByLabelText('Fecha'), '2026-10-03')
-    expect(filas()).toHaveLength(1)
+    await waitFor(() => expect(filas()).toHaveLength(1))
     expect(within(filas()[0]).getByText('03/10/2026')).toBeInTheDocument()
+    expect(listCajas).toHaveBeenLastCalledWith('loc-1', { businessDate: '2026-10-03', cashierUserId: 'yo' })
 
     await user.click(screen.getByRole('button', { name: 'Quitar filtros' }))
-    expect(filas()).toHaveLength(2)
+    await waitFor(() => expect(filas()).toHaveLength(2))
   })
 
   it('al abrir un turno ve su resumen, sin poder cerrarlo', async () => {

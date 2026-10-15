@@ -62,6 +62,7 @@ export function paymentMethodLabel(method) {
     debito: 'Débito',
     credit: 'Crédito',
     credito: 'Crédito',
+    sin_metodo: 'Sin método',
     transfer: 'Transferencia',
     transferencia: 'Transferencia',
     mercadopago: 'MercadoPago',

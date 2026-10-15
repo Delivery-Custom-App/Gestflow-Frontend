@@ -18,9 +18,13 @@ describe('CreateMesaModal', () => {
     render(<CreateMesaModal mesas={[]} onClose={() => {}} onSubmit={onSubmit} />)
   })
 
-  it('no pide zona, que es un dato que el backend no guarda', () => {
-    expect(screen.queryByLabelText(/zona/i)).not.toBeInTheDocument()
-    expect(screen.queryByPlaceholderText(/zona/i)).not.toBeInTheDocument()
+  it('A-05: pide la zona (opcional) y la envía', async () => {
+    const user = userEvent.setup()
+    await user.type(screen.getByLabelText(/número de mesa|nombre/i), 'Mesa 8')
+    await user.type(screen.getByLabelText(/capacidad/i), '4')
+    await user.type(screen.getByLabelText(/zona/i), ' Terraza ')
+    await user.click(screen.getByRole('button', { name: /crear/i }))
+    expect(onSubmit).toHaveBeenCalledWith({ name: 'Mesa 8', capacidad: '4', zona: 'Terraza' })
   })
 
   it('envía la capacidad para que quede guardada en la mesa', async () => {
@@ -30,7 +34,7 @@ describe('CreateMesaModal', () => {
     await user.type(screen.getByLabelText(/capacidad/i), '6')
     await user.click(screen.getByRole('button', { name: /crear/i }))
 
-    expect(onSubmit).toHaveBeenCalledWith({ name: 'Mesa 7', capacidad: '6' })
+    expect(onSubmit).toHaveBeenCalledWith({ name: 'Mesa 7', capacidad: '6', zona: '' })
   })
 
   it('sigue exigiendo los datos que sí se guardan', async () => {

@@ -10,6 +10,7 @@ import { MemoryRouter, Route, Routes } from 'react-router'
 import UsersListPage, { CreateUserDrawer } from './UsersListPage'
 import { createUser, listUsers } from '../lib/apiClient'
 import { V2_FEATURES } from '../lib/v2Features'
+import { actualizarUsuario, cambiarEstadoUsuario, restablecerClave } from '../lib/gestionUsuarios'
 
 const session = vi.hoisted(() => ({ role: 'Admin Negocio' }))
 
@@ -19,7 +20,17 @@ vi.mock('../lib/apiClient', () => ({
   deleteUser: vi.fn(),
   getOptionalAuthContext: vi.fn(() => Promise.resolve({ businessId: 'b-1' })),
 }))
-vi.mock('../context/AuthContext', () => ({ useAuth: () => ({ userRole: session.role, user: { id: 'yo' } }) }))
+vi.mock('../lib/gestionUsuarios', async (importOriginal) => ({
+  ...(await importOriginal()),
+  cambiarEstadoUsuario: vi.fn(() => Promise.resolve({})),
+  actualizarUsuario: vi.fn(() => Promise.resolve({})),
+  restablecerClave: vi.fn(() => Promise.resolve({ temporary_password: 'Temp-1234', email_sent: false })),
+}))
+vi.mock('../lib/sesiones', async (importOriginal) => ({
+  ...(await importOriginal()),
+  listarSesionesDe: vi.fn(() => Promise.resolve([])),
+}))
+vi.mock('../context/AuthContext', () => ({ useAuth: () => ({ userRole: session.role, user: { id: 'yo', local_id: session.role === 'Admin' ? 'loc-1' : null } }) }))
 vi.mock('../hooks/useLocals', () => ({ useLocals: () => ({ locales: LOCALES, loading: false }) }))
 
 const LOCALES = [
@@ -101,14 +112,17 @@ describe('CreateUserDrawer', () => {
     expect(createUser).not.toHaveBeenCalled()
   })
 
-  it('al crear un vendedor avisa del cambio de contraseña y del correo; a un encargado no', async () => {
+  it('al crear un vendedor o un encargado (T-62) avisa del cambio de contraseña; a un dueño no', async () => {
     const user = userEvent.setup()
-    abrirCajon()
+    abrirCajon({ userRole: 'Superadmin' })
 
     expect(screen.getByText(/deberá cambiar la contraseña/i)).toBeInTheDocument()
     expect(screen.getByText(/le llegará un correo con sus datos de acceso/i)).toBeInTheDocument()
 
     await user.selectOptions(screen.getByLabelText(/^Rol/), 'ADMIN')
+    expect(screen.getByText(/deberá cambiar la contraseña/i)).toBeInTheDocument()
+
+    await user.selectOptions(screen.getByLabelText(/^Rol/), 'ADMIN_NEGOCIO')
     expect(screen.queryByText(/deberá cambiar la contraseña/i)).not.toBeInTheDocument()
   })
 
@@ -151,12 +165,12 @@ describe('UsersListPage', () => {
     expect(screen.getAllByRole('button', { name: /Crear usuario/ })).toHaveLength(2)
   })
 
-  it('quien no puede crear usuarios no ve el botón', async () => {
+  it('T-47: el encargado también ve el botón de crear', async () => {
     session.role = 'Admin'
     montar()
 
     expect(await screen.findByText('Juan Pérez')).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /Crear usuario/ })).not.toBeInTheDocument()
+    expect(screen.getAllByRole('button', { name: /Crear usuario/ }).length).toBeGreaterThan(0)
   })
 })
 
@@ -230,7 +244,7 @@ describe('Quién ve qué usuarios', () => {
     expect(screen.getByLabelText(/Local asignado/)).toHaveValue('loc-2')
   })
 
-  it('el encargado ve la lista de su local, pero no crea, no elimina ni salta al negocio', async () => {
+  it('T-47: el encargado gestiona solo a los vendedores de su local, sin saltar al negocio', async () => {
     session.role = 'Admin'
     // El backend ya le devuelve solo los de su local.
     listUsers.mockResolvedValue(NEGOCIO.filter((u) => u.local_id === 'loc-1'))
@@ -239,10 +253,37 @@ describe('Quién ve qué usuarios', () => {
     expect(await screen.findByText('Vicente Centro')).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Usuarios de Sucursal Centro' })).toBeInTheDocument()
     expect(nombres()).toEqual(['Elena Centro', 'Vicente Centro'])
-    expect(within(screen.getByRole('table')).queryByRole('columnheader', { name: 'Acción' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /Crear usuario/ })).not.toBeInTheDocument()
+    // Al vendedor de su local lo edita y lo desactiva; a otro encargado, no.
+    expect(screen.getByRole('button', { name: 'Desactivar a Vicente Centro' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Desactivar a Elena Centro' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /Eliminar/ })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Ver todo el negocio' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Locales de/ })).not.toBeInTheDocument()
+  })
+
+  it('T-47: su alta tiene el rol Vendedor y su local fijos', async () => {
+    session.role = 'Admin'
+    listUsers.mockResolvedValue(NEGOCIO.filter((u) => u.local_id === 'loc-1'))
+    abrir('/local/loc-1/usuarios')
+    await screen.findByText('Vicente Centro')
+
+    expect(screen.getByLabelText(/^Rol/)).toBeDisabled()
+    expect(screen.getByLabelText(/^Rol/)).toHaveValue('EMPLEADO')
+    expect(screen.getByLabelText(/Local asignado/)).toHaveValue('loc-1')
+    expect(screen.getByLabelText(/Local asignado/)).toBeDisabled()
+  })
+
+  it('T-47: al editar a su vendedor no puede cambiarle el rol ni el local', async () => {
+    const user = userEvent.setup()
+    session.role = 'Admin'
+    listUsers.mockResolvedValue(NEGOCIO.filter((u) => u.local_id === 'loc-1'))
+    abrir('/local/loc-1/usuarios')
+
+    await user.click(await screen.findByRole('button', { name: 'Editar a Vicente Centro' }))
+    const dialogo = screen.getByRole('dialog')
+    expect(within(dialogo).getByLabelText('Nombre')).toBeInTheDocument()
+    expect(within(dialogo).queryByLabelText('Rol')).not.toBeInTheDocument()
+    expect(within(dialogo).queryByLabelText('Local')).not.toBeInTheDocument()
   })
 })
 
@@ -265,3 +306,106 @@ describe('UsersListPage · locales asignados (T-72)', () => {
   })
 })
 
+
+describe('UsersListPage · desactivar, reactivar, editar y restablecer (T-32)', () => {
+  const montar = () => render(<MemoryRouter><UsersListPage /></MemoryRouter>)
+  beforeEach(() => {
+    listUsers.mockResolvedValue([
+      ...NEGOCIO.map((u) => ({ ...u, is_active: true })),
+      { id: 'x1', email: 'ex@demo.cl', name: 'Exempleado', role: 'EMPLEADO', local_id: 'loc-1', is_active: false },
+      { id: 'yo', email: 'yo@demo.cl', name: 'Yo Mismo', role: 'ADMIN_NEGOCIO', local_id: null, is_active: true },
+    ])
+  })
+
+  it('ya no hay «Eliminar»: hay Desactivar, con confirmación que explica que se conserva el historial', async () => {
+    const user = userEvent.setup()
+    montar()
+    expect(await screen.findByText('Vicente Centro')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Eliminar/ })).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Desactivar a Vicente Centro' }))
+    const dialogo = screen.getByRole('dialog')
+    expect(dialogo).toHaveTextContent(/No podrá entrar/)
+    expect(dialogo).toHaveTextContent(/historial de turnos y ventas se conserva/)
+    await user.click(within(dialogo).getByRole('button', { name: 'Desactivar' }))
+    expect(cambiarEstadoUsuario).toHaveBeenCalledWith('v1', false)
+    expect(await screen.findByRole('status')).toHaveTextContent('Vicente Centro quedó desactivado.')
+  })
+
+  it('T-53: «Sesiones» abre las sesiones de la persona', async () => {
+    const user = userEvent.setup()
+    montar()
+    await user.click(await screen.findByRole('button', { name: 'Sesiones de Vicente Centro' }))
+    expect(await screen.findByRole('dialog', { name: 'Sesiones de Vicente Centro' })).toBeInTheDocument()
+  })
+
+  it('la cuenta propia no tiene Desactivar', async () => {
+    montar()
+    expect(await screen.findByText('Yo Mismo')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Desactivar a Yo Mismo' })).not.toBeInTheDocument()
+  })
+
+  it('la pestaña Inactivos lista a los desactivados con «Reactivar»', async () => {
+    const user = userEvent.setup()
+    montar()
+    await screen.findByText('Vicente Centro')
+    expect(screen.queryByText('Exempleado')).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('tab', { name: /Inactivos \(1\)/ }))
+    expect(screen.getByText('Exempleado')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Reactivar a Exempleado' }))
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Reactivar' }))
+    expect(cambiarEstadoUsuario).toHaveBeenCalledWith('x1', true)
+  })
+
+  it('editar cambia nombre, rol y local; sin local no deja guardar', async () => {
+    const user = userEvent.setup()
+    montar()
+    await user.click(await screen.findByRole('button', { name: 'Editar a Vicente Centro' }))
+    const dialogo = screen.getByRole('dialog')
+    await user.selectOptions(within(dialogo).getByLabelText('Local'), '')
+    await user.type(within(dialogo).getByLabelText('Nombre'), 'Vicente')
+    await user.click(within(dialogo).getByRole('button', { name: 'Guardar' }))
+    expect(within(dialogo).getByRole('alert')).toHaveTextContent(/siempre tiene uno/)
+    expect(actualizarUsuario).not.toHaveBeenCalled()
+
+    await user.selectOptions(within(dialogo).getByLabelText('Local'), 'loc-2')
+    await user.click(within(dialogo).getByRole('button', { name: 'Guardar' }))
+    await waitFor(() => expect(actualizarUsuario).toHaveBeenCalledWith('v1', { first_name: 'Vicente', local_id: 'loc-2' }))
+  })
+
+  it('restablecer clave pide confirmación y llama a regenerate-password', async () => {
+    const user = userEvent.setup()
+    montar()
+    await user.click(await screen.findByRole('button', { name: 'Restablecer la clave de Vicente Centro' }))
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Restablecer' }))
+    expect(restablecerClave).toHaveBeenCalledWith('v1')
+  })
+
+  it('T-61: muestra la clave temporal una vez, con Copiar y el aviso de entregarla en mano', async () => {
+    const user = userEvent.setup()
+    const setItem = vi.spyOn(Storage.prototype, 'setItem')
+    montar()
+    await user.click(await screen.findByRole('button', { name: 'Restablecer la clave de Vicente Centro' }))
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Restablecer' }))
+
+    const dialogo = await screen.findByRole('dialog', { name: 'Clave temporal de Vicente Centro' })
+    expect(within(dialogo).getByTestId('clave-temporal')).toHaveTextContent('Temp-1234')
+    expect(within(dialogo).getByRole('alert')).toHaveTextContent('No se pudo enviar por correo: entrégala en mano.')
+    expect(dialogo).toHaveTextContent(/deberá cambiar esta clave al entrar/)
+    expect(setItem.mock.calls.some(([, v]) => String(v).includes('Temp-1234'))).toBe(false)
+
+    await user.click(within(dialogo).getByRole('button', { name: 'Listo' }))
+    expect(screen.queryByText('Temp-1234')).not.toBeInTheDocument()
+    setItem.mockRestore()
+  })
+
+  it('un 400 o 403 del backend se muestra tal cual', async () => {
+    const user = userEvent.setup()
+    cambiarEstadoUsuario.mockRejectedValueOnce(Object.assign(new Error('403: No autorizado'), { status: 403, detail: 'No autorizado' }))
+    montar()
+    await user.click(await screen.findByRole('button', { name: 'Desactivar a Vicente Centro' }))
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Desactivar' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('No autorizado')
+  })
+})

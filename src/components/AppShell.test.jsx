@@ -97,6 +97,19 @@ describe('AppShell — perfil en el menú', () => {
   })
 })
 
+describe('AppShell — «no cobradas» según el local', () => {
+  it('en un local con mesas se llama «Mesas no cobradas»', () => {
+    renderShell('loc-mesas', 'administrativo/ventas')
+    expect(screen.getByRole('button', { name: 'Mesas no cobradas' })).toBeInTheDocument()
+  })
+
+  it('en un local al paso se llama «Pedidos no cobrados»', () => {
+    renderShell('loc-paso', 'administrativo/ventas')
+    expect(screen.getByRole('button', { name: 'Pedidos no cobrados' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Mesas no cobradas' })).not.toBeInTheDocument()
+  })
+})
+
 describe('AppShell — menú de Inventario', () => {
   it('las banderas de proveedores y compras semanales están apagadas', () => {
     expect(V2_FEATURES.suppliers).toBe(false)

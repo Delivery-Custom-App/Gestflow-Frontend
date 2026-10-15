@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { renderHook, waitFor, act } from '@testing-library/react'
 import { apiRequest, getOptionalAuthContext } from '../lib/apiClient'
 import { useLocals } from './useLocals'
+import { invalidate } from '../lib/apiCache'
 
 vi.mock('../lib/apiClient', () => ({
   apiRequest: vi.fn(),
@@ -9,6 +10,7 @@ vi.mock('../lib/apiClient', () => ({
 }))
 
 beforeEach(() => {
+  invalidate()
   vi.clearAllMocks()
 })
 
@@ -27,7 +29,7 @@ describe('useLocals', () => {
     apiRequest.mockResolvedValue([{ id: 'l1' }])
     const { result } = renderHook(() => useLocals())
     await waitFor(() => expect(result.current.loading).toBe(false))
-    expect(apiRequest).toHaveBeenCalledWith('/locals', { token: 'tok' })
+    expect(apiRequest).toHaveBeenCalledWith('/locals')
     expect(result.current.locales).toEqual([{ id: 'l1', address: null, lat: null, lng: null }])
   })
 
@@ -51,7 +53,7 @@ describe('useLocals', () => {
     apiRequest.mockResolvedValue([])
     const { result } = renderHook(() => useLocals())
     await waitFor(() => expect(result.current.loading).toBe(false))
-    expect(apiRequest).toHaveBeenCalledWith('/locals?business_id=biz-1', { token: 'tok' })
+    expect(apiRequest).toHaveBeenCalledWith('/locals?business_id=biz-1')
   })
 
   it('respuesta no-array cae a []', async () => {

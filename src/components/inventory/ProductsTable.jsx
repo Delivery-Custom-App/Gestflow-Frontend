@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { m, AnimatePresence } from 'framer-motion'
-import { Pencil, PackagePlus, ClipboardCheck, PlayCircle } from 'lucide-react'
+import { PackageMinus, History, Pencil, PackagePlus, ClipboardCheck, PlayCircle } from 'lucide-react'
 import StockStatusBadge from './StockStatusBadge'
 import { getStockAlertLevel } from './stockAlertUtils'
 
@@ -312,6 +312,18 @@ function ProductsTable({
                                   <ClipboardCheck size={12} />
                                   Corregir
                                 </Button>
+                                <Button type="button" variant="ghost" size="sm" onClick={() => onRegistrar(row, 'merma')}
+                                  aria-label={`Registrar merma de ${display}`} title="Se perdió o venció: registrar merma"
+                                  className="h-7 px-2 text-xs gap-1 text-[hsl(var(--muted-foreground))] hover:text-red-600">
+                                  <PackageMinus size={12} />
+                                  Merma
+                                </Button>
+                                <Button type="button" variant="ghost" size="sm" onClick={() => onRegistrar(row, 'historial')}
+                                  aria-label={`Historial de stock de ${display}`} title="Ver los movimientos del stock"
+                                  className="h-7 px-2 text-xs gap-1 text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--primary))]">
+                                  <History size={12} />
+                                  Historial
+                                </Button>
                               </>
                             )}
                             <Button
@@ -475,7 +487,9 @@ function ProductsTable({
         <div className="shrink-0 border-t border-[hsl(var(--border))] px-6 py-4 flex flex-col gap-3">
           {confirmDelete && (
             <div className="rounded-lg bg-red-50 border border-red-200 px-4 py-3 flex items-center justify-between gap-3">
-              <span className="text-sm text-red-700 font-medium">¿Eliminar este producto?</span>
+              <span className="text-sm text-red-700 font-medium">
+                ¿Eliminar del stock de este local? Se deja de controlar aquí; el producto sigue existiendo en el negocio y en los otros locales.
+              </span>
               <div className="flex gap-2">
                 <Button type="button" variant="destructive" size="sm" disabled={deleting}
                   onClick={async () => {

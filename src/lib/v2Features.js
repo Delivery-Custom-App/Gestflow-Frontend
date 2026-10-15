@@ -47,16 +47,6 @@ export const V2_FEATURES = {
    */
   userRut: false,
   /**
-   * "Cerrar turno" en la vista del vendedor. Lo acordado es que el vendedor
-   * abre su turno al entrar y que lo cierran el encargado o el dueño (Caja y
-   * turnos). El botón ya está hecho —confirma, cierra con `PATCH /cajas/{id}`
-   * y explica el 409 si quedan órdenes en curso— y espera a que el backend
-   * defina la opción del vendedor. Hoy, con la bandera apagada, no se muestra.
-   * Ojo: técnicamente el backend ya le permitiría cerrar su propio turno (no
-   * revisa el rol, ver B-05), así que encenderla es decisión de producto.
-   */
-  cierreTurnoVendedor: false,
-  /**
    * El vendedor elige su máquina de cobro (T-71, sección 5b del backend).
    * - Restaurante: elige la máquina POS antes de abrir su turno y viaja en
    *   `POST /cajas` (`pos_machine_id`, `compartir`). Una máquina la usan hasta
@@ -99,13 +89,6 @@ export const V2_FEATURES = {
   mercadopagoPoint: true,
   mpConfig: true,
   cajaMpPairing: true,
-  /**
-   * Administración de impresoras: registrar una, probarla, mandarle a
-   * imprimir. Eso no existe en V2 (`/printers` y `/comandas/{id}/print`
-   * devuelven 404) y no está previsto: la impresión la resuelve el navegador.
-   * La pantalla de configuración queda apagada con su código intacto.
-   */
-  printers: false,
   /** Comanda de cocina: `GET /orders/{id}/comanda`, impresa por el navegador. */
   comandas: true,
   /**
@@ -144,10 +127,6 @@ export const V2_FEATURES = {
   superAdminObservability: true,
   /** Resumen de caja (total esperado + desglose por método) y su lista de movimientos. */
   movimientosCaja: true,
-  /** Endpoints legacy /dashboard/* (aún no en V2). Se calculan desde órdenes. */
-  adminDashboard: false,
-  /** Motor de alertas / SSE (aún no en V2). */
-  alerts: false,
   /** Legacy /webhooks/mercadopago-pos discover+link — implementado en V2. */
   mpPosWebhooks: true,
 }

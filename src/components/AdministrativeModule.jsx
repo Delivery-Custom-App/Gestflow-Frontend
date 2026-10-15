@@ -16,17 +16,25 @@ import {
   getLocalDashboard,
   getOrdersByLocal,
   createCaja,
-  closeCaja,
   getResumenDiario,
 } from '../lib/administrativeApi'
 import { getAuthContext, apiRequest, listUsers } from '../lib/apiClient'
-import { mensajeCierreTurno } from '../lib/turnos'
-import { filtrarTurnos, nombreDeVendedor, opcionesDeVendedor } from '../lib/registroTurnos'
+import { textosNoCobradas } from '../lib/noCobradas'
+import { isAlPasoLocal } from '../lib/salesModel'
+import { useSelectedLocal } from '../hooks/useSelectedLocal'
+import { nombreDeVendedor, opcionesDeVendedor, useTurnosFiltrados } from '../lib/registroTurnos'
+import { monto, textoDiferencia } from '../lib/arqueo'
+import { puedeVender } from '../lib/rolesCaja'
 import DetalleTurno from './turno/DetalleTurno'
+import RegistrarMovimientoCaja from './turno/RegistrarMovimientoCaja'
+import CerrarTurno from './turno/CerrarTurno'
+import SupervisionTurno from './turno/SupervisionTurno'
+import HistorialTurno from './turno/HistorialTurno'
 import ConteoEfectivo from './turno/ConteoEfectivo'
 import { desgloseParaApi, totalesDelConteo } from '../lib/efectivo'
 import TablaTurnos from './turno/TablaTurnos'
 import FondoEmergencia from './FondoEmergencia'
+import NoCobradas from './NoCobradas'
 import FiltrosTurnos from './turno/FiltrosTurnos'
 import { useAuth } from '../context/AuthContext'
 import { normalizeRoleKey } from '../auth/roleLabel'
@@ -35,7 +43,7 @@ import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 import { formatCLPCurrency as formatMoney } from '../lib/formatCLP'
 import { m, AnimatePresence } from 'framer-motion'
-import { MapPin, X, ChevronUp, ChevronRight, ShoppingCart, HelpCircle, CreditCard, ArrowLeftRight, Lock, LifeBuoy } from 'lucide-react'
+import { MapPin, X, ShoppingCart, HelpCircle, CreditCard, ArrowLeftRight, Lock, LifeBuoy } from 'lucide-react'
 
 /**
  * Las cajas físicas son supervisorias: el backend restringe su estado de
@@ -47,9 +55,11 @@ import { MapPin, X, ChevronUp, ChevronRight, ShoppingCart, HelpCircle, CreditCar
 const ROLES_CAJAS_FISICAS = new Set(['ADMIN', 'ADMINNEGOCIO', 'SUPERADMIN'])
 
 /** Secciones visibles: se calculan al renderizar porque dependen de las banderas. */
-const getSections = () => [
+const getSections = (alPaso = false) => [
   { id: 'ventas',        label: 'Ventas',        subtitle: 'Totales de hoy, tendencia, productos más vendidos e histórico' },
   { id: 'flujo-caja',    label: 'Caja y turnos', subtitle: 'Turnos de caja, movimientos y arqueo del día' },
+  // T-46: lo que quedó sin cobrar al cerrar la caja y los pedidos vencidos.
+  { id: 'no-cobradas',   label: textosNoCobradas(alPaso).titulo, subtitle: textosNoCobradas(alPaso).subtitulo },
   // T-26: fondo de emergencia (backend B-09). Con la bandera apagada la sección no existe y su dirección lleva a Ventas.
   ...(isV2FeatureEnabled('fondoEmergencia')
     ? [{ id: 'fondo-emergencia', label: 'Fondo de emergencia', subtitle: 'Plata apartada para imprevistos: monto fijo, saldo, gastos y reposiciones' }]
@@ -64,10 +74,6 @@ function toNumber(value, fallback = 0) {
 
 function safeArray(value) {
   return Array.isArray(value) ? value : []
-}
-
-function _normalizeOrderStatus(status) {
-  return String(status || '').trim().toLowerCase()
 }
 
 function normalizePaymentMethod(method) {
@@ -253,11 +259,12 @@ function AmTable({ headers, rows, rowKeys, emptyMessage }) {
 
 // ── Section helpers ────────────────────────────────────────────
 
-function SectionActions({ activeSection, onNuevaCaja }) {
+function SectionActions({ activeSection, onNuevaCaja, puedeAbrirTurno = true }) {
   if (activeSection === 'ventas') {
     return null
   }
-  if (activeSection === 'flujo-caja') {
+  // A-03: en restaurante el administrador no tiene caja propia (no abre turno).
+  if (activeSection === 'flujo-caja' && puedeAbrirTurno) {
     return (
       <div className="flex gap-2">
         <Button onClick={onNuevaCaja}>+ Abrir turno de caja</Button>
@@ -280,106 +287,27 @@ function SectionState({ loading, error, isEmpty, emptyMessage }) {
 
 // ── Section content components ─────────────────────────────────
 
-const PERIOD_OPTIONS = [
-  { id: 'week',  label: 'Semanal' },
-  { id: 'month', label: 'Mensual' },
-  { id: 'year',  label: 'Anual' },
-]
-
-const MONTH_NAMES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
-
-function santiagoYmd(iso) {
-  const d = parseApiDate(iso)
-  if (!d) return null
-  const ymd = d.toLocaleString('en-CA', { timeZone: 'America/Santiago', year: 'numeric', month: '2-digit', day: '2-digit' })
-  return ymd.length === 10 ? ymd : null
-}
-
-function periodMeta(ymd, granularity) {
-  const [y, m, d] = ymd.split('-').map(Number)
-  if (granularity === 'year') {
-    return { key: String(y), label: `Año ${y}`, sortKey: y, range: String(y) }
-  }
-  if (granularity === 'month') {
-    const key = `${y}-${String(m).padStart(2, '0')}`
-    const label = `${MONTH_NAMES[m - 1]} ${y}`
-    return { key, label, sortKey: y * 12 + (m - 1), range: label }
-  }
-  const base = new Date(Date.UTC(y, m - 1, d))
-  const diffToMon = (base.getUTCDay() + 6) % 7
-  const mon = new Date(base.getTime() - diffToMon * 86400000)
-  const sun = new Date(mon.getTime() + 6 * 86400000)
-  const fmt = (dt) => `${String(dt.getUTCDate()).padStart(2, '0')}/${String(dt.getUTCMonth() + 1).padStart(2, '0')}`
-  return {
-    key: mon.toISOString().slice(0, 10),
-    label: `Semana del ${fmt(mon)} al ${fmt(sun)}`,
-    sortKey: mon.getTime(),
-    range: `Semana ${fmt(mon)} — ${fmt(sun)}`,
-  }
-}
-
-function VentasContent({ indicadores, orders, loading, error, onCargarDetalle, detalleLoading, onVerBoleta }) {
-  const all = useMemo(() => safeArray(orders), [orders])
-  const detalleCargado = Array.isArray(orders)
-  const [granularity, setGranularity] = useState('month')
-  const [expandedKey, setExpandedKey] = useState(null)
-
-  // ── Histórico consolidado por período ──
-  const buckets = useMemo(() => {
-    const map = new Map()
-    for (const o of all) {
-      if (_normalizeOrderStatus(o.status) === 'cancelled') continue
-      const ymd = santiagoYmd(o.created_at)
-      if (!ymd) continue
-      const meta = periodMeta(ymd, granularity)
-      if (!map.has(meta.key)) {
-        map.set(meta.key, { ...meta, total: 0, count: 0, orders: [] })
-      }
-      const bucket = map.get(meta.key)
-      bucket.total += getOrderAmount(o)
-      bucket.count += 1
-      bucket.orders.push(o)
-    }
-    return [...map.values()].sort((a, b) => (a.sortKey > b.sortKey ? -1 : a.sortKey < b.sortKey ? 1 : 0))
-  }, [all, granularity])
-
-  const histTotal = buckets.reduce((s, b) => s + b.total, 0)
-  const histCount = buckets.reduce((s, b) => s + b.count, 0)
-  const histAvg = histCount ? histTotal / histCount : 0
-
-  const methodBreakdown = useMemo(() => {
-    const acc = {}
-    for (const o of all) {
-      if (_normalizeOrderStatus(o.status) === 'cancelled') continue
-      const method = normalizePaymentMethod(o?.payment_method)
-      acc[method] = (acc[method] || 0) + getOrderAmount(o)
-    }
-    return Object.entries(acc)
-      .map(([label, total]) => ({ label, total }))
-      .sort((a, b) => b.total - a.total)
-  }, [all])
-
-  const methodTotal = methodBreakdown.reduce((s, m) => s + m.total, 0)
-  const periodNoun = granularity === 'week' ? 'semanas' : granularity === 'month' ? 'meses' : 'años'
-
-  // Tendencia de 7 días y top productos (antes en Reportes), calculados con las mismas órdenes.
-  // Indicadores: los calcula el backend. El detalle por orden, si se pidió,
-  // alimenta los paneles de abajo.
+const DETALLE_ORDENES_POR_PAGINA = 50
+function VentasContent({ indicadores, orders, ordersTotal, ordersOffset = 0, ordersLimit = 50, loading, error, onCargarDetalle, detalleLoading, onVerBoleta }) {
+  const pageOrders = safeArray(orders)
+  const detalleCargado = orders !== null && orders !== undefined
+  const total = Number.isFinite(ordersTotal) ? ordersTotal : 0
   const incomeTrend = safeArray(indicadores?.tendencia)
   const topProducts = safeArray(indicadores?.topProductos)
   const hoy = indicadores?.hoy || { total: 0, ordenes: 0 }
   const porMetodo = indicadores?.porMetodo || { efectivo: 0, tarjetas: 0, otros: 0 }
-
+  const firstOrder = total === 0 ? 0 : ordersOffset + 1
+  const lastOrder = Math.min(ordersOffset + pageOrders.length, total)
   const stateNode = <SectionState loading={loading} error={error} isEmpty={false} emptyMessage="" />
   if (loading || error) return stateNode
 
   return (
     <div className="space-y-5">
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <KpiCard label="Total Hoy"  value={formatMoney(hoy.total)}  sub={`${hoy.ordenes} venta${hoy.ordenes !== 1 ? 's' : ''}`} />
-        <KpiCard label="Efectivo"   value={formatMoney(porMetodo.efectivo)} />
-        <KpiCard label="Tarjetas"   value={formatMoney(porMetodo.tarjetas)} accent="blue" />
-        <KpiCard label="Otros"      value={formatMoney(porMetodo.otros)}    accent="purple" />
+        <KpiCard label="Total Hoy" value={formatMoney(hoy.total)} sub={`${hoy.ordenes} venta${hoy.ordenes !== 1 ? 's' : ''}`} />
+        <KpiCard label="Efectivo" value={formatMoney(porMetodo.efectivo)} />
+        <KpiCard label="Tarjetas" value={formatMoney(porMetodo.tarjetas)} accent="blue" />
+        <KpiCard label="Otros" value={formatMoney(porMetodo.otros)} accent="purple" />
       </div>
       <div className="grid gap-5 lg:grid-cols-2">
         <Panel title="Tendencia de Ventas" sub="Ingresos diarios de los últimos 7 días">
@@ -396,123 +324,55 @@ function VentasContent({ indicadores, orders, loading, error, onCargarDetalle, d
       </div>
 
       {!detalleCargado && (
-        <Panel title="Detalle de órdenes" sub="Se carga aparte porque trae el histórico completo del local">
+        <Panel title="Detalle de órdenes" sub="Consulta paginada de órdenes del local">
           <p className="text-sm text-[hsl(var(--muted-foreground))]">
-            Los indicadores de arriba los calcula el servidor. El detalle orden por orden y los
-            consolidados por período se descargan solo si los necesitas.
+            El detalle se carga por páginas y muestra el total informado por el servidor.
           </p>
-          <Button className="mt-3" size="sm" onClick={onCargarDetalle} disabled={detalleLoading}>
-            {detalleLoading ? 'Cargando detalle…' : 'Cargar detalle de órdenes'}
+          <Button className="mt-3" size="sm" onClick={() => onCargarDetalle(0)} disabled={detalleLoading}>
+            {detalleLoading ? 'Cargando órdenes…' : 'Cargar detalle de órdenes'}
           </Button>
         </Panel>
       )}
 
       {detalleCargado && (
-      <>
-      <Panel title="Histórico y Consolidados" sub="Registros consolidados por período. Excluye órdenes canceladas.">
-        <div className="mb-5 inline-flex rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--muted))] p-1">
-          {PERIOD_OPTIONS.map((opt) => (
-            <button
-              key={opt.id}
-              type="button"
-              onClick={() => { setGranularity(opt.id); setExpandedKey(null) }}
-              className={cn('rounded-md px-3 py-1.5 text-xs font-semibold transition-colors',
-                granularity === opt.id
-                  ? 'bg-[hsl(var(--primary))] text-white shadow-sm'
-                  : 'text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]')}>
-              {opt.label}
-            </button>
-          ))}
-        </div>
-
-        <div className="mb-5 grid grid-cols-2 gap-4 lg:grid-cols-4">
-          <KpiCard label="Total Consolidado" value={formatMoney(histTotal)} sub={`${histCount} ventas`} />
-          <KpiCard label="Ticket Promedio"   value={formatMoney(histAvg)}   sub="Por venta" accent="blue" />
-          <KpiCard label="Períodos"          value={String(buckets.length)} sub={periodNoun} accent="purple" />
-          <KpiCard label="Mayor Período"     value={formatMoney(buckets[0]?.total || 0)} sub={buckets[0]?.label || 'Sin ventas'} accent="warning" />
-        </div>
-
-        {buckets.length === 0 ? (
-          <p className="text-sm text-[hsl(var(--muted-foreground))]">No hay ventas históricas registradas.</p>
-        ) : (
-          <div className="space-y-2">
-            {buckets.map((bucket) => {
-              const isOpen = expandedKey === bucket.key
-              const pct = histTotal ? (bucket.total / histTotal) * 100 : 0
-              const bucketAvg = bucket.count ? bucket.total / bucket.count : 0
-              return (
-                <div key={bucket.key} className="rounded-lg border border-[hsl(var(--border))]">
-                  <button
-                    type="button"
-                    onClick={() => setExpandedKey(isOpen ? null : bucket.key)}
-                    className="flex w-full items-center justify-between gap-3 rounded-lg p-3 text-left transition-colors hover:bg-[hsl(var(--muted)/40)]">
-                    <div className="flex min-w-0 items-center gap-2">
-                      {isOpen
-                        ? <ChevronUp size={15} className="shrink-0 text-[hsl(var(--muted-foreground))]" />
-                        : <ChevronRight size={15} className="shrink-0 text-[hsl(var(--muted-foreground))]" />}
-                      <div className="min-w-0">
-                        <strong className="block truncate text-sm font-bold text-[hsl(var(--foreground))]">{bucket.label}</strong>
-                        <span className="block text-xs text-[hsl(var(--muted-foreground))]">{bucket.count} venta{bucket.count !== 1 ? 's' : ''} · {formatMoney(bucketAvg)} promedio</span>
-                      </div>
-                    </div>
-                    <div className="shrink-0 text-right">
-                      <strong className="block text-sm font-bold text-[hsl(var(--foreground))]">{formatMoney(bucket.total)}</strong>
-                      <span className="block text-xs text-[hsl(var(--muted-foreground))]">{pct.toFixed(0)}% del total</span>
-                    </div>
-                  </button>
-                  {isOpen && (
-                    <div className="space-y-2 border-t border-[hsl(var(--border))] p-3">
-                      {bucket.orders.map((order) => (
-                        <RowCard
-                          key={order.id}
-                          title={formatMoney(getOrderAmount(order))}
-                          sub={`#${String(order.id || '').slice(0, 8)} — ${normalizePaymentMethod(order.payment_method)} — ${formatDateTime(order.created_at)}`}
-                          meta={`Estado: ${order.status || '—'} · Fuente: ${order.source || '—'}`}
-                          pill={normalizePaymentMethod(order.payment_method)}
-                          action={isV2FeatureEnabled('receiptPrint') && (
-                            <Button size="sm" variant="outline" onClick={() => onVerBoleta(order)}>
-                              Boleta
-                            </Button>
-                          )}
-                        />
-                      ))}
-                    </div>
+        <Panel title="Detalle de órdenes" sub="Órdenes filtradas y paginadas por el servidor">
+          <p className="mb-3 text-sm text-[hsl(var(--muted-foreground))]">
+            Mostrando {firstOrder}–{lastOrder} de {total} órdenes.
+          </p>
+          {pageOrders.length === 0 ? (
+            <p className="text-sm text-[hsl(var(--muted-foreground))]">No hay órdenes para mostrar.</p>
+          ) : (
+            <div className="space-y-2">
+              {pageOrders.map((order) => (
+                <RowCard
+                  key={`${order.id}-${order.created_at || ''}`}
+                  title={formatMoney(getOrderAmount(order))}
+                  sub={`#${String(order.id || '').slice(0, 8)} — ${normalizePaymentMethod(order.payment_method)} — ${formatDateTime(order.created_at)}`}
+                  meta={`Estado: ${order.status || '—'} · Fuente: ${order.source || '—'}`}
+                  pill={normalizePaymentMethod(order.payment_method)}
+                  action={isV2FeatureEnabled('receiptPrint') && (
+                    <Button size="sm" variant="outline" onClick={() => onVerBoleta(order)}>
+                      Boleta
+                    </Button>
                   )}
-                </div>
-              )
-            })}
+                />
+              ))}
+            </div>
+          )}
+          <div className="mt-4 flex items-center justify-between gap-3">
+            <Button size="sm" variant="outline" disabled={ordersOffset <= 0 || detalleLoading} onClick={() => onCargarDetalle(Math.max(0, ordersOffset - ordersLimit))}>
+              Anterior
+            </Button>
+            <span className="text-xs text-[hsl(var(--muted-foreground))]">Página {Math.floor(ordersOffset / ordersLimit) + 1}</span>
+            <Button size="sm" variant="outline" disabled={ordersOffset + pageOrders.length >= total || detalleLoading} onClick={() => onCargarDetalle(ordersOffset + ordersLimit)}>
+              Siguiente
+            </Button>
           </div>
-        )}
-      </Panel>
-
-      <Panel title="Distribución por Método de Pago" sub={`Histórico consolidado ${granularity === 'week' ? 'semanal' : granularity === 'month' ? 'mensual' : 'anual'}`}>
-        {methodBreakdown.length === 0 ? (
-          <p className="text-sm text-[hsl(var(--muted-foreground))]">No hay datos de métodos de pago.</p>
-        ) : (
-          <div className="space-y-3">
-            {methodBreakdown.map((m) => {
-              const pct = methodTotal ? (m.total / methodTotal) * 100 : 0
-              return (
-                <div key={m.label}>
-                  <div className="mb-1 flex items-center justify-between text-xs">
-                    <span className="text-[hsl(var(--muted-foreground))]">{m.label}</span>
-                    <span className="text-[hsl(var(--muted-foreground))]">{formatMoney(m.total)} · {pct.toFixed(0)}%</span>
-                  </div>
-                  <div className="h-1.5 w-full overflow-hidden rounded-full bg-[hsl(var(--border))]">
-                    <div className="h-full rounded-full bg-[hsl(var(--primary))]" style={{ width: `${pct}%` }} />
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        )}
-      </Panel>
-      </>
+        </Panel>
       )}
     </div>
   )
 }
-
 const MP_PAIRING_BADGE = {
   // Cuando el backend no responde el estado, no se afirma que no está vinculada:
   // no saberlo y no estarlo son cosas distintas.
@@ -529,7 +389,7 @@ const MP_PAIRING_ACTION = {
   paired:           'Ver vinculación',
 }
 
-function FlujoCajaContent({ dashboard, cajas, cajasFisicas, usuarios, resumenDiario, loading, error, onManagePairing, onViewMovimientos, onGestionarCajaFisica }) {
+function FlujoCajaContent({ localId, dashboard, cajas, cajasFisicas, usuarios, resumenDiario, loading, error, onManagePairing, onViewMovimientos, onGestionarCajaFisica }) {
   const [filtroVendedor, setFiltroVendedor] = useState('')
   const [filtroFecha, setFiltroFecha] = useState('')
   const cajasList = safeArray(cajas)
@@ -545,10 +405,11 @@ function FlujoCajaContent({ dashboard, cajas, cajasFisicas, usuarios, resumenDia
   const nombrePorCajaFisica = new Map(cajasFisicasList.map((cf) => [String(cf.id), cf.name]))
   const showMpPairing = typeof onManagePairing === 'function'
   const showMovimientos = typeof onViewMovimientos === 'function'
+  // A-01: con filtros, la lista la trae el servidor (GET /cajas?business_date=&cashier_user_id=).
+  const filtrados = useTurnosFiltrados(localId, cajasList, { vendedorId: filtroVendedor, fecha: filtroFecha })
   const stateNode = <SectionState loading={loading} error={error} isEmpty={!dashboard && !loading && !error} emptyMessage="Sin datos de flujo. Completa órdenes desde el POS y registra gastos para ver gráficos." />
   if (loading || error || (!dashboard && !loading && !error)) return stateNode
 
-  const turnosFiltrados = filtrarTurnos(cajasList, { vendedorId: filtroVendedor, fecha: filtroFecha })
   const openCajasCount = cajasList.filter((c) => c.is_active).length
 
   return (
@@ -573,9 +434,22 @@ function FlujoCajaContent({ dashboard, cajas, cajasFisicas, usuarios, resumenDia
               <p className="text-[10px] font-semibold uppercase tracking-wide text-[hsl(var(--muted-foreground))]">Ingresos de hoy</p>
               <p className="mt-1 text-sm font-bold text-[hsl(var(--foreground))]">{formatMoney(Number(resumenDiario.total_ingresos))}</p>
             </div>
-            <div className="rounded-lg border border-[hsl(var(--primary)/0.3)] bg-[hsl(var(--primary)/0.08)] p-3">
+            <div className="rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--muted))] p-3">
               <p className="text-[10px] font-semibold uppercase tracking-wide text-[hsl(var(--muted-foreground))]">Total esperado hoy</p>
               <p className="mt-1 text-sm font-bold text-[hsl(var(--foreground))]">{formatMoney(Number(resumenDiario.total_esperado))}</p>
+            </div>
+            {/* T-63: retiros, efectivo esperado y diferencias del día (B-18). */}
+            <div className="rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--muted))] p-3">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-[hsl(var(--muted-foreground))]">Egresos de hoy</p>
+              <p className="mt-1 text-sm font-bold text-[hsl(var(--foreground))]" data-testid="egresos-dia">{formatMoney(monto(resumenDiario.total_egresos) ?? 0)}</p>
+            </div>
+            <div className="rounded-lg border border-[hsl(var(--primary)/0.3)] bg-[hsl(var(--primary)/0.08)] p-3">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-[hsl(var(--muted-foreground))]">Efectivo esperado</p>
+              <p className="mt-1 text-sm font-bold text-[hsl(var(--foreground))]" data-testid="efectivo-esperado-dia">{monto(resumenDiario.efectivo_esperado) === null ? '—' : formatMoney(monto(resumenDiario.efectivo_esperado))}</p>
+            </div>
+            <div className={cn('rounded-lg border p-3', (monto(resumenDiario.diferencia_total) ?? 0) < 0 ? 'border-red-200 bg-red-50 dark:border-red-800/50 dark:bg-red-950/30' : 'border-[hsl(var(--border))] bg-[hsl(var(--muted))]')}>
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-[hsl(var(--muted-foreground))]">Diferencia del día</p>
+              <p className="mt-1 text-sm font-bold text-[hsl(var(--foreground))]" data-testid="diferencia-dia">{textoDiferencia(resumenDiario.diferencia_total) ?? 'Sin arqueo'}</p>
             </div>
           </div>
           {turnosDelDia === 0 ? (
@@ -586,7 +460,7 @@ function FlujoCajaContent({ dashboard, cajas, cajasFisicas, usuarios, resumenDia
                 Detalle por caja física
               </p>
               <AmTable
-                headers={['Caja física', 'Turnos', 'Apertura', 'Ingresos', 'Esperado']}
+                headers={['Caja física', 'Turnos', 'Apertura', 'Ingresos', 'Egresos', 'Efectivo esperado', 'Diferencia']}
                 rowKeys={porCajaFisica.map((cf) => cf.caja_fisica_id)}
                 rows={porCajaFisica.map((cf) => {
                   const turnos = safeArray(cf.cajas)
@@ -596,11 +470,39 @@ function FlujoCajaContent({ dashboard, cajas, cajasFisicas, usuarios, resumenDia
                     `${turnos.length}${abiertos ? ` · ${abiertos} abierto${abiertos !== 1 ? 's' : ''}` : ''}`,
                     formatMoney(Number(cf.monto_apertura_total)),
                     formatMoney(Number(cf.total_ingresos)),
-                    formatMoney(Number(cf.total_esperado)),
+                    formatMoney(monto(cf.total_egresos) ?? 0),
+                    monto(cf.efectivo_esperado) === null ? '—' : formatMoney(monto(cf.efectivo_esperado)),
+                    textoDiferencia(cf.diferencia_total) ?? 'Sin arqueo',
                   ]
                 })}
                 emptyMessage="Sin cajas físicas con movimiento hoy."
               />
+              <p className="mb-2 mt-4 text-[10px] font-semibold uppercase tracking-wide text-[hsl(var(--muted-foreground))]">
+                Detalle por turno
+              </p>
+              <ul aria-label="Turnos del día" className="flex flex-col gap-1.5">
+                {porCajaFisica.flatMap((cf) => safeArray(cf.cajas).map((t) => {
+                  const dif = monto(t.diferencia)
+                  const conDiferencia = dif !== null && dif !== 0
+                  return (
+                    <li key={t.caja_id} data-diferencia={conDiferencia ? 'si' : 'no'}
+                      className={cn('grid grid-cols-2 gap-x-3 gap-y-0.5 rounded-lg border px-3 py-2 text-xs sm:grid-cols-6',
+                        conDiferencia ? 'border-red-300 bg-red-50 dark:border-red-800/60 dark:bg-red-950/30' : 'border-[hsl(var(--border))]')}>
+                      <span className="font-semibold text-[hsl(var(--foreground))] sm:col-span-2">
+                        {cf.nombre || 'Caja física'} · {nombreDeVendedor(usuariosPorId, t.cashier_user_id)}
+                      </span>
+                      <span>{t.status === 'open' ? 'Abierto' : 'Cerrado'}</span>
+                      <span>Egresos {formatMoney(monto(t.total_egresos) ?? 0)}</span>
+                      <span>Esperado {monto(t.efectivo_esperado) === null ? '—' : formatMoney(monto(t.efectivo_esperado))}</span>
+                      <span className={conDiferencia && dif < 0 ? 'font-semibold text-red-600' : ''}>
+                        {t.status === 'open' ? 'Sin cerrar'
+                          : monto(t.monto_cierre_declarado) === null ? 'Sin arqueo'
+                            : `Contado ${formatMoney(monto(t.monto_cierre_declarado))} · ${textoDiferencia(t.diferencia)}`}
+                      </span>
+                    </li>
+                  )
+                }))}
+              </ul>
             </div>
           )}
         </Panel>
@@ -614,13 +516,20 @@ function FlujoCajaContent({ dashboard, cajas, cajasFisicas, usuarios, resumenDia
             fecha={filtroFecha}
             onFecha={setFiltroFecha}
           />
+          {filtrados.error && <p role="alert" className="text-xs text-red-600">{filtrados.error}</p>}
           <TablaTurnos
             key={`${filtroVendedor}|${filtroFecha}`}
-            turnos={turnosFiltrados}
+            turnos={filtrados.turnos}
             cajaFisicaDe={(c) => nombrePorCajaFisica.get(String(c.caja_fisica_id))}
             vendedorDe={(c) => nombreDeVendedor(usuariosPorId, c.cashier_user_id)}
-            onVer={showMovimientos ? (c) => onViewMovimientos({ ...c, vendedor: nombreDeVendedor(usuariosPorId, c.cashier_user_id) }) : undefined}
-            vacio={filtroVendedor || filtroFecha ? 'No hay turnos con esos filtros.' : 'Este local todavía no tiene turnos de caja.'}
+            onVer={showMovimientos ? (c) => onViewMovimientos({
+              ...c,
+              vendedor: nombreDeVendedor(usuariosPorId, c.cashier_user_id),
+              cerradoPor: c.closed_by_user_id ? nombreDeVendedor(usuariosPorId, c.closed_by_user_id) : null,
+              nombreDeUsuario: (id) => nombreDeVendedor(usuariosPorId, id),
+              usuarios: safeArray(usuarios),
+            }) : undefined}
+            vacio={filtrados.cargando ? 'Buscando turnos…' : filtroVendedor || filtroFecha ? 'No hay turnos con esos filtros.' : 'Este local todavía no tiene turnos de caja.'}
           />
         </div>
       </Panel>
@@ -647,6 +556,7 @@ function FlujoCajaContent({ dashboard, cajas, cajasFisicas, usuarios, resumenDia
               return [
                 <span className="inline-flex items-center gap-2" key={`nombre-${cf.id}`}>
                   {cf.name || 'Caja física sin nombre'}
+                  <Badge variant="outline">{cf.tipo === 'digital' ? 'Digital' : 'Física'}</Badge>
                   {!activa && <Badge variant="warning">Desactivada</Badge>}
                 </span>,
                 <div className="flex items-center gap-2" key={`mp-${cf.id}`}>
@@ -658,7 +568,7 @@ function FlujoCajaContent({ dashboard, cajas, cajasFisicas, usuarios, resumenDia
                 <div className="flex items-center gap-2" key={`acc-${cf.id}`}>
                   {onGestionarCajaFisica && (
                     <Button size="sm" variant="outline" onClick={() => onGestionarCajaFisica({ cajaFisica: cf })}>
-                      Renombrar
+                      Editar
                     </Button>
                   )}
                   {activa && (
@@ -1016,10 +926,16 @@ function AbrirTurnoModal({ localId, onClose, onSaved, onCrearCajaFisica }) {
  * Resumen de un turno para el encargado y el dueño: ventas, ingresos,
  * egresos, apertura y total esperado (DetalleTurno), y el cierre del arqueo.
  */
-function CajaMovimientosModal({ caja, onClose, onClosed }) {
-  const [err, setErr] = useState('')
+function CajaMovimientosModal({ caja, onClose, onClosed, puedeRegistrarMovimientos = false }) {
   const [visible, setVisible] = useState(false)
-  const [closing, setClosing] = useState(false)
+  // T-55: el cierre pide el efectivo contado (arqueo).
+  const [cerrandoTurno, setCerrandoTurno] = useState(false)
+  // T-56: retiros, gastos e ingresos de caja; al registrar se recarga el resumen.
+  const [registrando, setRegistrando] = useState(false)
+  const [version, setVersion] = useState(0)
+  const [aviso, setAviso] = useState('')
+  // T-43: historial del turno, bajo pedido.
+  const [verHistorial, setVerHistorial] = useState(false)
   const isOpen = caja.status === 'open' || caja.is_active
 
   useEffect(() => { requestAnimationFrame(() => setVisible(true)) }, [])
@@ -1029,19 +945,6 @@ function CajaMovimientosModal({ caja, onClose, onClosed }) {
     setTimeout(onClose, 300)
   }
 
-  const handleCloseCaja = async () => {
-    if (!window.confirm('¿Cerrar este turno? Es el cierre del arqueo del día — no se puede reabrir después.')) return
-    setClosing(true); setErr('')
-    try {
-      await closeCaja(caja.id)
-      onClosed?.()
-      handleClose()
-    } catch (e) {
-      // Con órdenes en curso el backend responde 409: se explica qué hacer.
-      setErr(mensajeCierreTurno(e))
-      setClosing(false)
-    }
-  }
 
   return (
     <div className="fixed inset-0 z-50">
@@ -1070,27 +973,56 @@ function CajaMovimientosModal({ caja, onClose, onClosed }) {
 
         {/* Body */}
         <div className="p-6 flex flex-col gap-5 flex-1">
-          {err && (
-            <div className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 dark:border-red-800/50 dark:bg-red-950/30 px-3 py-2">
-              <span className="h-1.5 w-1.5 rounded-full bg-red-500 shrink-0" />
-              <p className="text-xs text-red-600 dark:text-red-400">{err}</p>
-            </div>
+          {aviso && <p role="status" className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800">{aviso}</p>}
+          {isOpen && puedeRegistrarMovimientos && (
+            registrando ? (
+              <RegistrarMovimientoCaja
+                cajaId={caja.id}
+                onCancelar={() => setRegistrando(false)}
+                onRegistrado={({ tipo, monto }) => {
+                  setRegistrando(false)
+                  setAviso(`${tipo === 'egreso' ? 'Retiro o gasto' : 'Ingreso'} de ${formatMoney(monto)} registrado.`)
+                  setVersion((v) => v + 1)
+                }}
+              />
+            ) : (
+              <Button size="sm" variant="outline" className="self-start" onClick={() => { setRegistrando(true); setAviso('') }}>
+                Registrar movimiento
+              </Button>
+            )
           )}
-          <DetalleTurno caja={caja} conArqueo />
+          {isOpen && puedeRegistrarMovimientos && (
+            <SupervisionTurno turno={caja} usuarios={caja.usuarios} onHecho={() => { setVersion((v) => v + 1); onClosed?.() }} />
+          )}
+          <DetalleTurno key={version} caja={caja} conArqueo cerradoPor={caja.cerradoPor} nombreDeUsuario={caja.nombreDeUsuario} />
+          <div className="flex flex-col gap-2">
+            <Button size="sm" variant="outline" className="self-start" onClick={() => setVerHistorial((v) => !v)} aria-expanded={verHistorial}>
+              {verHistorial ? 'Ocultar historial' : 'Historial'}
+            </Button>
+            {verHistorial && <HistorialTurno key={version} cajaId={caja.id} />}
+          </div>
         </div>
 
         {/* Footer */}
         {isOpen && (
           <div className="px-6 py-4 border-t border-[hsl(var(--border))] shrink-0">
-            <button
-              type="button"
-              onClick={handleCloseCaja}
-              disabled={closing}
-              className="flex w-full items-center justify-center gap-2 rounded-lg border border-red-200 dark:border-red-800/50 px-4 py-2 text-sm font-semibold text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors disabled:opacity-50"
-            >
-              <Lock size={14} />
-              {closing ? 'Cerrando…' : 'Cerrar turno (arqueo del día)'}
-            </button>
+            {cerrandoTurno ? (
+              <CerrarTurno
+                cajaId={caja.id}
+                localId={caja.local_id}
+                onCancelar={() => setCerrandoTurno(false)}
+                onCerrado={() => { onClosed?.(); handleClose() }}
+              />
+            ) : (
+              <button
+                type="button"
+                onClick={() => setCerrandoTurno(true)}
+                className="flex w-full items-center justify-center gap-2 rounded-lg border border-red-200 dark:border-red-800/50 px-4 py-2 text-sm font-semibold text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors disabled:opacity-50"
+              >
+                <Lock size={14} />
+                Cerrar turno (arqueo del día)
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -1101,14 +1033,16 @@ function CajaMovimientosModal({ caja, onClose, onClosed }) {
 function renderSectionContent(activeSection, payload) {
   switch (activeSection) {
     case 'flujo-caja':
-      return <FlujoCajaContent dashboard={payload.dashboard} cajas={payload.cajas} cajasFisicas={payload.cajasFisicas} usuarios={payload.usuarios} resumenDiario={payload.resumenDiario} loading={payload.loading} error={payload.error} onManagePairing={payload.onManagePairing} onViewMovimientos={payload.onViewMovimientos} onGestionarCajaFisica={payload.onGestionarCajaFisica} />
+      return <FlujoCajaContent localId={payload.localId} dashboard={payload.dashboard} cajas={payload.cajas} cajasFisicas={payload.cajasFisicas} usuarios={payload.usuarios} resumenDiario={payload.resumenDiario} loading={payload.loading} error={payload.error} onManagePairing={payload.onManagePairing} onViewMovimientos={payload.onViewMovimientos} onGestionarCajaFisica={payload.onGestionarCajaFisica} />
     case 'fondo-emergencia':
       return <FondoEmergencia localId={payload.localId} />
+    case 'no-cobradas':
+      return <NoCobradas localId={payload.localId} />
     case 'configuracion':
       return <ConfiguracionContent localId={payload.localId} />
     case 'ventas':
     default:
-      return <VentasContent indicadores={payload.indicadores} orders={payload.orders} loading={payload.loading} error={payload.error} onCargarDetalle={payload.onCargarDetalle} detalleLoading={payload.detalleLoading} onVerBoleta={payload.onVerBoleta} />
+      return <VentasContent indicadores={payload.indicadores} orders={payload.orders} ordersTotal={payload.ordersTotal} ordersOffset={payload.ordersOffset} ordersLimit={payload.ordersLimit} loading={payload.loading} error={payload.error} onCargarDetalle={payload.onCargarDetalle} detalleLoading={payload.detalleLoading} onVerBoleta={payload.onVerBoleta} />
   }
 }
 
@@ -1117,24 +1051,27 @@ function renderSectionContent(activeSection, payload) {
 function AdministrativeModule() {
   const location = useLocation()
   const { localId, sectionId } = useParams()
-  const { userRole } = useAuth()
+  const { userRole, user } = useAuth()
+  const puedeAbrirTurno = puedeVender(userRole, user?.local_sales_model)
   const puedeGestionarCajasFisicas = ROLES_CAJAS_FISICAS.has(normalizeRoleKey(userRole))
-  const [sectionData, setSectionData] = useState({ dashboard: null, orders: null, cajas: [], indicadores: null })
+  const [sectionData, setSectionData] = useState({ dashboard: null, orders: null, ordersTotal: null, ordersOffset: 0, ordersLimit: DETALLE_ORDENES_POR_PAGINA, cajas: [], indicadores: null })
   const [detalleLoading, setDetalleLoading] = useState(false)
   const [cajaFisicaModal, setCajaFisicaModal] = useState(null)
   const [boletaOrden, setBoletaOrden] = useState(null)
 
-  /**
-   * Descarga el detalle orden por orden. Solo bajo pedido: `/orders` no admite
-   * filtro de fecha ni paginación, así que trae el histórico completo del local
-   * y no debe pagarse al entrar a la pantalla.
-   */
-  const cargarDetalleOrdenes = async () => {
+  /** Carga una página del detalle y conserva el total que informa X-Total-Count. */
+  const cargarDetalleOrdenes = async (offset = 0) => {
     setDetalleLoading(true)
     try {
       const { token } = await getAuthContext()
-      const rows = await getOrdersByLocal(localId, token)
-      setSectionData((prev) => ({ ...prev, orders: rows }))
+      const page = await getOrdersByLocal(localId, token, { limit: DETALLE_ORDENES_POR_PAGINA, offset })
+      setSectionData((prev) => ({
+        ...prev,
+        orders: page.orders,
+        ordersTotal: page.total,
+        ordersOffset: page.offset,
+        ordersLimit: page.limit,
+      }))
     } catch (error) {
       setSectionError(error.message || 'No se pudo cargar el detalle de órdenes')
     } finally {
@@ -1151,7 +1088,8 @@ function AdministrativeModule() {
 
 
   // Sin sección o con una que ya no existe (rendiciones, reportes, alertas, bonos, dashboard) → Ventas.
-  const sections = getSections()
+  const localActual = useSelectedLocal(localId, 'state-then-locales')
+  const sections = getSections(isAlPasoLocal(localActual))
   const isKnownSection = sections.some((s) => s.id === sectionId)
   const activeSection = isKnownSection ? sectionId : 'ventas'
   const activeSectionMeta = sections.find((s) => s.id === activeSection) || sections[0]
@@ -1257,6 +1195,7 @@ function AdministrativeModule() {
           caja={movimientosCaja}
           onClose={() => setMovimientosCaja(null)}
           onClosed={() => setRefreshKey(k => k + 1)}
+          puedeRegistrarMovimientos={puedeGestionarCajasFisicas}
         />
       )}
       <AnimatePresence>
@@ -1309,6 +1248,7 @@ function AdministrativeModule() {
             <SectionActions
               activeSection={activeSection}
               onNuevaCaja={() => setShowNuevaCaja(true)}
+              puedeAbrirTurno={puedeAbrirTurno}
             />
             <button
               onClick={() => setGuideOpen(true)}

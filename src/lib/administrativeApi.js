@@ -1,6 +1,7 @@
 import {
   listCajas,
-  listOrders,
+  listOrdersPage,
+  toV2OrderStatus,
   createCajaV2,
   getCajaResumen,
   getMovimientosCaja,
@@ -9,22 +10,9 @@ import {
 } from './salesApi'
 import { apiRequest } from './apiClient'
 import { getProductsReport, getSalesReport } from './reportsApi'
-import { isV2FeatureEnabled } from './v2Features'
+import { CHILE_TZ } from '../utils/chileDateTime'
 
 const safeList = (v) => (Array.isArray(v) ? v : [])
-
-function withQuery(path, params) {
-  const query = new URLSearchParams()
-
-  Object.entries(params).forEach(([key, value]) => {
-    if (value !== undefined && value !== null && value !== '') {
-      query.set(key, String(value))
-    }
-  })
-
-  const queryString = query.toString()
-  return queryString ? `${path}?${queryString}` : path
-}
 
 function orderAmount(order) {
   const n = Number(order?.total_amount ?? order?.total ?? order?.amount ?? order?.subtotal ?? 0)
@@ -118,16 +106,117 @@ export function buildDashboardFromOrders(orders = [], { localCount = 1 } = {}) {
 
 export async function getLocalDashboard(localId, token) {
   void token
-  if (!isV2FeatureEnabled('adminDashboard')) {
-    const orders = await listOrders(localId)
-    return buildDashboardFromOrders(orders, { localCount: 1 })
+  // Calculado desde /reports (T-39: /dashboard/local no existe en V2).
+  const endDate = todayInChileIso()
+  const startDate = `${endDate.slice(0, 7)}-01`
+  const report = await getSalesReport(localId, { startDate, endDate })
+  const byDay = safeList(report?.by_day)
+  const dailySales = nullableNumber(byDay.find((row) => row.date === endDate)?.total_sales) ?? 0
+  const monthlySales = nullableNumber(report?.total_sales) ?? 0
+  return {
+    daily_sales: dailySales,
+    monthly_sales: monthlySales,
+    monthly_cash_flow: monthlySales,
+    monthly_expenses: 0,
+    active_alerts: 0,
+    avg_ticket: nullableNumber(report?.avg_ticket) ?? 0,
+    stock_critical_count: 0,
+    stock_low_count: 0,
+    stock_out_count: 0,
+    inventory_total_value: 0,
+    active_cajas_count: 0,
+    cajas_count: 0,
+    peak_hour: null,
+    local_count: 1,
+    top_products: [],
+    payment_breakdown: safeList(report?.by_payment_method),
+    week_comparison: null,
+    monthly_goal: { target_amount: 0, current_amount: monthlySales, progress_pct: 0 },
+    petty_cash: { active_cajas: 0, total_cajas: 0, pending_expenses_amount: 0 },
+    daily_income_trend: byDay.map((row) => ({ date: row.date, ingresos: nullableNumber(row.total_sales) ?? 0 })),
+    expenses_breakdown: [],
+    _source: 'reports_v2',
   }
-  return apiRequest(`/dashboard/local/${localId}`, { token })
 }
 
-export function getOrdersByLocal(localId, token, status) {
+function todayInChileIso(now = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: CHILE_TZ,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(now)
+  const values = Object.fromEntries(parts.map(({ type, value }) => [type, value]))
+  return `${values.year}-${values.month}-${values.day}`
+}
+
+function shiftIsoDate(isoDate, amount) {
+  const date = new Date(`${isoDate}T00:00:00Z`)
+  date.setUTCDate(date.getUTCDate() + amount)
+  return date.toISOString().slice(0, 10)
+}
+
+function nullableNumber(value) {
+  if (value === null || value === undefined || value === '') return null
+  const number = Number(value)
+  return Number.isFinite(number) ? number : null
+}
+
+function reportDateLabel(isoDate) {
+  const [, month, day] = String(isoDate || '').slice(0, 10).split('-')
+  return month && day ? `${day}/${month}` : '—'
+}
+
+/** Normaliza el reporte de ventas V2 para el dashboard local (T-31). */
+export function mapDashboardSalesReport(report) {
+  const byDay = safeList(report?.by_day).map((row) => ({
+    date: reportDateLabel(row.date),
+    ingresos: nullableNumber(row.total_sales) ?? 0,
+    ordenes: nullableNumber(row.total_orders) ?? 0,
+  }))
+  const currentSales = nullableNumber(report?.total_sales)
+  const previousSales = nullableNumber(report?.previous_period?.total_sales)
+  const changePct = previousSales > 0 && currentSales !== null
+    ? ((currentSales - previousSales) / previousSales) * 100
+    : null
+
+  return {
+    total_sales: currentSales,
+    total_orders: nullableNumber(report?.total_orders),
+    daily_sales: byDay.length ? byDay[byDay.length - 1].ingresos : null,
+    avg_ticket: nullableNumber(report?.avg_ticket),
+    cancelled_orders: nullableNumber(report?.cancelled_orders),
+    by_day: byDay,
+    payment_breakdown: safeList(report?.by_payment_method).map((row) => ({
+      method: String(row.method || ''),
+      total: nullableNumber(row.total) ?? 0,
+      count: nullableNumber(row.count) ?? 0,
+    })),
+    week_comparison: currentSales !== null && previousSales !== null
+      ? {
+          current_week_sales: currentSales,
+          prev_week_sales: previousSales,
+          change_pct: changePct,
+        }
+      : null,
+  }
+}
+
+/** Una llamada agregada para los indicadores de los últimos siete días (T-31). */
+export async function getDashboardSalesReport(localId, now = new Date()) {
+  const endDate = todayInChileIso(now)
+  const startDate = shiftIsoDate(endDate, -6)
+  const report = await getSalesReport(localId, { startDate, endDate })
+  return mapDashboardSalesReport(report)
+}
+
+export function getOrdersByLocal(localId, token, filters = {}) {
   void token
-  return listOrders(localId, { status })
+  const requested = filters.status ?? ['open', 'preparing', 'ready', 'completed']
+  const status = Array.isArray(requested)
+    ? requested.map(toV2OrderStatus)
+    : toV2OrderStatus(requested)
+  return listOrdersPage(localId, { ...filters, status, limit: filters.limit ?? 50 })
 }
 
 export async function getCajasByLocal(localId, token) {
@@ -257,20 +346,29 @@ export function createCaja(body) {
 
 export { getCajaResumen, getMovimientosCaja, closeCaja, getResumenDiario }
 
+/**
+ * Tipo de caja (A-02, R6): `fisica` (por defecto) o `digital`. Es solo un
+ * dato: las dos abren turno con cualquier monto, también 0.
+ */
+export const TIPOS_CAJA_FISICA = { fisica: 'Física', digital: 'Digital' }
+
 /** Alta de caja física. El backend responde 409 si el nombre ya existe en el local. */
-export async function crearCajaFisica(localId, nombre) {
+export async function crearCajaFisica(localId, nombre, tipo = 'fisica') {
   const row = await apiRequest('/cajas-fisicas', {
     method: 'POST',
-    body: { local_id: localId, nombre: String(nombre || '').trim() },
+    body: { local_id: localId, nombre: String(nombre || '').trim(), tipo: tipo === 'digital' ? 'digital' : 'fisica' },
   })
   return { ...row, name: row?.nombre ?? null }
 }
 
-/** Renombra una caja física. Misma regla de nombre único por local. */
-export async function renombrarCajaFisica(cajaFisicaId, nombre) {
+/**
+ * Renombra una caja física y, si viene, cambia su tipo. Misma regla de nombre
+ * único por local. Cambiar el tipo no toca los turnos abiertos.
+ */
+export async function renombrarCajaFisica(cajaFisicaId, nombre, tipo) {
   const row = await apiRequest(`/cajas-fisicas/${encodeURIComponent(String(cajaFisicaId))}`, {
     method: 'PATCH',
-    body: { nombre: String(nombre || '').trim() },
+    body: { nombre: String(nombre || '').trim(), ...(tipo ? { tipo } : {}) },
   })
   return { ...row, name: row?.nombre ?? null }
 }
@@ -319,12 +417,4 @@ export function assignExistingMpPos(cajaFisicaId, mercadopagoPosId) {
     method: 'POST',
     body: { mercadopago_pos_id: mercadopagoPosId },
   })
-}
-
-export async function getIncomeTrend(localId, token, days = 7) {
-  void token
-  void days
-  if (!isV2FeatureEnabled('adminDashboard')) return []
-  const path = withQuery(`/dashboard/local/${localId}/trend`, { days })
-  return apiRequest(path, { token })
 }

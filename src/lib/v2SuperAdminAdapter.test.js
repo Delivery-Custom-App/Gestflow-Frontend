@@ -27,9 +27,9 @@ const locals = [
   { id: 'l2', business_id: 'b2' },
 ]
 const orders = [
-  { id: 'o1', local_id: 'l1', status: 'paid', total: 1000, created_at: '2026-09-01T00:00:00Z' },
-  { id: 'o2', local_id: 'l1', status: 'cancelled', total: 5000, created_at: '2026-09-01T00:00:00Z' },
-  { id: 'o3', local_id: 'l2', status: 'paid', total: 300, created_at: '2026-01-01T00:00:00Z' },
+  { id: 'o1', local_id: 'l1', status: 'completed', total: 1000, created_at: '2026-09-01T12:00:00Z' },
+  { id: 'o2', local_id: 'l1', status: 'cancelled', total: 5000, created_at: '2026-09-01T12:00:00Z' },
+  { id: 'o3', local_id: 'l2', status: 'completed', total: 300, created_at: '2026-01-01T12:00:00Z' },
 ]
 
 function mockPlatform() {
@@ -37,7 +37,27 @@ function mockPlatform() {
     if (path === '/businesses') return Promise.resolve(businesses)
     if (path === '/users') return Promise.resolve(users)
     if (path === '/locals') return Promise.resolve(locals)
-    if (path === '/orders') return Promise.resolve(orders)
+    if (path.startsWith('/orders?')) {
+      const query = new URLSearchParams(path.split('?')[1])
+      const statuses = query.getAll('status')
+      const matches = orders.filter((order) => {
+        if (String(order.local_id) !== query.get('local_id')) return false
+        if (statuses.length && !statuses.includes(order.status)) return false
+        const created = new Date(order.created_at)
+        if (query.has('date_from') && created < new Date(query.get('date_from'))) return false
+        if (query.has('date_to') && created >= new Date(query.get('date_to'))) return false
+        return true
+      })
+      return Promise.resolve({ data: matches.slice(0, Number(query.get('limit'))), total: matches.length })
+    }
+    if (path.startsWith('/reports/sales?')) {
+      const query = new URLSearchParams(path.split('?')[1])
+      const matches = orders.filter((order) => order.local_id === query.get('local_id')
+        && order.status === 'completed'
+        && order.created_at.slice(0, 10) >= query.get('start_date')
+        && order.created_at.slice(0, 10) <= query.get('end_date'))
+      return Promise.resolve({ total_sales: matches.reduce((sum, order) => sum + order.total, 0), total_orders: matches.length })
+    }
     if (path.startsWith('/audit')) return Promise.resolve([])
     return Promise.resolve(null)
   })
@@ -101,7 +121,7 @@ describe('v2ListAllUsers', () => {
 })
 
 describe('v2GetGlobalStats', () => {
-  it('excluye órdenes canceladas y separa por mes/negocio', async () => {
+  it('usa conteos y reportes del servidor, sin descargar órdenes', async () => {
     mockPlatform()
     const stats = await v2GetGlobalStats()
     expect(stats.totals.orders).toBe(2) // o1, o3 (o2 cancelada)
@@ -113,6 +133,8 @@ describe('v2GetGlobalStats', () => {
     expect(tenantB1.plan).toBe('pro')
     const tenantB2 = stats.tenants.find((t) => t.id === 'b2')
     expect(tenantB2.plan).toBe('starter') // default cuando plan es null
+    expect(apiRequest).not.toHaveBeenCalledWith('/orders', expect.anything())
+    expect(apiRequest.mock.calls.filter(([path]) => String(path).startsWith('/orders?')).every(([, options]) => options.withTotal === true)).toBe(true)
   })
 })
 
@@ -128,6 +150,8 @@ describe('v2GetBusinessStats', () => {
     expect(res.business.id).toBe('b1')
     expect(res.stats.users).toBe(2)
     expect(res.stats.admins).toBe(1)
+    expect(res.stats.orders).toBe(1)
+    expect(res.stats.revenue).toBe(1000)
     expect(res.admins[0].name).toBe('Ana Perez')
     expect(res.audit).toEqual([])
   })

@@ -1,14 +1,16 @@
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useParams } from 'react-router'
-import { Printer } from 'lucide-react'
+import { CreditCard } from 'lucide-react'
+import { useAuth } from '../../context/AuthContext'
 import { cancelOrder, createOrder, fetchProductsCatalog } from '../../lib/salesApi'
 import { formatCLP } from '../../lib/formatCLP'
+import { obtenerClaveIdempotencia } from '../../lib/idempotency'
 import { useCajaActiva } from '../../hooks/useCajaActiva'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import MercadoPagoModal from './MercadoPagoModal'
 import TicketModal from './TicketModal'
-import PrinterConfigModal from './PrinterConfigModal'
+import MPConfigDrawer from './MPConfigDrawer'
 import { isV2FeatureEnabled } from '../../lib/v2Features'
 
 /**
@@ -55,6 +57,7 @@ function ProductCard({ product, qty, onAdd, onRemove }) {
 
 export default function VentaDirectaView() {
   const { localId } = useParams()
+  const { isWorker } = useAuth()
   const { cajaId } = useCajaActiva(localId)
 
   const [products, setProducts] = useState([])
@@ -65,7 +68,8 @@ export default function VentaDirectaView() {
   const [activeOrder, setActiveOrder] = useState(null) // { id, total }
   const [showMPModal, setShowMPModal] = useState(false)
   const [successMsg, setSuccessMsg] = useState('')
-  const [showPrinterConfig, setShowPrinterConfig] = useState(false)
+  const [showMPConfig, setShowMPConfig] = useState(false)
+  const idempotencyKeyRef = useRef(null)
 
   const loadCatalog = useCallback(() => {
     if (!localId) return
@@ -110,13 +114,16 @@ export default function VentaDirectaView() {
         const p = products.find((prod) => prod.id === id)
         return { product_id: id, quantity, unit_price: p?.price || 0 }
       })
+      const idempotencyKey = obtenerClaveIdempotencia(idempotencyKeyRef)
       const order = await createOrder({
         local_id: localId,
         mesa_id: null,
         caja_id: cajaId || null,
         source: 'mostrador',
         items,
+        idempotency_key: idempotencyKey,
       })
+      idempotencyKeyRef.current = null
       setActiveOrder({ id: order.id, total: order.total ?? subtotal, created_at: order.created_at })
       setShowMPModal(true)
     } catch (err) {
@@ -167,27 +174,15 @@ export default function VentaDirectaView() {
           <p className="text-sm text-[hsl(var(--muted-foreground))]">Selecciona productos y cobra sin pasar por mesa.</p>
         </div>
 
-        {isV2FeatureEnabled('printers') && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          {isV2FeatureEnabled('printers') && (
+        {!isWorker && isV2FeatureEnabled('mpConfig') && (
           <button
-            onClick={() => setShowPrinterConfig(true)}
-            className="min-h-[86px] rounded-2xl border border-[hsl(var(--border))] border-l-4 border-l-amber-700 bg-[hsl(var(--card))] px-4 py-3 text-left text-[hsl(var(--foreground))] shadow-sm ring-1 ring-black/5 transition hover:bg-[hsl(var(--muted)/0.45)] active:scale-[0.99] focus:outline-none focus:ring-2 focus:ring-amber-500/60"
+            type="button"
+            onClick={() => setShowMPConfig(true)}
+            className="inline-flex h-10 items-center gap-2 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3 text-sm font-medium text-[hsl(var(--foreground))] hover:bg-[hsl(var(--muted))]"
           >
-            <span className="flex items-center gap-3">
-              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-amber-700 text-white shadow-sm">
-                <Printer size={23} />
-              </span>
-              <span className="min-w-0">
-                <span className="block text-sm font-black uppercase tracking-wide">Impresora</span>
-                <span className="mt-1 block text-xs font-semibold leading-snug text-[hsl(var(--muted-foreground))]">
-                  Registrar ticketera, IP y prueba de conexión.
-                </span>
-              </span>
-            </span>
+            <CreditCard size={16} />
+            Configurar POS
           </button>
-          )}
-        </div>
         )}
 
         {error && (
@@ -239,6 +234,7 @@ export default function VentaDirectaView() {
         <MercadoPagoModal
           open={showMPModal}
           orderId={activeOrder.id}
+          createdAt={activeOrder.created_at}
           total={activeOrder.total}
           description="Venta directa"
           onSuccess={handlePaymentSuccess}
@@ -246,12 +242,12 @@ export default function VentaDirectaView() {
         />
       )}
 
-      {isV2FeatureEnabled('printers') && (
-      <PrinterConfigModal
-        open={showPrinterConfig}
-        localId={localId}
-        onClose={() => setShowPrinterConfig(false)}
-      />
+      {!isWorker && isV2FeatureEnabled('mpConfig') && (
+        <MPConfigDrawer
+          open={showMPConfig}
+          localId={localId}
+          onClose={() => setShowMPConfig(false)}
+        />
       )}
 
       {boletaOrderId && (

@@ -91,14 +91,20 @@ export default function TicketModal({ tipo = 'comanda', orderId, createdAt, onCl
               {esBoleta && (
                 <>
                   <div className="my-3 border-t border-dashed border-[hsl(var(--border))]" />
-                  <div className="flex justify-between text-sm font-bold">
-                    <span>TOTAL</span><span>{formatMoney(ticket.total)}</span>
+                  <div className="flex justify-between">
+                    <span>Consumo</span><span>{formatMoney(ticket.total)}</span>
                   </div>
                   <div className="flex justify-between opacity-70">
                     <span>Neto</span><span>{formatMoney(ticket.net_amount)}</span>
                   </div>
                   <div className="flex justify-between opacity-70">
                     <span>IVA incluido (19%)</span><span>{formatMoney(ticket.iva_amount)}</span>
+                  </div>
+                  <div className="flex justify-between opacity-70">
+                    <span>Propina</span><span>{formatMoney(ticket.tip_amount ?? 0)}</span>
+                  </div>
+                  <div className="mt-1 flex justify-between text-sm font-bold">
+                    <span>TOTAL</span><span>{formatMoney(Number(ticket.total_with_tip) || (Number(ticket.total || 0) + Number(ticket.tip_amount || 0)))}</span>
                   </div>
                   {ticket.payment_method && (
                     <p className="mt-2 text-center opacity-70">Pagado con {metodoPagoLegible(ticket.payment_method)}</p>

@@ -2,17 +2,16 @@
  * Registro de turnos por vendedor: "Mis turnos" del vendedor y la tabla de
  * turnos del encargado y del dueño (Caja y turnos).
  *
- * `GET /cajas?local_id=` no filtra por persona ni por fecha: el filtro se hace
- * aquí. Al vendedor el backend ya le entrega solo sus turnos (RLS); igual se
- * filtra por `cashier_user_id` para no depender de eso.
- *
- * La máquina usada en cada turno no se muestra: el turno no la guarda (B-03).
+ * `GET /cajas` filtra en el servidor por fecha, estado y cajero (A-01) y cada
+ * turno trae su `total_ingresos`: la tabla ya no pide un resumen por fila. Al
+ * vendedor el backend le entrega solo sus turnos (RLS); igual se filtra por
+ * `cashier_user_id` para no depender de eso.
  */
 import { useEffect, useState } from 'react'
-import { getCajaResumen, getMovimientosCaja } from './salesApi'
+import { getMovimientosCaja, listCajas } from './salesApi'
 import { nombreVisible } from './altaUsuario'
 
-/** Turnos que se muestran por página: cada uno pide su total vendido al backend. */
+/** Turnos que se muestran por página. */
 export const TURNOS_POR_PAGINA = 20
 
 /** Los turnos de una persona. */
@@ -84,24 +83,37 @@ export async function movimientosDelTurno(cajaId) {
 }
 
 /**
- * Total vendido de cada turno de la lista (`total_ingresos` de su resumen).
- * Devuelve un Map id → número; `false` si no se pudo consultar, y sin entrada
- * mientras carga.
+ * Total vendido de un turno: `total_ingresos` que trae la fila de `GET /cajas`
+ * (A-01). null si el backend no lo mandó: la tabla muestra «—», no un $0.
  */
-export function useTotalesVendidos(turnos) {
-  const [totales, setTotales] = useState(() => new Map())
-  const clave = (Array.isArray(turnos) ? turnos : []).map((t) => t.id).join(',')
+export function totalVendidoDe(turno) {
+  const v = turno?.total_ingresos
+  if (v === null || v === undefined || v === '') return null
+  const n = Number(v)
+  return Number.isFinite(n) ? n : null
+}
+
+/**
+ * Turnos del local con los filtros resueltos en el servidor (A-01). Sin
+ * filtros devuelve `base` (la lista ya cargada); con filtros pide
+ * `GET /cajas?business_date=&cashier_user_id=`.
+ * Devuelve { turnos, cargando, error }.
+ */
+export function useTurnosFiltrados(localId, base, { vendedorId = '', fecha = '' } = {}) {
+  const hayFiltro = Boolean(vendedorId || fecha)
+  const [estado, setEstado] = useState({ clave: '', turnos: [], error: '' })
+  const clave = `${localId}|${vendedorId}|${fecha}`
 
   useEffect(() => {
+    if (!hayFiltro || !localId) return undefined
     let ignore = false
-    const ids = clave ? clave.split(',') : []
-    for (const id of ids) {
-      getCajaResumen(id)
-        .then((r) => { if (!ignore) setTotales((prev) => new Map(prev).set(id, Number(r?.total_ingresos) || 0)) })
-        .catch(() => { if (!ignore) setTotales((prev) => new Map(prev).set(id, false)) })
-    }
+    listCajas(localId, { businessDate: fecha || undefined, cashierUserId: vendedorId || undefined })
+      .then((turnos) => { if (!ignore) setEstado({ clave, turnos, error: '' }) })
+      .catch((e) => { if (!ignore) setEstado({ clave, turnos: [], error: e?.message || 'No se pudieron cargar los turnos' }) })
     return () => { ignore = true }
-  }, [clave])
+  }, [hayFiltro, localId, vendedorId, fecha, clave])
 
-  return totales
+  if (!hayFiltro) return { turnos: Array.isArray(base) ? base : [], cargando: false, error: '' }
+  if (estado.clave !== clave) return { turnos: [], cargando: true, error: '' }
+  return { turnos: estado.turnos, cargando: false, error: estado.error }
 }

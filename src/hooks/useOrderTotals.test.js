@@ -29,6 +29,15 @@ describe('useOrderTotals', () => {
     expect(result.current.iva).toBe(399)
   })
 
+  it('usa el total devuelto por X-Order-Total tras una baja inmediata', () => {
+    const detail = { active_orders: [
+      { id: 'o1', total_override: 1200, items: [{ id: 'i1', total_price: 5000 }] },
+      { id: 'o2', items: [{ id: 'i2', total_price: 800 }] },
+    ] }
+    const { result } = renderHook(() => useOrderTotals(detail))
+    expect(result.current.total).toBe(2000)
+  })
+
   it('subtotal + iva === total con redondeos', () => {
     const detail = { active_orders: [{ id: 'o1', items: [{ id: 'i1', total_price: 1000 }] }] }
     const { result } = renderHook(() => useOrderTotals(detail))

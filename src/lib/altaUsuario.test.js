@@ -3,7 +3,7 @@
  * envía. El RUT depende de la bandera `userRut` (el backend aún no lo guarda).
  */
 import { describe, it, expect, afterEach } from 'vitest'
-import {
+import { localFijoDelAlta,
   ROL_LABEL, datosDeAlta, nombreVisible, pideRut, puedeCrearUsuarios, rolConLocal, rolesAsignables, validarAlta,
 } from './altaUsuario'
 import { V2_FEATURES } from './v2Features'
@@ -26,11 +26,18 @@ describe('quién crea usuarios y con qué roles', () => {
     expect(rolesAsignables('Superadmin')).toEqual(['SUPERADMIN', 'ADMIN_NEGOCIO', 'ADMIN', 'EMPLEADO'])
   })
 
-  it('el encargado y el vendedor no crean usuarios: el backend les responde 403', () => {
-    for (const rol of ['Admin', 'Empleado', 'Cajero']) {
+  it('el vendedor no crea usuarios: el backend le responde 403', () => {
+    for (const rol of ['Empleado', 'Cajero']) {
       expect(puedeCrearUsuarios(rol)).toBe(false)
       expect(rolesAsignables(rol)).toEqual([])
     }
+  })
+
+  it('T-47: el encargado crea solo vendedores, y en su propio local', () => {
+    expect(puedeCrearUsuarios('Admin')).toBe(true)
+    expect(rolesAsignables('Admin')).toEqual(['EMPLEADO'])
+    expect(localFijoDelAlta('Admin', 'loc-1')).toBe('loc-1')
+    expect(localFijoDelAlta('Admin Negocio', 'loc-1')).toBe('')
   })
 
   it('solo se nombran roles que el backend guarda: no existe "Cajero"', () => {

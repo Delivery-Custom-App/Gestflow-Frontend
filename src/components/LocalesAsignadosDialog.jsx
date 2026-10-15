@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Store, Trash2, Plus } from 'lucide-react'
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogDescription, DialogBody, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import {
@@ -83,6 +83,7 @@ export default function LocalesAsignadosDialog({ usuario, locales = [], onClose 
             {nombrePersona} puede trabajar en estos locales con la misma cuenta y cambiar de uno a otro.
           </DialogDescription>
         </DialogHeader>
+        <DialogBody>
 
         {error && (
           <p role="alert" className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600 dark:border-red-800/50 dark:bg-red-950/30 dark:text-red-400">
@@ -152,6 +153,7 @@ export default function LocalesAsignadosDialog({ usuario, locales = [], onClose 
         <div className="flex justify-end pt-1">
           <Button variant="outline" onClick={onClose} disabled={ocupado}>Cerrar</Button>
         </div>
+      </DialogBody>
       </DialogContent>
     </Dialog>
   )

@@ -25,9 +25,40 @@ export function useMesaDetail(mesaId) {
     }
   }, [mesaId])
 
+  const updateAfterItemRemoval = useCallback((orderId, itemId, orderTotal) => {
+    const parsedTotal = Number(orderTotal)
+    if (!Number.isFinite(parsedTotal)) return
+    setDetail((current) => {
+      if (!current) return current
+      let removedItem = null
+      const activeOrders = (current.active_orders || []).map((order) => {
+        if (String(order.id) !== String(orderId)) return order
+        removedItem = (order.items || []).find((item) => String(item.id) === String(itemId)) || null
+        const subtotal = Math.round(parsedTotal / 1.19)
+        return {
+          ...order,
+          items: (order.items || []).filter((item) => String(item.id) !== String(itemId)),
+          total_override: parsedTotal,
+          total: parsedTotal,
+          subtotal,
+          iva: parsedTotal - subtotal,
+        }
+      })
+      if (!removedItem) return current
+      const removedQuantity = Number(removedItem.quantity) || 0
+      const removedValue = Number(removedItem.subtotal ?? (removedQuantity * Number(removedItem.unit_price))) || 0
+      return {
+        ...current,
+        active_orders: activeOrders,
+        total_products: Math.max(0, (Number(current.total_products) || 0) - removedQuantity),
+        total_value: Math.max(0, (Number(current.total_value) || 0) - removedValue),
+      }
+    })
+  }, [])
+
   useEffect(() => {
     fetchMesaDetail()
   }, [fetchMesaDetail])
 
-  return { detail, loading, error, refresh: fetchMesaDetail }
+  return { detail, loading, error, refresh: fetchMesaDetail, updateAfterItemRemoval }
 }

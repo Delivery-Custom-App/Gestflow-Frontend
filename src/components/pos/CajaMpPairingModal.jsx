@@ -6,9 +6,13 @@ import {
   getAvailableMpPos,
   assignExistingMpPos,
 } from '../../lib/administrativeApi'
+import MPConfigDrawer from './MPConfigDrawer'
+
+/** El backend responde 400 «Conectá la cuenta MercadoPago del local antes de…». */
+const faltaCuentaMp = (msg) => /conect\S*\s+la\s+cuenta\s+mercado\s?pago/i.test(msg || '')
 
 // step machine: 'choose_method' | 'loading_available' | 'choose_existing' | 'provisioning'
-//             | 'needs_location' | 'awaiting_pairing' | 'verifying' | 'paired' | 'error'
+//             | 'needs_account' | 'needs_location' | 'awaiting_pairing' | 'verifying' | 'paired' | 'error'
 export default function CajaMpPairingModal({ caja, localId, onClose, onUpdated }) {
   const [step, setStep]           = useState('choose_method')
   const [error, setError]         = useState(null)
@@ -18,6 +22,7 @@ export default function CajaMpPairingModal({ caja, localId, onClose, onUpdated }
   const [location, setLocation]   = useState({ street_name: '', city_name: '', state_name: '', latitude: '', longitude: '' })
   const [availablePos, setAvailablePos] = useState([])
   const [assigning, setAssigning] = useState(false)
+  const [conectandoCuenta, setConectandoCuenta] = useState(false)
 
   const handleProvision = async () => {
     setStep('provisioning')
@@ -28,7 +33,10 @@ export default function CajaMpPairingModal({ caja, localId, onClose, onUpdated }
       setStep('awaiting_pairing')
     } catch (e) {
       const msg = e?.message || 'Error al provisionar en MercadoPago'
-      if (msg.toLowerCase().includes('direccion')) {
+      if (faltaCuentaMp(msg)) {
+        setError(null)
+        setStep('needs_account')
+      } else if (msg.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().includes('direccion')) {
         setError(null)
         setStep('needs_location')
       } else {
@@ -46,6 +54,11 @@ export default function CajaMpPairingModal({ caja, localId, onClose, onUpdated }
       setAvailablePos(list || [])
       setStep('choose_existing')
     } catch (e) {
+      if (faltaCuentaMp(e?.message)) {
+        setError(null)
+        setStep('needs_account')
+        return
+      }
       setError(e?.message || 'No se pudieron cargar los POS disponibles')
       setStep('error')
     }
@@ -211,6 +224,20 @@ export default function CajaMpPairingModal({ caja, localId, onClose, onUpdated }
             </div>
           )}
 
+          {step === 'needs_account' && (
+            <div className="space-y-3">
+              <p className="text-xs text-[hsl(var(--muted-foreground))]">
+                Este local todavía no tiene una cuenta de MercadoPago conectada. Conéctala y vuelve a intentar.
+              </p>
+              <button type="button" onClick={() => setConectandoCuenta(true)} className="w-full py-2.5 rounded-xl bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))] text-sm font-semibold hover:opacity-90 transition-opacity">
+                Conectar cuenta de MercadoPago
+              </button>
+              <button type="button" onClick={() => setStep('choose_method')} className="w-full py-2 rounded-lg border border-[hsl(var(--border))] text-sm text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))] transition-colors">
+                Volver
+              </button>
+            </div>
+          )}
+
           {step === 'error' && (
             <div className="space-y-3">
               <p className="text-xs text-red-600">{error}</p>
@@ -298,6 +325,12 @@ export default function CajaMpPairingModal({ caja, localId, onClose, onUpdated }
           )}
         </div>
       </div>
+
+      <MPConfigDrawer
+        open={conectandoCuenta}
+        localId={localId}
+        onClose={() => { setConectandoCuenta(false); setStep('choose_method') }}
+      />
     </div>
   )
 }

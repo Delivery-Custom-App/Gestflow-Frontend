@@ -28,6 +28,7 @@ const ReportesPage = lazy(() => import('../components/pos/ReportesPage'))
 const VentaDirectaView = lazy(() => import('../components/pos/VentaDirectaView'))
 const UserManagementPage = lazy(() => import('../components/UserManagementPage'))
 const UsersListPage = lazy(() => import('../components/UsersListPage'))
+const MaquinasNegocioPage = lazy(() => import('../components/MaquinasNegocioPage'))
 const TenantManagerPage = lazy(() => import('../components/TenantManagerPage'))
 const TenantManagerDashboardPage = lazy(() => import('../components/TenantManagerDashboardPage'))
 const TenantDetailPage = lazy(() => import('../components/TenantDetailPage'))
@@ -177,6 +178,8 @@ export function OwnerRoutes() {
         <Route path="/admin" element={<AdminDashboard />} />
         <Route path="/usuarios" element={<UsersListPage />} />
         <Route path="/usuarios/crear" element={<UserManagementPage />} />
+        {/* T-44: las máquinas POS de todo el negocio (solo el dueño). */}
+        <Route path="/maquinas" element={<MaquinasNegocioPage />} />
         <Route path="/configuracion" element={<ConfiguracionPage />} />
         {localRoutes()}
         <Route path="*" element={<Navigate to="/admin" replace />} />

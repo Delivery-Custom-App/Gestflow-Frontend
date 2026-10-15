@@ -27,7 +27,7 @@ export default function DeleteMesaModal({ mesa, onClose, onConfirm, isDeleting =
           </DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-4 py-1">
+        <div className="space-y-4 px-6 py-5">
           <p className="text-sm text-[hsl(var(--foreground))]">
             ¿Estás seguro que deseas eliminar la mesa <strong>{mesa.name}</strong>?
           </p>

@@ -13,7 +13,7 @@ import { createUser } from '../lib/apiClient'
 const session = vi.hoisted(() => ({ role: 'Admin Negocio' }))
 
 vi.mock('../lib/apiClient', () => ({ createUser: vi.fn() }))
-vi.mock('../context/AuthContext', () => ({ useAuth: () => ({ userRole: session.role }) }))
+vi.mock('../context/AuthContext', () => ({ useAuth: () => ({ userRole: session.role, user: { id: 'yo', local_id: 'loc-1' } }) }))
 vi.mock('../hooks/useLocals', () => ({
   useLocals: () => ({ locales: [{ id: 'loc-1', name: 'Sucursal Centro', business_id: 'b-1' }], loading: false }),
 }))
@@ -52,11 +52,13 @@ describe('UserManagementPage', () => {
     expect(screen.getByLabelText('Contraseña')).toHaveAttribute('placeholder', 'Mínimo 8 caracteres')
   })
 
-  it('el encargado no puede crear usuarios: el backend se lo rechaza', () => {
+  it('T-47: el encargado crea vendedores con su local fijo', () => {
     session.role = 'Admin'
     montar()
 
-    expect(screen.getByText('No autorizado')).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Crear usuario' })).not.toBeInTheDocument()
+    expect(screen.queryByText('No autorizado')).not.toBeInTheDocument()
+    const local = screen.getByLabelText(/Local/)
+    expect(local).toHaveValue('loc-1')
+    expect(local).toBeDisabled()
   })
 })

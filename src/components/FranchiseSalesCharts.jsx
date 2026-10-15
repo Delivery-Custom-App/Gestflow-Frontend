@@ -57,7 +57,7 @@ function WeeklyChart({ weekly }) {
 }
 
 function MonthlyChart({ monthly }) {
-  const max = Math.max(1, ...monthly.months.map((m) => m.total))
+  const max = Math.max(1, ...monthly.months.map((m) => m.total || 0))
   return (
     <div className="rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-5">
       <div className="flex items-start justify-between gap-3 mb-6">
@@ -68,11 +68,20 @@ function MonthlyChart({ monthly }) {
       </div>
       <div className="flex items-end justify-between gap-3 h-32">
         {monthly.months.map((month, i) => {
-          const prevTotal = i > 0 ? monthly.months[i - 1].total : month.total
+          if (month.total == null) {
+            // Falló la lectura de ese mes: «—», nunca un 0 que parezca real.
+            return (
+              <div key={month.label} data-testid={`mes-${month.label}`} title="No se pudo cargar la venta de este mes" className="flex-1 flex flex-col items-center justify-end h-full gap-1.5">
+                <span className="text-sm font-semibold text-[hsl(var(--muted-foreground))]">—</span>
+                <span className="text-[11px] text-[hsl(var(--muted-foreground))]">{month.label}</span>
+              </div>
+            )
+          }
+          const prevTotal = i > 0 && monthly.months[i - 1].total != null ? monthly.months[i - 1].total : month.total
           const baseHeight = Math.max(10, Math.round((Math.min(month.total, prevTotal) / max) * 100))
           const growthHeight = month.total > prevTotal ? Math.round(((month.total - prevTotal) / max) * 100) : 0
           return (
-            <div key={month.label} className="flex-1 flex flex-col items-center justify-end h-full gap-1.5">
+            <div key={month.label} data-testid={`mes-${month.label}`} title={`${month.label}: ${CLP(month.total)}`} className="flex-1 flex flex-col items-center justify-end h-full gap-1.5">
               {month.momPercent != null && (
                 <span className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
                   {month.momPercent >= 0 ? '+' : ''}{month.momPercent}
@@ -85,6 +94,7 @@ function MonthlyChart({ monthly }) {
                   style={{ height: `${baseHeight}%` }}
                 />
               </div>
+              <span className="text-[10px] text-[hsl(var(--foreground))]">{CLP(month.total)}</span>
               <span className="text-[11px] text-[hsl(var(--muted-foreground))]">{month.label}</span>
             </div>
           )
