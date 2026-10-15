@@ -11,12 +11,14 @@ import {
   paginate,
   createProductWithInventory,
 } from './v2CatalogApi'
+import { invalidate } from './apiCache'
 
 vi.mock('./apiClient', () => ({
   apiRequest: vi.fn(),
 }))
 
 beforeEach(() => {
+  invalidate()
   vi.clearAllMocks()
 })
 

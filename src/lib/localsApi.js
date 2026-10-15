@@ -1,4 +1,5 @@
 import { apiRequest } from './apiClient'
+import { invalidarLocales } from './cacheLocales'
 
 /**
  * Borrado de un local en Backend V2.
@@ -60,8 +61,12 @@ export async function getResumenBorradoLocal(localId) {
  */
 export async function eliminarLocal(localId) {
   const id = encodeURIComponent(String(localId))
-  await apiRequest(`/locals/${id}`, { method: 'PATCH', body: { is_active: false } })
-  await apiRequest(`/locals/${id}`, { method: 'DELETE' })
+  try {
+    await apiRequest(`/locals/${id}`, { method: 'PATCH', body: { is_active: false } })
+    await apiRequest(`/locals/${id}`, { method: 'DELETE' })
+  } finally {
+    invalidarLocales()
+  }
 }
 
 /**
@@ -104,11 +109,13 @@ export function validarTelefono(valor) {
 }
 
 /** Cambia el nombre y el teléfono del local (`PATCH /locals/{id}`); teléfono vacío lo borra. */
-export function actualizarLocal(localId, { name, phone }) {
+export async function actualizarLocal(localId, { name, phone }) {
   const body = {}
   if (name !== undefined) body.name = String(name).trim()
   if (phone !== undefined) body.phone = normalizarTelefono(phone) || null
-  return apiRequest(`/locals/${encodeURIComponent(String(localId))}`, { method: 'PATCH', body })
+  const r = await apiRequest(`/locals/${encodeURIComponent(String(localId))}`, { method: 'PATCH', body })
+  invalidarLocales()
+  return r
 }
 
 /** Texto del backend sin el código. */

@@ -1,4 +1,5 @@
 import { nombreDelEquipo, obtenerDeviceId } from './dispositivo'
+import { invalidate } from './apiCache'
 
 const TOKEN_KEY = 'gestflow-auth-token'
 const USER_KEY = 'gestflow-auth-user'
@@ -47,6 +48,8 @@ function writeSession({ access_token, refresh_token, expires_in, user }) {
 }
 
 export function clearStoredSession() {
+  // T-35: al cerrar sesión se olvidan los locales y negocios guardados en memoria.
+  invalidate()
   inMemoryRefreshToken = null
   inMemoryExpiresAt = null
 

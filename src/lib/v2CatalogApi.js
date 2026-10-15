@@ -3,6 +3,7 @@
  * Compone endpoints planos V2 a las formas que esperan las pantallas legacy.
  */
 import { apiRequest } from './apiClient'
+import { invalidarLocales, obtenerLocal } from './cacheLocales'
 
 /**
  * Estado del stock por unidades: crítico sin unidades o en su nivel crítico
@@ -17,8 +18,9 @@ export function stockStatus(stockActual, stockMin, stockCritical = null) {
   return 'OPTIMO'
 }
 
+/** Un local, guardado en memoria (T-35). */
 export async function fetchLocal(localId) {
-  return apiRequest(`/locals/${localId}`)
+  return obtenerLocal(localId)
 }
 
 export async function listLocals(businessId) {
@@ -30,10 +32,12 @@ export async function listLocals(businessId) {
 }
 
 export async function updateLocal(localId, body) {
-  return apiRequest(`/locals/${encodeURIComponent(String(localId))}`, {
+  const r = await apiRequest(`/locals/${encodeURIComponent(String(localId))}`, {
     method: 'PATCH',
     body,
   })
+  invalidarLocales()
+  return r
 }
 
 /**

@@ -6,6 +6,7 @@ import {
   v2GetObservability,
   v2ListAllUsers,
 } from './v2SuperAdminAdapter'
+import { invalidarLocales, invalidarNegocios } from './cacheLocales'
 
 function withQuery(path, params) {
   const query = new URLSearchParams()
@@ -28,16 +29,23 @@ export async function getBusiness(businessId, token) {
   return apiRequest(`/businesses/${businessId}`, { token })
 }
 
+// T-35: crear, editar o eliminar un negocio invalida lo guardado en memoria.
 export async function createBusiness(body, token) {
-  return apiRequest('/businesses', { method: 'POST', body, token })
+  const r = await apiRequest('/businesses', { method: 'POST', body, token })
+  invalidarNegocios()
+  return r
 }
 
 export async function updateBusiness(businessId, body, token) {
-  return apiRequest(`/businesses/${businessId}`, { method: 'PATCH', body, token })
+  const r = await apiRequest(`/businesses/${businessId}`, { method: 'PATCH', body, token })
+  invalidarNegocios()
+  return r
 }
 
 export async function deleteBusiness(businessId, token) {
-  return apiRequest(`/businesses/${businessId}`, { method: 'DELETE', token })
+  const r = await apiRequest(`/businesses/${businessId}`, { method: 'DELETE', token })
+  invalidarNegocios()
+  return r
 }
 
 export async function getAuditLog(opts = {}, token) {
@@ -62,11 +70,13 @@ export async function listBusinessLocals(businessId, token) {
 }
 
 export async function updateLocalSalesModel(localId, salesModel, token) {
-  return apiRequest(`/locals/${encodeURIComponent(String(localId))}`, {
+  const r = await apiRequest(`/locals/${encodeURIComponent(String(localId))}`, {
     method: 'PATCH',
     body: { sales_model: salesModel },
     token,
   })
+  invalidarLocales()
+  return r
 }
 
 export async function listAllUsers({ role, businessId } = {}, token) {

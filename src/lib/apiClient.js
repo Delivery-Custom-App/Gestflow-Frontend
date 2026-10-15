@@ -1,5 +1,6 @@
 import { clearStoredSession, getStoredSession, refreshSession } from './authClient'
 import { getBusinessId } from '../utils/jwt'
+import { cachedRequest } from './apiCache'
 
 const apiBaseUrl = import.meta.env.VITE_API_URL || ''
 
@@ -313,9 +314,10 @@ export async function listUsers(businessId) {
   return filtered.map((u) => ({ ...u, name: displayNameFromUser(u) }))
 }
 
+/** El negocio, guardado en memoria 5 minutos (T-35): se pedía en cada pantalla. */
 export async function getBusiness(businessId) {
   if (!businessId) return null
-  return apiRequest(`/businesses/${businessId}`)
+  return cachedRequest(`business:${businessId}`, () => apiRequest(`/businesses/${businessId}`), 5 * 60 * 1000)
 }
 
 export async function changeMyPassword({ current_password, new_password }) {

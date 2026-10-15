@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { TELEFONO_MAX, normalizarTelefono, validarTelefono } from '../lib/localsApi'
+import { invalidarLocales } from '../lib/cacheLocales'
 
 // Expands Chilean street abbreviations and removes postal codes so Nominatim understands them
 function normalizeChileanAddress(address) {
@@ -157,6 +158,7 @@ function CreateLocalDrawer({ isOpen, onClose, onSuccess }) {
       }
 
       await apiRequest('/locals', { method: 'POST', token, body })
+      invalidarLocales()
 
       setFormData({ name: '', address: '', phone: '', sales_model: 'RESTAURANT' })
       selectedCoordsRef.current = null
