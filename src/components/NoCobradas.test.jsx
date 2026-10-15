@@ -8,7 +8,7 @@ import { listarNoCobradas } from '../lib/noCobradas'
 
 const sesion = vi.hoisted(() => ({ rol: 'Admin Negocio' }))
 vi.mock('../context/AuthContext', () => ({ useAuth: () => ({ userRole: sesion.rol }) }))
-vi.mock('../hooks/useLocals', () => ({ useLocals: () => ({ locales: [{ id: 'loc-1', name: 'Centro' }, { id: 'loc-2', name: 'Express' }] }) }))
+vi.mock('../hooks/useLocals', () => ({ useLocals: () => ({ locales: [{ id: 'loc-1', name: 'Centro' }, { id: 'loc-2', name: 'Express', sales_model: 'AL_PASO' }] }) }))
 vi.mock('../lib/apiClient', () => ({ listUsers: vi.fn(() => Promise.resolve([{ id: 'u-ana', first_name: 'Ana', last_name: 'Rojas' }])) }))
 vi.mock('../lib/fondoEmergencia', () => ({ hoyEnChile: () => '2026-10-14' }))
 vi.mock('../lib/noCobradas', async (importOriginal) => ({ ...(await importOriginal()), listarNoCobradas: vi.fn() }))
@@ -22,7 +22,7 @@ const FILAS = [
   { evento_id: 'e2', tipo: 'orden_vencida', mesa: null, mesero_id: null, total: '1500.00', hora: '2026-10-14T20:00:00Z', registrado_por_email: 'enc@demo.cl', motivo: 'Vencido', consumo: [] },
 ]
 
-const montar = () => render(<MemoryRouter><NoCobradas localId="loc-1" /></MemoryRouter>)
+const montar = (localId = 'loc-1') => render(<MemoryRouter><NoCobradas localId={localId} /></MemoryRouter>)
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -47,6 +47,16 @@ describe('NoCobradas', () => {
     expect(within(fila).getByText('Quedó abierta al cerrar la caja')).toBeInTheDocument()
     expect(within(fila).getByText('enc@demo.cl')).toBeInTheDocument()
     expect(within(tabla).getByText('Pedido vencido')).toBeInTheDocument()
+  })
+
+  it('en un local al paso se llama «Pedidos no cobrados» y no muestra Mesa ni Mesero', async () => {
+    listarNoCobradas.mockResolvedValue([FILAS[1]])
+    montar('loc-2')
+    const tabla = await screen.findByRole('table', { name: 'Pedidos no cobrados' })
+    expect(within(tabla).getByText('Pedido vencido')).toBeInTheDocument()
+    expect(within(tabla).queryByRole('columnheader', { name: 'Mesa' })).not.toBeInTheDocument()
+    expect(within(tabla).queryByRole('columnheader', { name: 'Mesero' })).not.toBeInTheDocument()
+    expect(within(tabla).getAllByRole('columnheader').map((c) => c.textContent)).toEqual(['Detalle', 'Tipo', 'Hora', 'Total', 'Motivo', 'Cerró'])
   })
 
   it('se puede expandir el consumo', async () => {

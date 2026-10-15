@@ -22,6 +22,16 @@ export const TIPO_NO_COBRADA = {
   orden_vencida: 'Pedido vencido',
 }
 
+/**
+ * Textos de la pantalla según el tipo de local. Un local al paso no tiene
+ * mesas: solo le quedan los pedidos de mostrador vencidos.
+ */
+export function textosNoCobradas(alPaso) {
+  return alPaso
+    ? { titulo: 'Pedidos no cobrados', subtitulo: 'Pedidos de mostrador que vencieron sin cobrar al cerrar la caja' }
+    : { titulo: 'Mesas no cobradas', subtitulo: 'Mesas que quedaron sin cobrar al cerrar la caja y pedidos de mostrador vencidos' }
+}
+
 /** Todas las filas del rango (pide de a 500 hasta completar X-Total-Count). */
 export async function listarNoCobradas(localId, { desde, hasta } = {}) {
   const filas = []

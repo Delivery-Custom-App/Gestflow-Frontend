@@ -1,5 +1,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useParams } from 'react-router'
+import { CreditCard } from 'lucide-react'
+import { useAuth } from '../../context/AuthContext'
 import { cancelOrder, createOrder, fetchProductsCatalog } from '../../lib/salesApi'
 import { formatCLP } from '../../lib/formatCLP'
 import { obtenerClaveIdempotencia } from '../../lib/idempotency'
@@ -8,6 +10,7 @@ import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import MercadoPagoModal from './MercadoPagoModal'
 import TicketModal from './TicketModal'
+import MPConfigDrawer from './MPConfigDrawer'
 import { isV2FeatureEnabled } from '../../lib/v2Features'
 
 /**
@@ -54,6 +57,7 @@ function ProductCard({ product, qty, onAdd, onRemove }) {
 
 export default function VentaDirectaView() {
   const { localId } = useParams()
+  const { isWorker } = useAuth()
   const { cajaId } = useCajaActiva(localId)
 
   const [products, setProducts] = useState([])
@@ -64,6 +68,7 @@ export default function VentaDirectaView() {
   const [activeOrder, setActiveOrder] = useState(null) // { id, total }
   const [showMPModal, setShowMPModal] = useState(false)
   const [successMsg, setSuccessMsg] = useState('')
+  const [showMPConfig, setShowMPConfig] = useState(false)
   const idempotencyKeyRef = useRef(null)
 
   const loadCatalog = useCallback(() => {
@@ -169,6 +174,17 @@ export default function VentaDirectaView() {
           <p className="text-sm text-[hsl(var(--muted-foreground))]">Selecciona productos y cobra sin pasar por mesa.</p>
         </div>
 
+        {!isWorker && isV2FeatureEnabled('mpConfig') && (
+          <button
+            type="button"
+            onClick={() => setShowMPConfig(true)}
+            className="inline-flex h-10 items-center gap-2 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3 text-sm font-medium text-[hsl(var(--foreground))] hover:bg-[hsl(var(--muted))]"
+          >
+            <CreditCard size={16} />
+            Configurar POS
+          </button>
+        )}
+
         {error && (
           <div className="px-3 py-2 rounded-lg bg-red-50 border border-red-200 text-sm text-red-600">
             {error}<button type="button" aria-label="Cerrar mensaje de error" className="ml-2 underline text-xs" onClick={() => setError('')}>✕</button>
@@ -223,6 +239,14 @@ export default function VentaDirectaView() {
           description="Venta directa"
           onSuccess={handlePaymentSuccess}
           onClose={handleAbandonCheckout}
+        />
+      )}
+
+      {!isWorker && isV2FeatureEnabled('mpConfig') && (
+        <MPConfigDrawer
+          open={showMPConfig}
+          localId={localId}
+          onClose={() => setShowMPConfig(false)}
         />
       )}
 

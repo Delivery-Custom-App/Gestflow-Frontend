@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { LogOut, Monitor } from 'lucide-react'
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogDescription, DialogBody, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import {
@@ -73,6 +73,7 @@ export default function SesionesEmpleadoDialog({ usuario, onClose, nombreDeUsuar
             Dispositivos donde tiene la sesión abierta. Cerrar una sesión no termina su turno ni suelta su máquina.
           </DialogDescription>
         </DialogHeader>
+        <DialogBody>
 
         {error && <p role="alert" className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
         {aviso && <p role="status" className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">{aviso}</p>}
@@ -149,6 +150,7 @@ export default function SesionesEmpleadoDialog({ usuario, onClose, nombreDeUsuar
             )}
           </>
         )}
+      </DialogBody>
       </DialogContent>
     </Dialog>
   )

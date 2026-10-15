@@ -8,10 +8,11 @@ import { isAdminNegocioRole, isSuperAdminRole } from '../auth/roleLabel'
 import { formatCLPCurrency as formatMoney } from '../lib/formatCLP'
 import { hoyEnChile } from '../lib/fondoEmergencia'
 import { fechaHora } from '../lib/sesiones'
+import { isAlPasoLocal } from '../lib/salesModel'
 import { nombreDeVendedor } from '../lib/registroTurnos'
 import { listUsers } from '../lib/apiClient'
 import {
-  NO_COBRADAS_POR_PAGINA, TIPO_NO_COBRADA, listarNoCobradas, totalNoCobrado, validarRango,
+  NO_COBRADAS_POR_PAGINA, TIPO_NO_COBRADA, listarNoCobradas, textosNoCobradas, totalNoCobrado, validarRango,
 } from '../lib/noCobradas'
 
 const CAMPO = 'h-9 rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 text-sm text-[hsl(var(--foreground))]'
@@ -29,6 +30,8 @@ export default function NoCobradas({ localId }) {
   const navigate = useNavigate()
   const puedeElegirLocal = isAdminNegocioRole(userRole) || isSuperAdminRole(userRole)
   const { locales } = useLocals()
+  const alPaso = isAlPasoLocal(locales.find((l) => String(l.id) === String(localId)))
+  const { titulo } = textosNoCobradas(alPaso)
   const hoy = hoyEnChile()
   const [desde, setDesde] = useState(hoy)
   const [hasta, setHasta] = useState(hoy)
@@ -99,14 +102,14 @@ export default function NoCobradas({ localId }) {
           <p className="text-sm text-[hsl(var(--muted-foreground))]">No quedó nada sin cobrar en esas fechas.</p>
         ) : (
           <div className="overflow-x-auto rounded-lg border border-[hsl(var(--border))]">
-            <table className="w-full text-sm" aria-label="Mesas no cobradas">
+            <table className="w-full text-sm" aria-label={titulo}>
               <thead className="bg-[hsl(var(--muted))] text-left text-xs uppercase tracking-wide text-[hsl(var(--muted-foreground))]">
                 <tr>
                   <th className="px-3 py-2"><span className="sr-only">Detalle</span></th>
                   <th className="px-3 py-2">Tipo</th>
-                  <th className="px-3 py-2">Mesa</th>
+                  {!alPaso && <th className="px-3 py-2">Mesa</th>}
                   <th className="px-3 py-2">Hora</th>
-                  <th className="px-3 py-2">Mesero</th>
+                  {!alPaso && <th className="px-3 py-2">Mesero</th>}
                   <th className="px-3 py-2 text-right">Total</th>
                   <th className="px-3 py-2">Motivo</th>
                   <th className="px-3 py-2">Cerró</th>
@@ -126,9 +129,9 @@ export default function NoCobradas({ localId }) {
                           </button>
                         </td>
                         <td className="px-3 py-2">{TIPO_NO_COBRADA[f.tipo] || f.tipo}</td>
-                        <td className="px-3 py-2">{f.mesa || '—'}</td>
+                        {!alPaso && <td className="px-3 py-2">{f.mesa || '—'}</td>}
                         <td className="px-3 py-2 whitespace-nowrap">{fechaHora(f.hora)}</td>
-                        <td className="px-3 py-2">{f.mesero_id ? nombreDeVendedor(usuarios, f.mesero_id) : '—'}</td>
+                        {!alPaso && <td className="px-3 py-2">{f.mesero_id ? nombreDeVendedor(usuarios, f.mesero_id) : '—'}</td>}
                         <td className="px-3 py-2 text-right font-semibold">{formatMoney(Number(f.total))}</td>
                         <td className="px-3 py-2">{f.motivo || '—'}</td>
                         <td className="px-3 py-2 text-xs">{f.registrado_por_email || '—'}</td>
@@ -136,7 +139,7 @@ export default function NoCobradas({ localId }) {
                       {abiertaEsta && (
                         <tr className="bg-[hsl(var(--muted))]/40">
                           <td />
-                          <td colSpan={7} className="px-3 py-2">
+                          <td colSpan={alPaso ? 5 : 7} className="px-3 py-2">
                             {consumo.length === 0 ? (
                               <span className="text-xs text-[hsl(var(--muted-foreground))]">Sin consumo registrado.</span>
                             ) : (

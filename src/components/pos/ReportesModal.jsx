@@ -60,7 +60,7 @@ export default function ReportesModal({ localId, onClose }) {
           </DialogTitle>
         </DialogHeader>
 
-        <div className="flex-1 overflow-y-auto space-y-4 pr-1">
+        <div className="flex-1 overflow-y-auto space-y-4 px-6 py-5">
           {loading && (
             <div className="flex flex-col items-center gap-2 py-8 text-[hsl(var(--muted-foreground))]">
               <div className="w-6 h-6 border-2 border-[hsl(var(--primary))] border-t-transparent rounded-full animate-spin" aria-label="Cargando..." />

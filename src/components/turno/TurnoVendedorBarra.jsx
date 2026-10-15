@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Clock3, CreditCard, LogOut } from 'lucide-react'
 import { toast } from 'sonner'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { useAuth } from '../../context/AuthContext'
 import { useTurnoVendedor } from '../../context/turnoVendedor'
 import { getCaja, terminarTurno } from '../../lib/salesApi'
@@ -111,13 +111,15 @@ function MaquinaDelTurno({ turnoInicial, alPaso, onTerminado }) {
             <DialogHeader>
               <DialogTitle>{maquina ? 'Cambiar de máquina' : 'Elegir máquina de cobro'}</DialogTitle>
             </DialogHeader>
-            <ElegirMaquina
-              localId={turno.local_id}
-              maquinaActualId={maquina?.id || null}
-              onConfirmar={cambiar}
-              onSinMaquina={() => setEligiendo(false)}
-              textoSinMaquina="Cancelar"
-            />
+            <DialogBody>
+              <ElegirMaquina
+                localId={turno.local_id}
+                maquinaActualId={maquina?.id || null}
+                onConfirmar={cambiar}
+                onSinMaquina={() => setEligiendo(false)}
+                textoSinMaquina="Cancelar"
+              />
+            </DialogBody>
           </DialogContent>
         </Dialog>
       )}
@@ -178,17 +180,19 @@ export default function TurnoVendedorBarra() {
             <DialogHeader>
               <DialogTitle>¿Terminar tu turno?</DialogTitle>
             </DialogHeader>
+            <DialogBody>
             <p className="text-sm text-[hsl(var(--muted-foreground))]">
               Se suelta tu máquina de cobro y ya no podrás vender en este turno. La caja queda abierta: la cuenta y la cierra el administrador.
             </p>
             {error && <p role="alert" className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
-            <div className="flex justify-end gap-2">
+            </DialogBody>
+            <DialogFooter>
               <button type="button" onClick={() => setConfirmando(false)} disabled={terminando} className={BOTON}>Cancelar</button>
               <button type="button" onClick={terminar} disabled={terminando}
                 className="inline-flex items-center gap-1.5 rounded-full bg-red-600 px-3 py-1 text-xs font-semibold text-white hover:bg-red-700 disabled:opacity-50">
                 {terminando ? 'Terminando…' : 'Terminar turno'}
               </button>
-            </div>
+            </DialogFooter>
           </DialogContent>
         </Dialog>
       )}

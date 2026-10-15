@@ -19,6 +19,9 @@ import {
   getResumenDiario,
 } from '../lib/administrativeApi'
 import { getAuthContext, apiRequest, listUsers } from '../lib/apiClient'
+import { textosNoCobradas } from '../lib/noCobradas'
+import { isAlPasoLocal } from '../lib/salesModel'
+import { useSelectedLocal } from '../hooks/useSelectedLocal'
 import { nombreDeVendedor, opcionesDeVendedor, useTurnosFiltrados } from '../lib/registroTurnos'
 import { monto, textoDiferencia } from '../lib/arqueo'
 import { puedeVender } from '../lib/rolesCaja'
@@ -52,11 +55,11 @@ import { MapPin, X, ShoppingCart, HelpCircle, CreditCard, ArrowLeftRight, Lock, 
 const ROLES_CAJAS_FISICAS = new Set(['ADMIN', 'ADMINNEGOCIO', 'SUPERADMIN'])
 
 /** Secciones visibles: se calculan al renderizar porque dependen de las banderas. */
-const getSections = () => [
+const getSections = (alPaso = false) => [
   { id: 'ventas',        label: 'Ventas',        subtitle: 'Totales de hoy, tendencia, productos más vendidos e histórico' },
   { id: 'flujo-caja',    label: 'Caja y turnos', subtitle: 'Turnos de caja, movimientos y arqueo del día' },
   // T-46: lo que quedó sin cobrar al cerrar la caja y los pedidos vencidos.
-  { id: 'no-cobradas',   label: 'Mesas no cobradas', subtitle: 'Mesas que quedaron sin cobrar al cerrar la caja y pedidos de mostrador vencidos' },
+  { id: 'no-cobradas',   label: textosNoCobradas(alPaso).titulo, subtitle: textosNoCobradas(alPaso).subtitulo },
   // T-26: fondo de emergencia (backend B-09). Con la bandera apagada la sección no existe y su dirección lleva a Ventas.
   ...(isV2FeatureEnabled('fondoEmergencia')
     ? [{ id: 'fondo-emergencia', label: 'Fondo de emergencia', subtitle: 'Plata apartada para imprevistos: monto fijo, saldo, gastos y reposiciones' }]
@@ -1085,7 +1088,8 @@ function AdministrativeModule() {
 
 
   // Sin sección o con una que ya no existe (rendiciones, reportes, alertas, bonos, dashboard) → Ventas.
-  const sections = getSections()
+  const localActual = useSelectedLocal(localId, 'state-then-locales')
+  const sections = getSections(isAlPasoLocal(localActual))
   const isKnownSection = sections.some((s) => s.id === sectionId)
   const activeSection = isKnownSection ? sectionId : 'ventas'
   const activeSectionMeta = sections.find((s) => s.id === activeSection) || sections[0]

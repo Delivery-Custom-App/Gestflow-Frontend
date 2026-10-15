@@ -8,6 +8,9 @@ import { agruparPorLocal, textoOcupacion } from '../lib/maquinasNegocio'
 
 vi.mock('../lib/apiClient', () => ({ apiRequest: vi.fn() }))
 vi.mock('../hooks/useLocals', () => ({ useLocals: () => ({ locales: LOCALES }) }))
+vi.mock('./pos/MPConfigDrawer', () => ({
+  default: ({ open, localId }) => (open ? <div role="dialog" aria-label="Configurar POS">drawer del local {localId}</div> : null),
+}))
 vi.mock('../lib/administrativeApi', () => ({ listarCajasFisicas: vi.fn(() => Promise.resolve([{ id: 'cf-9', name: 'Caja mostrador' }])) }))
 
 const LOCALES = [
@@ -38,6 +41,19 @@ describe('lib/maquinasNegocio', () => {
 })
 
 describe('MaquinasNegocioPage', () => {
+  it('con la cuenta sin conectar ofrece conectarla: elige el local y abre la configuración de ese local', async () => {
+    const user = userEvent.setup()
+    apiRequest.mockImplementation(async (path) => (path === '/pos-machines/negocio'
+      ? { ...RESPUESTA, mercadopago_conectado: false, registradas: [], aviso: 'Conecta tu cuenta de Mercado Pago para ver las máquinas de la cuenta' }
+      : {}))
+    render(<MaquinasNegocioPage />)
+    const boton = await screen.findByRole('button', { name: /Conectar Mercado Pago/ })
+    expect(boton).toBeDisabled()
+    await user.selectOptions(screen.getByLabelText('Local de la cuenta'), 'l2')
+    await user.click(boton)
+    expect(await screen.findByRole('dialog', { name: 'Configurar POS' })).toHaveTextContent('drawer del local l2')
+  })
+
   it('lista las máquinas por local con caja, proveedor, terminal y ocupación, y las sin registrar', async () => {
     render(<MaquinasNegocioPage />)
     const centro = await screen.findByRole('region', { name: 'Máquinas de Restaurante Centro' })

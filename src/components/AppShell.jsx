@@ -34,6 +34,7 @@ import { isDirectSaleDemoUser } from '../constants/demoMode'
 import { formatShortAddress } from '../lib/formatAddress'
 import { isV2FeatureEnabled } from '../lib/v2Features'
 import { isAlPasoLocal, normalizeSalesModel } from '../lib/salesModel'
+import { textosNoCobradas } from '../lib/noCobradas'
 
 /* ── key sets for accordion auto-open ──────────────────────────── */
 const ADMIN_KEYS = new Set(['administracion', 'ventas', 'flujo-caja', 'no-cobradas', 'fondo-emergencia'])
@@ -239,6 +240,9 @@ function Sidebar({ collapsed, onToggle, onClose }) {
     : isAlPaso
       ? availableAccordions.map((s) => {
           if (s.key === 'pos') return { ...s, label: 'Punto de venta', items: AL_PASO_POS_ITEMS }
+          if (s.key === 'administracion') {
+            return { ...s, items: s.items.map((i) => (i.key === 'no-cobradas' ? { ...i, label: textosNoCobradas(true).titulo } : i)) }
+          }
           if (s.key === 'inventario') {
             return {
               ...s,

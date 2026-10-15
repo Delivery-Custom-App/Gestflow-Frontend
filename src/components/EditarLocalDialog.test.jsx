@@ -4,9 +4,11 @@ import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import EditarLocalDialog from './EditarLocalDialog'
 import { apiRequest } from '../lib/apiClient'
+import { geocodeAddress } from '../lib/geocoding'
 import { actualizarLocal, normalizarTelefono, validarTelefono } from '../lib/localsApi'
 
 vi.mock('../lib/apiClient', () => ({ apiRequest: vi.fn() }))
+vi.mock('../lib/geocoding', () => ({ geocodeAddress: vi.fn() }))
 
 beforeEach(() => { vi.clearAllMocks() })
 
@@ -55,5 +57,61 @@ describe('EditarLocalDialog', () => {
     await user.type(screen.getByLabelText('Teléfono'), '123')
     await user.click(screen.getByRole('button', { name: 'Guardar' }))
     expect(await screen.findByRole('alert')).toHaveTextContent('El teléfono debe tener al menos un dígito')
+  })
+})
+
+describe('EditarLocalDialog · dirección', () => {
+  const sinDireccion = { id: 'l1', name: 'Centro' }
+
+  it('guarda la dirección con el punto del mapa, sin pedir coordenadas', async () => {
+    const user = userEvent.setup()
+    const onGuardado = vi.fn()
+    apiRequest.mockResolvedValue({})
+    geocodeAddress.mockResolvedValue({ lat: -33.01, lng: -71.54 })
+    render(<EditarLocalDialog local={sinDireccion} onClose={vi.fn()} onGuardado={onGuardado} />)
+    expect(screen.queryByLabelText(/Latitud|Longitud/)).not.toBeInTheDocument()
+    await user.type(screen.getByLabelText('Calle y número'), 'Veinte Norte 1234')
+    await user.type(screen.getByLabelText('Comuna'), 'Viña del Mar')
+    await user.type(screen.getByLabelText('Región'), 'Valparaíso')
+    await user.click(screen.getByRole('button', { name: 'Guardar' }))
+    expect(geocodeAddress).toHaveBeenCalledWith('Veinte Norte 1234, Viña del Mar, Valparaíso')
+    expect(apiRequest).toHaveBeenCalledWith('/locals/l1/mp-location', {
+      method: 'PUT',
+      body: { street_name: 'Veinte Norte 1234', city_name: 'Viña del Mar', state_name: 'Valparaíso', latitude: -33.01, longitude: -71.54 },
+    })
+    expect(apiRequest).toHaveBeenCalledWith('/locals/l1', { method: 'PATCH', body: { name: 'Centro', phone: null } })
+    expect(onGuardado).toHaveBeenCalled()
+  })
+
+  it('muestra la dirección que el local ya tiene y no la vuelve a guardar si no cambia', async () => {
+    const user = userEvent.setup()
+    apiRequest.mockResolvedValue({})
+    const local = { ...sinDireccion, street_name: 'Veinte Norte 1234', city_name: 'Viña del Mar', state_name: 'Valparaíso' }
+    render(<EditarLocalDialog local={local} onClose={vi.fn()} onGuardado={vi.fn()} />)
+    expect(screen.getByLabelText('Comuna')).toHaveValue('Viña del Mar')
+    await user.click(screen.getByRole('button', { name: 'Guardar' }))
+    expect(geocodeAddress).not.toHaveBeenCalled()
+    expect(apiRequest).not.toHaveBeenCalledWith(expect.stringContaining('mp-location'), expect.anything())
+  })
+
+  it('con la dirección a medias avisa y no guarda nada', async () => {
+    const user = userEvent.setup()
+    render(<EditarLocalDialog local={sinDireccion} onClose={vi.fn()} onGuardado={vi.fn()} />)
+    await user.type(screen.getByLabelText('Calle y número'), 'Veinte Norte 1234')
+    await user.click(screen.getByRole('button', { name: 'Guardar' }))
+    expect(screen.getByRole('alert')).toHaveTextContent(/calle, la comuna y la región/)
+    expect(apiRequest).not.toHaveBeenCalled()
+  })
+
+  it('si no se puede ubicar la dirección, lo dice y no guarda nada', async () => {
+    const user = userEvent.setup()
+    geocodeAddress.mockResolvedValue(null)
+    render(<EditarLocalDialog local={sinDireccion} onClose={vi.fn()} onGuardado={vi.fn()} />)
+    await user.type(screen.getByLabelText('Calle y número'), 'Calle Inventada 1')
+    await user.type(screen.getByLabelText('Comuna'), 'Nada')
+    await user.type(screen.getByLabelText('Región'), 'Nada')
+    await user.click(screen.getByRole('button', { name: 'Guardar' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent(/No pudimos ubicar esa dirección/)
+    expect(apiRequest).not.toHaveBeenCalled()
   })
 })

@@ -82,7 +82,7 @@ export default function EditMesaModal({ mesa, onClose, onSubmit }) {
           <DialogTitle>Editar Mesa</DialogTitle>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-4 pt-1">
+        <form onSubmit={handleSubmit} className="space-y-4 px-6 pt-5">
           {/* Nombre */}
           <div className="space-y-1.5">
             <Label htmlFor="edit-mesa-name">
@@ -145,7 +145,7 @@ export default function EditMesaModal({ mesa, onClose, onSubmit }) {
             </p>
           </div>
 
-          <DialogFooter>
+          <DialogFooter className="-mx-6">
             <Button type="button" variant="outline" onClick={onClose} disabled={isSubmitting}>
               Cancelar
             </Button>

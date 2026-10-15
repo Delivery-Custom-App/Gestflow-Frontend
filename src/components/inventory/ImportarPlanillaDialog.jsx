@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Download, Upload } from 'lucide-react'
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogDescription, DialogBody, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import {
@@ -57,6 +57,7 @@ export default function ImportarPlanillaDialog({ localId, onClose, onImportado }
             Los productos quedan en el menú de este local y, si la planilla trae Stock, también su stock. Si un producto ya existe (por Código o, sin código, por Nombre) se actualiza.
           </DialogDescription>
         </DialogHeader>
+        <DialogBody>
 
         {fase !== 'listo' ? (
           <form onSubmit={importar} className="flex flex-col gap-4">
@@ -95,6 +96,7 @@ export default function ImportarPlanillaDialog({ localId, onClose, onImportado }
             </div>
           </div>
         )}
+      </DialogBody>
       </DialogContent>
     </Dialog>
   )

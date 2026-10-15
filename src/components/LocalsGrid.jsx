@@ -14,7 +14,7 @@ import { UMBRAL_POR_DEFECTO, getFlowTrend, getSalesFlow, textoDelPeriodo } from 
 const NO_COUNTS = {}
 
 /**
- * Inicio del dueño: sus franquicias y, con `onShowUsers`, el acceso a los
+ * Inicio del dueño: sus locales y, con `onShowUsers`, el acceso a los
  * usuarios del negocio.
  */
 function LocalsGrid({
@@ -86,14 +86,14 @@ function LocalsGrid({
                   {
                     icon: Building2,
                     color: 'text-[hsl(var(--primary))]',
-                    title: 'Lista de franquicias',
-                    desc: 'Muestra todas tus sucursales con nombre y dirección. Haz clic en cualquier fila para acceder al panel completo de esa franquicia.',
+                    title: 'Lista de locales',
+                    desc: 'Muestra todas tus sucursales con nombre y dirección. Haz clic en cualquier fila para acceder al panel completo de ese local.',
                   },
                   {
                     icon: TrendingUp,
                     color: 'text-amber-600',
                     title: 'Flujo de actividad',
-                    desc: `Ventas de cada franquicia en ${textoDelPeriodo(thresholds.horas)}. Verde = Bajo (pocas ventas), Amarillo = Medio, Rojo = Alto (mucha actividad). Se actualiza solo cada minuto.`,
+                    desc: `Ventas de cada local en ${textoDelPeriodo(thresholds.horas)}. Verde = Bajo (pocas ventas), Amarillo = Medio, Rojo = Alto (mucha actividad). Se actualiza solo cada minuto.`,
                   },
                   {
                     icon: ArrowUp,
@@ -110,13 +110,13 @@ function LocalsGrid({
                   ...(canDeleteLocals ? [{
                     icon: Trash2,
                     color: 'text-slate-600',
-                    title: 'Botón Eliminar franquicia',
-                    desc: 'Elige una franquicia y elimínala de forma permanente.',
+                    title: 'Botón Eliminar local',
+                    desc: 'Elige un local y elimínalo de forma permanente.',
                   }] : []),
                   {
                     icon: Plus,
                     color: 'text-[hsl(var(--primary))]',
-                    title: 'Crear Franquicia',
+                    title: 'Crear local',
                     desc: 'Registra una nueva sucursal en el sistema. Solo disponible para administradores.',
                     highlight: true,
                   },
@@ -124,19 +124,19 @@ function LocalsGrid({
                     icon: Users,
                     color: 'text-sky-600',
                     title: 'Usuarios del negocio',
-                    desc: 'Abre la lista de las personas que trabajan en tus franquicias, para revisarlas o crear una nueva.',
+                    desc: 'Abre la lista de las personas que trabajan en tus locales, para revisarlas o crear una nueva.',
                   }] : []),
                   {
                     icon: MapPin,
                     color: 'text-rose-600',
-                    title: 'Mapa de franquicias',
-                    desc: 'Visualiza la ubicación geográfica de todas tus franquicias en un mapa interactivo.',
+                    title: 'Mapa de locales',
+                    desc: 'Visualiza la ubicación geográfica de todos tus locales en un mapa interactivo.',
                   },
                   {
                     icon: Search,
                     color: 'text-indigo-600',
                     title: 'Filtros y búsqueda',
-                    desc: 'Busca por nombre o filtra por nivel de flujo para encontrar franquicias rápidamente.',
+                    desc: 'Busca por nombre o filtra por nivel de flujo para encontrar locales rápidamente.',
                   },
                 ].map(({ icon: Icon, color, title, desc, highlight }) => (
                   <div
@@ -180,8 +180,8 @@ function LocalsGrid({
               </h1>
               <p className="mt-1.5 text-sm text-[hsl(var(--muted-foreground))] max-w-md">
                 {locales.length > 0
-                  ? `${locales.length} franquicia${locales.length !== 1 ? 's' : ''} · Flujo de ${textoDelPeriodo(thresholds.horas)}`
-                  : 'Crea tu primera franquicia para comenzar a operar.'}
+                  ? `${locales.length} local${locales.length !== 1 ? 'es' : ''} · Flujo de ${textoDelPeriodo(thresholds.horas)}`
+                  : 'Crea tu primer local para comenzar a operar.'}
               </p>
             </div>
             <div className="flex flex-col items-end gap-2 shrink-0">
@@ -198,16 +198,16 @@ function LocalsGrid({
                   Umbral de flujo
                 </Button>
                 )}
-                {/* Eliminar franquicias (solo quien puede hacerlo). */}
+                {/* Eliminar locales (solo quien puede hacerlo). */}
                 {canDeleteLocals && (
                   <Button variant="outline" onClick={() => setShowOpciones(true)} className="gap-2 rounded-xl">
                     <Trash2 className="h-4 w-4" />
-                    Eliminar franquicia
+                    Eliminar local
                   </Button>
                 )}
                 <Button onClick={onCreateLocal} className="gap-2 rounded-xl px-5">
                   <Plus className="h-4 w-4" />
-                  Crear Franquicia
+                  Crear local
                 </Button>
               </div>
               <button
@@ -224,20 +224,20 @@ function LocalsGrid({
         <div className="px-6 pb-6 flex flex-col gap-4">
           {locales.length > 0 && <FranchiseSalesCharts locales={locales} />}
           {locales.length > 0 && (
-            <h2 className="mt-2 text-base font-bold text-[hsl(var(--foreground))]">Mis franquicias</h2>
+            <h2 className="mt-2 text-base font-bold text-[hsl(var(--foreground))]">Mis locales</h2>
           )}
           {locales.length === 0 ? (
             <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-[hsl(var(--border))] bg-[hsl(var(--card))] py-24 text-center">
               <div className="mb-5 flex h-20 w-20 items-center justify-center rounded-2xl bg-[hsl(var(--primary)/0.08)]">
                 <Building2 className="h-10 w-10 text-[hsl(var(--primary))]" />
               </div>
-              <h3 className="mb-2 text-xl font-bold text-[hsl(var(--foreground))]">No hay franquicias disponibles</h3>
+              <h3 className="mb-2 text-xl font-bold text-[hsl(var(--foreground))]">No hay locales disponibles</h3>
               <p className="mb-8 text-sm text-[hsl(var(--muted-foreground))] max-w-xs">
-                Agrega tu primera franquicia para empezar a gestionar tu negocio.
+                Agrega tu primer local para empezar a gestionar tu negocio.
               </p>
               <Button onClick={onCreateLocal} className="gap-2 rounded-xl px-6">
                 <Plus className="h-4 w-4" />
-                Crear primera franquicia
+                Crear primer local
               </Button>
             </div>
           ) : (
@@ -393,7 +393,7 @@ function LocalsGrid({
               >
                 <MapPin className="h-4 w-4 text-[hsl(var(--primary))] shrink-0" />
                 <h2 className="text-sm font-bold text-[hsl(var(--muted-foreground))] uppercase tracking-widest">
-                  Ubicación de franquicias
+                  Ubicación de locales
                 </h2>
                 <div className="flex-1 h-px bg-[hsl(var(--border))]" />
                 <span className="text-xs text-[hsl(var(--muted-foreground))] group-hover:text-[hsl(var(--foreground))] transition-colors shrink-0">

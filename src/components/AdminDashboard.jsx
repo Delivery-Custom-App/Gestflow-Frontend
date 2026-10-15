@@ -34,7 +34,7 @@ function AdminDashboard() {
   const navigate   = useNavigate()
   const location   = useLocation()
   const { userRole } = useAuth()
-  // El dueño ya no elimina franquicias desde Inicio: queda reservado al
+  // El dueño ya no elimina locales desde Inicio: queda reservado al
   // superadmin (soporte de la empresa). El código de borrado se conserva.
   const puedeEliminarLocales = isSuperAdminRole(userRole)
   // /usuarios solo está montado en las rutas del dueño.
@@ -174,7 +174,7 @@ function AdminDashboard() {
   if (loading) {
     return (
       <div className="flex-1 flex items-center justify-center">
-        <LoadingSpinner message="Cargando franquicias..." />
+        <LoadingSpinner message="Cargando locales..." />
       </div>
     )
   }

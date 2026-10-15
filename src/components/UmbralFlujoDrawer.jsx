@@ -56,8 +56,8 @@ export default function UmbralFlujoDrawer({ umbral, onGuardar, onClose }) {
           <section aria-label="Cómo se lee" className="flex flex-col gap-2 rounded-xl bg-[hsl(var(--muted)/0.4)] p-4 text-xs leading-relaxed text-[hsl(var(--muted-foreground))]">
             <p>
               Se cuentan las <strong className="text-[hsl(var(--foreground))]">ventas</strong> (órdenes no canceladas)
-              de cada franquicia en <strong className="text-[hsl(var(--foreground))]">{periodo}</strong>. El mismo
-              umbral vale para todas las franquicias.
+              de cada local en <strong className="text-[hsl(var(--foreground))]">{periodo}</strong>. El mismo
+              umbral vale para todos los locales.
             </p>
             <ul className="flex flex-col gap-1">
               <li><span className="mr-1.5 inline-block h-2 w-2 rounded-full bg-green-500" />Verde, flujo bajo: menos de {umbral.medium} ventas.</li>
@@ -66,7 +66,7 @@ export default function UmbralFlujoDrawer({ umbral, onGuardar, onClose }) {
             </ul>
             <p>
               La <strong className="text-[hsl(var(--foreground))]">flecha</strong> compara la última hora con la anterior:
-              ↑ si con eso la franquicia subió de color, ↓ si bajó. Sin cambio de color no hay flecha.
+              ↑ si con eso el local subió de color, ↓ si bajó. Sin cambio de color no hay flecha.
             </p>
             <p>Se actualiza solo cada minuto, sin recargar la página.</p>
           </section>

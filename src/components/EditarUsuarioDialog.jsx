@@ -49,7 +49,7 @@ export default function EditarUsuarioDialog({ usuario, locales = [], miRol, onCl
           <DialogTitle>Editar usuario</DialogTitle>
           <DialogDescription>{usuario.email}</DialogDescription>
         </DialogHeader>
-        <form onSubmit={guardar} className="flex flex-col gap-4">
+        <form onSubmit={guardar} className="flex flex-col gap-4 px-6 py-5">
           <div className="grid grid-cols-2 gap-3">
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="ed-nombre">Nombre</Label>

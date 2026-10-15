@@ -118,6 +118,26 @@ export async function actualizarLocal(localId, { name, phone }) {
   return r
 }
 
+/**
+ * Guarda la ubicación del local (`PUT /locals/{id}/mp-location`): calle,
+ * comuna, región y el punto del mapa. Es la misma que pide Mercado Pago para
+ * crear la sucursal, y la que muestra el mapa de locales.
+ */
+export async function guardarUbicacionLocal(localId, { street_name, city_name, state_name, latitude, longitude }) {
+  const r = await apiRequest(`/locals/${encodeURIComponent(String(localId))}/mp-location`, {
+    method: 'PUT',
+    body: {
+      street_name: String(street_name).trim(),
+      city_name: String(city_name).trim(),
+      state_name: String(state_name).trim(),
+      latitude,
+      longitude,
+    },
+  })
+  invalidarLocales()
+  return r
+}
+
 /** Texto del backend sin el código. */
 export function mensajeLocal(err) {
   return String(err?.detail || err?.message || 'No se pudo guardar el local').replace(/^\d{3}:\s*/, '')

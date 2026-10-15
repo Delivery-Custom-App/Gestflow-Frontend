@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Copy, Check } from 'lucide-react'
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogDescription, DialogBody, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 
 /**
@@ -30,6 +30,7 @@ export default function ClaveTemporalDialog({ nombre, clave, correoEnviado, onCl
           <DialogTitle>Clave temporal de {nombre}</DialogTitle>
           <DialogDescription>Se muestra una sola vez. Al cerrar esta ventana ya no se puede volver a ver.</DialogDescription>
         </DialogHeader>
+        <DialogBody>
         <div className="flex items-center gap-2">
           <code data-testid="clave-temporal" className="flex-1 select-all rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--muted))] px-3 py-2 font-mono text-lg tracking-wider text-[hsl(var(--foreground))]">
             {clave}
@@ -52,6 +53,7 @@ export default function ClaveTemporalDialog({ nombre, clave, correoEnviado, onCl
         <div className="flex justify-end">
           <Button type="button" onClick={onClose}>Listo</Button>
         </div>
+      </DialogBody>
       </DialogContent>
     </Dialog>
   )

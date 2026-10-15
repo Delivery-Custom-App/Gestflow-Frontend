@@ -10,6 +10,8 @@ import {
   agruparPorLocal, listarMaquinasDelNegocio, mensajeMaquinas, moverMaquina, registrarTerminal, textoOcupacion,
 } from '../lib/maquinasNegocio'
 import { PROVEEDOR_LABEL } from '../lib/maquinasCobro'
+import { isV2FeatureEnabled } from '../lib/v2Features'
+import MPConfigDrawer from './pos/MPConfigDrawer'
 
 const CAMPO = 'w-full rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3 py-2 text-sm'
 
@@ -53,7 +55,7 @@ function ElegirDestino({ titulo, descripcion, conNombre = false, onConfirmar, on
           <DialogTitle>{titulo}</DialogTitle>
           <DialogDescription>{descripcion}</DialogDescription>
         </DialogHeader>
-        <form onSubmit={confirmar} className="flex flex-col gap-3">
+        <form onSubmit={confirmar} className="flex flex-col gap-3 px-6 py-5">
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="destino-local">Local</Label>
             <select id="destino-local" value={localId} onChange={(e) => { setLocalId(e.target.value); setCajaId('') }} className={CAMPO} disabled={ocupado}>
@@ -100,6 +102,10 @@ export default function MaquinasNegocioPage() {
   const [moviendo, setMoviendo] = useState(null)
   const [registrando, setRegistrando] = useState(null)
   const [version, setVersion] = useState(0)
+  const { locales } = useLocals()
+  const [localMp, setLocalMp] = useState('')
+  const [configurandoMp, setConfigurandoMp] = useState(false)
+  const localMpEfectivo = localMp || (locales.length === 1 ? String(locales[0].id) : '')
 
   useEffect(() => {
     let ignore = false
@@ -126,6 +132,31 @@ export default function MaquinasNegocioPage() {
       {error && <p role="alert" className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
       {aviso && <p role="status" className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">{aviso}</p>}
       {datos?.aviso && <p role="note" className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">{datos.aviso}</p>}
+
+      {isV2FeatureEnabled('mpConfig') && datos !== null && (
+        <div className="mb-5 flex flex-wrap items-end gap-3 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] p-4">
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-bold text-[hsl(var(--foreground))]">Cuenta de Mercado Pago</p>
+            <p className="text-xs text-[hsl(var(--muted-foreground))]">
+              {datos.mercadopago_conectado === false
+                ? 'Todavía no hay una cuenta conectada. Conéctala desde el local que la usa.'
+                : 'Conecta, cambia o desconecta la cuenta de un local.'}
+            </p>
+          </div>
+          {locales.length > 1 && (
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="mp-local">Local de la cuenta</Label>
+              <select id="mp-local" value={localMp} onChange={(e) => setLocalMp(e.target.value)} className={CAMPO}>
+                <option value="">Elige un local</option>
+                {locales.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
+              </select>
+            </div>
+          )}
+          <Button type="button" disabled={!localMpEfectivo} onClick={() => setConfigurandoMp(true)}>
+            <CreditCard size={14} /> {datos.mercadopago_conectado === false ? 'Conectar Mercado Pago' : 'Configurar Mercado Pago'}
+          </Button>
+        </div>
+      )}
 
       {datos === null ? (
         <p className="text-sm text-[hsl(var(--muted-foreground))]">Cargando las máquinas…</p>
@@ -200,6 +231,14 @@ export default function MaquinasNegocioPage() {
             setRegistrando(null)
             recargar()
           }}
+        />
+      )}
+
+      {isV2FeatureEnabled('mpConfig') && localMpEfectivo && (
+        <MPConfigDrawer
+          open={configurandoMp}
+          localId={localMpEfectivo}
+          onClose={() => { setConfigurandoMp(false); recargar() }}
         />
       )}
     </main>

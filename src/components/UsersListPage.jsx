@@ -12,7 +12,7 @@ import LocalesAsignadosDialog from './LocalesAsignadosDialog'
 import EditarUsuarioDialog from './EditarUsuarioDialog'
 import ClaveTemporalDialog from './ClaveTemporalDialog'
 import SesionesEmpleadoDialog from './SesionesEmpleadoDialog'
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import {
   cambiarEstadoUsuario, puedeGestionar, restablecerClave, separarPorEstado, textoDeError,
 } from '../lib/gestionUsuarios'
@@ -617,12 +617,12 @@ export default function UsersListPage() {
                     : 'Se genera una clave temporal, se cierran sus sesiones y deberá cambiarla al entrar.'}
               </DialogDescription>
             </DialogHeader>
-            <div className="flex justify-end gap-2">
+            <DialogFooter>
               <Button variant="outline" onClick={() => setConfirmando(null)} disabled={ocupado}>Cancelar</Button>
               <Button variant={confirmando.accion === 'desactivar' ? 'danger' : 'default'} onClick={confirmar} disabled={ocupado}>
                 {ocupado ? 'Un momento…' : confirmando.accion === 'desactivar' ? 'Desactivar' : confirmando.accion === 'reactivar' ? 'Reactivar' : 'Restablecer'}
               </Button>
-            </div>
+            </DialogFooter>
           </DialogContent>
         </Dialog>
       )}

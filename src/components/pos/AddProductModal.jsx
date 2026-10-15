@@ -104,7 +104,7 @@ export default function AddProductModal({ orderId, mesaId, localId, onClose, onP
           <DialogTitle>Agregar Producto</DialogTitle>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-4 pt-1">
+        <form onSubmit={handleSubmit} className="space-y-4 px-6 pt-5">
           {/* Producto */}
           <div className="space-y-1.5">
             <Label htmlFor="product-select">Producto</Label>
@@ -162,7 +162,7 @@ export default function AddProductModal({ orderId, mesaId, localId, onClose, onP
             <p className="text-xs text-[hsl(var(--muted-foreground))]">Creando orden...</p>
           )}
 
-          <DialogFooter>
+          <DialogFooter className="-mx-6">
             <Button type="button" variant="outline" onClick={onClose} disabled={isLoading}>
               Cancelar
             </Button>

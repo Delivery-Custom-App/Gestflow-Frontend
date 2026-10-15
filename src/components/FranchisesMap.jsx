@@ -27,7 +27,7 @@ function FranchisesMap({ locales }) {
         </div>
         <p className="text-sm font-medium text-[hsl(var(--foreground))]">Sin ubicaciones registradas</p>
         <p className="text-xs text-[hsl(var(--muted-foreground))] max-w-xs">
-          Las franquicias que crees con una dirección válida aparecerán aquí automáticamente.
+          Los locales que crees con una dirección válida aparecerán aquí automáticamente.
         </p>
       </div>
     )

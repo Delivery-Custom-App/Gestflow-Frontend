@@ -28,10 +28,10 @@ function responderNominatim(resultados) {
 }
 
 async function completarYEnviar(user, direccion = '5 Norte 147, Viña del Mar') {
-  await user.type(screen.getByPlaceholderText('Ej: Franquicia Centro'), 'Franquicia Centro')
+  await user.type(screen.getByPlaceholderText('Ej: Local Centro'), 'Local Centro')
   await user.type(screen.getByPlaceholderText(/5 Norte 147/i), direccion)
   await user.type(screen.getByLabelText(/Teléfono/), '9 1234 5678')
-  await user.click(screen.getByRole('button', { name: 'Crear Franquicia' }))
+  await user.click(screen.getByRole('button', { name: 'Crear local' }))
 }
 
 describe('CreateLocalDrawer — ubicación del local', () => {
@@ -60,7 +60,7 @@ describe('CreateLocalDrawer — ubicación del local', () => {
     expect(ruta).toBe('/locals')
     expect(opciones.body).toMatchObject({
       business_id: 'biz-1',
-      name: 'Franquicia Centro',
+      name: 'Local Centro',
       street_name: '5 Norte 147',
       city_name: 'Viña del Mar',
       state_name: 'Valparaíso',
@@ -83,7 +83,7 @@ describe('CreateLocalDrawer — ubicación del local', () => {
     expect(onClose).not.toHaveBeenCalled()
     expect(onSuccess).not.toHaveBeenCalled()
     // Sobre el aviso la única acción es cerrarlo: el formulario no queda detrás.
-    expect(screen.queryByRole('button', { name: 'Crear Franquicia' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Crear local' })).not.toBeInTheDocument()
   })
 
   it('sin ubicación no inventa coordenadas: guarda la dirección escrita y nada más', async () => {

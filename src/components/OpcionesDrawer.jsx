@@ -62,13 +62,13 @@ function DeleteSection({ locales, onDeleteDone }) {
     return (
       <div className="flex flex-col gap-3">
         <h3 className="text-xs font-bold text-[hsl(var(--muted-foreground))] uppercase tracking-widest">
-          Eliminar franquicia
+          Eliminar local
         </h3>
         <p className="text-xs text-[hsl(var(--muted-foreground))]">
-          Selecciona la franquicia que deseas eliminar permanentemente.
+          Selecciona el local que deseas eliminar permanentemente.
         </p>
         {locales.length === 0 ? (
-          <p className="text-xs text-[hsl(var(--muted-foreground))] italic">No hay franquicias registradas.</p>
+          <p className="text-xs text-[hsl(var(--muted-foreground))] italic">No hay locales registrados.</p>
         ) : (
           <div className="flex flex-col gap-1">
             {locales.map((local) => (
@@ -97,7 +97,7 @@ function DeleteSection({ locales, onDeleteDone }) {
     return (
       <div className="flex flex-col gap-4">
         <h3 className="text-xs font-bold text-[hsl(var(--muted-foreground))] uppercase tracking-widest">
-          Eliminar franquicia
+          Eliminar local
         </h3>
 
         <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-4 flex gap-3">
