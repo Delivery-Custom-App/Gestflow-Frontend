@@ -1,6 +1,7 @@
 import {
   listCajas,
-  listOrders,
+  listOrdersPage,
+  toV2OrderStatus,
   createCajaV2,
   getCajaResumen,
   getMovimientosCaja,
@@ -120,8 +121,36 @@ export function buildDashboardFromOrders(orders = [], { localCount = 1 } = {}) {
 export async function getLocalDashboard(localId, token) {
   void token
   if (!isV2FeatureEnabled('adminDashboard')) {
-    const orders = await listOrders(localId)
-    return buildDashboardFromOrders(orders, { localCount: 1 })
+    const endDate = todayInChileIso()
+    const startDate = `${endDate.slice(0, 7)}-01`
+    const report = await getSalesReport(localId, { startDate, endDate })
+    const byDay = safeList(report?.by_day)
+    const dailySales = nullableNumber(byDay.find((row) => row.date === endDate)?.total_sales) ?? 0
+    const monthlySales = nullableNumber(report?.total_sales) ?? 0
+    return {
+      daily_sales: dailySales,
+      monthly_sales: monthlySales,
+      monthly_cash_flow: monthlySales,
+      monthly_expenses: 0,
+      active_alerts: 0,
+      avg_ticket: nullableNumber(report?.avg_ticket) ?? 0,
+      stock_critical_count: 0,
+      stock_low_count: 0,
+      stock_out_count: 0,
+      inventory_total_value: 0,
+      active_cajas_count: 0,
+      cajas_count: 0,
+      peak_hour: null,
+      local_count: 1,
+      top_products: [],
+      payment_breakdown: safeList(report?.by_payment_method),
+      week_comparison: null,
+      monthly_goal: { target_amount: 0, current_amount: monthlySales, progress_pct: 0 },
+      petty_cash: { active_cajas: 0, total_cajas: 0, pending_expenses_amount: 0 },
+      daily_income_trend: byDay.map((row) => ({ date: row.date, ingresos: nullableNumber(row.total_sales) ?? 0 })),
+      expenses_breakdown: [],
+      _source: 'reports_v2',
+    }
   }
   return apiRequest(`/dashboard/local/${localId}`, { token })
 }
@@ -197,9 +226,13 @@ export async function getDashboardSalesReport(localId, now = new Date()) {
   return mapDashboardSalesReport(report)
 }
 
-export function getOrdersByLocal(localId, token, status) {
+export function getOrdersByLocal(localId, token, filters = {}) {
   void token
-  return listOrders(localId, { status })
+  const requested = filters.status ?? ['open', 'preparing', 'ready', 'completed']
+  const status = Array.isArray(requested)
+    ? requested.map(toV2OrderStatus)
+    : toV2OrderStatus(requested)
+  return listOrdersPage(localId, { ...filters, status, limit: filters.limit ?? 50 })
 }
 
 export async function getCajasByLocal(localId, token) {

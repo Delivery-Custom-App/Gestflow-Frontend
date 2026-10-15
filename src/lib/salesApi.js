@@ -260,13 +260,69 @@ export async function getMovimientosCaja(cajaId, { limit = 100, offset = 0 } = {
   return Array.isArray(rows) ? rows : []
 }
 
-/**
- * Órdenes de un turno (`GET /orders?caja_id=`, B8): para revisar desde el
- * resumen del turno qué se vendió.
- */
+const ORDER_PAGE_SIZE = 500
+
+function appendOrderFilters(query, filters = {}) {
+  const values = {
+    local_id: filters.localId,
+    mesa_id: filters.mesaId,
+    caja_id: filters.cajaId,
+    waiter_user_id: filters.waiterUserId,
+    date_from: filters.dateFrom instanceof Date ? filters.dateFrom.toISOString() : filters.dateFrom,
+    date_to: filters.dateTo instanceof Date ? filters.dateTo.toISOString() : filters.dateTo,
+    business_date: filters.businessDate,
+  }
+  Object.entries(values).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== '') query.set(key, String(value))
+  })
+  const statuses = Array.isArray(filters.status) ? filters.status : filters.status ? [filters.status] : []
+  statuses.forEach((status) => query.append('status', String(status)))
+}
+
+async function fetchOrdersPage(filters = {}) {
+  const limit = Math.min(Math.max(Number(filters.limit) || 50, 1), ORDER_PAGE_SIZE)
+  const offset = Math.max(Number(filters.offset) || 0, 0)
+  const query = new URLSearchParams({ limit: String(limit), offset: String(offset) })
+  appendOrderFilters(query, filters)
+  const response = await apiRequest(`/orders?${query.toString()}`, { withTotal: true })
+  const data = Array.isArray(response) ? response : response?.data
+  const total = Array.isArray(response) ? null : response?.total ?? null
+  return { rows: Array.isArray(data) ? data : [], total, limit, offset }
+}
+
+/** Una página de órdenes y el total del filtro, sin descargar el historial completo. */
+export async function listOrdersPage(localId, filters = {}) {
+  const page = await fetchOrdersPage({ ...filters, localId })
+  return { orders: page.rows.map(mapOrderOut), total: page.total, limit: page.limit, offset: page.offset }
+}
+
+async function fetchAllMatchingOrders(filters = {}) {
+  const rows = []
+  let offset = 0
+  let total = null
+  while (total === null || offset < total) {
+    // Cada consulta trae solo hasta 500 órdenes que ya cumplen los filtros del servidor.
+    // oxlint-disable-next-line react-doctor/async-await-in-loop
+    const page = await fetchOrdersPage({ ...filters, limit: ORDER_PAGE_SIZE, offset })
+    rows.push(...page.rows)
+    total = page.total
+    offset += page.rows.length
+    if (page.rows.length < ORDER_PAGE_SIZE) break
+  }
+  return rows
+}
+
+/** Órdenes activas de cocina; los estados se filtran y paginan en el servidor. */
+export async function listOrders(localId, { status = ACTIVE_ORDER_STATUS_FILTERS, ...filters } = {}) {
+  const statuses = Array.isArray(status) ? status.map(toV2OrderStatus) : status ? toV2OrderStatus(status) : status
+  const rows = await fetchAllMatchingOrders({ ...filters, localId, status: statuses })
+  return rows.map(mapOrderOut)
+}
+
+/** Órdenes de un turno, obtenidas por páginas para no traer el historial del local. */
 export async function listOrdenesDelTurno(cajaId) {
-  const rows = await apiRequest(`/orders?caja_id=${encodeURIComponent(String(cajaId))}`)
-  return (Array.isArray(rows) ? rows : []).map(mapOrderOut)
+  const rows = await fetchAllMatchingOrders({ cajaId })
+  return rows.map(mapOrderOut)
 }
 
 export async function listMesas(localId) {
@@ -281,14 +337,13 @@ export async function listMesas(localId) {
  * local: una sola consulta filtrada por estado, no el histórico completo.
  */
 export async function listMesasConTotales(localId) {
-  const local = encodeURIComponent(String(localId))
   // En curso = abierta, en preparación o lista: todavía no se cobra ni se cancela.
-  const [mesas, ...porEstado] = await Promise.all([
+  const [mesas, ordenesEnCurso] = await Promise.all([
     listMesas(localId),
-    ...['open', 'preparing', 'ready'].map((estado) => apiRequest(`/orders?local_id=${local}&status=${estado}`).catch(() => [])),
+    fetchAllMatchingOrders({ localId, status: ACTIVE_ORDER_STATUS_FILTERS }).catch(() => []),
   ])
   const enCursoPorMesa = new Map()
-  for (const orden of porEstado.flatMap((filas) => (Array.isArray(filas) ? filas : []))) {
+  for (const orden of ordenesEnCurso) {
     if (!orden?.mesa_id) continue
     const clave = String(orden.mesa_id)
     if (!enCursoPorMesa.has(clave)) enCursoPorMesa.set(clave, [])
@@ -368,10 +423,7 @@ export async function deleteMesa(mesaId) {
 export async function getMesaDetail(mesaId) {
   const mesa = mapMesaOut(await apiRequest(`/mesas/${encodeURIComponent(String(mesaId))}`))
   const [ordersByStatus, productsMap] = await Promise.all([
-    Promise.all(ACTIVE_ORDER_STATUS_FILTERS.map((status) => {
-      const query = new URLSearchParams({ mesa_id: String(mesaId), status })
-      return apiRequest(`/orders?${query.toString()}`)
-    })),
+    Promise.all(ACTIVE_ORDER_STATUS_FILTERS.map((status) => fetchAllMatchingOrders({ mesaId, status }))),
     fetchProductsMap().catch(() => new Map()),
   ])
   const active = ordersByStatus.flatMap((orders) => Array.isArray(orders) ? orders : []).filter(
@@ -404,16 +456,6 @@ export async function getMesaDetail(mesaId) {
     total_products: totalProducts,
     total_value: totalValue,
   }
-}
-
-export async function listOrders(localId, { status } = {}) {
-  const rows = await apiRequest(`/orders?local_id=${encodeURIComponent(String(localId))}`)
-  let list = (Array.isArray(rows) ? rows : []).map(mapOrderOut)
-  if (status) {
-    const wanted = toUiOrderStatus(status)
-    list = list.filter((o) => o.status === wanted || String(o.status_v2) === String(status).toLowerCase())
-  }
-  return list
 }
 
 export async function listOrderItems(orderId, createdAt) {

@@ -50,9 +50,20 @@ describe('variacion', () => {
 describe('fetchBusinessSalesSummary · mensual', () => {
   function responder({ fallaMes } = {}) {
     apiRequest.mockImplementation(async (path) => {
-      if (path.startsWith('/orders')) return []
       const p = params(path)
       if (fallaMes && p.start_date === fallaMes && p.local_id === 'B') throw new Error('500: boom')
+      if (p.start_date === '2026-10-12') {
+        return {
+          total_sales: '0',
+          total_orders: 0,
+          by_day: p.local_id === 'A'
+            ? [
+                { date: '2026-10-12', total_sales: '100', total_orders: 1 },
+                { date: '2026-10-14', total_sales: '300', total_orders: 2 },
+              ]
+            : [{ date: '2026-10-14', total_sales: '400', total_orders: 1 }],
+        }
+      }
       // Ventas simuladas: julio y agosto con datos, el resto en 0.
       const ventas = { '2026-07-01': { A: '1000.00', B: '500.00' }, '2026-08-01': { A: '2000.00', B: '1000.00' } }
       return { total_sales: ventas[p.start_date]?.[p.local_id] ?? '0', total_orders: 1 }
@@ -62,11 +73,12 @@ describe('fetchBusinessSalesSummary · mensual', () => {
   it('una llamada a /reports/sales por local y mes, con el filtro de local', async () => {
     responder()
     await fetchBusinessSalesSummary(LOCALES)
-    const reportes = apiRequest.mock.calls.map(([p]) => p).filter((p) => p.startsWith('/reports/sales'))
+    const reportes = apiRequest.mock.calls.map(([p]) => p).filter((p) => p.startsWith('/reports/sales') && params(p).start_date !== '2026-10-12')
     expect(reportes).toHaveLength(8)
     expect(params(reportes[0])).toEqual({ local_id: 'A', start_date: '2026-07-01', end_date: '2026-07-31' })
     expect(reportes.map((p) => params(p).local_id).sort()).toEqual(['A', 'A', 'A', 'A', 'B', 'B', 'B', 'B'])
     expect(reportes.some((p) => params(p).end_date === '2026-10-14')).toBe(true)
+    expect(apiRequest.mock.calls.some(([path]) => String(path).startsWith('/orders'))).toBe(false)
   })
 
   it('suma total_sales de los locales y calcula la variación entre meses', async () => {
@@ -76,6 +88,15 @@ describe('fetchBusinessSalesSummary · mensual', () => {
     expect(monthly.months[1].momPercent).toBe(100)
     expect(monthly.months[2].momPercent).toBe(-100)
     expect(monthly.months[3].momPercent).toBeNull()
+  })
+
+  it('consolida el gráfico semanal desde by_day, agrupado por fecha contable', async () => {
+    responder()
+    const { weekly } = await fetchBusinessSalesSummary(LOCALES)
+
+    expect(weekly.days[0]).toMatchObject({ total: 100, count: 1, isFuture: false })
+    expect(weekly.days[2]).toMatchObject({ total: 700, count: 3, isToday: true })
+    expect(weekly.total).toBe(800)
   })
 
   it('si falla un mes, ese mes queda en null (se muestra «—», no 0)', async () => {

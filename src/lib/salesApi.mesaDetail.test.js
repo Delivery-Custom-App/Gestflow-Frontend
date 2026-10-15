@@ -12,17 +12,17 @@ describe('getMesaDetail', () => {
       if (path === '/mesas/m-1') {
         return Promise.resolve({ id: 'm-1', name: 'Mesa 1', local_id: 'loc-1', status: 'occupied' })
       }
-      if (path === '/orders?mesa_id=m-1&status=open') {
+      if (path.startsWith('/orders?') && new URLSearchParams(path.split('?')[1]).get('status') === 'open') {
         return Promise.resolve([
           { id: 'o-open', mesa_id: 'm-1', status: 'open' },
           { id: 'o-other', mesa_id: 'm-2', status: 'open' },
           { id: 'o-cancelled', mesa_id: 'm-1', status: 'cancelled' },
         ])
       }
-      if (path === '/orders?mesa_id=m-1&status=preparing') {
+      if (path.startsWith('/orders?') && new URLSearchParams(path.split('?')[1]).get('status') === 'preparing') {
         return Promise.resolve([{ id: 'o-preparing', mesa_id: 'm-1', status: 'preparing' }])
       }
-      if (path === '/orders?mesa_id=m-1&status=ready') {
+      if (path.startsWith('/orders?') && new URLSearchParams(path.split('?')[1]).get('status') === 'ready') {
         return Promise.resolve([{ id: 'o-ready', mesa_id: 'm-1', status: 'ready' }])
       }
       if (path.endsWith('/items')) {
@@ -35,9 +35,10 @@ describe('getMesaDetail', () => {
   it('solicita solo pedidos de esa mesa en cada estado activo y mantiene sus totales', async () => {
     const detail = await getMesaDetail('m-1')
 
-    expect(apiRequest).toHaveBeenCalledWith('/orders?mesa_id=m-1&status=open')
-    expect(apiRequest).toHaveBeenCalledWith('/orders?mesa_id=m-1&status=preparing')
-    expect(apiRequest).toHaveBeenCalledWith('/orders?mesa_id=m-1&status=ready')
+    const orderRequests = apiRequest.mock.calls.filter(([path]) => String(path).startsWith('/orders?'))
+    expect(orderRequests.map(([path]) => new URLSearchParams(path.split('?')[1]).get('status'))).toEqual(['open', 'preparing', 'ready'])
+    expect(orderRequests.every(([, options]) => options.withTotal)).toBe(true)
+    expect(orderRequests.every(([path]) => new URLSearchParams(path.split('?')[1]).get('limit') === '500')).toBe(true)
     expect(apiRequest.mock.calls.some(([path]) => path.startsWith('/orders?local_id='))).toBe(false)
     expect(detail.active_orders.map((order) => order.id)).toEqual(['o-open', 'o-preparing', 'o-ready'])
     expect(detail.active_orders[0].items[0]).toMatchObject({ product_name: 'Jugo', item_name: 'Jugo', total_price: 1200 })

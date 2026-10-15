@@ -40,7 +40,7 @@ import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 import { formatCLPCurrency as formatMoney } from '../lib/formatCLP'
 import { m, AnimatePresence } from 'framer-motion'
-import { MapPin, X, ChevronUp, ChevronRight, ShoppingCart, HelpCircle, CreditCard, ArrowLeftRight, Lock, LifeBuoy } from 'lucide-react'
+import { MapPin, X, ShoppingCart, HelpCircle, CreditCard, ArrowLeftRight, Lock, LifeBuoy } from 'lucide-react'
 
 /**
  * Las cajas físicas son supervisorias: el backend restringe su estado de
@@ -71,10 +71,6 @@ function toNumber(value, fallback = 0) {
 
 function safeArray(value) {
   return Array.isArray(value) ? value : []
-}
-
-function _normalizeOrderStatus(status) {
-  return String(status || '').trim().toLowerCase()
 }
 
 function normalizePaymentMethod(method) {
@@ -288,106 +284,27 @@ function SectionState({ loading, error, isEmpty, emptyMessage }) {
 
 // ── Section content components ─────────────────────────────────
 
-const PERIOD_OPTIONS = [
-  { id: 'week',  label: 'Semanal' },
-  { id: 'month', label: 'Mensual' },
-  { id: 'year',  label: 'Anual' },
-]
-
-const MONTH_NAMES = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
-
-function santiagoYmd(iso) {
-  const d = parseApiDate(iso)
-  if (!d) return null
-  const ymd = d.toLocaleString('en-CA', { timeZone: 'America/Santiago', year: 'numeric', month: '2-digit', day: '2-digit' })
-  return ymd.length === 10 ? ymd : null
-}
-
-function periodMeta(ymd, granularity) {
-  const [y, m, d] = ymd.split('-').map(Number)
-  if (granularity === 'year') {
-    return { key: String(y), label: `Año ${y}`, sortKey: y, range: String(y) }
-  }
-  if (granularity === 'month') {
-    const key = `${y}-${String(m).padStart(2, '0')}`
-    const label = `${MONTH_NAMES[m - 1]} ${y}`
-    return { key, label, sortKey: y * 12 + (m - 1), range: label }
-  }
-  const base = new Date(Date.UTC(y, m - 1, d))
-  const diffToMon = (base.getUTCDay() + 6) % 7
-  const mon = new Date(base.getTime() - diffToMon * 86400000)
-  const sun = new Date(mon.getTime() + 6 * 86400000)
-  const fmt = (dt) => `${String(dt.getUTCDate()).padStart(2, '0')}/${String(dt.getUTCMonth() + 1).padStart(2, '0')}`
-  return {
-    key: mon.toISOString().slice(0, 10),
-    label: `Semana del ${fmt(mon)} al ${fmt(sun)}`,
-    sortKey: mon.getTime(),
-    range: `Semana ${fmt(mon)} — ${fmt(sun)}`,
-  }
-}
-
-function VentasContent({ indicadores, orders, loading, error, onCargarDetalle, detalleLoading, onVerBoleta }) {
-  const all = useMemo(() => safeArray(orders), [orders])
-  const detalleCargado = Array.isArray(orders)
-  const [granularity, setGranularity] = useState('month')
-  const [expandedKey, setExpandedKey] = useState(null)
-
-  // ── Histórico consolidado por período ──
-  const buckets = useMemo(() => {
-    const map = new Map()
-    for (const o of all) {
-      if (_normalizeOrderStatus(o.status) === 'cancelled') continue
-      const ymd = santiagoYmd(o.created_at)
-      if (!ymd) continue
-      const meta = periodMeta(ymd, granularity)
-      if (!map.has(meta.key)) {
-        map.set(meta.key, { ...meta, total: 0, count: 0, orders: [] })
-      }
-      const bucket = map.get(meta.key)
-      bucket.total += getOrderAmount(o)
-      bucket.count += 1
-      bucket.orders.push(o)
-    }
-    return [...map.values()].sort((a, b) => (a.sortKey > b.sortKey ? -1 : a.sortKey < b.sortKey ? 1 : 0))
-  }, [all, granularity])
-
-  const histTotal = buckets.reduce((s, b) => s + b.total, 0)
-  const histCount = buckets.reduce((s, b) => s + b.count, 0)
-  const histAvg = histCount ? histTotal / histCount : 0
-
-  const methodBreakdown = useMemo(() => {
-    const acc = {}
-    for (const o of all) {
-      if (_normalizeOrderStatus(o.status) === 'cancelled') continue
-      const method = normalizePaymentMethod(o?.payment_method)
-      acc[method] = (acc[method] || 0) + getOrderAmount(o)
-    }
-    return Object.entries(acc)
-      .map(([label, total]) => ({ label, total }))
-      .sort((a, b) => b.total - a.total)
-  }, [all])
-
-  const methodTotal = methodBreakdown.reduce((s, m) => s + m.total, 0)
-  const periodNoun = granularity === 'week' ? 'semanas' : granularity === 'month' ? 'meses' : 'años'
-
-  // Tendencia de 7 días y top productos (antes en Reportes), calculados con las mismas órdenes.
-  // Indicadores: los calcula el backend. El detalle por orden, si se pidió,
-  // alimenta los paneles de abajo.
+const DETALLE_ORDENES_POR_PAGINA = 50
+function VentasContent({ indicadores, orders, ordersTotal, ordersOffset = 0, ordersLimit = 50, loading, error, onCargarDetalle, detalleLoading, onVerBoleta }) {
+  const pageOrders = safeArray(orders)
+  const detalleCargado = orders !== null && orders !== undefined
+  const total = Number.isFinite(ordersTotal) ? ordersTotal : 0
   const incomeTrend = safeArray(indicadores?.tendencia)
   const topProducts = safeArray(indicadores?.topProductos)
   const hoy = indicadores?.hoy || { total: 0, ordenes: 0 }
   const porMetodo = indicadores?.porMetodo || { efectivo: 0, tarjetas: 0, otros: 0 }
-
+  const firstOrder = total === 0 ? 0 : ordersOffset + 1
+  const lastOrder = Math.min(ordersOffset + pageOrders.length, total)
   const stateNode = <SectionState loading={loading} error={error} isEmpty={false} emptyMessage="" />
   if (loading || error) return stateNode
 
   return (
     <div className="space-y-5">
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <KpiCard label="Total Hoy"  value={formatMoney(hoy.total)}  sub={`${hoy.ordenes} venta${hoy.ordenes !== 1 ? 's' : ''}`} />
-        <KpiCard label="Efectivo"   value={formatMoney(porMetodo.efectivo)} />
-        <KpiCard label="Tarjetas"   value={formatMoney(porMetodo.tarjetas)} accent="blue" />
-        <KpiCard label="Otros"      value={formatMoney(porMetodo.otros)}    accent="purple" />
+        <KpiCard label="Total Hoy" value={formatMoney(hoy.total)} sub={`${hoy.ordenes} venta${hoy.ordenes !== 1 ? 's' : ''}`} />
+        <KpiCard label="Efectivo" value={formatMoney(porMetodo.efectivo)} />
+        <KpiCard label="Tarjetas" value={formatMoney(porMetodo.tarjetas)} accent="blue" />
+        <KpiCard label="Otros" value={formatMoney(porMetodo.otros)} accent="purple" />
       </div>
       <div className="grid gap-5 lg:grid-cols-2">
         <Panel title="Tendencia de Ventas" sub="Ingresos diarios de los últimos 7 días">
@@ -404,123 +321,55 @@ function VentasContent({ indicadores, orders, loading, error, onCargarDetalle, d
       </div>
 
       {!detalleCargado && (
-        <Panel title="Detalle de órdenes" sub="Se carga aparte porque trae el histórico completo del local">
+        <Panel title="Detalle de órdenes" sub="Consulta paginada de órdenes del local">
           <p className="text-sm text-[hsl(var(--muted-foreground))]">
-            Los indicadores de arriba los calcula el servidor. El detalle orden por orden y los
-            consolidados por período se descargan solo si los necesitas.
+            El detalle se carga por páginas y muestra el total informado por el servidor.
           </p>
-          <Button className="mt-3" size="sm" onClick={onCargarDetalle} disabled={detalleLoading}>
-            {detalleLoading ? 'Cargando detalle…' : 'Cargar detalle de órdenes'}
+          <Button className="mt-3" size="sm" onClick={() => onCargarDetalle(0)} disabled={detalleLoading}>
+            {detalleLoading ? 'Cargando órdenes…' : 'Cargar detalle de órdenes'}
           </Button>
         </Panel>
       )}
 
       {detalleCargado && (
-      <>
-      <Panel title="Histórico y Consolidados" sub="Registros consolidados por período. Excluye órdenes canceladas.">
-        <div className="mb-5 inline-flex rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--muted))] p-1">
-          {PERIOD_OPTIONS.map((opt) => (
-            <button
-              key={opt.id}
-              type="button"
-              onClick={() => { setGranularity(opt.id); setExpandedKey(null) }}
-              className={cn('rounded-md px-3 py-1.5 text-xs font-semibold transition-colors',
-                granularity === opt.id
-                  ? 'bg-[hsl(var(--primary))] text-white shadow-sm'
-                  : 'text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]')}>
-              {opt.label}
-            </button>
-          ))}
-        </div>
-
-        <div className="mb-5 grid grid-cols-2 gap-4 lg:grid-cols-4">
-          <KpiCard label="Total Consolidado" value={formatMoney(histTotal)} sub={`${histCount} ventas`} />
-          <KpiCard label="Ticket Promedio"   value={formatMoney(histAvg)}   sub="Por venta" accent="blue" />
-          <KpiCard label="Períodos"          value={String(buckets.length)} sub={periodNoun} accent="purple" />
-          <KpiCard label="Mayor Período"     value={formatMoney(buckets[0]?.total || 0)} sub={buckets[0]?.label || 'Sin ventas'} accent="warning" />
-        </div>
-
-        {buckets.length === 0 ? (
-          <p className="text-sm text-[hsl(var(--muted-foreground))]">No hay ventas históricas registradas.</p>
-        ) : (
-          <div className="space-y-2">
-            {buckets.map((bucket) => {
-              const isOpen = expandedKey === bucket.key
-              const pct = histTotal ? (bucket.total / histTotal) * 100 : 0
-              const bucketAvg = bucket.count ? bucket.total / bucket.count : 0
-              return (
-                <div key={bucket.key} className="rounded-lg border border-[hsl(var(--border))]">
-                  <button
-                    type="button"
-                    onClick={() => setExpandedKey(isOpen ? null : bucket.key)}
-                    className="flex w-full items-center justify-between gap-3 rounded-lg p-3 text-left transition-colors hover:bg-[hsl(var(--muted)/40)]">
-                    <div className="flex min-w-0 items-center gap-2">
-                      {isOpen
-                        ? <ChevronUp size={15} className="shrink-0 text-[hsl(var(--muted-foreground))]" />
-                        : <ChevronRight size={15} className="shrink-0 text-[hsl(var(--muted-foreground))]" />}
-                      <div className="min-w-0">
-                        <strong className="block truncate text-sm font-bold text-[hsl(var(--foreground))]">{bucket.label}</strong>
-                        <span className="block text-xs text-[hsl(var(--muted-foreground))]">{bucket.count} venta{bucket.count !== 1 ? 's' : ''} · {formatMoney(bucketAvg)} promedio</span>
-                      </div>
-                    </div>
-                    <div className="shrink-0 text-right">
-                      <strong className="block text-sm font-bold text-[hsl(var(--foreground))]">{formatMoney(bucket.total)}</strong>
-                      <span className="block text-xs text-[hsl(var(--muted-foreground))]">{pct.toFixed(0)}% del total</span>
-                    </div>
-                  </button>
-                  {isOpen && (
-                    <div className="space-y-2 border-t border-[hsl(var(--border))] p-3">
-                      {bucket.orders.map((order) => (
-                        <RowCard
-                          key={order.id}
-                          title={formatMoney(getOrderAmount(order))}
-                          sub={`#${String(order.id || '').slice(0, 8)} — ${normalizePaymentMethod(order.payment_method)} — ${formatDateTime(order.created_at)}`}
-                          meta={`Estado: ${order.status || '—'} · Fuente: ${order.source || '—'}`}
-                          pill={normalizePaymentMethod(order.payment_method)}
-                          action={isV2FeatureEnabled('receiptPrint') && (
-                            <Button size="sm" variant="outline" onClick={() => onVerBoleta(order)}>
-                              Boleta
-                            </Button>
-                          )}
-                        />
-                      ))}
-                    </div>
+        <Panel title="Detalle de órdenes" sub="Órdenes filtradas y paginadas por el servidor">
+          <p className="mb-3 text-sm text-[hsl(var(--muted-foreground))]">
+            Mostrando {firstOrder}–{lastOrder} de {total} órdenes.
+          </p>
+          {pageOrders.length === 0 ? (
+            <p className="text-sm text-[hsl(var(--muted-foreground))]">No hay órdenes para mostrar.</p>
+          ) : (
+            <div className="space-y-2">
+              {pageOrders.map((order) => (
+                <RowCard
+                  key={`${order.id}-${order.created_at || ''}`}
+                  title={formatMoney(getOrderAmount(order))}
+                  sub={`#${String(order.id || '').slice(0, 8)} — ${normalizePaymentMethod(order.payment_method)} — ${formatDateTime(order.created_at)}`}
+                  meta={`Estado: ${order.status || '—'} · Fuente: ${order.source || '—'}`}
+                  pill={normalizePaymentMethod(order.payment_method)}
+                  action={isV2FeatureEnabled('receiptPrint') && (
+                    <Button size="sm" variant="outline" onClick={() => onVerBoleta(order)}>
+                      Boleta
+                    </Button>
                   )}
-                </div>
-              )
-            })}
+                />
+              ))}
+            </div>
+          )}
+          <div className="mt-4 flex items-center justify-between gap-3">
+            <Button size="sm" variant="outline" disabled={ordersOffset <= 0 || detalleLoading} onClick={() => onCargarDetalle(Math.max(0, ordersOffset - ordersLimit))}>
+              Anterior
+            </Button>
+            <span className="text-xs text-[hsl(var(--muted-foreground))]">Página {Math.floor(ordersOffset / ordersLimit) + 1}</span>
+            <Button size="sm" variant="outline" disabled={ordersOffset + pageOrders.length >= total || detalleLoading} onClick={() => onCargarDetalle(ordersOffset + ordersLimit)}>
+              Siguiente
+            </Button>
           </div>
-        )}
-      </Panel>
-
-      <Panel title="Distribución por Método de Pago" sub={`Histórico consolidado ${granularity === 'week' ? 'semanal' : granularity === 'month' ? 'mensual' : 'anual'}`}>
-        {methodBreakdown.length === 0 ? (
-          <p className="text-sm text-[hsl(var(--muted-foreground))]">No hay datos de métodos de pago.</p>
-        ) : (
-          <div className="space-y-3">
-            {methodBreakdown.map((m) => {
-              const pct = methodTotal ? (m.total / methodTotal) * 100 : 0
-              return (
-                <div key={m.label}>
-                  <div className="mb-1 flex items-center justify-between text-xs">
-                    <span className="text-[hsl(var(--muted-foreground))]">{m.label}</span>
-                    <span className="text-[hsl(var(--muted-foreground))]">{formatMoney(m.total)} · {pct.toFixed(0)}%</span>
-                  </div>
-                  <div className="h-1.5 w-full overflow-hidden rounded-full bg-[hsl(var(--border))]">
-                    <div className="h-full rounded-full bg-[hsl(var(--primary))]" style={{ width: `${pct}%` }} />
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        )}
-      </Panel>
-      </>
+        </Panel>
       )}
     </div>
   )
 }
-
 const MP_PAIRING_BADGE = {
   // Cuando el backend no responde el estado, no se afirma que no está vinculada:
   // no saberlo y no estarlo son cosas distintas.
@@ -1190,7 +1039,7 @@ function renderSectionContent(activeSection, payload) {
       return <ConfiguracionContent localId={payload.localId} />
     case 'ventas':
     default:
-      return <VentasContent indicadores={payload.indicadores} orders={payload.orders} loading={payload.loading} error={payload.error} onCargarDetalle={payload.onCargarDetalle} detalleLoading={payload.detalleLoading} onVerBoleta={payload.onVerBoleta} />
+      return <VentasContent indicadores={payload.indicadores} orders={payload.orders} ordersTotal={payload.ordersTotal} ordersOffset={payload.ordersOffset} ordersLimit={payload.ordersLimit} loading={payload.loading} error={payload.error} onCargarDetalle={payload.onCargarDetalle} detalleLoading={payload.detalleLoading} onVerBoleta={payload.onVerBoleta} />
   }
 }
 
@@ -1202,22 +1051,24 @@ function AdministrativeModule() {
   const { userRole, user } = useAuth()
   const puedeAbrirTurno = puedeVender(userRole, user?.local_sales_model)
   const puedeGestionarCajasFisicas = ROLES_CAJAS_FISICAS.has(normalizeRoleKey(userRole))
-  const [sectionData, setSectionData] = useState({ dashboard: null, orders: null, cajas: [], indicadores: null })
+  const [sectionData, setSectionData] = useState({ dashboard: null, orders: null, ordersTotal: null, ordersOffset: 0, ordersLimit: DETALLE_ORDENES_POR_PAGINA, cajas: [], indicadores: null })
   const [detalleLoading, setDetalleLoading] = useState(false)
   const [cajaFisicaModal, setCajaFisicaModal] = useState(null)
   const [boletaOrden, setBoletaOrden] = useState(null)
 
-  /**
-   * Descarga el detalle orden por orden. Solo bajo pedido: `/orders` no admite
-   * filtro de fecha ni paginación, así que trae el histórico completo del local
-   * y no debe pagarse al entrar a la pantalla.
-   */
-  const cargarDetalleOrdenes = async () => {
+  /** Carga una página del detalle y conserva el total que informa X-Total-Count. */
+  const cargarDetalleOrdenes = async (offset = 0) => {
     setDetalleLoading(true)
     try {
       const { token } = await getAuthContext()
-      const rows = await getOrdersByLocal(localId, token)
-      setSectionData((prev) => ({ ...prev, orders: rows }))
+      const page = await getOrdersByLocal(localId, token, { limit: DETALLE_ORDENES_POR_PAGINA, offset })
+      setSectionData((prev) => ({
+        ...prev,
+        orders: page.orders,
+        ordersTotal: page.total,
+        ordersOffset: page.offset,
+        ordersLimit: page.limit,
+      }))
     } catch (error) {
       setSectionError(error.message || 'No se pudo cargar el detalle de órdenes')
     } finally {

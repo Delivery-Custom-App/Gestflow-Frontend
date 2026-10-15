@@ -30,17 +30,14 @@ vi.mock('./LocalsGrid', () => ({
 
 const AHORA = new Date('2026-10-05T15:00:00Z')
 const rutasDeConteo = () => apiRequest.mock.calls.map(([r]) => r)
+const paramsDeRuta = (ruta) => new URLSearchParams(String(ruta).split('?')[1])
 
 beforeEach(() => {
   vi.useFakeTimers({ shouldAdvanceTime: true })
   vi.setSystemTime(AHORA)
   localStorage.clear()
   sesion.userRole = 'Admin Negocio'
-  apiRequest.mockResolvedValue([
-    { id: 'o1', status: 'completed', created_at: '2026-10-05T14:30:00Z' },
-    { id: 'o2', status: 'open', created_at: '2026-10-05T14:50:00Z' },
-    { id: 'o3', status: 'cancelled', created_at: '2026-10-05T14:40:00Z' },
-  ])
+  apiRequest.mockResolvedValue({ data: [], total: 2 })
 })
 afterEach(() => vi.useRealTimers())
 
@@ -48,9 +45,12 @@ describe('AdminDashboard · flujo', () => {
   it('cuenta las ventas (sin canceladas) de la última hora por defecto', async () => {
     render(<AdminDashboard />)
     expect(await screen.findByText('ventas 2 · período 1 h')).toBeInTheDocument()
-    expect(rutasDeConteo()).toContain(
-      `/orders?local_id=loc-1&date_from=${encodeURIComponent('2026-10-05T14:00:00.000Z')}&date_to=${encodeURIComponent(AHORA.toISOString())}`,
-    )
+    const request = apiRequest.mock.calls.find(([path]) => paramsDeRuta(path).get('date_from') === '2026-10-05T14:00:00.000Z')
+    expect(request[0]).toContain('/orders?')
+    expect(paramsDeRuta(request[0]).get('date_to')).toBe(AHORA.toISOString())
+    expect(paramsDeRuta(request[0]).get('limit')).toBe('1')
+    expect(paramsDeRuta(request[0]).getAll('status')).toEqual(['open', 'preparing', 'ready', 'completed'])
+    expect(request[1]).toMatchObject({ withTotal: true })
   })
 
   it('usa de verdad el período guardado en horas', async () => {
@@ -64,7 +64,7 @@ describe('AdminDashboard · flujo', () => {
     render(<AdminDashboard />)
     await screen.findByText('ventas 2 · período 1 h')
 
-    apiRequest.mockResolvedValue([{ id: 'o9', status: 'completed', created_at: '2026-10-05T15:00:30Z' }])
+    apiRequest.mockResolvedValue({ data: [], total: 1 })
     await act(async () => { await vi.advanceTimersByTimeAsync(60_000) })
     await waitFor(() => expect(screen.getByText('ventas 1 · período 1 h')).toBeInTheDocument())
   })

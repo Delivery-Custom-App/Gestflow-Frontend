@@ -74,15 +74,15 @@ describe('Mesas', () => {
           { id: 'm2', nombre: 'Mesa 2', status: 'available', capacity: 2 },
         ])
       }
-      if (path === '/orders?local_id=loc-1&status=open') {
+      if (path.startsWith('/orders?')) {
+        const query = new URLSearchParams(path.split('?')[1])
+        const statuses = query.getAll('status')
+        if (statuses.length !== 3 || !statuses.includes('open')) return Promise.resolve([])
         return Promise.resolve([
           { id: 'o1', mesa_id: 'm1', status: 'open', total: '9400.00' },
           { id: 'o2', mesa_id: 'm1', status: 'open', total: '600.00' },
+          { id: 'o3', mesa_id: 'm1', status: 'preparing', total: '1000.00' },
         ])
-      }
-      // En preparación también está en curso: suma a la mesa.
-      if (path === '/orders?local_id=loc-1&status=preparing') {
-        return Promise.resolve([{ id: 'o3', mesa_id: 'm1', status: 'preparing', total: '1000.00' }])
       }
       return Promise.resolve([])
     })
@@ -90,11 +90,11 @@ describe('Mesas', () => {
     const mesas = await listMesasConTotales('loc-1')
 
     // Solo pide las órdenes en curso, no el histórico del local.
-    expect(rutas()).toEqual(expect.arrayContaining([
-      '/orders?local_id=loc-1&status=open',
-      '/orders?local_id=loc-1&status=preparing',
-      '/orders?local_id=loc-1&status=ready',
-    ]))
+    const request = apiRequest.mock.calls.find(([path]) => String(path).startsWith('/orders?'))
+    const query = new URLSearchParams(request[0].split('?')[1])
+    expect(query.getAll('status')).toEqual(['open', 'preparing', 'ready'])
+    expect(query.get('limit')).toBe('500')
+    expect(request[1]).toEqual({ withTotal: true })
     expect(rutas().some((r) => r.startsWith('/orders') && !r.includes('status='))).toBe(false)
     expect(mesas[0]).toMatchObject({ nombre: 'Mesa 1', state: 'ocupada', capacidad: 4, total: 11000 })
     expect(mesas[0].ordenes_en_curso.map((o) => o.id)).toEqual(['o1', 'o2', 'o3'])

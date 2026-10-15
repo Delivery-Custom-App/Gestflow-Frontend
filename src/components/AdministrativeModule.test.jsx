@@ -93,7 +93,7 @@ const mockCajasFisicas = [
 
 vi.mock('../lib/administrativeApi', async (importOriginal) => ({
   ...(await importOriginal()),
-  getOrdersByLocal: vi.fn(() => Promise.resolve(mockOrders)),
+  getOrdersByLocal: vi.fn((_localId, _token, { limit = 50, offset = 0 } = {}) => Promise.resolve({ orders: mockOrders, total: 53, limit, offset })),
   getLocalDashboard: vi.fn(() => Promise.resolve({ monthly_sales: 120000 })),
   getCajasByLocal: vi.fn(() => Promise.resolve(mockCajas)),
   getCajasFisicasByLocal: vi.fn(() => Promise.resolve(mockCajasFisicas)),
@@ -179,12 +179,13 @@ describe('AdministrativeModule', () => {
 
     const boton = await screen.findByRole('button', { name: 'Cargar detalle de órdenes' })
     expect(getOrdersByLocal).not.toHaveBeenCalled()
-    expect(screen.queryByRole('heading', { name: 'Histórico y Consolidados' })).not.toBeInTheDocument()
+    expect(screen.queryByText(/Mostrando \d/)).not.toBeInTheDocument()
 
     await user.click(boton)
 
-    await waitFor(() => expect(getOrdersByLocal).toHaveBeenCalledWith('loc-1', 'test-token'))
-    expect(await screen.findByRole('heading', { name: 'Histórico y Consolidados' })).toBeInTheDocument()
+    await waitFor(() => expect(getOrdersByLocal).toHaveBeenCalledWith('loc-1', 'test-token', { limit: 50, offset: 0 }))
+    expect(await screen.findByRole('heading', { name: 'Detalle de órdenes' })).toBeInTheDocument()
+    expect(screen.getByText('Mostrando 1–2 de 53 órdenes.')).toBeInTheDocument()
   })
 
   it('el panel "Ventas del Día" ya no se muestra al cargar el detalle', async () => {
@@ -192,9 +193,28 @@ describe('AdministrativeModule', () => {
     renderAdmin('ventas')
 
     await user.click(await screen.findByRole('button', { name: 'Cargar detalle de órdenes' }))
-    expect(await screen.findByRole('heading', { name: 'Histórico y Consolidados' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Detalle de órdenes' })).toBeInTheDocument()
     expect(screen.queryByRole('heading', { name: 'Ventas del Día' })).not.toBeInTheDocument()
     expect(screen.queryByText(/últimas 24 h/)).not.toBeInTheDocument()
+  })
+
+  it('Ventas pagina el detalle y solicita la siguiente página usando offset', async () => {
+    const user = userEvent.setup()
+    getOrdersByLocal.mockImplementation((_localId, _token, { limit = 50, offset = 0 } = {}) => Promise.resolve({
+      orders: offset ? [mockOrders[0]] : mockOrders,
+      total: 53,
+      limit,
+      offset,
+    }))
+    renderAdmin('ventas')
+
+    await user.click(await screen.findByRole('button', { name: 'Cargar detalle de órdenes' }))
+    expect(await screen.findByText('Mostrando 1–2 de 53 órdenes.')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Siguiente' }))
+
+    await waitFor(() => expect(getOrdersByLocal).toHaveBeenLastCalledWith('loc-1', 'test-token', { limit: 50, offset: 50 }))
+    expect(await screen.findByText('Mostrando 51–51 de 53 órdenes.')).toBeInTheDocument()
+    expect(screen.getByText('Página 2')).toBeInTheDocument()
   })
 
   it('Caja y turnos vincula MercadoPago desde las cajas físicas, no desde los turnos', async () => {
@@ -349,14 +369,11 @@ describe('AdministrativeModule', () => {
     expect(getCajasByLocal).toHaveBeenCalledWith('loc-1', 'test-token')
   })
 
-  it('la boleta de cada venta se ve desde el detalle de órdenes del histórico', async () => {
+  it('la boleta de cada venta se ve desde la página de detalle de órdenes', async () => {
     const user = userEvent.setup()
     renderAdmin('ventas')
 
     await user.click(await screen.findByRole('button', { name: 'Cargar detalle de órdenes' }))
-    // Sin desplegar un período no hay órdenes a la vista.
-    expect(screen.queryByRole('button', { name: 'Boleta' })).not.toBeInTheDocument()
-    await user.click(await screen.findByRole('button', { name: /2 ventas/ }))
     const botones = await screen.findAllByRole('button', { name: 'Boleta' })
     expect(botones).toHaveLength(mockOrders.length)
 

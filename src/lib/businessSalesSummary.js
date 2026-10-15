@@ -1,8 +1,8 @@
 /**
  * Agregados de venta a nivel negocio (todas las franquicias) para los cards
  * de "venta semanal" y "comparativa mensual" del resumen del Inicio del dueño.
- * La semana reutiliza /orders por local (mismo endpoint que el indicador de
- * Flujo); la comparativa mensual sale de /reports/sales (T-28).
+ * La semana y la comparativa mensual salen de /reports/sales, agregadas por
+ * fecha contable en el servidor.
  */
 import { apiRequest, getOptionalAuthContext } from './apiClient'
 
@@ -52,31 +52,44 @@ async function totalDelRango(locals, token, { startDate, endDate }) {
   }
 }
 
-function isCompleted(order) {
-  return String(order?.status || '').toLowerCase() === 'completed'
+function todayInChileIso(now = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Santiago', year: 'numeric', month: '2-digit', day: '2-digit',
+  }).formatToParts(now)
+  const values = Object.fromEntries(parts.map(({ type, value }) => [type, value]))
+  return `${values.year}-${values.month}-${values.day}`
 }
 
-function mondayOfWeek(date) {
-  const d = new Date(date)
-  const day = d.getDay() // 0=domingo..6=sábado
-  const diff = day === 0 ? -6 : 1 - day
-  d.setDate(d.getDate() + diff)
-  d.setHours(0, 0, 0, 0)
-  return d
+function shiftIsoDate(isoDate, amount) {
+  const date = new Date(`${isoDate}T00:00:00Z`)
+  date.setUTCDate(date.getUTCDate() + amount)
+  return date.toISOString().slice(0, 10)
 }
 
-async function sumOrdersInRange(locals, token, dateFrom, dateTo) {
-  const results = await Promise.all(
-    locals.map((l) =>
-      apiRequest(
-        `/orders?local_id=${l.id}&date_from=${encodeURIComponent(dateFrom.toISOString())}&date_to=${encodeURIComponent(dateTo.toISOString())}`,
-        { token },
-      )
-        .then((orders) => (Array.isArray(orders) ? orders : []))
-        .catch(() => []),
-    ),
+function mondayOfWeek(isoDate) {
+  const day = new Date(`${isoDate}T00:00:00Z`).getUTCDay()
+  return shiftIsoDate(isoDate, day === 0 ? -6 : 1 - day)
+}
+
+async function sumSalesReports(locals, token, startDate, endDate) {
+  const responses = await Promise.all(
+    locals.map((local) => apiRequest(
+      `/reports/sales?${new URLSearchParams({
+        local_id: String(local.id), start_date: startDate, end_date: endDate,
+      })}`,
+      { token },
+    )),
   )
-  return results.flat()
+  const totalsByDay = new Map()
+  for (const report of responses) {
+    for (const row of Array.isArray(report?.by_day) ? report.by_day : []) {
+      const current = totalsByDay.get(row.date) || { total: 0, count: 0 }
+      current.total += Number(row.total_sales) || 0
+      current.count += Number(row.total_orders) || 0
+      totalsByDay.set(row.date, current)
+    }
+  }
+  return totalsByDay
 }
 
 /**
@@ -89,30 +102,22 @@ export async function fetchBusinessSalesSummary(locales) {
   if (!token) return null
 
   const now = new Date()
-  const monday = mondayOfWeek(now)
-  const nextMonday = new Date(monday)
-  nextMonday.setDate(nextMonday.getDate() + 7)
-
-  const weekOrders = await sumOrdersInRange(locales, token, monday, nextMonday)
-  const completedWeekOrders = weekOrders.filter(isCompleted)
+  const today = todayInChileIso(now)
+  const monday = mondayOfWeek(today)
+  const sunday = shiftIsoDate(monday, 6)
+  const weeklySalesByDay = await sumSalesReports(locales, token, monday, sunday).catch(() => null)
 
   const days = DAY_LABELS.map((label, i) => {
-    const dayStart = new Date(monday)
-    dayStart.setDate(dayStart.getDate() + i)
-    const dayEnd = new Date(dayStart)
-    dayEnd.setDate(dayEnd.getDate() + 1)
-    const dayOrders = completedWeekOrders.filter((o) => {
-      const d = new Date(o.created_at)
-      return d >= dayStart && d < dayEnd
-    })
-    const total = dayOrders.reduce((sum, o) => sum + Number(o.total || 0), 0)
+    const date = shiftIsoDate(monday, i)
+    const dayStart = new Date(`${date}T00:00:00Z`)
+    const reportDay = weeklySalesByDay?.get(date)
     return {
       label,
       date: dayStart,
-      total,
-      count: dayOrders.length,
-      isToday: dayStart.toDateString() === now.toDateString(),
-      isFuture: dayStart > now,
+      total: reportDay?.total ?? 0,
+      count: reportDay?.count ?? 0,
+      isToday: date === today,
+      isFuture: date > today,
     }
   })
 

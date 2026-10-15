@@ -7,12 +7,25 @@ import CreateLocalDrawer from './CreateLocalDrawer'
 import LocalsGrid from './LocalsGrid'
 import LoadingSpinner from './LoadingSpinner'
 import { apiRequest, getOptionalAuthContext } from '../lib/apiClient'
-import { REFRESCO_FLUJO_MS, cargarUmbral, esVenta, guardarUmbral, rangoDelPeriodo } from '../lib/umbralFlujo'
+import { REFRESCO_FLUJO_MS, cargarUmbral, guardarUmbral, rangoDelPeriodo } from '../lib/umbralFlujo'
 
-const ordenesEntre = (localId, desde, hasta, token) => apiRequest(
-  `/orders?local_id=${localId}&date_from=${encodeURIComponent(desde.toISOString())}&date_to=${encodeURIComponent(hasta.toISOString())}`,
-  { token },
-)
+const ESTADOS_NO_CANCELADOS = ['open', 'preparing', 'ready', 'completed']
+
+const contarOrdenesEntre = (localId, desde, hasta, token) => {
+  const query = new URLSearchParams({
+    local_id: String(localId),
+    date_from: desde.toISOString(),
+    date_to: hasta.toISOString(),
+    limit: '1',
+    offset: '0',
+  })
+  ESTADOS_NO_CANCELADOS.forEach((status) => query.append('status', status))
+  return apiRequest(`/orders?${query.toString()}`, { token, withTotal: true })
+}
+
+function totalOrdenes(respuesta) {
+  return Number.isFinite(respuesta?.total) ? respuesta.total : 0
+}
 
 function AdminDashboard() {
   const navigate   = useNavigate()
@@ -40,15 +53,8 @@ function AdminDashboard() {
       const { desde, hasta } = rangoDelPeriodo(horas)
       const results = await Promise.all(
         locals.map((l) =>
-          ordenesEntre(l.id, desde, hasta, token)
-            .then((orders) => {
-              if (!Array.isArray(orders)) return { id: l.id, count: 0 }
-              const count = orders.filter((o) => {
-                const d = new Date(o.created_at)
-                return esVenta(o) && d >= desde && d <= hasta
-              }).length
-              return { id: l.id, count }
-            })
+          contarOrdenesEntre(l.id, desde, hasta, token)
+            .then((respuesta) => ({ id: l.id, count: totalOrdenes(respuesta) }))
             .catch(() => ({ id: l.id, count: 0 }))
         )
       )
@@ -71,14 +77,11 @@ function AdminDashboard() {
       const h2ago = new Date(now.getTime() - 120 * 60 * 1000)
       const results = await Promise.all(
         locals.map((l) =>
-          ordenesEntre(l.id, h2ago, now, token)
-            .then((orders) => {
-              if (!Array.isArray(orders)) return { id: l.id, current: 0, prev: 0 }
-              const ventas  = orders.filter(esVenta)
-              const current = ventas.filter((o) => new Date(o.created_at) >= h1ago).length
-              const prev    = ventas.filter((o) => new Date(o.created_at) <  h1ago).length
-              return { id: l.id, current, prev }
-            })
+          Promise.all([
+            contarOrdenesEntre(l.id, h1ago, now, token),
+            contarOrdenesEntre(l.id, h2ago, h1ago, token),
+          ])
+            .then(([current, prev]) => ({ id: l.id, current: totalOrdenes(current), prev: totalOrdenes(prev) }))
             .catch(() => ({ id: l.id, current: 0, prev: 0 }))
         )
       )

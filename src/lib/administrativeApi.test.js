@@ -16,6 +16,7 @@ import {
   getCajasFisicasByLocal,
   getVentasIndicadores,
   getDashboardSalesReport,
+  getLocalDashboard,
   mapDashboardSalesReport,
   provisionCajaFisicaMp,
   verifyCajaFisicaMpPairing,
@@ -233,6 +234,31 @@ describe('reporte de ventas del dashboard (T-31)', () => {
     })
 
     expect(data.week_comparison.change_pct).toBe(200)
+  })
+})
+
+describe('fallback de dashboard local (A-04)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-09-27T02:00:00Z'))
+  })
+
+  afterEach(() => vi.useRealTimers())
+
+  it('usa el reporte agregado del mes y no descarga órdenes', async () => {
+    apiRequest.mockResolvedValue({
+      total_sales: '62000.00',
+      avg_ticket: '12400.00',
+      by_day: [{ date: '2026-09-26', total_sales: '9400.00', total_orders: 3 }],
+      by_payment_method: [],
+    })
+
+    const dashboard = await getLocalDashboard(LOCAL, 'token')
+
+    expect(apiRequest).toHaveBeenCalledExactlyOnceWith('/reports/sales?local_id=loc-1&start_date=2026-09-01&end_date=2026-09-26')
+    expect(rutasPedidas().some((path) => path.startsWith('/orders'))).toBe(false)
+    expect(dashboard).toMatchObject({ daily_sales: 9400, monthly_sales: 62000, avg_ticket: 12400, _source: 'reports_v2' })
   })
 })
 
