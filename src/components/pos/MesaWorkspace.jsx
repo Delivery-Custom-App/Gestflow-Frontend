@@ -16,6 +16,7 @@ import RecipeCustomizer from './menu-picker/RecipeCustomizer'
 import { calcItemPrice, isCompleto, productKey } from './menu-picker/menuPricing'
 import MultiPaymentModal from './MultiPaymentModal'
 import MercadoPagoModal from './MercadoPagoModal'
+import LiberarMesaModal from './LiberarMesaModal'
 import ComandaActions from './ComandaActions'
 import { formatCantidad } from '@/lib/utils'
 import {
@@ -32,7 +33,7 @@ const EMPTY_CUSTOMIZATION = { embutido: null, agregados: [] }
 
 const formatItemName = (item) => item.item_name || item.product_name || '—'
 
-export default function MesaWorkspace({ mesa, atencion = null, localId, cajaId, puedeCobrar = true, onBack, onTableUpdated }) {
+export default function MesaWorkspace({ mesa, atencion = null, localId, cajaId, puedeCobrar = true, puedeLiberarMesa = false, onBack, onTableUpdated }) {
   const { detail, loading, error: mesaError, refresh } = useMesaDetail(mesa.id)
   const { updateOrderStatus } = useOrderManagement()
   const { data: menuData, loading: menuLoading, fetch: fetchMenu } = useMenuPOS(localId)
@@ -50,6 +51,8 @@ export default function MesaWorkspace({ mesa, atencion = null, localId, cajaId, 
   const [splitFullyPaid, setSplitFullyPaid] = useState(false)
   const [hasSplits, setHasSplits] = useState(false)
   const [showMPModal, setShowMPModal] = useState(false)
+  const [showLiberarModal, setShowLiberarModal] = useState(false)
+  const [offerLiberar, setOfferLiberar] = useState(false)
   const [mobileTab, setMobileTab] = useState('menu') // 'menu' | 'pedido'
 
   const submittingRef = useRef(false)
@@ -218,9 +221,17 @@ export default function MesaWorkspace({ mesa, atencion = null, localId, cajaId, 
       onBack()
     } catch (err) {
       setErrorMsg(err.message || 'Error al finalizar el cobro')
+      if (Number(err?.status) === 409 && puedeLiberarMesa) setOfferLiberar(true)
       setCobrarLoading(false)
     }
-  }, [mesa, firstOrder, allItems, subtotal, iva, total, onTableUpdated, onBack])
+  }, [mesa, firstOrder, allItems, subtotal, iva, total, onTableUpdated, onBack, puedeLiberarMesa])
+
+  const handleMesaLiberada = useCallback(() => {
+    setShowLiberarModal(false)
+    setOfferLiberar(false)
+    onTableUpdated?.()
+    onBack()
+  }, [onTableUpdated, onBack])
 
   const handlePrintChargeDetail = useCallback(() => {
     if (!detail?.active_orders?.length) return
@@ -350,6 +361,17 @@ export default function MesaWorkspace({ mesa, atencion = null, localId, cajaId, 
     <div className="flex h-full min-h-0 flex-col">
       <div className="px-4 lg:px-5 py-4 border-b border-[hsl(var(--border))] shrink-0 space-y-3">
         <div className="flex flex-wrap gap-2">
+          {puedeLiberarMesa && (detail?.active_orders?.length > 0 || mesa.state === 'ocupada') && (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => { setErrorMsg(''); setOfferLiberar(false); setShowLiberarModal(true) }}
+              disabled={cobrarLoading || cancelLoading}
+              className="h-11 rounded-xl"
+            >
+              Liberar mesa
+            </Button>
+          )}
           {puedeCobrar && <Button
             onClick={handleCobrar}
             disabled={cobrarLoading || cancelLoading || !detail?.active_orders?.length || (hasSplits && !splitFullyPaid)}
@@ -520,6 +542,15 @@ export default function MesaWorkspace({ mesa, atencion = null, localId, cajaId, 
         />
       )}
 
+      {showLiberarModal && (
+        <LiberarMesaModal
+          mesa={mesa}
+          totalPendiente={total}
+          onClose={() => setShowLiberarModal(false)}
+          onDone={handleMesaLiberada}
+        />
+      )}
+
       {firstOrder && (
         <MercadoPagoModal
           open={showMPModal}
@@ -572,8 +603,13 @@ export default function MesaWorkspace({ mesa, atencion = null, localId, cajaId, 
         </div>
 
         {visibleError && (
-          <div className="mx-4 lg:mx-6 mt-3 px-3 py-2 rounded-lg bg-red-50 border border-red-200 text-sm text-red-600 shrink-0">
+          <div role="alert" className="mx-4 lg:mx-6 mt-3 px-3 py-2 rounded-lg bg-red-50 border border-red-200 text-sm text-red-600 shrink-0">
             {visibleError}
+            {offerLiberar && puedeLiberarMesa && (
+              <Button type="button" variant="outline" size="sm" className="ml-3" onClick={() => setShowLiberarModal(true)}>
+                Liberar mesa
+              </Button>
+            )}
           </div>
         )}
 

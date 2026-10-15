@@ -255,6 +255,7 @@ export default function POSModule() {
             localId={localId}
             cajaId={cajaId}
             puedeCobrar={puedeCobrar}
+            puedeLiberarMesa={!isWorker}
             onBack={handleWorkspaceBack}
             onTableUpdated={handleTableUpdated}
           />

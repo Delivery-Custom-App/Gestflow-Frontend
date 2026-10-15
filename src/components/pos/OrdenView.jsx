@@ -5,6 +5,8 @@ import { useOrderManagement } from '../../hooks/useOrderManagement'
 import { useOrderTotals } from '../../hooks/useOrderTotals'
 import { getSplitPaymentSummary } from '../../lib/apiClient'
 import { setMesaLibre } from '../../lib/salesApi'
+import LiberarMesaModal from './LiberarMesaModal'
+import { useAuth } from '../../context/AuthContext'
 import { isV2FeatureEnabled } from '../../lib/v2Features'
 import MesaDetailModal from './MesaDetailModal'
 import MultiPaymentModal from './MultiPaymentModal'
@@ -22,6 +24,7 @@ import {
 } from './order-panel/orderPrint'
 
 function OrdenView({ mesa, localId, onBack, onTableUpdated }) {
+  const { isWorker } = useAuth()
   const { detail, loading, error: mesaError, refresh } = useMesaDetail(mesa.id)
   const { updateOrderStatus } = useOrderManagement()
   const [cancelLoading, setCancelLoading]       = useState(false)
@@ -32,6 +35,8 @@ function OrdenView({ mesa, localId, onBack, onTableUpdated }) {
   const [splitFullyPaid, setSplitFullyPaid]     = useState(false)
   const [hasSplits, setHasSplits]               = useState(false)
   const [showMPModal, setShowMPModal]           = useState(false)
+  const [showLiberarModal, setShowLiberarModal] = useState(false)
+  const [offerLiberar, setOfferLiberar]         = useState(false)
   const [showMobileMenu, setShowMobileMenu]     = useState(false)
 
   const { allItems, subtotal, iva, total, firstOrder } = useOrderTotals(detail)
@@ -90,9 +95,17 @@ function OrdenView({ mesa, localId, onBack, onTableUpdated }) {
       onBack()
     } catch (err) {
       setErrorMsg(err.message || 'Error al finalizar el cobro')
+      if (Number(err?.status) === 409 && !isWorker) setOfferLiberar(true)
       setCobrarLoading(false)
     }
-  }, [mesa, firstOrder, allItems, subtotal, iva, total, onTableUpdated, onBack])
+  }, [mesa, firstOrder, allItems, subtotal, iva, total, onTableUpdated, onBack, isWorker])
+
+  const handleMesaLiberada = useCallback(() => {
+    setShowLiberarModal(false)
+    setOfferLiberar(false)
+    onTableUpdated?.()
+    onBack()
+  }, [onTableUpdated, onBack])
 
   const handlePrintChargeDetail = useCallback(() => {
     if (!detail?.active_orders?.length) return
@@ -142,6 +155,15 @@ function OrdenView({ mesa, localId, onBack, onTableUpdated }) {
         />
       )}
 
+      {showLiberarModal && (
+        <LiberarMesaModal
+          mesa={mesa}
+          totalPendiente={total}
+          onClose={() => setShowLiberarModal(false)}
+          onDone={handleMesaLiberada}
+        />
+      )}
+
       {firstOrder && (
         <MercadoPagoModal
           open={showMPModal}
@@ -180,6 +202,17 @@ function OrdenView({ mesa, localId, onBack, onTableUpdated }) {
           {/* Acciones principales */}
           <div className="px-4 lg:px-6 pb-4">
             <div className="flex flex-wrap gap-2">
+              {!isWorker && (detail?.active_orders?.length > 0 || mesa.state === 'ocupada') && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => { setErrorMsg(''); setOfferLiberar(false); setShowLiberarModal(true) }}
+                  disabled={cobrarLoading || cancelLoading}
+                  className="h-11 rounded-xl"
+                >
+                  Liberar mesa
+                </Button>
+              )}
               {/* Acción principal: Cobrar */}
               <Button
                 onClick={handleCobrar}
@@ -308,8 +341,13 @@ function OrdenView({ mesa, localId, onBack, onTableUpdated }) {
         </div>
 
         {visibleError && (
-          <div className="mx-6 mt-3 px-3 py-2 rounded-lg bg-red-50 border border-red-200 text-sm text-red-600">
+          <div role="alert" className="mx-6 mt-3 px-3 py-2 rounded-lg bg-red-50 border border-red-200 text-sm text-red-600">
             {visibleError}
+            {offerLiberar && !isWorker && (
+              <Button type="button" variant="outline" size="sm" className="ml-3" onClick={() => setShowLiberarModal(true)}>
+                Liberar mesa
+              </Button>
+            )}
           </div>
         )}
 

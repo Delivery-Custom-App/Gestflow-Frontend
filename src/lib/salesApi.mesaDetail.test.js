@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { apiRequest } from './apiClient'
-import { getMesaDetail } from './salesApi'
+import { getMesaDetail, liberarMesa } from './salesApi'
 
 vi.mock('./apiClient', () => ({ apiRequest: vi.fn() }))
 vi.mock('./v2CatalogApi', () => ({ fetchProductsMap: vi.fn(async () => new Map([['p1', { id: 'p1', name: 'Jugo' }]])) }))
@@ -42,5 +42,18 @@ describe('getMesaDetail', () => {
     expect(detail.active_orders.map((order) => order.id)).toEqual(['o-open', 'o-preparing', 'o-ready'])
     expect(detail.active_orders[0].items[0]).toMatchObject({ product_name: 'Jugo', item_name: 'Jugo', total_price: 1200 })
     expect(detail).toMatchObject({ total_products: 3, total_value: 3600 })
+  })
+})
+
+describe('liberarMesa', () => {
+  it('registra el motivo en POST /mesas/{id}/liberar y devuelve el resultado', async () => {
+    const resultado = { mesa_id: 'm-1', nombre: 'Mesa 1', status: 'available', total_sin_cobrar: '1500.00' }
+    apiRequest.mockResolvedValue(resultado)
+
+    await expect(liberarMesa('m-1', '  Se fueron sin pagar  ')).resolves.toEqual(resultado)
+    expect(apiRequest).toHaveBeenCalledWith('/mesas/m-1/liberar', {
+      method: 'POST',
+      body: { motivo: 'Se fueron sin pagar' },
+    })
   })
 })

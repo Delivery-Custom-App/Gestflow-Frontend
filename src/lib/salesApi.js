@@ -343,6 +343,15 @@ export async function setMesaLibre(mesaId) {
   return updateMesa(mesaId, { status: 'available' })
 }
 
+/** Libera una mesa dejando registro y cancelando sus pedidos abiertos sin cobrar. */
+export async function liberarMesa(mesaId, motivo) {
+  if (!mesaId) throw new Error('Falta indicar qué mesa liberar')
+  return apiRequest(`/mesas/${encodeURIComponent(String(mesaId))}/liberar`, {
+    method: 'POST',
+    body: { motivo: String(motivo || '').trim() },
+  })
+}
+
 /**
  * Da de baja una mesa (`DELETE /mesas/{id}`, B-19). Es una baja lógica: deja
  * de salir en el listado, pero los pedidos viejos la conservan y se puede
