@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPointCharge, getPointOrderStatus, cancelPointCharge } from '../../lib/cobroTarjeta'
-import { completeOrderCash } from '../../lib/salesApi'
+import { completeOrderCash, updateOrderFields } from '../../lib/salesApi'
 import { isV2FeatureEnabled } from '../../lib/v2Features'
 
 const ALL_METHODS = [
@@ -16,7 +16,7 @@ function fmt(n) {
   return `$${Number(n || 0).toLocaleString('es-CL')}`
 }
 
-export default function MercadoPagoModal({ open, orderId, total, description, onSuccess, onClose }) {
+export default function MercadoPagoModal({ open, orderId, createdAt, total, description, onSuccess, onClose }) {
   const [step, setStep]               = useState('select')
   // steps: 'select' | 'cash_amount' | 'point_waiting' | 'point_success'
   const [loading, setLoading]         = useState(false)
@@ -25,6 +25,7 @@ export default function MercadoPagoModal({ open, orderId, total, description, on
   const [paymentDetail, setPaymentDetail] = useState(null)
   const [chargeInfo, setChargeInfo] = useState(null)
   const [cashAmount, setCashAmount] = useState('')
+  const [tipInput, setTipInput] = useState('0')
   const pollRef = useRef(null)
 
   const stopPolling = () => {
@@ -45,25 +46,28 @@ export default function MercadoPagoModal({ open, orderId, total, description, on
     setPaymentDetail(null)
     setChargeInfo(null)
     setCashAmount('')
+    setTipInput('0')
   }
 
   const handleClose = () => { reset(); onClose() }
 
   // ── Efectivo: registra monto recibido y calcula el vuelto ────────────────
+  const tipAmount = Math.max(0, Math.round(Number(tipInput) || 0))
+  const paymentTotal = Math.round(Number(total) || 0) + tipAmount
   const cashReceivedNumber = Number(cashAmount) || 0
-  const cashChange = cashReceivedNumber >= total ? cashReceivedNumber - total : 0
+  const cashChange = cashReceivedNumber >= paymentTotal ? cashReceivedNumber - paymentTotal : 0
 
   const handleConfirmCash = async () => {
-    if (!cashReceivedNumber || cashReceivedNumber < total) {
-      setError(`El monto recibido debe ser al menos ${fmt(total)}`)
+    if (!cashReceivedNumber || cashReceivedNumber < paymentTotal) {
+      setError(`El monto recibido debe ser al menos ${fmt(paymentTotal)}`)
       return
     }
     setLoading(true)
     setError(null)
     try {
-      await completeOrderCash(orderId, cashReceivedNumber)
+      await completeOrderCash(orderId, cashReceivedNumber, createdAt, tipAmount)
       reset()
-      onSuccess('CASH')
+      onSuccess('CASH', tipAmount)
     } catch (err) {
       setError(err.message || 'Error al registrar el pago en efectivo')
       setLoading(false)
@@ -77,7 +81,8 @@ export default function MercadoPagoModal({ open, orderId, total, description, on
     setLoading(true)
     setError(null)
     try {
-      const charge = await createPointCharge(orderId, { amount: Math.round(total), description })
+      await updateOrderFields(orderId, { tip_amount: tipAmount }, createdAt)
+      const charge = await createPointCharge(orderId, { amount: paymentTotal, description })
       setChargeInfo(charge || null)
       setStep('point_waiting')
       setTerminalMsg(charge?.message || 'Esperando que el cliente pase la tarjeta...')
@@ -121,7 +126,7 @@ export default function MercadoPagoModal({ open, orderId, total, description, on
         if (s.point_charge_expired) {
           stopPolling()
           setError(
-            `No detectamos el pago en la terminal. Verificá que cobraste exactamente ${fmt(total)} y volvé a enviar el cobro.`
+            `No detectamos el pago en la terminal. Verificá que cobraste exactamente ${fmt(paymentTotal)} y volvé a enviar el cobro.`
           )
           setStep('select')
           return
@@ -176,7 +181,7 @@ export default function MercadoPagoModal({ open, orderId, total, description, on
           <div>
             <h2 className="font-semibold text-[hsl(var(--foreground))] text-sm">Método de Pago</h2>
             <p className="text-xs text-[hsl(var(--muted-foreground))]">
-              Total: <span className="font-bold text-[hsl(var(--foreground))]">{fmt(total)}</span>
+              Total a pagar: <span className="font-bold text-[hsl(var(--foreground))]">{fmt(paymentTotal)}</span>
             </p>
           </div>
           <button type="button" aria-label="Cerrar"
@@ -193,6 +198,30 @@ export default function MercadoPagoModal({ open, orderId, total, description, on
           {/* ── Selección ───────────────────────────────────────────────────── */}
           {step === 'select' && (
             <>
+              <div className="rounded-xl border border-[hsl(var(--border))] p-3 space-y-2">
+                <p className="text-xs font-semibold text-[hsl(var(--foreground))]">Propina (opcional)</p>
+                <div className="flex gap-2">
+                  <button type="button" onClick={() => setTipInput('0')} className="flex-1 rounded-lg border border-[hsl(var(--border))] px-2 py-1.5 text-xs">Sin propina</button>
+                  {[10, 15, 20].map((percent) => (
+                    <button key={percent} type="button" onClick={() => setTipInput(String(Math.round(Number(total) * percent / 100)))} className="flex-1 rounded-lg border border-[hsl(var(--border))] px-2 py-1.5 text-xs">
+                      {percent}%
+                    </button>
+                  ))}
+                </div>
+                <label htmlFor="checkout-tip-amount" className="block text-xs text-[hsl(var(--muted-foreground))]">Monto de propina</label>
+                <input
+                  id="checkout-tip-amount"
+                  type="number"
+                  min="0"
+                  step="1"
+                  value={tipInput}
+                  onChange={(event) => { setTipInput(event.target.value); setError(null) }}
+                  className="w-full rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 py-2 text-sm"
+                />
+                <p className="text-right text-xs text-[hsl(var(--muted-foreground))]">
+                  Consumo {fmt(total)} + propina {fmt(tipAmount)} = <strong>{fmt(paymentTotal)}</strong>
+                </p>
+              </div>
               {METHODS.map((m) => (
                 <button
                   key={m.key}
@@ -221,17 +250,17 @@ export default function MercadoPagoModal({ open, orderId, total, description, on
                 <label htmlFor="mercado-pago-modal-monto-recibido" className="mb-1.5 block text-xs font-semibold text-[hsl(var(--muted-foreground))]">Monto recibido</label>
                 <input id="mercado-pago-modal-monto-recibido"
                   type="number"
-                  min={total}
+                  min={paymentTotal}
                   autoFocus
                   value={cashAmount}
                   onChange={(e) => { setCashAmount(e.target.value); setError(null) }}
-                  placeholder={fmt(total)}
+                  placeholder={fmt(paymentTotal)}
                   className="w-full rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 py-2.5 text-lg font-bold text-[hsl(var(--foreground))] outline-none focus:border-[hsl(var(--primary))]"
                 />
               </div>
 
               <div className="flex gap-2">
-                {[total, total + 1000, total + 2000, total + 5000].map((amt) => (
+                {[paymentTotal, paymentTotal + 1000, paymentTotal + 2000, paymentTotal + 5000].map((amt) => (
                   <button
                     key={amt}
                     type="button"
@@ -309,7 +338,7 @@ export default function MercadoPagoModal({ open, orderId, total, description, on
                 )}
               </div>
               <button
-                onClick={() => { reset(); onSuccess(paymentDetail?.payment_type_id?.includes('debit') ? 'mercadopago_point_debit' : paymentDetail?.payment_type_id?.includes('credit') ? 'mercadopago_point_credit' : 'MERCADOPAGO_POINT') }}
+                onClick={() => { reset(); onSuccess(paymentDetail?.payment_type_id?.includes('debit') ? 'mercadopago_point_debit' : paymentDetail?.payment_type_id?.includes('credit') ? 'mercadopago_point_credit' : 'MERCADOPAGO_POINT', tipAmount) }}
                 className="w-full py-2.5 rounded-xl bg-green-600 hover:bg-green-700 text-white text-sm font-semibold transition-colors"
               >
                 Confirmar y cerrar

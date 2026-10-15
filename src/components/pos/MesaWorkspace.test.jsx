@@ -130,6 +130,8 @@ describe('MesaWorkspace', () => {
     createOrder.mockResolvedValue({ id: 'order-nueva' })
     render(<MesaWorkspace mesa={mesa} localId="local1" cajaId="caja1" onBack={() => {}} onTableUpdated={() => {}} />)
 
+    await user.clear(screen.getByLabelText('Comensales'))
+    await user.type(screen.getByLabelText('Comensales'), '4')
     await user.click(screen.getByText('+'))
     await user.click(screen.getByRole('button', { name: /agregar al pedido/i }))
 
@@ -138,6 +140,7 @@ describe('MesaWorkspace', () => {
       mesa_id: 'mesa-1',
       caja_id: 'caja1',
       source: 'dine_in',
+      guests: 4,
       items: [{ product_id: 'prod1', quantity: 1, unit_price: 1000 }],
     }))
     expect(addOrderItem).not.toHaveBeenCalled()

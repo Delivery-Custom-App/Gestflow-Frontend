@@ -239,6 +239,7 @@ export default function VentaDirectaView() {
         <MercadoPagoModal
           open={showMPModal}
           orderId={activeOrder.id}
+          createdAt={activeOrder.created_at}
           total={activeOrder.total}
           description="Venta directa"
           onSuccess={handlePaymentSuccess}

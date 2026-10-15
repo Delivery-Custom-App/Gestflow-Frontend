@@ -40,6 +40,7 @@ export default function MesaWorkspace({ mesa, atencion = null, localId, cajaId, 
   const { allItems, subtotal, iva, total, firstOrder } = useOrderTotals(detail)
 
   const [selectedQtys, setSelectedQtys] = useState({})
+  const [guests, setGuests] = useState('1')
   const [customizations, setCustomizations] = useState({})
   const [expandedKeys, setExpandedKeys] = useState(() => new Set())
   const [submitting, setSubmitting] = useState(false)
@@ -142,6 +143,10 @@ export default function MesaWorkspace({ mesa, atencion = null, localId, cajaId, 
 
   const handleAgregarAlPedido = useCallback(async () => {
     if (!totalItems || submittingRef.current) return
+    if (!firstOrder && (!Number.isInteger(Number(guests)) || Number(guests) < 1)) {
+      setErrorMsg('Ingresa una cantidad válida de comensales.')
+      return
+    }
     const sandwichSinProteina = menuItemsSelected
       .filter(it => !isCompleto(it))
       .find(it => !(customizations[it.key]?.embutido))
@@ -166,7 +171,7 @@ export default function MesaWorkspace({ mesa, atencion = null, localId, cajaId, 
           await addOrderItem(firstOrder.id, item, firstOrder.created_at)
         }
       } else {
-        await createOrder({ local_id: localId, mesa_id: mesa.id, caja_id: cajaId || null, source: 'dine_in', items })
+        await createOrder({ local_id: localId, mesa_id: mesa.id, caja_id: cajaId || null, source: 'dine_in', guests: Number(guests), items })
       }
       setSelectedQtys({})
       setCustomizations({})
@@ -179,7 +184,7 @@ export default function MesaWorkspace({ mesa, atencion = null, localId, cajaId, 
       submittingRef.current = false
       setSubmitting(false)
     }
-  }, [totalItems, menuItemsSelected, customizations, selectedQtys, allMenuItems, firstOrder, localId, mesa.id, cajaId, refresh, onTableUpdated])
+  }, [totalItems, firstOrder, guests, menuItemsSelected, customizations, selectedQtys, allMenuItems, localId, mesa.id, cajaId, refresh, onTableUpdated])
 
   /* ─── cobro / acciones (trasladado de OrdenView) ─── */
   const handleCancelOrder = useCallback(async () => {
@@ -211,12 +216,12 @@ export default function MesaWorkspace({ mesa, atencion = null, localId, cajaId, 
     setShowMPModal(true)
   }, [detail, hasSplits, splitFullyPaid])
 
-  const handlePaymentSuccess = useCallback(async () => {
+  const handlePaymentSuccess = useCallback(async (_paymentMethod, tipAmount = 0) => {
     setShowMPModal(false)
     setCobrarLoading(true)
     try {
       await setMesaLibre(mesa.id)
-      openPrintWindow({ mesa, firstOrder, allItems, subtotal, iva, total })
+      openPrintWindow({ mesa, firstOrder, allItems, subtotal, iva, total, tipAmount, totalWithTip: total + Number(tipAmount || 0) })
       onTableUpdated?.()
       onBack()
     } catch (err) {
@@ -360,6 +365,22 @@ export default function MesaWorkspace({ mesa, atencion = null, localId, cajaId, 
   const orderPanel = (
     <div className="flex h-full min-h-0 flex-col">
       <div className="px-4 lg:px-5 py-4 border-b border-[hsl(var(--border))] shrink-0 space-y-3">
+        {!detail?.active_orders?.length ? (
+          <div className="flex items-center gap-3">
+            <label htmlFor="mesa-comensales" className="text-sm font-medium">Comensales</label>
+            <input
+              id="mesa-comensales"
+              type="number"
+              min="1"
+              step="1"
+              value={guests}
+              onChange={(event) => setGuests(event.target.value)}
+              className="w-20 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-2 py-1.5 text-sm"
+            />
+          </div>
+        ) : firstOrder?.guests != null ? (
+          <p className="text-xs text-[hsl(var(--muted-foreground))]">Comensales: {firstOrder.guests}</p>
+        ) : null}
         <div className="flex flex-wrap gap-2">
           {puedeLiberarMesa && (detail?.active_orders?.length > 0 || mesa.state === 'ocupada') && (
             <Button
@@ -555,6 +576,7 @@ export default function MesaWorkspace({ mesa, atencion = null, localId, cajaId, 
         <MercadoPagoModal
           open={showMPModal}
           orderId={firstOrder.id}
+          createdAt={firstOrder.created_at}
           total={total}
           description={`Mesa ${mesa.name || mesa.numero || ''}`.trim()}
           onSuccess={handlePaymentSuccess}

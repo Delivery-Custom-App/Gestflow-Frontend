@@ -35,6 +35,8 @@ const BOLETA = {
   created_at: '2026-09-28T14:30:00Z',
   items: [{ product_name: 'Churrasco italiano', quantity: 2, subtotal: 12000 }],
   total: 12000,
+  tip_amount: 1200,
+  total_with_tip: 13200,
   net_amount: 10084,
   iva_amount: 1916,
   payment_method: 'efectivo',
@@ -69,6 +71,9 @@ describe('TicketModal', () => {
     expect(await screen.findByText('Sabores del Valle')).toBeInTheDocument()
     expect(screen.getByText('RUT 77.123.456-7')).toBeInTheDocument()
     expect(screen.getByText('TOTAL')).toBeInTheDocument()
+    expect(screen.getByText('Propina')).toBeInTheDocument()
+    expect(screen.getByText('$1.200')).toBeInTheDocument()
+    expect(screen.getByText('$13.200')).toBeInTheDocument()
     expect(screen.getByText('IVA incluido (19%)')).toBeInTheDocument()
     expect(screen.getByText(/Pagado con efectivo/)).toBeInTheDocument()
   })

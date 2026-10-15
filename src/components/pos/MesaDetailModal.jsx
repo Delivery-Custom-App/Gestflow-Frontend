@@ -23,6 +23,7 @@ export default function MesaDetailModal({ mesa, localId, cajaId, onClose, onTabl
   const [step, setStep]                 = useState('select')   // 'select' | 'customize'
   const [selectedQtys, setSelectedQtys] = useState({})
   const [customizations, setCustomizations] = useState({})     // { itemKey: {embutido, agregados} }
+  const [guests, setGuests] = useState('1')
 
   const [processing, setProcessing] = useState(false)
   const [error, setError]           = useState('')
@@ -106,6 +107,10 @@ export default function MesaDetailModal({ mesa, localId, cajaId, onClose, onTabl
   /* crear la orden */
   const handleConfirmOrder = async () => {
     if (!totalItems) { setError('Selecciona al menos un producto'); return }
+    if (!Number.isInteger(Number(guests)) || Number(guests) < 1) {
+      setError('Ingresa una cantidad válida de comensales.')
+      return
+    }
     // Validar que sandwiches tengan proteína seleccionada
     const sandwichSinProteina = menuItemsSelected
       .filter(it => !isCompleto(it))
@@ -131,6 +136,7 @@ export default function MesaDetailModal({ mesa, localId, cajaId, onClose, onTabl
         mesa_id: mesa.id,
         caja_id: cajaId || null,
         source: 'dine_in',
+        guests: Number(guests),
         items,
       })
       onTableUpdated?.()
@@ -299,6 +305,19 @@ export default function MesaDetailModal({ mesa, localId, cajaId, onClose, onTabl
           )
         ) : (
           <div className="px-5 py-4 border-t border-[hsl(var(--border))] shrink-0 bg-[hsl(var(--card))]">
+            <div className="mb-3 flex items-center gap-3">
+              <label htmlFor="mesa-modal-comensales" className="text-sm font-medium">Comensales</label>
+              <input
+                id="mesa-modal-comensales"
+                type="number"
+                min="1"
+                step="1"
+                value={guests}
+                onChange={(event) => setGuests(event.target.value)}
+                disabled={processing}
+                className="w-20 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-2 py-1.5 text-sm"
+              />
+            </div>
             <div className="flex items-center justify-between w-full gap-3">
               <Button 
                 variant="outline" 

@@ -31,6 +31,7 @@ export default function MesaDetail() {
   const { cajaId } = useCajaActiva(localId)
 
   const [agregados, setAgregados] = useState({})
+  const [guests, setGuests] = useState('1')
   const [showPicker, setShowPicker] = useState(false)
   const pickerOrderIdRef = useRef(null) // orden destino del picker; solo se lee al agregar
   const [pickerSearch, setPickerSearch] = useState('')
@@ -75,11 +76,16 @@ export default function MesaDetail() {
       let orderId = pickerOrderIdRef.current
 
       if (!orderId) {
+        if (!Number.isInteger(Number(guests)) || Number(guests) < 1) {
+          setAddError('Ingresa una cantidad válida de comensales.')
+          return
+        }
         const newOrder = await createOrder({
           local_id: localId,
           mesa_id: mesaId,
           caja_id: cajaId || null,
           source: 'dine_in',
+          guests: Number(guests),
           items: [],
         })
         orderId = newOrder.id
@@ -100,7 +106,7 @@ export default function MesaDetail() {
     } finally {
       setAddingProduct(false)
     }
-  }, [localId, mesaId, cajaId, refresh, fetchMenu])
+  }, [localId, mesaId, cajaId, guests, refresh, fetchMenu])
 
   const pickerMenu = (menuData?.categories || []).filter((cat) => (cat.products?.length || 0) > 0)
   const handleGoBack = () => navigate(`/local/${localId}/pos`)
@@ -218,6 +224,20 @@ export default function MesaDetail() {
 
         {/* Órdenes + Agregados */}
         <section className="bg-[hsl(var(--card))] rounded-xl border border-[hsl(var(--border))] p-4 space-y-4">
+          {!hasOrders && (
+            <div className="flex items-center gap-3">
+              <label htmlFor="mesa-detail-comensales" className="text-sm font-medium">Comensales</label>
+              <Input
+                id="mesa-detail-comensales"
+                type="number"
+                min="1"
+                step="1"
+                value={guests}
+                onChange={(event) => setGuests(event.target.value)}
+                className="w-20"
+              />
+            </div>
+          )}
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-semibold text-[hsl(var(--foreground))]">Órdenes Activas</h2>
             <Button

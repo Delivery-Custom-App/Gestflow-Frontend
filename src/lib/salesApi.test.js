@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { apiRequest, getOptionalAuthContext } from './apiClient'
-import { completeOrderMercadoPago, createCajaV2, createOrder, getActiveCaja, getBoleta, getMiTurnoDeHoy, listCajas, todayIso, closeCaja, terminarTurno } from './salesApi'
+import { completeOrderCash, completeOrderMercadoPago, createCajaV2, createOrder, getActiveCaja, getBoleta, getMiTurnoDeHoy, listCajas, todayIso, closeCaja, terminarTurno, updateOrderFields } from './salesApi'
 
 vi.mock('./apiClient', () => ({
   apiRequest: vi.fn(),
@@ -173,6 +173,32 @@ describe('completeOrderMercadoPago — cierre del cobro por checkout', () => {
   })
 })
 
+describe('tip en el pago (T-33)', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('guarda la propina en el PATCH sin cambiar el estado de la orden', async () => {
+    apiRequest.mockResolvedValue({ id: 'ord-1', status: 'ready', tip_amount: '1200.00' })
+
+    await updateOrderFields('ord-1', { tip_amount: 1200 }, '2026-10-04T12:00:00Z')
+
+    expect(apiRequest).toHaveBeenCalledWith('/orders/ord-1?created_at=2026-10-04T12%3A00%3A00Z', {
+      method: 'PATCH',
+      body: { tip_amount: 1200 },
+    })
+  })
+
+  it('incluye la propina al cerrar el pago en efectivo', async () => {
+    apiRequest.mockResolvedValue({ id: 'ord-1', status: 'completed', payment_method: 'cash', tip_amount: 1000 })
+
+    await completeOrderCash('ord-1', 6000, undefined, 1000)
+
+    expect(apiRequest).toHaveBeenCalledWith('/orders/ord-1', {
+      method: 'PATCH',
+      body: { status: 'completed', payment_method: 'cash', tip_amount: 1000 },
+    })
+  })
+})
+
 describe('createCajaV2 — apertura de turno (contrato del ticket #40)', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -246,6 +272,11 @@ describe('createOrder — quién atiende la mesa', () => {
   it('al abrir una mesa queda registrado que la atiende quien la abre', async () => {
     await createOrder({ local_id: 'l1', caja_id: 'c1', mesa_id: 'm1', source: 'dine_in' })
     expect(cuerpoDeLaOrden()).toMatchObject({ mesa_id: 'm1', waiter_user_id: 'u-ana' })
+  })
+
+  it('guarda la cantidad de comensales al abrir la mesa', async () => {
+    await createOrder({ local_id: 'l1', caja_id: 'c1', mesa_id: 'm1', source: 'dine_in', guests: 4 })
+    expect(cuerpoDeLaOrden()).toMatchObject({ guests: 4 })
   })
 
   it('se puede indicar otro mesero', async () => {

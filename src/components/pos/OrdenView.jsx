@@ -85,12 +85,12 @@ function OrdenView({ mesa, localId, onBack, onTableUpdated }) {
   }, [detail, hasSplits, splitFullyPaid])
 
   // Llamado por MercadoPagoModal al aprobar el pago (order ya COMPLETED vía simulate)
-  const handlePaymentSuccess = useCallback(async () => {
+  const handlePaymentSuccess = useCallback(async (_paymentMethod, tipAmount = 0) => {
     setShowMPModal(false)
     setCobrarLoading(true)
     try {
       await setMesaLibre(mesa.id)
-      openPrintWindow({ mesa, firstOrder, allItems, subtotal, iva, total })
+      openPrintWindow({ mesa, firstOrder, allItems, subtotal, iva, total, tipAmount, totalWithTip: total + Number(tipAmount || 0) })
       onTableUpdated?.()
       onBack()
     } catch (err) {
@@ -168,6 +168,7 @@ function OrdenView({ mesa, localId, onBack, onTableUpdated }) {
         <MercadoPagoModal
           open={showMPModal}
           orderId={firstOrder.id}
+          createdAt={firstOrder.created_at}
           total={total}
           description={`Mesa ${mesa.name || mesa.numero || ''}`.trim()}
           onSuccess={handlePaymentSuccess}

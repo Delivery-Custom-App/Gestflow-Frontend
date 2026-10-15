@@ -112,9 +112,11 @@ export function boletaHtml(boleta) {
     <table><tbody>${filas}</tbody></table>
     <hr/>
     <table><tbody>
-      <tr><td class="total">TOTAL</td><td class="der total">${esc(money(boleta?.total))}</td></tr>
+      <tr><td>Consumo</td><td class="der">${esc(money(boleta?.total))}</td></tr>
       <tr><td class="chico">Neto</td><td class="der chico">${esc(money(boleta?.net_amount))}</td></tr>
       <tr><td class="chico">IVA incluido (19%)</td><td class="der chico">${esc(money(boleta?.iva_amount))}</td></tr>
+      <tr><td class="chico">Propina</td><td class="der chico">${esc(money(boleta?.tip_amount ?? 0))}</td></tr>
+      <tr><td class="total">TOTAL</td><td class="der total">${esc(money(Number(boleta?.total_with_tip) || (Number(boleta?.total || 0) + Number(boleta?.tip_amount || 0))))}</td></tr>
     </tbody></table>
     <hr/>
     <p class="centro chico">${boleta?.payment_method ? `Pagado con ${esc(metodoPagoLegible(boleta.payment_method))}` : 'Sin método de pago registrado'}</p>

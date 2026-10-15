@@ -493,6 +493,11 @@ export async function createOrder(orderData = {}) {
     source: toV2Source(orderData.source || 'mostrador'),
     mesa_id: orderData.mesa_id || null,
   }
+  if (orderData.guests != null) {
+    const guests = Number(orderData.guests)
+    if (!Number.isInteger(guests) || guests < 1) throw new Error('La cantidad de comensales debe ser un entero mayor que cero.')
+    payload.guests = guests
+  }
   // Al abrir una mesa queda registrado quién la atiende: quien la abre. El
   // backend solo acepta mesero en locales con mesas, y las mesas solo existen ahí.
   if (payload.mesa_id) {
@@ -556,27 +561,36 @@ export async function updateOrderStatus(orderId, status, createdAt, extra = {}) 
   return mapOrderOut(updated)
 }
 
+/** Actualiza datos del pedido sin alterar su estado. */
+export async function updateOrderFields(orderId, fields = {}, createdAt) {
+  const updated = await apiRequest(orderResourcePath(orderId, createdAt), {
+    method: 'PATCH',
+    body: fields,
+  }).catch((err) => { throw traducirErrorCobro(err) })
+  return mapOrderOut(updated)
+}
+
 /**
  * Completa una orden con su método de pago. En RESTAURANT el backend exige
  * caminar open→preparing→ready→completed, así que ante un 400 por transición
  * inválida se recorren los estados intermedios y se reintenta.
  */
-export async function completeOrder(orderId, paymentMethod, createdAt) {
-  const extra = { payment_method: paymentMethod }
+export async function completeOrder(orderId, paymentMethod, createdAt, extra = {}) {
+  const fields = { payment_method: paymentMethod, ...extra }
   try {
-    return await updateOrderStatus(orderId, 'completed', createdAt, extra)
+    return await updateOrderStatus(orderId, 'completed', createdAt, fields)
   } catch (err) {
     const msg = String(err?.message || err?.detail || '')
     if (!/transici[oó]n inv[aá]lida|400/i.test(msg)) throw err
     await updateOrderStatus(orderId, 'preparing', createdAt)
     await updateOrderStatus(orderId, 'ready', createdAt)
-    return updateOrderStatus(orderId, 'completed', createdAt, extra)
+    return updateOrderStatus(orderId, 'completed', createdAt, fields)
   }
 }
 
 /** Completa orden (cobro efectivo). */
-export async function completeOrderCash(orderId, _cashReceived, createdAt) {
-  return completeOrder(orderId, 'cash', createdAt)
+export async function completeOrderCash(orderId, _cashReceived, createdAt, tipAmount = 0) {
+  return completeOrder(orderId, 'cash', createdAt, { tip_amount: tipAmount })
 }
 
 /**

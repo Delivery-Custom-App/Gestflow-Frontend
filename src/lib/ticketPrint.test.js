@@ -27,6 +27,8 @@ const BOLETA = {
   created_at: '2026-09-28T14:30:00Z',
   items: [{ product_name: 'Churrasco italiano', quantity: 2, unit_price: 6000, subtotal: 12000 }],
   total: 12000,
+  tip_amount: 1200,
+  total_with_tip: 13200,
   net_amount: 10084,
   iva_amount: 1916,
   payment_method: 'efectivo',
@@ -72,6 +74,9 @@ describe('boletaHtml', () => {
     expect(html).toContain('$12.000')
     expect(html).toContain('IVA incluido (19%)')
     expect(html).toContain('$1.916')
+    expect(html).toContain('Propina')
+    expect(html).toContain('$1.200')
+    expect(html).toContain('$13.200')
     expect(html).toContain('Pagado con efectivo')
   })
 
