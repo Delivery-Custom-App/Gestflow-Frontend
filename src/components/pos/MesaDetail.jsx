@@ -27,7 +27,7 @@ const EXTRAS_DISPONIBLES = [
 export default function MesaDetail() {
   const navigate = useNavigate()
   const { mesaId, localId } = useParams()
-  const { detail, loading, error, refresh } = useMesaDetail(mesaId)
+  const { detail, loading, error, refresh, updateAfterItemRemoval } = useMesaDetail(mesaId)
   const { data: menuData, fetch: fetchMenu } = useMenuPOS(localId)
   const { cajaId } = useCajaActiva(localId)
 
@@ -272,7 +272,13 @@ export default function MesaDetail() {
                   </div>
                   <div className="p-3 space-y-2">
                     <p className="text-xs font-medium text-[hsl(var(--muted-foreground))] uppercase tracking-wide">Productos</p>
-                    <ProductList products={order.items || []} orderId={order.id} createdAt={order.created_at} onProductsChanged={refresh} />
+                    <ProductList
+                      products={order.items || []}
+                      orderId={order.id}
+                      createdAt={order.created_at}
+                      onProductsChanged={refresh}
+                      onItemRemoved={(itemId, orderTotal) => updateAfterItemRemoval(order.id, itemId, orderTotal)}
+                    />
                   </div>
                   <div className="px-3 py-2 border-t border-[hsl(var(--border))] text-right">
                     <span className="text-xs text-[hsl(var(--muted-foreground))]">Subtotal: ${formatCLP(order.subtotal)}</span>

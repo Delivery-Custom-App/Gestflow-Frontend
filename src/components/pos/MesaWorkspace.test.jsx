@@ -39,10 +39,11 @@ const menuData = {
 
 function setup({ activeOrders = [] } = {}) {
   const refresh = vi.fn()
-  useMesaDetail.mockReturnValue({ detail: { active_orders: activeOrders }, loading: false, error: null, refresh })
+  const updateAfterItemRemoval = vi.fn()
+  useMesaDetail.mockReturnValue({ detail: { active_orders: activeOrders }, loading: false, error: null, refresh, updateAfterItemRemoval })
   useMenuPOS.mockReturnValue({ data: menuData, loading: false, fetch: vi.fn() })
   useOrderManagement.mockReturnValue({ updateOrderStatus: vi.fn() })
-  return { refresh }
+  return { refresh, updateAfterItemRemoval }
 }
 
 beforeEach(() => {
@@ -227,6 +228,20 @@ describe('MesaWorkspace · editar y quitar ítems (T-30)', () => {
     await user.click(screen.getAllByRole('button', { name: 'Quitar Agua del pedido' })[0])
     expect(removeOrderItem).toHaveBeenCalledWith('order-1', 'it-1', '2026-10-14T12:00:00Z')
     await waitFor(() => expect(refresh).toHaveBeenCalled())
+    confirmar.mockRestore()
+  })
+
+  it('actualiza el total desde X-Order-Total sin recargar la mesa', async () => {
+    const user = userEvent.setup()
+    const confirmar = vi.spyOn(window, 'confirm').mockReturnValue(true)
+    const { refresh, updateAfterItemRemoval } = setup({ activeOrders: [orden] })
+    removeOrderItem.mockResolvedValue({ orderTotal: 1200 })
+    render(<MesaWorkspace mesa={mesa} localId="local1" cajaId="caja1" onBack={() => {}} onTableUpdated={() => {}} />)
+
+    await user.click(screen.getAllByRole('button', { name: 'Quitar Agua del pedido' })[0])
+
+    expect(updateAfterItemRemoval).toHaveBeenCalledWith('order-1', 'it-1', 1200)
+    expect(refresh).not.toHaveBeenCalled()
     confirmar.mockRestore()
   })
 

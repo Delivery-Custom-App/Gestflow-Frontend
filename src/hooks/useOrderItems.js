@@ -30,7 +30,7 @@ export function useOrderItems(orderId, createdAt) {
     (productId, quantity, key) => run(
       () => addOrderItem(orderId, { product_id: productId, quantity: parseInt(quantity, 10) }, createdAt, key),
       'Error al agregar producto',
-      null,
+      false,
     ),
     [run, orderId, createdAt],
   )
@@ -48,7 +48,7 @@ export function useOrderItems(orderId, createdAt) {
     (itemId) => run(
       () => removeOrderItem(orderId, itemId, createdAt),
       'No se pudo quitar el producto',
-      false,
+      null,
     ),
     [run, orderId, createdAt],
   )

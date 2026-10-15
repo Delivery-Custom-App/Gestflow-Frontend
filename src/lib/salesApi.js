@@ -470,10 +470,11 @@ export async function updateOrderItem(orderId, itemId, { quantity, notes } = {},
 
 /** Quita un ítem del pedido: `DELETE /orders/{id}/items/{item_id}` (204). */
 export async function removeOrderItem(orderId, itemId, createdAt) {
-  await apiRequest(orderResourcePath(orderId, createdAt, `/items/${encodeURIComponent(String(itemId))}`), {
+  const result = await apiRequest(orderResourcePath(orderId, createdAt, `/items/${encodeURIComponent(String(itemId))}`), {
     method: 'DELETE',
+    withOrderTotal: true,
   }).catch(errorDeItem)
-  return true
+  return { orderTotal: result?.orderTotal ?? null }
 }
 
 /**

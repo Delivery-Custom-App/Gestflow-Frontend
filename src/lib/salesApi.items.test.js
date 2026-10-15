@@ -43,10 +43,15 @@ describe('updateOrderItem', () => {
 })
 
 describe('removeOrderItem', () => {
-  it('DELETE /orders/{id}/items/{item_id}', async () => {
-    apiRequest.mockResolvedValue(null)
-    await expect(removeOrderItem('ord-1', 'it-1', CREADO)).resolves.toBe(true)
-    expect(apiRequest).toHaveBeenCalledWith(`/orders/ord-1/items/it-1${qs}`, { method: 'DELETE' })
+  it('DELETE /orders/{id}/items/{item_id} devuelve X-Order-Total si está presente', async () => {
+    apiRequest.mockResolvedValue({ data: null, orderTotal: 750 })
+    await expect(removeOrderItem('ord-1', 'it-1', CREADO)).resolves.toEqual({ orderTotal: 750 })
+    expect(apiRequest).toHaveBeenCalledWith(`/orders/ord-1/items/it-1${qs}`, { method: 'DELETE', withOrderTotal: true })
+  })
+
+  it('devuelve null si falta X-Order-Total para que la pantalla pueda recargar', async () => {
+    apiRequest.mockResolvedValue({ data: null, orderTotal: null })
+    await expect(removeOrderItem('ord-1', 'it-1', CREADO)).resolves.toEqual({ orderTotal: null })
   })
 })
 

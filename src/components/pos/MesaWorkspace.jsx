@@ -35,7 +35,7 @@ const EMPTY_CUSTOMIZATION = { embutido: null, agregados: [] }
 const formatItemName = (item) => item.item_name || item.product_name || '—'
 
 export default function MesaWorkspace({ mesa, atencion = null, localId, cajaId, puedeCobrar = true, puedeLiberarMesa = false, onBack, onTableUpdated }) {
-  const { detail, loading, error: mesaError, refresh } = useMesaDetail(mesa.id)
+  const { detail, loading, error: mesaError, refresh, updateAfterItemRemoval } = useMesaDetail(mesa.id)
   const { updateOrderStatus } = useOrderManagement()
   const { data: menuData, loading: menuLoading, fetch: fetchMenu } = useMenuPOS(localId)
   const { allItems, subtotal, iva, total, firstOrder } = useOrderTotals(detail)
@@ -263,15 +263,20 @@ export default function MesaWorkspace({ mesa, atencion = null, localId, cajaId, 
     setItemOcupado(item.id)
     setErrorMsg('')
     try {
-      if (accion === 'quitar' || nueva <= 0) await removeOrderItem(orden.id, item.id, orden.created_at)
-      else await updateOrderItem(orden.id, item.id, { quantity: nueva }, orden.created_at)
-      await refresh()
+      if (accion === 'quitar' || nueva <= 0) {
+        const result = await removeOrderItem(orden.id, item.id, orden.created_at)
+        if (result?.orderTotal != null) updateAfterItemRemoval(orden.id, item.id, result.orderTotal)
+        else await refresh()
+      } else {
+        await updateOrderItem(orden.id, item.id, { quantity: nueva }, orden.created_at)
+        await refresh()
+      }
     } catch (e) {
       setErrorMsg(e?.message || 'No se pudo cambiar el pedido')
     } finally {
       setItemOcupado('')
     }
-  }, [ordenDelItem, refresh])
+  }, [ordenDelItem, refresh, updateAfterItemRemoval])
   const visibleError = errorMsg || mesaError
 
   /* ─── fila de menú, con customizador inline para recetas ─── */

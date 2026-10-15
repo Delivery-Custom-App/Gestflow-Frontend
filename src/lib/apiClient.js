@@ -153,6 +153,8 @@ export async function apiRequest(path, options = {}) {
     // Con `withTotal` devuelve { data, total }: `total` sale del encabezado X-Total-Count
     // de las listas paginadas (null si no viene).
     withTotal = false,
+    // Para DELETE de ítems devuelve { data, orderTotal } desde X-Order-Total.
+    withOrderTotal = false,
   } = options
 
   const token = providedToken || (await getSession()).access_token
@@ -237,6 +239,11 @@ export async function apiRequest(path, options = {}) {
   if (withTotal) {
     const total = Number(response.headers.get('X-Total-Count'))
     return { data, total: response.headers.get('X-Total-Count') != null && Number.isFinite(total) ? total : null }
+  }
+  if (withOrderTotal) {
+    const rawTotal = response.headers.get('X-Order-Total')
+    const orderTotal = Number(rawTotal)
+    return { data, orderTotal: rawTotal != null && Number.isFinite(orderTotal) ? orderTotal : null }
   }
   return data
 }

@@ -46,6 +46,21 @@ describe('ProductList', () => {
     confirmar.mockRestore()
   })
 
+  it('usa X-Order-Total y deja la recarga para cuando no venga el encabezado', async () => {
+    const user = userEvent.setup()
+    const onChanged = vi.fn()
+    const onItemRemoved = vi.fn()
+    const confirmar = vi.spyOn(window, 'confirm').mockReturnValue(true)
+    removeOrderItem.mockResolvedValue({ orderTotal: 1000 })
+    render(<ProductList products={productos} orderId="ord-1" createdAt="c" onProductsChanged={onChanged} onItemRemoved={onItemRemoved} />)
+
+    await user.click(screen.getByRole('button', { name: 'Quitar Agua del pedido' }))
+
+    expect(onItemRemoved).toHaveBeenCalledWith('it-1', 1000)
+    expect(onChanged).not.toHaveBeenCalled()
+    confirmar.mockRestore()
+  })
+
   it('ya no aparece el «no disponible en Backend V2»; el error real se muestra', async () => {
     const user = userEvent.setup()
     updateOrderItem.mockRejectedValue(new Error('El pedido ya está cerrado'))

@@ -28,7 +28,7 @@ function validateProduct(product) {
  */
 const NO_PRODUCTS = []
 
-function ProductList({ products = NO_PRODUCTS, orderId = null, createdAt = null, onProductsChanged = null, className = '' }) {
+function ProductList({ products = NO_PRODUCTS, orderId = null, createdAt = null, onProductsChanged = null, onItemRemoved = null, className = '' }) {
   const { updateItem, deleteItem, loading, error } = useOrderItems(orderId, createdAt)
   const [editingId, setEditingId] = useState(null)
   const [editQuantity, setEditQuantity] = useState('')
@@ -66,10 +66,11 @@ function ProductList({ products = NO_PRODUCTS, orderId = null, createdAt = null,
     if (window.confirm(`¿Quitar ${product.product_name || 'este producto'} del pedido?`)) {
       const success = await deleteItem(product.id)
       if (success) {
-        if (onProductsChanged) onProductsChanged()
+        if (success.orderTotal != null && onItemRemoved) onItemRemoved(product.id, success.orderTotal)
+        else if (onProductsChanged) onProductsChanged()
       }
     }
-  }, [deleteItem, onProductsChanged])
+  }, [deleteItem, onItemRemoved, onProductsChanged])
 
   if (!products || products.length === 0) {
     return (
