@@ -1,7 +1,7 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState } from 'react'
 import { useReportesPOS } from '../../hooks/useReportesPOS'
 import { formatCLP } from '../../lib/formatCLP'
-import { apiRequest } from '../../lib/apiClient'
+import { fetchEnrichedInventoryForLocal, stockStatus } from '../../lib/v2CatalogApi'
 import {
   Dialog,
   DialogContent,
@@ -14,28 +14,38 @@ import { Button } from '@/components/ui/button'
 /** Modal de reportes POS: top producto, bebida, top 5 y stock bajo. */
 export default function ReportesModal({ localId, onClose }) {
   const { data, loading, error, fetch } = useReportesPOS(localId)
-  const [stockBajo, setStockBajo]     = useState([])
-  const [stockLoading, setStockLoading] = useState(false)
-
-  const fetchStockBajo = useCallback(async () => {
-    if (!localId) return
-    setStockLoading(true)
-    try {
-      const res = await apiRequest(
-        `/inventory/locals/${localId}/products?status=CRITICO&status=BAJO&limit=20&offset=0`
-      )
-      setStockBajo(res?.items || res || [])
-    } catch {
-      setStockBajo([])
-    } finally {
-      setStockLoading(false)
-    }
-  }, [localId])
+  const [stockRefreshTick, setStockRefreshTick] = useState(0)
+  const [stockState, setStockState] = useState({ localId: null, refreshTick: -1, rows: [], error: false })
+  const stockMatchesView = stockState.localId === localId
+    && stockState.refreshTick === stockRefreshTick
+  const stockBajo = stockMatchesView ? stockState.rows : []
+  const stockError = stockMatchesView && stockState.error
+  const stockLoading = Boolean(localId) && !stockMatchesView
 
   useEffect(() => {
     fetch()
-    fetchStockBajo()
-  }, [fetch, fetchStockBajo])
+  }, [fetch])
+
+  useEffect(() => {
+    if (!localId) return
+    let ignore = false
+    fetchEnrichedInventoryForLocal(localId)
+      .then(({ rows }) => {
+        if (ignore) return
+        const filtered = (Array.isArray(rows) ? rows : [])
+          .map((row) => ({
+            ...row,
+            stock_status: row.stock_status || stockStatus(row.stock_current, row.stock_min, row.stock_critical),
+          }))
+          .filter((row) => row.stock_status === 'CRITICO' || row.stock_status === 'BAJO')
+          .sort((a, b) => (a.stock_status === b.stock_status ? 0 : a.stock_status === 'CRITICO' ? -1 : 1))
+        setStockState({ localId, refreshTick: stockRefreshTick, rows: filtered, error: false })
+      })
+      .catch(() => {
+        if (!ignore) setStockState({ localId, refreshTick: stockRefreshTick, rows: [], error: true })
+      })
+    return () => { ignore = true }
+  }, [localId, stockRefreshTick])
 
   return (
     <Dialog open onOpenChange={onClose}>
@@ -112,8 +122,13 @@ export default function ReportesModal({ localId, onClose }) {
             </h3>
             {stockLoading ? (
               <p className="text-xs text-[hsl(var(--muted-foreground))]">Cargando...</p>
+            ) : stockError ? (
+              <div role="alert" className="space-y-2">
+                <p className="text-xs text-[hsl(var(--destructive))]">No se pudo cargar el stock del local. Inténtalo nuevamente.</p>
+                <Button size="sm" variant="outline" onClick={() => setStockRefreshTick((tick) => tick + 1)}>Reintentar</Button>
+              </div>
             ) : stockBajo.length === 0 ? (
-              <p className="text-xs text-[hsl(var(--muted-foreground))]">Todo el inventario está en nivel óptimo.</p>
+              <p className="text-xs text-[hsl(var(--muted-foreground))]">Todo el stock está sobre el mínimo</p>
             ) : (
               <div className="rounded-lg border border-[hsl(var(--border))] divide-y divide-[hsl(var(--border))]">
                 {stockBajo.map(item => (
@@ -128,8 +143,8 @@ export default function ReportesModal({ localId, onClose }) {
           <Button
             variant="outline"
             size="sm"
-            onClick={fetch}
-            disabled={loading}
+            onClick={() => { fetch(); setStockRefreshTick((tick) => tick + 1) }}
+            disabled={loading || stockLoading}
           >
             {loading ? 'Actualizando...' : '↻ Actualizar'}
           </Button>
