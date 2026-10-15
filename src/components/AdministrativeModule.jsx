@@ -20,7 +20,9 @@ import {
 } from '../lib/administrativeApi'
 import { getAuthContext, apiRequest, listUsers } from '../lib/apiClient'
 import { textosNoCobradas } from '../lib/noCobradas'
-import { isAlPasoLocal } from '../lib/salesModel'
+import { isAlPasoLocal, normalizeSalesModel, SALES_MODEL } from '../lib/salesModel'
+import { vendedoresDelLocal } from '../lib/atencionMesas'
+import { listarMaquinasDelLocal, maquinasElegibles, requiereCompartir, textoDeOcupacion } from '../lib/maquinasCobro'
 import { useSelectedLocal } from '../hooks/useSelectedLocal'
 import { nombreDeVendedor, opcionesDeVendedor, useTurnosFiltrados } from '../lib/registroTurnos'
 import { monto, textoDiferencia } from '../lib/arqueo'
@@ -259,12 +261,13 @@ function AmTable({ headers, rows, rowKeys, emptyMessage }) {
 
 // ── Section helpers ────────────────────────────────────────────
 
-function SectionActions({ activeSection, onNuevaCaja, puedeAbrirTurno = true }) {
+function SectionActions({ activeSection, onNuevaCaja }) {
   if (activeSection === 'ventas') {
     return null
   }
-  // A-03: en restaurante el administrador no tiene caja propia (no abre turno).
-  if (activeSection === 'flujo-caja' && puedeAbrirTurno) {
+  // T-80: el encargado de un restaurante no tiene caja propia (A-03), pero
+  // abre el turno a nombre de un mesero y cuenta el efectivo de apertura.
+  if (activeSection === 'flujo-caja') {
     return (
       <div className="flex gap-2">
         <Button onClick={onNuevaCaja}>+ Abrir turno de caja</Button>
@@ -732,7 +735,21 @@ function ConfiguracionContent({ localId }) {
 
 // ── Modal de apertura de turno ───────────────────────────────
 
-function AbrirTurnoModal({ localId, onClose, onSaved, onCrearCajaFisica }) {
+/**
+ * Abre un turno de caja con el efectivo de apertura contado.
+ *
+ * T-80: quien supervisa puede abrirlo a nombre de un empleado del local
+ * («A nombre de», `cashier_user_id`). El encargado de un restaurante no tiene
+ * caja propia (A-03), así que para él elegir al empleado es obligatorio. En un
+ * restaurante el turno de un empleado lleva su máquina POS (`pos_machine_id`):
+ * el backend la exige.
+ */
+function AbrirTurnoModal({ localId, onClose, onSaved, onCrearCajaFisica, empleados = [], puedeAbrirPropio = true, esRestaurante = false }) {
+  // '' = el turno es de quien lo abre; un id = a nombre de ese empleado.
+  const [titularId, setTitularId] = useState('')
+  const [maquinas, setMaquinas] = useState(null)
+  const [maquinaId, setMaquinaId] = useState('')
+  const pideMaquina = esRestaurante && Boolean(titularId)
   // null mientras se cargan: distingue "todavía no sé" de "no hay ninguna".
   const [cajasFisicas, setCajasFisicas] = useState(null)
   const [cajaFisicaId, setCajaFisicaId] = useState('')
@@ -763,6 +780,20 @@ function AbrirTurnoModal({ localId, onClose, onSaved, onCrearCajaFisica }) {
     return () => { ignore = true }
   }, [localId])
 
+  useEffect(() => {
+    if (!pideMaquina) return undefined
+    let ignore = false
+    listarMaquinasDelLocal(localId)
+      .then((filas) => {
+        if (ignore) return
+        const elegibles = maquinasElegibles(filas)
+        setMaquinas(elegibles)
+        if (elegibles.length === 1) setMaquinaId(String(elegibles[0].id))
+      })
+      .catch(() => { if (!ignore) setMaquinas([]) })
+    return () => { ignore = true }
+  }, [localId, pideMaquina])
+
   const handleClose = () => {
     if (saving) return
     setVisible(false)
@@ -779,10 +810,13 @@ function AbrirTurnoModal({ localId, onClose, onSaved, onCrearCajaFisica }) {
   const abrir = async () => {
     setSaving(true); setErr('')
     const desglose = desgloseParaApi(cantidades)
+    const maquina = pideMaquina ? (maquinas || []).find((m) => String(m.id) === maquinaId) : null
     try {
       await createCaja({
         caja_fisica_id: cajaFisicaId,
         monto_apertura: total,
+        ...(titularId ? { cashier_user_id: titularId } : {}),
+        ...(maquina ? { pos_machine_id: maquina.id, compartir: requiereCompartir(maquina) } : {}),
         // El backend guarda el desglose desde el B-28; antes lo descartaría.
         ...(isV2FeatureEnabled('desgloseEfectivo') && desglose.length > 0 ? { apertura_desglose: desglose } : {}),
       })
@@ -792,9 +826,11 @@ function AbrirTurnoModal({ localId, onClose, onSaved, onCrearCajaFisica }) {
       const mensaje = String(e?.message || '')
       // El backend rechaza un segundo turno del mismo cajero en la misma caja
       // física el mismo día; se explica en vez de mostrar el 409.
-      setErr(/409|ya existe una caja abierta/i.test(mensaje)
-        ? 'Ya tienes un turno abierto hoy en esa caja física. Ciérralo antes de abrir otro.'
-        : (mensaje || 'No se pudo abrir el turno'))
+      setErr(/ya existe una caja abierta/i.test(mensaje)
+        ? (titularId
+          ? 'Esa persona ya tiene un turno abierto hoy en esa caja física.'
+          : 'Ya tienes un turno abierto hoy en esa caja física. Ciérralo antes de abrir otro.')
+        : (mensaje.replace(/^\d{3}:\s*/, '') || 'No se pudo abrir el turno'))
       setSaving(false)
     }
   }
@@ -802,6 +838,8 @@ function AbrirTurnoModal({ localId, onClose, onSaved, onCrearCajaFisica }) {
   const handleSubmit = (e) => {
     e.preventDefault()
     if (!cajaFisicaId) { setErr('Elige la caja física donde se abre el turno'); return }
+    if (!puedeAbrirPropio && !titularId) { setErr('Elige a nombre de quién se abre el turno'); return }
+    if (pideMaquina && !maquinaId) { setErr('Elige la máquina POS con la que cobrará'); return }
     if (total === 0 && !confirmarSinEfectivo) { setErr(''); setConfirmarSinEfectivo(true); return }
     abrir()
   }
@@ -876,6 +914,40 @@ function AbrirTurnoModal({ localId, onClose, onSaved, onCrearCajaFisica }) {
                 </select>
                 <p className="text-xs text-[hsl(var(--muted-foreground))]">El puesto donde se atiende. El turno queda asociado a ella.</p>
               </div>
+
+              {(!puedeAbrirPropio || empleados.length > 0) && (
+                <div className="flex flex-col gap-1.5">
+                  <label htmlFor="turno-titular" className={labelCls}>A nombre de</label>
+                  <select id="turno-titular" value={titularId} onChange={(e) => { setTitularId(e.target.value); setMaquinaId(''); setMaquinas(null) }} className={inputCls} disabled={saving}>
+                    <option value="">{puedeAbrirPropio ? 'Yo (mi propio turno)' : 'Elige un empleado'}</option>
+                    {empleados.map((e) => <option key={e.id} value={e.id}>{e.nombre}</option>)}
+                  </select>
+                  {!puedeAbrirPropio && (
+                    <p className="text-xs text-[hsl(var(--muted-foreground))]">
+                      {empleados.length === 0
+                        ? 'Este local no tiene empleados activos. Créalos en Usuarios para abrirles el turno.'
+                        : 'En un restaurante el encargado no tiene caja propia: el turno queda a nombre del empleado que va a vender.'}
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {pideMaquina && (
+                <div className="flex flex-col gap-1.5">
+                  <label htmlFor="turno-maquina" className={labelCls}>Máquina POS</label>
+                  {maquinas === null ? (
+                    <p className="text-xs text-[hsl(var(--muted-foreground))]">Cargando las máquinas del local…</p>
+                  ) : maquinas.length === 0 ? (
+                    <p className="text-xs text-amber-700">No hay máquinas libres en este local: registra una o libera una antes de abrir el turno.</p>
+                  ) : (
+                    <select id="turno-maquina" value={maquinaId} onChange={(e) => setMaquinaId(e.target.value)} className={inputCls} disabled={saving}>
+                      <option value="">Elige una máquina</option>
+                      {maquinas.map((m) => <option key={m.id} value={m.id}>{`${m.nombre} · ${textoDeOcupacion(m)}`}</option>)}
+                    </select>
+                  )}
+                  <p className="text-xs text-[hsl(var(--muted-foreground))]">Con la que cobrará con tarjeta. Si ya la usa alguien, la comparten.</p>
+                </div>
+              )}
 
               <div className="flex flex-col gap-1.5">
                 <p className={labelCls}>Efectivo de apertura</p>
@@ -1052,7 +1124,6 @@ function AdministrativeModule() {
   const location = useLocation()
   const { localId, sectionId } = useParams()
   const { userRole, user } = useAuth()
-  const puedeAbrirTurno = puedeVender(userRole, user?.local_sales_model)
   const puedeGestionarCajasFisicas = ROLES_CAJAS_FISICAS.has(normalizeRoleKey(userRole))
   const [sectionData, setSectionData] = useState({ dashboard: null, orders: null, ordersTotal: null, ordersOffset: 0, ordersLimit: DETALLE_ORDENES_POR_PAGINA, cajas: [], indicadores: null })
   const [detalleLoading, setDetalleLoading] = useState(false)
@@ -1089,6 +1160,7 @@ function AdministrativeModule() {
 
   // Sin sección o con una que ya no existe (rendiciones, reportes, alertas, bonos, dashboard) → Ventas.
   const localActual = useSelectedLocal(localId, 'state-then-locales')
+  const salesModelDelLocal = normalizeSalesModel(localActual?.sales_model ?? user?.local_sales_model)
   const sections = getSections(isAlPasoLocal(localActual))
   const isKnownSection = sections.some((s) => s.id === sectionId)
   const activeSection = isKnownSection ? sectionId : 'ventas'
@@ -1156,6 +1228,9 @@ function AdministrativeModule() {
           onCrearCajaFisica={puedeGestionarCajasFisicas
             ? () => { setShowNuevaCaja(false); setCajaFisicaModal({ nueva: true }) }
             : undefined}
+          empleados={puedeGestionarCajasFisicas ? vendedoresDelLocal(sectionData.usuarios, localId) : []}
+          puedeAbrirPropio={puedeVender(userRole, salesModelDelLocal)}
+          esRestaurante={salesModelDelLocal === SALES_MODEL.RESTAURANT}
         />
       )}
       {boletaOrden && (
@@ -1248,7 +1323,6 @@ function AdministrativeModule() {
             <SectionActions
               activeSection={activeSection}
               onNuevaCaja={() => setShowNuevaCaja(true)}
-              puedeAbrirTurno={puedeAbrirTurno}
             />
             <button
               onClick={() => setGuideOpen(true)}

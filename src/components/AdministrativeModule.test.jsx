@@ -30,6 +30,14 @@ vi.mock('../hooks/useSelectedLocal', () => ({
 }))
 
 vi.mock('./pos/CajaMpPairingModal', () => ({ default: () => null }))
+vi.mock('../lib/maquinasCobro', async (importOriginal) => ({
+  ...(await importOriginal()),
+  listarMaquinasDelLocal: vi.fn(() => Promise.resolve([
+    { id: 'pm-1', nombre: 'Point barra', estado: 'libre', usuarios: [] },
+    { id: 'pm-2', nombre: 'Point terraza', estado: 'compartible', usuarios: ['Luis'] },
+    { id: 'pm-3', nombre: 'Point llena', estado: 'llena', usuarios: ['Ana', 'Luis'] },
+  ])),
+}))
 vi.mock('./pos/CajaFisicaModal', () => ({ default: () => <div>modal de caja física</div> }))
 vi.mock('./pos/TicketModal', () => ({ default: ({ tipo }) => <div>ticket de {tipo}</div> }))
 
@@ -613,16 +621,86 @@ describe('AdministrativeModule', () => {
     expect(within(lateral).getByRole('form', { name: 'Registrar movimiento' })).toBeInTheDocument()
   })
 
-  it('A-03: en restaurante el administrador no ve «Abrir turno de caja»; el dueño sí', async () => {
-    render(
-      <AuthProvider user={{ id: 'u-1', local_sales_model: 'RESTAURANT' }} userRole="Admin" logout={() => {}}>
+  // T-80: el encargado de un restaurante no tiene caja propia (A-03), pero abre
+  // el turno a nombre de un mesero, con el efectivo contado y su máquina POS.
+  function renderEncargado(salesModel) {
+    return render(
+      <AuthProvider user={{ id: 'u-1', local_sales_model: salesModel }} userRole="Admin" logout={() => {}}>
         <MemoryRouter initialEntries={['/local/loc-1/administrativo/flujo-caja']}>
           <Routes><Route path="/local/:localId/administrativo/:sectionId?" element={<AdministrativeModule />} /></Routes>
         </MemoryRouter>
       </AuthProvider>,
     )
-    await screen.findByRole('heading', { name: 'Turnos de caja' })
-    expect(screen.queryByRole('button', { name: /Abrir turno de caja/ })).not.toBeInTheDocument()
+  }
+  const MESEROS = [
+    { id: 'u-ana', first_name: 'Ana', last_name: 'Rojas', role: 'EMPLEADO', local_id: 'loc-1' },
+    { id: 'u-luis', first_name: 'Luis', last_name: 'Soto', role: 'EMPLEADO', local_id: 'loc-1' },
+    { id: 'u-otro', first_name: 'Otro', last_name: 'Local', role: 'EMPLEADO', local_id: 'loc-2' },
+    { id: 'u-inactivo', first_name: 'Ido', last_name: 'Ya', role: 'EMPLEADO', local_id: 'loc-1', is_active: false },
+  ]
+
+  it('T-80: en restaurante el encargado abre el turno a nombre de un mesero, con el efectivo y la máquina', async () => {
+    listUsers.mockResolvedValueOnce(MESEROS)
+    const user = userEvent.setup()
+    renderEncargado('RESTAURANT')
+
+    await user.click(await screen.findByRole('button', { name: '+ Abrir turno de caja' }))
+    await user.selectOptions(await screen.findByLabelText('Caja física'), 'cf-1')
+    const titular = screen.getByLabelText('A nombre de')
+    // Solo los empleados activos de este local; no hay opción «Yo».
+    expect(within(titular).getAllByRole('option').map((o) => o.textContent)).toEqual(['Elige un empleado', 'Ana Rojas', 'Luis Soto'])
+    expect(screen.getByText(/el encargado no tiene caja propia/)).toBeInTheDocument()
+
+    await user.type(screen.getByLabelText('Cantidad de billetes de $10.000'), '2')
+    await user.click(screen.getByRole('button', { name: 'Abrir turno' }))
+    expect(screen.getByText('Elige a nombre de quién se abre el turno')).toBeInTheDocument()
+
+    await user.selectOptions(titular, 'u-ana')
+    const maquina = await screen.findByLabelText('Máquina POS')
+    // Solo las que tienen cupo.
+    expect(within(maquina).queryByRole('option', { name: /Point llena/ })).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Abrir turno' }))
+    expect(screen.getByText('Elige la máquina POS con la que cobrará')).toBeInTheDocument()
+    expect(createCaja).not.toHaveBeenCalled()
+
+    await user.selectOptions(maquina, 'pm-2')
+    await user.click(screen.getByRole('button', { name: 'Abrir turno' }))
+    await waitFor(() => expect(createCaja).toHaveBeenCalledWith({
+      caja_fisica_id: 'cf-1',
+      monto_apertura: 20000,
+      cashier_user_id: 'u-ana',
+      pos_machine_id: 'pm-2',
+      compartir: true,
+    }))
+  })
+
+  it('T-80: si el mesero ya tiene turno hoy en esa caja, lo explica', async () => {
+    listUsers.mockResolvedValueOnce(MESEROS)
+    createCaja.mockRejectedValueOnce(new Error('409: Ya existe una caja abierta hoy para este cajero en esta caja física'))
+    const user = userEvent.setup()
+    renderEncargado('RESTAURANT')
+
+    await user.click(await screen.findByRole('button', { name: '+ Abrir turno de caja' }))
+    await user.selectOptions(await screen.findByLabelText('Caja física'), 'cf-1')
+    await user.selectOptions(screen.getByLabelText('A nombre de'), 'u-luis')
+    await user.selectOptions(await screen.findByLabelText('Máquina POS'), 'pm-1')
+    await user.type(screen.getByLabelText('Cantidad de billetes de $1.000'), '5')
+    await user.click(screen.getByRole('button', { name: 'Abrir turno' }))
+    expect(await screen.findByText('Esa persona ya tiene un turno abierto hoy en esa caja física.')).toBeInTheDocument()
+  })
+
+  it('T-80: el dueño abre su propio turno o a nombre de un empleado', async () => {
+    listUsers.mockResolvedValueOnce(MESEROS)
+    const user = userEvent.setup()
+    renderAdmin('flujo-caja')
+
+    await user.click(await screen.findByRole('button', { name: '+ Abrir turno de caja' }))
+    await user.selectOptions(await screen.findByLabelText('Caja física'), 'cf-1')
+    expect(screen.getByLabelText('A nombre de')).toHaveValue('')
+    expect(screen.getByRole('option', { name: 'Yo (mi propio turno)' })).toBeInTheDocument()
+    await user.type(screen.getByLabelText('Cantidad de billetes de $1.000'), '3')
+    await user.click(screen.getByRole('button', { name: 'Abrir turno' }))
+    await waitFor(() => expect(createCaja).toHaveBeenCalledWith({ caja_fisica_id: 'cf-1', monto_apertura: 3000 }))
   })
 
   it('A-03: en al paso el administrador sí abre turno', async () => {
