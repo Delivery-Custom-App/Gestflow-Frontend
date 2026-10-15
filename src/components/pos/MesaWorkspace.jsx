@@ -84,6 +84,7 @@ export default function MesaWorkspace({ mesa, atencion = null, localId, cajaId, 
     return (menuData?.categories ?? [])
       .map((cat) => ({
         name: cat.name || 'Sin categoría',
+        color: cat.color || null,
         items: (cat.products || []).map((p) => ({
           key: productKey(p.id),
           id: p.id,
@@ -345,6 +346,7 @@ export default function MesaWorkspace({ mesa, atencion = null, localId, cajaId, 
             <MenuCategoryAccordion
               key={cat.name}
               label={cat.name}
+              color={cat.color}
               items={cat.items}
               selectedQtys={selectedQtys}
               onAdd={handleAddItem}

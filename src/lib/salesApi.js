@@ -794,10 +794,13 @@ export async function fetchLocalMenuCatalog(localId, { search, includeInactive =
     categoryList.push({
       id: catId,
       name: cat?.name || 'Sin nombre',
+      // A-08: orden y color de la categoría (B-23).
+      sort_order: Number(cat?.sort_order) || 0,
+      color: cat?.color || null,
       products: prods.sort((a, b) => a.name.localeCompare(b.name, 'es')),
     })
   }
-  categoryList.sort((a, b) => a.name.localeCompare(b.name, 'es'))
+  categoryList.sort((a, b) => a.sort_order - b.sort_order || a.name.localeCompare(b.name, 'es'))
 
   return { categories: categoryList, local_id: localId }
 }

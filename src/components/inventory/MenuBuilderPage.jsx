@@ -9,6 +9,7 @@ import {
   removeFromLocalMenu,
 } from '../../lib/inventoryApi'
 import { fetchLocalMenuCatalog } from '../../lib/salesApi'
+import { cambiarColorCategoria, esColorValido, guardarOrden, moverCategoria, ordenarCategorias } from '../../lib/categoriasOrden'
 import { apiRequest } from '../../lib/apiClient'
 import { formatCLPCurrency as formatMoney } from '../../lib/formatCLP'
 import InventoryShell from './InventoryShell'
@@ -21,7 +22,7 @@ import LoadingSpinner from '../LoadingSpinner'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
-import {
+import { ArrowUp, ArrowDown, Palette,
   GripVertical, Plus, Pencil, Trash2, MoreHorizontal,
   Eye, UtensilsCrossed, Search, PackagePlus, FileSpreadsheet,
 } from 'lucide-react'
@@ -137,6 +138,35 @@ function MenuBuilderPage() {
       await load()
     } catch (err) {
       toast.error(err?.message || 'No se pudo crear la categoría')
+    } finally {
+      setCategorySaving(false)
+    }
+  }
+
+  // A-08: subir o bajar una categoría (sort_order) y cambiar o quitar su color.
+  async function handleMoverCategoria(cat, direccion) {
+    const cambios = moverCategoria(categories, cat.id, direccion)
+    setMenuOpenId('')
+    if (!cambios.length) return
+    setCategorySaving(true)
+    try {
+      await guardarOrden(cambios)
+      await load()
+    } catch (err) {
+      toast.error(err?.message || 'No se pudo cambiar el orden')
+    } finally {
+      setCategorySaving(false)
+    }
+  }
+
+  async function handleColorCategoria(cat, color) {
+    if (color && !esColorValido(color)) { toast.error('El color debe ser #RRGGBB'); return }
+    setCategorySaving(true)
+    try {
+      await cambiarColorCategoria(cat.id, color || null)
+      await load()
+    } catch (err) {
+      toast.error(String(err?.detail || err?.message || 'No se pudo cambiar el color').replace(/^\d{3}:\s*/, ''))
     } finally {
       setCategorySaving(false)
     }
@@ -264,7 +294,7 @@ function MenuBuilderPage() {
                     Aún no hay categorías.
                   </p>
                 ) : (
-                  categories.map((cat) => {
+                  ordenarCategorias(categories).map((cat, posicion, ordenadas) => {
                     const active = cat.id === selectedCategoryId
                     const count = countsByCategory.get(cat.id) || 0
                     return (
@@ -302,6 +332,7 @@ function MenuBuilderPage() {
                               className="flex min-w-0 flex-1 items-center gap-2 py-2.5 pl-2.5 text-left"
                             >
                               <GripVertical className="h-3.5 w-3.5 shrink-0 opacity-35" />
+                              {cat.color && <span data-testid={`color-${cat.id}`} className="h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: cat.color }} />}
                               <span className="min-w-0 flex-1 truncate">{cat.name}</span>
                               <span className={cn('text-[10px] tabular-nums', active ? 'opacity-80' : 'text-[hsl(var(--muted-foreground))]')}>
                                 {count}
@@ -331,6 +362,27 @@ function MenuBuilderPage() {
                             >
                               <Pencil className="h-3 w-3" /> Editar
                             </button>
+                            <button type="button" disabled={posicion === 0 || categorySaving}
+                              className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-medium hover:bg-[hsl(var(--muted)/0.6)] disabled:opacity-40"
+                              onClick={() => handleMoverCategoria(cat, 'arriba')}>
+                              <ArrowUp className="h-3 w-3" /> Subir
+                            </button>
+                            <button type="button" disabled={posicion === ordenadas.length - 1 || categorySaving}
+                              className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-medium hover:bg-[hsl(var(--muted)/0.6)] disabled:opacity-40"
+                              onClick={() => handleMoverCategoria(cat, 'abajo')}>
+                              <ArrowDown className="h-3 w-3" /> Bajar
+                            </button>
+                            <label className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-medium hover:bg-[hsl(var(--muted)/0.6)]">
+                              <Palette className="h-3 w-3" /> Color
+                              <input type="color" aria-label={`Color de ${cat.name}`} value={cat.color || '#888888'}
+                                onChange={(e) => handleColorCategoria(cat, e.target.value)} className="ml-auto h-5 w-6 cursor-pointer border-0 bg-transparent p-0" />
+                            </label>
+                            {cat.color && (
+                              <button type="button" className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-medium hover:bg-[hsl(var(--muted)/0.6)]"
+                                onClick={() => handleColorCategoria(cat, null)}>
+                                Quitar color
+                              </button>
+                            )}
                             <button
                               type="button"
                               className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-medium text-red-600 hover:bg-red-50"
