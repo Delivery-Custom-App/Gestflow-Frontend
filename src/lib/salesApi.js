@@ -59,6 +59,7 @@ const SOURCE_TO_V2 = {
 }
 
 const ACTIVE_ORDER_STATUSES = new Set(['open', 'preparing', 'ready', 'PENDING', 'PREPARING', 'READY'])
+const ACTIVE_ORDER_STATUS_FILTERS = ['open', 'preparing', 'ready']
 
 export function toUiOrderStatus(status) {
   const key = String(status || '')
@@ -357,11 +358,14 @@ export async function deleteMesa(mesaId) {
  */
 export async function getMesaDetail(mesaId) {
   const mesa = mapMesaOut(await apiRequest(`/mesas/${encodeURIComponent(String(mesaId))}`))
-  const [orders, productsMap] = await Promise.all([
-    apiRequest(`/orders?local_id=${encodeURIComponent(String(mesa.local_id))}`),
+  const [ordersByStatus, productsMap] = await Promise.all([
+    Promise.all(ACTIVE_ORDER_STATUS_FILTERS.map((status) => {
+      const query = new URLSearchParams({ mesa_id: String(mesaId), status })
+      return apiRequest(`/orders?${query.toString()}`)
+    })),
     fetchProductsMap().catch(() => new Map()),
   ])
-  const active = (Array.isArray(orders) ? orders : []).filter(
+  const active = ordersByStatus.flatMap((orders) => Array.isArray(orders) ? orders : []).filter(
     (o) => String(o.mesa_id) === String(mesaId) && ACTIVE_ORDER_STATUSES.has(String(o.status)),
   )
 
