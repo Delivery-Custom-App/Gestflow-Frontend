@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { m, AnimatePresence } from 'framer-motion'
-import { Pencil, PackagePlus, ClipboardCheck, PlayCircle } from 'lucide-react'
+import { PackageMinus, History, Pencil, PackagePlus, ClipboardCheck, PlayCircle } from 'lucide-react'
 import StockStatusBadge from './StockStatusBadge'
 import { getStockAlertLevel } from './stockAlertUtils'
 
@@ -311,6 +311,18 @@ function ProductsTable({
                                   className="h-7 px-2 text-xs gap-1 text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--primary))]">
                                   <ClipboardCheck size={12} />
                                   Corregir
+                                </Button>
+                                <Button type="button" variant="ghost" size="sm" onClick={() => onRegistrar(row, 'merma')}
+                                  aria-label={`Registrar merma de ${display}`} title="Se perdió o venció: registrar merma"
+                                  className="h-7 px-2 text-xs gap-1 text-[hsl(var(--muted-foreground))] hover:text-red-600">
+                                  <PackageMinus size={12} />
+                                  Merma
+                                </Button>
+                                <Button type="button" variant="ghost" size="sm" onClick={() => onRegistrar(row, 'historial')}
+                                  aria-label={`Historial de stock de ${display}`} title="Ver los movimientos del stock"
+                                  className="h-7 px-2 text-xs gap-1 text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--primary))]">
+                                  <History size={12} />
+                                  Historial
                                 </Button>
                               </>
                             )}

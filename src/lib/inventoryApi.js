@@ -1,4 +1,5 @@
 import { apiRequest } from './apiClient'
+import { registrarMovimientoStock } from './movimientosStock'
 import {
   getCachedCategories,
   mergeCategoryIntoCache,
@@ -367,23 +368,29 @@ export async function patchInventoryStock(_localId, inventoryId, body) {
  * Suma unidades (por ejemplo, llegó mercadería). No hay endpoint de ingreso:
  * se lee el stock actual recién consultado, se le suma y se guarda.
  */
-export async function sumarUnidades(inventoryId, cantidad) {
+/**
+ * Llegó mercadería: un movimiento `ingreso` (T-58). Es atómico en el backend,
+ * así que dos personas sumando a la vez ya no se pisan (antes se leía el
+ * stock y se escribía el valor calculado con un PATCH).
+ */
+export async function sumarUnidades(inventoryId, cantidad, motivo = '') {
   const n = Number(cantidad)
   if (!Number.isFinite(n) || n <= 0) throw new Error('Indica cuántas unidades llegaron.')
-  const ruta = `/inventory/${encodeURIComponent(String(inventoryId))}`
-  const fila = await apiRequest(ruta)
-  const actual = Number(fila?.stock_actual) || 0
-  return apiRequest(ruta, { method: 'PATCH', body: { stock_actual: actual + n } })
+  return registrarMovimientoStock(inventoryId, { tipo: 'ingreso', cantidad: n, motivo })
 }
 
-/** Corrige el conteo: el stock pasa a ser lo que se contó. */
-export async function corregirConteo(inventoryId, contado) {
+/** Corrige el conteo: un movimiento `ajuste` (el stock pasa a ser lo contado), con motivo (T-58). */
+export async function corregirConteo(inventoryId, contado, motivo) {
   const n = Number(contado)
   if (!Number.isFinite(n) || n < 0) throw new Error('Indica cuántas unidades contaste.')
-  return apiRequest(`/inventory/${encodeURIComponent(String(inventoryId))}`, {
-    method: 'PATCH',
-    body: { stock_actual: n },
-  })
+  return registrarMovimientoStock(inventoryId, { tipo: 'ajuste', cantidad: n, motivo })
+}
+
+/** Se perdió o venció mercadería: un movimiento `merma`, con motivo (T-58). */
+export async function registrarMerma(inventoryId, cantidad, motivo) {
+  const n = Number(cantidad)
+  if (!Number.isFinite(n) || n <= 0) throw new Error('Indica cuántas unidades se perdieron.')
+  return registrarMovimientoStock(inventoryId, { tipo: 'merma', cantidad: n, motivo })
 }
 
 /** Empieza a controlar el stock de un producto que todavía no lo tiene en el local. */

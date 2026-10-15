@@ -16,7 +16,7 @@ describe('RegistrarStockModal', () => {
     expect(screen.getByText('Quedarán 44 unidades.')).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Guardar' }))
 
-    await waitFor(() => expect(onGuardar).toHaveBeenCalledWith({ cantidad: 24 }))
+    await waitFor(() => expect(onGuardar).toHaveBeenCalledWith({ cantidad: 24, motivo: '' }))
   })
 
   it('sumar sin cantidad no guarda', async () => {
@@ -37,8 +37,12 @@ describe('RegistrarStockModal', () => {
     await user.type(screen.getByLabelText('¿Cuántas unidades contaste?'), '18')
     expect(screen.getByText('Diferencia: -2 unidades.')).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Guardar' }))
+    // T-58: corregir pide motivo.
+    expect(screen.getByRole('alert')).toHaveTextContent(/motivo/)
+    await user.type(screen.getByLabelText('Motivo'), 'Conteo del domingo')
+    await user.click(screen.getByRole('button', { name: 'Guardar' }))
 
-    await waitFor(() => expect(onGuardar).toHaveBeenCalledWith({ cantidad: 18 }))
+    await waitFor(() => expect(onGuardar).toHaveBeenCalledWith({ cantidad: 18, motivo: 'Conteo del domingo' }))
   })
 
   it('corregir a 0 es válido (se acabó)', async () => {
@@ -47,8 +51,9 @@ describe('RegistrarStockModal', () => {
     render(<RegistrarStockModal modo="corregir" row={ROW} onGuardar={onGuardar} onClose={vi.fn()} />)
 
     await user.type(screen.getByLabelText('¿Cuántas unidades contaste?'), '0')
+    await user.type(screen.getByLabelText('Motivo'), 'Se acabó')
     await user.click(screen.getByRole('button', { name: 'Guardar' }))
-    await waitFor(() => expect(onGuardar).toHaveBeenCalledWith({ cantidad: 0 }))
+    await waitFor(() => expect(onGuardar).toHaveBeenCalledWith({ cantidad: 0, motivo: 'Se acabó' }))
   })
 
   it('empezar: pide las unidades, el mínimo y el nivel crítico opcional', async () => {
@@ -87,5 +92,20 @@ describe('RegistrarStockModal', () => {
     await user.click(screen.getByRole('button', { name: 'Guardar' }))
     expect(await screen.findByRole('alert')).toHaveTextContent('No autorizado')
     expect(onClose).not.toHaveBeenCalled()
+  })
+})
+
+describe('RegistrarStockModal · merma (T-58)', () => {
+  it('pide cantidad y motivo, avisa si deja el stock negativo y muestra el 409', async () => {
+    const onGuardar = vi.fn(() => Promise.reject(Object.assign(new Error('409: x'), { status: 409, detail: 'El stock quedaría negativo: hay 20.000 y la merma es de 30' })))
+    const user = userEvent.setup()
+    render(<RegistrarStockModal modo="merma" row={ROW} onGuardar={onGuardar} onClose={vi.fn()} />)
+    await user.type(screen.getByLabelText('¿Cuántas unidades se perdieron?'), '30')
+    expect(screen.getByText(/no puede quedar negativo/)).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Guardar' }))
+    expect(screen.getByRole('alert')).toHaveTextContent(/motivo/)
+    await user.type(screen.getByLabelText('Motivo'), 'Se cayó la caja')
+    await user.click(screen.getByRole('button', { name: 'Guardar' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('El stock quedaría negativo: hay 20.000 y la merma es de 30')
   })
 })

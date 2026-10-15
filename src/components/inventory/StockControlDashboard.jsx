@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useParams } from 'react-router'
 import {
   deleteInventoryItem,
+  registrarMerma,
   getInventoryProductsPage,
   patchInventoryProductUnitCost,
   patchInventoryStock,
@@ -15,6 +16,7 @@ import {
   empezarAControlarStock,
 } from '../../lib/inventoryApi'
 import RegistrarStockModal from './RegistrarStockModal'
+import HistorialStockModal from './HistorialStockModal'
 import InventoryShell from './InventoryShell'
 import LoadingSpinner from '../LoadingSpinner'
 import NuevoProductoModal from './NuevoProductoModal'
@@ -215,11 +217,13 @@ function StockControlDashboard() {
 
   // Registrar stock por unidades: sumar lo que llegó, corregir el conteo o empezar a controlarlo.
   const [registrando, setRegistrando] = useState(null) // { row, modo }
+  const [historialDe, setHistorialDe] = useState(null) // fila cuyo historial de stock se ve (T-58)
   const guardarRegistro = useCallback(
     async (datos) => {
       const { row, modo } = registrando
-      if (modo === 'sumar') await sumarUnidades(row.inventory_id, datos.cantidad)
-      else if (modo === 'corregir') await corregirConteo(row.inventory_id, datos.cantidad)
+      if (modo === 'sumar') await sumarUnidades(row.inventory_id, datos.cantidad, datos.motivo)
+      else if (modo === 'corregir') await corregirConteo(row.inventory_id, datos.cantidad, datos.motivo)
+      else if (modo === 'merma') await registrarMerma(row.inventory_id, datos.cantidad, datos.motivo)
       else await empezarAControlarStock(localId, row.product_id, datos)
       setRegistrando(null)
       await loadItems(currentFilters, currentPage)
@@ -506,7 +510,7 @@ function StockControlDashboard() {
               onPatchProductName={handlePatchProductName}
               onPatchCategory={handlePatchCategory}
               onDeleteItem={handleDeleteItem}
-              onRegistrar={(row, modo) => setRegistrando({ row, modo })}
+              onRegistrar={(row, modo) => (modo === 'historial' ? setHistorialDe(row) : setRegistrando({ row, modo }))}
               statusFilters={statusFilters}
               categoriesCatalog={categoriesCatalog}
             />
@@ -514,6 +518,7 @@ function StockControlDashboard() {
         </Card>
         </m.div>
 
+        {historialDe && <HistorialStockModal row={historialDe} onClose={() => setHistorialDe(null)} />}
         {registrando && (
           <RegistrarStockModal
             modo={registrando.modo}

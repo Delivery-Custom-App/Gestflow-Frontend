@@ -110,7 +110,7 @@ describe('StockControlDashboard', () => {
     await user.type(within(dialogo).getByLabelText('¿Cuántas unidades llegaron?'), '24')
     await user.click(within(dialogo).getByRole('button', { name: 'Guardar' }))
 
-    await waitFor(() => expect(sumarUnidades).toHaveBeenCalledWith('inv-1', 24))
+    await waitFor(() => expect(sumarUnidades).toHaveBeenCalledWith('inv-1', 24, ''))
     await waitFor(() => expect(getInventoryProductsPage.mock.calls.length).toBeGreaterThan(llamadasAntes))
     expect(screen.queryByRole('dialog', { name: 'Sumar unidades' })).not.toBeInTheDocument()
   })

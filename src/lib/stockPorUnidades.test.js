@@ -5,7 +5,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { apiRequest } from './apiClient'
 import { fetchEnrichedInventoryForLocal, stockStatus } from './v2CatalogApi'
-import { corregirConteo, empezarAControlarStock, patchInventoryStock, sumarUnidades } from './inventoryApi'
+import { corregirConteo, registrarMerma, empezarAControlarStock, patchInventoryStock, sumarUnidades } from './inventoryApi'
 
 vi.mock('./apiClient', () => ({ apiRequest: vi.fn() }))
 
@@ -69,12 +69,13 @@ describe('fetchEnrichedInventoryForLocal · productos sin stock registrado', () 
 })
 
 describe('registrar stock', () => {
-  it('sumar unidades lee lo que hay recién y guarda la suma', async () => {
-    apiRequest.mockResolvedValueOnce({ id: 'inv-1', stock_actual: '20.000' }).mockResolvedValueOnce({})
-    await sumarUnidades('inv-1', 24)
-
-    expect(apiRequest).toHaveBeenNthCalledWith(1, '/inventory/inv-1')
-    expect(apiRequest).toHaveBeenNthCalledWith(2, '/inventory/inv-1', { method: 'PATCH', body: { stock_actual: 44 } })
+  it('T-58: sumar unidades es un movimiento «ingreso» (atómico, sin leer y escribir)', async () => {
+    apiRequest.mockResolvedValue({})
+    await sumarUnidades('inv-1', 24, 'Llegó el camión')
+    expect(apiRequest).toHaveBeenCalledTimes(1)
+    expect(apiRequest).toHaveBeenCalledWith('/inventory/inv-1/movimientos', {
+      method: 'POST', body: { tipo: 'ingreso', cantidad: '24', motivo: 'Llegó el camión' },
+    })
   })
 
   it('sumar cero o nada no llama al backend', async () => {
@@ -82,10 +83,20 @@ describe('registrar stock', () => {
     expect(apiRequest).not.toHaveBeenCalled()
   })
 
-  it('corregir el conteo deja lo contado', async () => {
+  it('T-58: corregir el conteo es un movimiento «ajuste» con motivo', async () => {
     apiRequest.mockResolvedValue({})
-    await corregirConteo('inv-1', 18)
-    expect(apiRequest).toHaveBeenCalledWith('/inventory/inv-1', { method: 'PATCH', body: { stock_actual: 18 } })
+    await corregirConteo('inv-1', 18, 'Conteo del domingo')
+    expect(apiRequest).toHaveBeenCalledWith('/inventory/inv-1/movimientos', {
+      method: 'POST', body: { tipo: 'ajuste', cantidad: '18', motivo: 'Conteo del domingo' },
+    })
+  })
+
+  it('T-58: la merma es un movimiento «merma» con motivo', async () => {
+    apiRequest.mockResolvedValue({})
+    await registrarMerma('inv-1', 3, 'Se cayó la caja')
+    expect(apiRequest).toHaveBeenCalledWith('/inventory/inv-1/movimientos', {
+      method: 'POST', body: { tipo: 'merma', cantidad: '3', motivo: 'Se cayó la caja' },
+    })
   })
 
   it('empezar a controlar crea la fila del local', async () => {
