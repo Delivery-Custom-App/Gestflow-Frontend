@@ -3,7 +3,7 @@
  * Normaliza enums, shapes y flujos legacy (items nested, caja activa, mesa detail).
  */
 import { apiRequest, getOptionalAuthContext } from './apiClient'
-import { fetchProductsMap } from './v2CatalogApi'
+import { fetchProductsMap, productoDeFila } from './v2CatalogApi'
 import { traducirErrorCobro } from './supervision'
 
 /**
@@ -722,15 +722,22 @@ export async function computeMesasKpis(localId) {
  * Shape: { categories: [{ id, name, products: [...] }], local_id }
  */
 export async function fetchLocalMenuCatalog(localId, { search, includeInactive = false } = {}) {
+  const lid = encodeURIComponent(String(localId))
+  // A-07 (B-12): la carta para vender (venta directa y mesas) sale del menú del
+  // local con los datos del producto (`include=product`), sin bajar el catálogo
+  // completo. El Creador de menú (includeInactive) sigue leyendo el producto
+  // entero porque necesita saber si está activo en el negocio.
   const [localProducts, products, categories, inventory] = await Promise.all([
-    apiRequest('/local-products'),
-    apiRequest('/products'),
+    apiRequest(`/local-products?local_id=${lid}${includeInactive ? '' : '&include=product'}`),
+    includeInactive ? apiRequest('/products') : Promise.resolve(null),
     apiRequest('/categories'),
-    apiRequest('/inventory'),
+    apiRequest(`/inventory?local_id=${lid}`),
   ])
 
   const productMap = new Map(
-    (Array.isArray(products) ? products : []).map((p) => [String(p.id), p]),
+    Array.isArray(products)
+      ? products.map((p) => [String(p.id), p])
+      : (Array.isArray(localProducts) ? localProducts : []).filter((lp) => lp.product_name).map((lp) => [String(lp.product_id), productoDeFila(lp)]),
   )
   const categoryMap = new Map(
     (Array.isArray(categories) ? categories : []).map((c) => [String(c.id), c]),
@@ -764,7 +771,8 @@ export async function fetchLocalMenuCatalog(localId, { search, includeInactive =
       name: product.name,
       product_name: product.name,
       price: Number(product.price) || 0,
-      cost: Number(product.cost) || 0,
+      // El empleado recibe el costo en null: no se muestra.
+      cost: product.cost == null ? null : Number(product.cost) || 0,
       stock: stockMap.get(String(product.id)) || 0,
       category_id: product.category_id ? String(product.category_id) : null,
       stock_deduction_mode: product.stock_deduction_mode,

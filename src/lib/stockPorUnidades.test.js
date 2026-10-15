@@ -22,24 +22,44 @@ describe('stockStatus con nivel crítico', () => {
   })
 })
 
+
+/**
+ * Simula `include=product` del backend (A-07): filtra por local y pone los
+ * datos del producto dentro de cada fila. Sin el producto, los campos van null.
+ */
+function conProducto(filas, productos, localId) {
+  const porId = new Map(productos.map((p) => [String(p.id), p]))
+  return filas.filter((f) => String(f.local_id) === String(localId)).map((f) => {
+    const p = porId.get(String(f.product_id))
+    return {
+      ...f,
+      product_name: p?.name ?? null,
+      category_id: p?.category_id ?? null,
+      price: p?.price ?? null,
+      cost: p?.cost ?? null,
+      stock_deduction_mode: p?.stock_deduction_mode ?? null,
+    }
+  })
+}
+
 describe('fetchEnrichedInventoryForLocal · productos sin stock registrado', () => {
   beforeEach(() => {
+    const productos = [
+      { id: 'p1', name: 'Bebida lata', stock_deduction_mode: 'DIRECT_STOCK', cost: 500 },
+      { id: 'p2', name: 'Agua mineral', stock_deduction_mode: 'DIRECT_STOCK', cost: 400 },
+      { id: 'p3', name: 'Lomo a lo pobre', stock_deduction_mode: 'RECIPE_BASED', cost: 3000 },
+      { id: 'p4', name: 'Producto de otro local', stock_deduction_mode: 'DIRECT_STOCK' },
+    ]
     apiRequest.mockImplementation((ruta) => {
-      if (ruta === '/inventory') return Promise.resolve([{ id: 'inv-1', local_id: 'l1', product_id: 'p1', stock_actual: '3', stock_min: '10', stock_critical: '4' }])
-      if (ruta === '/products') {
-        return Promise.resolve([
-          { id: 'p1', name: 'Bebida lata', stock_deduction_mode: 'DIRECT_STOCK', cost: 500 },
-          { id: 'p2', name: 'Agua mineral', stock_deduction_mode: 'DIRECT_STOCK', cost: 400 },
-          { id: 'p3', name: 'Lomo a lo pobre', stock_deduction_mode: 'RECIPE_BASED', cost: 3000 },
-          { id: 'p4', name: 'Producto de otro local', stock_deduction_mode: 'DIRECT_STOCK' },
-        ])
+      if (ruta === '/inventory?local_id=l1&include=product') {
+        return Promise.resolve(conProducto([{ id: 'inv-1', local_id: 'l1', product_id: 'p1', stock_actual: '3', stock_min: '10', stock_critical: '4' }], productos, 'l1'))
       }
       if (ruta === '/locals/l1') return Promise.resolve({ id: 'l1', business_id: 'b1' })
-      if (ruta === '/local-products') {
-        return Promise.resolve([
+      if (ruta === '/local-products?local_id=l1&include=product') {
+        return Promise.resolve(conProducto([
           { local_id: 'l1', product_id: 'p1' }, { local_id: 'l1', product_id: 'p2' },
           { local_id: 'l1', product_id: 'p3' }, { local_id: 'l2', product_id: 'p4' },
-        ])
+        ], productos, 'l1'))
       }
       return Promise.resolve([])
     })
@@ -50,7 +70,7 @@ describe('fetchEnrichedInventoryForLocal · productos sin stock registrado', () 
     expect(rows).toHaveLength(1)
     expect(rows[0]).toMatchObject({ stock_critical: 4, stock_status: 'CRITICO' })
     // Sin la opción no consulta productos sin registro (los indicadores no los cuentan).
-    expect(apiRequest).not.toHaveBeenCalledWith('/local-products')
+    expect(apiRequest).not.toHaveBeenCalledWith('/local-products?local_id=l1&include=product')
   })
 
   it('con incluirSinRegistro agrega los del local por unidades sin fila; nunca los que se preparan', async () => {

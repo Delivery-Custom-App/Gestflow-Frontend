@@ -114,22 +114,41 @@ describe('fetchCategoriesForBusiness', () => {
   })
 })
 
+
+/**
+ * Simula `include=product` del backend (A-07): filtra por local y pone los
+ * datos del producto dentro de cada fila. Sin el producto, los campos van null.
+ */
+function conProducto(filas, productos, localId) {
+  const porId = new Map(productos.map((p) => [String(p.id), p]))
+  return filas.filter((f) => String(f.local_id) === String(localId)).map((f) => {
+    const p = porId.get(String(f.product_id))
+    return {
+      ...f,
+      product_name: p?.name ?? null,
+      category_id: p?.category_id ?? null,
+      price: p?.price ?? null,
+      cost: p?.cost ?? null,
+      stock_deduction_mode: p?.stock_deduction_mode ?? null,
+    }
+  })
+}
+
 describe('fetchEnrichedInventoryForLocal', () => {
-  function mockPlatform({ categoriesFail = false } = {}) {
+  const INVENTARIO = [
+    { id: 'inv1', local_id: 'l1', product_id: 'p1', stock_actual: '10', stock_min: '2', stock_max: '50', updated_at: 't1' },
+    { id: 'inv2', local_id: 'l1', product_id: 'p2', stock_actual: 0, stock_min: 5, updated_at: 't2' },
+    { id: 'inv3', local_id: 'otro-local', product_id: 'p1' },
+  ]
+  let PRODUCTOS
+  function mockPlatform({ categoriesFail = false, productos } = {}) {
+    PRODUCTOS = productos || [
+      { id: 'p1', name: 'Café', cost: 100, price: 200, category_id: 'c1', is_active: true, business_id: 'b1' },
+      { id: 'p2', name: 'Pan', cost: 50, price: 90 },
+    ]
     apiRequest.mockImplementation((path) => {
-      if (path === '/inventory') {
-        return Promise.resolve([
-          { id: 'inv1', local_id: 'l1', product_id: 'p1', stock_actual: '10', stock_min: '2', stock_max: '50', updated_at: 't1' },
-          { id: 'inv2', local_id: 'l1', product_id: 'p2', stock_actual: 0, stock_min: 5, updated_at: 't2' },
-          { id: 'inv3', local_id: 'otro-local', product_id: 'p1' },
-        ])
-      }
-      if (path === '/products') {
-        return Promise.resolve([
-          { id: 'p1', name: 'Café', cost: 100, price: 200, category_id: 'c1', is_active: true, business_id: 'b1' },
-          { id: 'p2', name: 'Pan', cost: 50, price: 90 },
-        ])
-      }
+      // A-07: el inventario ya viene del local y con los datos del producto.
+      if (path === '/inventory?local_id=l1&include=product') return Promise.resolve(conProducto(INVENTARIO, PRODUCTOS, 'l1'))
       if (path === '/locals/l1') {
         return Promise.resolve({ id: 'l1', business_id: 'b1' })
       }
@@ -139,6 +158,20 @@ describe('fetchEnrichedInventoryForLocal', () => {
       return Promise.resolve(null)
     })
   }
+
+  it('A-07: pide el inventario del local con include=product, sin bajar el catálogo', async () => {
+    mockPlatform()
+    await fetchEnrichedInventoryForLocal('l1')
+    expect(apiRequest).toHaveBeenCalledWith('/inventory?local_id=l1&include=product')
+    expect(apiRequest).not.toHaveBeenCalledWith('/products')
+    expect(apiRequest).not.toHaveBeenCalledWith('/inventory')
+  })
+
+  it('A-07: para el empleado (cost null) no inventa un costo', async () => {
+    mockPlatform({ productos: [{ id: 'p1', name: 'Café', cost: null }, { id: 'p2', name: 'Pan', cost: null }] })
+    const { rows } = await fetchEnrichedInventoryForLocal('l1')
+    expect(rows[0]).toMatchObject({ cost: null, unit_cost: null, total_value: null })
+  })
 
   it('filtra por local_id, calcula status y enriquece con categoría', async () => {
     mockPlatform()
@@ -175,14 +208,10 @@ describe('fetchEnrichedInventoryForLocal', () => {
   })
 
   it('un producto que se prepara no se lista aunque conserve su fila de inventario', async () => {
-    mockPlatform()
-    const original = apiRequest.getMockImplementation()
-    apiRequest.mockImplementation((path) => (path === '/products'
-      ? Promise.resolve([
-        { id: 'p1', name: 'Café', cost: 100, stock_deduction_mode: 'DIRECT_STOCK' },
-        { id: 'p2', name: 'Lomo a lo pobre', cost: 50, stock_deduction_mode: 'RECIPE_BASED' },
-      ])
-      : original(path)))
+    mockPlatform({ productos: [
+      { id: 'p1', name: 'Café', cost: 100, stock_deduction_mode: 'DIRECT_STOCK' },
+      { id: 'p2', name: 'Lomo a lo pobre', cost: 50, stock_deduction_mode: 'RECIPE_BASED' },
+    ] })
     const { rows } = await fetchEnrichedInventoryForLocal('l1')
     expect(rows.map((r) => r.product_id)).toEqual(['p1'])
   })
