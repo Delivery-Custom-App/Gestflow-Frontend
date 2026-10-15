@@ -89,13 +89,6 @@ export const V2_FEATURES = {
   mercadopagoPoint: true,
   mpConfig: true,
   cajaMpPairing: true,
-  /**
-   * Administración de impresoras: registrar una, probarla, mandarle a
-   * imprimir. Eso no existe en V2 (`/printers` y `/comandas/{id}/print`
-   * devuelven 404) y no está previsto: la impresión la resuelve el navegador.
-   * La pantalla de configuración queda apagada con su código intacto.
-   */
-  printers: false,
   /** Comanda de cocina: `GET /orders/{id}/comanda`, impresa por el navegador. */
   comandas: true,
   /**
@@ -134,10 +127,6 @@ export const V2_FEATURES = {
   superAdminObservability: true,
   /** Resumen de caja (total esperado + desglose por método) y su lista de movimientos. */
   movimientosCaja: true,
-  /** Endpoints legacy /dashboard/* (aún no en V2). Se calculan desde órdenes. */
-  adminDashboard: false,
-  /** Motor de alertas / SSE (aún no en V2). */
-  alerts: false,
   /** Legacy /webhooks/mercadopago-pos discover+link — implementado en V2. */
   mpPosWebhooks: true,
 }

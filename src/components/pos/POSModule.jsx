@@ -13,7 +13,6 @@ import CreateMesaModal from './CreateMesaModal'
 import EditMesaModal from './EditMesaModal'
 import DeleteMesaModal from './DeleteMesaModal'
 import MesaWorkspace from './MesaWorkspace'
-import PrinterConfigModal from './PrinterConfigModal'
 import MPConfigDrawer from './MPConfigDrawer'
 import { useAuth } from '../../context/AuthContext'
 import { useCajaActiva } from '../../hooks/useCajaActiva'
@@ -28,7 +27,7 @@ import { puedeVender } from '../../lib/rolesCaja'
 import { empleadosConTurnoHoy } from '../../lib/supervision'
 import { hoyEnChile } from '../../lib/fondoEmergencia'
 import { SALES_MODEL } from '../../lib/salesModel'
-import { ArrowRightLeft, CreditCard, PlusCircle, Printer } from 'lucide-react'
+import { ArrowRightLeft, CreditCard, PlusCircle } from 'lucide-react'
 
 export default function POSModule() {
   const { isWorker, user, userRole } = useAuth()
@@ -50,7 +49,6 @@ export default function POSModule() {
   const [isDeleting, setIsDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState(null)
   const [selectedMesa, setSelectedMesa] = useState(null)
-  const [showPrinterConfig, setShowPrinterConfig] = useState(false)
   const [showMPConfig, setShowMPConfig] = useState(false)
   // A-05: ver las mesas dadas de baja y reactivarlas (encargado y dueño).
   const [verDadasDeBaja, setVerDadasDeBaja] = useState(false)
@@ -229,15 +227,6 @@ export default function POSModule() {
                   >
                     <CreditCard size={16} />
                     POS
-                  </button>
-                )}
-                {isV2FeatureEnabled('printers') && (
-                  <button
-                    onClick={() => setShowPrinterConfig(true)}
-                    className="inline-flex h-10 items-center gap-2 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3 text-sm font-medium text-[hsl(var(--foreground))] hover:bg-[hsl(var(--muted))]"
-                  >
-                    <Printer size={16} />
-                    Impresora
                   </button>
                 )}
                 <label className="inline-flex h-10 items-center gap-2 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3 text-sm text-[hsl(var(--foreground))]">
@@ -426,14 +415,6 @@ export default function POSModule() {
           isDeleting={isDeleting}
           error={deleteError}
         />
-      )}
-
-      {isV2FeatureEnabled('printers') && (
-      <PrinterConfigModal
-        open={showPrinterConfig}
-        localId={localId}
-        onClose={() => setShowPrinterConfig(false)}
-      />
       )}
 
       {isV2FeatureEnabled('mpConfig') && (

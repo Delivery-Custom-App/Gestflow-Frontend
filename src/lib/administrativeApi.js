@@ -10,23 +10,9 @@ import {
 } from './salesApi'
 import { apiRequest } from './apiClient'
 import { getProductsReport, getSalesReport } from './reportsApi'
-import { isV2FeatureEnabled } from './v2Features'
 import { CHILE_TZ } from '../utils/chileDateTime'
 
 const safeList = (v) => (Array.isArray(v) ? v : [])
-
-function withQuery(path, params) {
-  const query = new URLSearchParams()
-
-  Object.entries(params).forEach(([key, value]) => {
-    if (value !== undefined && value !== null && value !== '') {
-      query.set(key, String(value))
-    }
-  })
-
-  const queryString = query.toString()
-  return queryString ? `${path}?${queryString}` : path
-}
 
 function orderAmount(order) {
   const n = Number(order?.total_amount ?? order?.total ?? order?.amount ?? order?.subtotal ?? 0)
@@ -120,39 +106,37 @@ export function buildDashboardFromOrders(orders = [], { localCount = 1 } = {}) {
 
 export async function getLocalDashboard(localId, token) {
   void token
-  if (!isV2FeatureEnabled('adminDashboard')) {
-    const endDate = todayInChileIso()
-    const startDate = `${endDate.slice(0, 7)}-01`
-    const report = await getSalesReport(localId, { startDate, endDate })
-    const byDay = safeList(report?.by_day)
-    const dailySales = nullableNumber(byDay.find((row) => row.date === endDate)?.total_sales) ?? 0
-    const monthlySales = nullableNumber(report?.total_sales) ?? 0
-    return {
-      daily_sales: dailySales,
-      monthly_sales: monthlySales,
-      monthly_cash_flow: monthlySales,
-      monthly_expenses: 0,
-      active_alerts: 0,
-      avg_ticket: nullableNumber(report?.avg_ticket) ?? 0,
-      stock_critical_count: 0,
-      stock_low_count: 0,
-      stock_out_count: 0,
-      inventory_total_value: 0,
-      active_cajas_count: 0,
-      cajas_count: 0,
-      peak_hour: null,
-      local_count: 1,
-      top_products: [],
-      payment_breakdown: safeList(report?.by_payment_method),
-      week_comparison: null,
-      monthly_goal: { target_amount: 0, current_amount: monthlySales, progress_pct: 0 },
-      petty_cash: { active_cajas: 0, total_cajas: 0, pending_expenses_amount: 0 },
-      daily_income_trend: byDay.map((row) => ({ date: row.date, ingresos: nullableNumber(row.total_sales) ?? 0 })),
-      expenses_breakdown: [],
-      _source: 'reports_v2',
-    }
+  // Calculado desde /reports (T-39: /dashboard/local no existe en V2).
+  const endDate = todayInChileIso()
+  const startDate = `${endDate.slice(0, 7)}-01`
+  const report = await getSalesReport(localId, { startDate, endDate })
+  const byDay = safeList(report?.by_day)
+  const dailySales = nullableNumber(byDay.find((row) => row.date === endDate)?.total_sales) ?? 0
+  const monthlySales = nullableNumber(report?.total_sales) ?? 0
+  return {
+    daily_sales: dailySales,
+    monthly_sales: monthlySales,
+    monthly_cash_flow: monthlySales,
+    monthly_expenses: 0,
+    active_alerts: 0,
+    avg_ticket: nullableNumber(report?.avg_ticket) ?? 0,
+    stock_critical_count: 0,
+    stock_low_count: 0,
+    stock_out_count: 0,
+    inventory_total_value: 0,
+    active_cajas_count: 0,
+    cajas_count: 0,
+    peak_hour: null,
+    local_count: 1,
+    top_products: [],
+    payment_breakdown: safeList(report?.by_payment_method),
+    week_comparison: null,
+    monthly_goal: { target_amount: 0, current_amount: monthlySales, progress_pct: 0 },
+    petty_cash: { active_cajas: 0, total_cajas: 0, pending_expenses_amount: 0 },
+    daily_income_trend: byDay.map((row) => ({ date: row.date, ingresos: nullableNumber(row.total_sales) ?? 0 })),
+    expenses_breakdown: [],
+    _source: 'reports_v2',
   }
-  return apiRequest(`/dashboard/local/${localId}`, { token })
 }
 
 function todayInChileIso(now = new Date()) {
@@ -433,12 +417,4 @@ export function assignExistingMpPos(cajaFisicaId, mercadopagoPosId) {
     method: 'POST',
     body: { mercadopago_pos_id: mercadopagoPosId },
   })
-}
-
-export async function getIncomeTrend(localId, token, days = 7) {
-  void token
-  void days
-  if (!isV2FeatureEnabled('adminDashboard')) return []
-  const path = withQuery(`/dashboard/local/${localId}/trend`, { days })
-  return apiRequest(path, { token })
 }

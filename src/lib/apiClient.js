@@ -357,39 +357,6 @@ export async function changeMyPassword({ current_password, new_password }) {
   })
 }
 
-// ─── Printers (OP-02) ─────────────────────────────────────────────────────────
-// Ninguna de estas rutas existe en Backend V2. Se conservan, sin uso, detrás
-// de la bandera `printers`, para cuando exista un servicio de impresión.
-
-export async function listPrinters(localId) {
-  return apiRequest(`/printers?local_id=${localId}`)
-}
-
-export async function createPrinter({ local_id, name, model, connection_type, ip_address, port, bluetooth_name, is_active }) {
-  return apiRequest('/printers', {
-    method: 'POST',
-    body: {
-      local_id, name, model, connection_type,
-      ip_address: connection_type === 'bluetooth' ? null : ip_address,
-      port: connection_type === 'bluetooth' ? null : Number(port),
-      bluetooth_name: connection_type === 'bluetooth' ? (bluetooth_name || null) : null,
-      is_active,
-    },
-  })
-}
-
-export async function updatePrinter(id, updates) {
-  return apiRequest(`/printers/${id}`, { method: 'PATCH', body: updates })
-}
-
-export async function deletePrinter(id) {
-  return apiRequest(`/printers/${id}`, { method: 'DELETE' })
-}
-
-export async function testPrinterConnection(id) {
-  return apiRequest(`/printers/${id}/test`, { method: 'POST' })
-}
-
 // ─── Comandas ─────────────────────────────────────────────────────────────────
 // La comanda y la boleta se piden a `/orders/{id}/comanda` y `/orders/{id}/
 // boleta` (ver salesApi) y se imprimen desde el navegador (ver ticketPrint).
