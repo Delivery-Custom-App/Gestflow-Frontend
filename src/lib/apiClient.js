@@ -133,6 +133,20 @@ export async function getOptionalAuthContext() {
   }
 }
 
+export const MENSAJE_503 = 'No se pudo verificar tu cuenta en este momento. Reintenta en unos segundos.'
+export const MENSAJE_429 = 'Demasiados intentos, espera un minuto.'
+const MAX_ESPERA_503_MS = 10_000
+
+/** Segundos de `Retry-After` en milisegundos (5 s si no viene; máximo 10 s). */
+export function esperaRetryAfter(response) {
+  const valor = response?.headers?.get?.('Retry-After')
+  const s = valor == null || valor === '' ? NaN : Number(valor)
+  return Math.min(Number.isFinite(s) && s >= 0 ? s * 1000 : 5000, MAX_ESPERA_503_MS)
+}
+
+/** Espera configurable (los tests la reemplazan). */
+export const reloj = { esperar: (ms) => new Promise((r) => setTimeout(r, ms)) }
+
 /**
  * Cierra la sesión local y avisa a la app con el motivo que mandó el backend
  * (`X-Account-Status` y `detail`), para que el login lo muestre.
@@ -185,6 +199,18 @@ export async function apiRequest(path, options = {}) {
     throw err
   }
 
+  // T-66: un 503 sin X-Account-Status es temporal (el servidor no pudo
+  // verificar la cuenta): nunca cierra la sesión. Un GET se reintenta una vez
+  // después de Retry-After; un POST, PATCH o DELETE no se reintenta solo.
+  if (response.status === 503 && method === 'GET' && !response.headers.get('X-Account-Status')) {
+    await reloj.esperar(esperaRetryAfter(response))
+    try {
+      response = await makeRequest(token)
+    } catch {
+      /* se informa abajo como 503 */
+    }
+  }
+
   if (response.status === 401 && retryOnUnauthorized) {
     // Con X-Account-Status la sesión ya está cerrada o vencida (T-52): no
     // sirve renovar. Sin él, el access_token venció: se renueva una vez y se
@@ -211,7 +237,11 @@ export async function apiRequest(path, options = {}) {
   }
 
   if (!response.ok) {
-    const detail = await parseErrorResponse(response)
+    let detail = await parseErrorResponse(response)
+    // T-66: textos claros para el 503 temporal y el límite de intentos (429:
+    // el cuerpo trae `error`, no `detail`).
+    if (response.status === 503 && !response.headers.get('X-Account-Status')) detail = MENSAJE_503
+    if (response.status === 429) detail = MENSAJE_429
     const message = detail ? `${response.status}: ${detail}` : `${response.status} ${response.statusText}`
     const err = new Error(message)
     err.status = response.status
