@@ -48,6 +48,11 @@ export async function getGlobalStats(token) {
   return v2GetGlobalStats(token)
 }
 
+export function getGlobalSalesReport({ startDate, endDate }, token) {
+  const params = new URLSearchParams({ start_date: startDate, end_date: endDate })
+  return apiRequest(`/reports/sales?${params.toString()}`, { token })
+}
+
 export async function getBusinessStats(businessId, token) {
   return v2GetBusinessStats(businessId, token)
 }
