@@ -81,3 +81,37 @@ export function mapLocalOut(local) {
     lng: local.longitude ?? null,
   }
 }
+
+// ── Teléfono del local (T-38, B-13 sección 3.7) ──────────────────────────────
+// Se guarda tal como se escribe (solo se ordenan los espacios), hasta 32
+// caracteres y con al menos un dígito (422 si no). En PATCH, null o vacío lo
+// borran. Ya no se exige el formato internacional.
+
+export const TELEFONO_MAX = 32
+
+/** Espacios ordenados: ninguno en los extremos y uno solo entre palabras. */
+export function normalizarTelefono(valor) {
+  return String(valor || '').trim().replace(/\s+/g, ' ')
+}
+
+/** Problema del teléfono, o null. Vacío es válido (el teléfono es opcional). */
+export function validarTelefono(valor) {
+  const t = normalizarTelefono(valor)
+  if (!t) return null
+  if (t.length > TELEFONO_MAX) return `El teléfono puede tener hasta ${TELEFONO_MAX} caracteres.`
+  if (!/\d/.test(t)) return 'El teléfono debe tener al menos un número.'
+  return null
+}
+
+/** Cambia el nombre y el teléfono del local (`PATCH /locals/{id}`); teléfono vacío lo borra. */
+export function actualizarLocal(localId, { name, phone }) {
+  const body = {}
+  if (name !== undefined) body.name = String(name).trim()
+  if (phone !== undefined) body.phone = normalizarTelefono(phone) || null
+  return apiRequest(`/locals/${encodeURIComponent(String(localId))}`, { method: 'PATCH', body })
+}
+
+/** Texto del backend sin el código. */
+export function mensajeLocal(err) {
+  return String(err?.detail || err?.message || 'No se pudo guardar el local').replace(/^\d{3}:\s*/, '')
+}

@@ -4,6 +4,7 @@ import { apiRequest, getAuthContext } from '../lib/apiClient'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { TELEFONO_MAX, normalizarTelefono, validarTelefono } from '../lib/localsApi'
 
 // Expands Chilean street abbreviations and removes postal codes so Nominatim understands them
 function normalizeChileanAddress(address) {
@@ -121,7 +122,9 @@ function CreateLocalDrawer({ isOpen, onClose, onSuccess }) {
     try {
       if (!formData.name.trim())    throw new Error('El nombre del local es requerido')
       if (!formData.address.trim()) throw new Error('La dirección es requerida')
-      if (!formData.phone.trim())   throw new Error('El teléfono es requerido')
+      // T-38: el teléfono es opcional y se guarda tal como se escribe.
+      const problemaTelefono = validarTelefono(formData.phone)
+      if (problemaTelefono) throw new Error(problemaTelefono)
 
       const { token, businessId } = await getAuthContext()
       if (!businessId) throw new Error('No se encontró business_id en el token')
@@ -146,6 +149,7 @@ function CreateLocalDrawer({ isOpen, onClose, onSuccess }) {
         name: formData.name.trim(),
         sales_model: salesModel,
         promotions_autonomy: false,
+        ...(normalizarTelefono(formData.phone) ? { phone: normalizarTelefono(formData.phone) } : {}),
         street_name: (coords?.street || formData.address.trim()).slice(0, 200),
         ...(coords?.city ? { city_name: coords.city.slice(0, 200) } : {}),
         ...(coords?.state ? { state_name: coords.state.slice(0, 200) } : {}),
@@ -305,10 +309,10 @@ function CreateLocalDrawer({ isOpen, onClose, onSuccess }) {
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="phone">Teléfono <span className="text-red-500">*</span></Label>
+            <Label htmlFor="phone">Teléfono (opcional)</Label>
             <Input
-              id="phone" name="phone" type="tel"
-              placeholder="Ej: +56912345678"
+              id="phone" name="phone" type="tel" maxLength={TELEFONO_MAX}
+              placeholder="Ej: 9 1234 5678"
               value={formData.phone}
               onChange={handleChange}
               disabled={isBusy}

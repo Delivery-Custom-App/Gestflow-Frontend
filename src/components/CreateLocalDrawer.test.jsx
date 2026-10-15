@@ -30,7 +30,7 @@ function responderNominatim(resultados) {
 async function completarYEnviar(user, direccion = '5 Norte 147, Viña del Mar') {
   await user.type(screen.getByPlaceholderText('Ej: Franquicia Centro'), 'Franquicia Centro')
   await user.type(screen.getByPlaceholderText(/5 Norte 147/i), direccion)
-  await user.type(screen.getByPlaceholderText(/\+569/), '+56912345678')
+  await user.type(screen.getByLabelText(/Teléfono/), '9 1234 5678')
   await user.click(screen.getByRole('button', { name: 'Crear Franquicia' }))
 }
 

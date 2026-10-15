@@ -1,12 +1,13 @@
 import { useMemo, useState } from 'react'
 import { m, AnimatePresence } from 'framer-motion'
-import { Building2, MapPin, Plus, TrendingUp, TrendingDown, Trash2, Search, ArrowUp, ChevronRight, ChevronDown, HelpCircle, X, RefreshCw, Users, Gauge } from 'lucide-react'
+import { Building2, MapPin, Plus, TrendingUp, TrendingDown, Trash2, Search, ArrowUp, ChevronRight, ChevronDown, HelpCircle, X, RefreshCw, Users, Gauge, Phone, Pencil } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table'
 import OpcionesDrawer from './OpcionesDrawer'
 import UmbralFlujoDrawer from './UmbralFlujoDrawer'
 import FranchisesMap from './FranchisesMap'
 import FranchiseSalesCharts from './FranchiseSalesCharts'
+import EditarLocalDialog from './EditarLocalDialog'
 import { SALES_MODEL_SHORT_LABEL } from '@/lib/salesModel'
 import { UMBRAL_POR_DEFECTO, getFlowTrend, getSalesFlow, textoDelPeriodo } from '../lib/umbralFlujo'
 
@@ -26,6 +27,8 @@ function LocalsGrid({
   const [filterFlow,   setFilterFlow]   = useState('')
   const [guideOpen,    setGuideOpen]    = useState(false)
   const [mapOpen,      setMapOpen]      = useState(true)
+  // T-38: editar el nombre y el teléfono del local.
+  const [editandoLocal, setEditandoLocal] = useState(null)
 
   const handleGuardarUmbral = (nuevo) => {
     onGuardarUmbral?.(nuevo)
@@ -327,6 +330,12 @@ function LocalsGrid({
                               ) : (
                                 <span className="text-sm text-[hsl(var(--muted-foreground))] italic opacity-50">—</span>
                               )}
+                              {local.phone && (
+                                <div className="mt-0.5 flex items-center gap-1 text-xs text-[hsl(var(--muted-foreground))]">
+                                  <Phone className="h-3 w-3 shrink-0 opacity-60" />
+                                  <span data-testid={`telefono-${local.id}`}>{local.phone}</span>
+                                </div>
+                              )}
                             </TableCell>
                             <TableCell className="py-3.5">
                               <span className="text-sm text-[hsl(var(--muted-foreground))]">
@@ -348,7 +357,12 @@ function LocalsGrid({
                                 <span className="text-xs text-[hsl(var(--muted-foreground))]">—</span>
                               )}
                             </TableCell>
-                            <TableCell className="pr-5 py-3.5 text-right">
+                            <TableCell className="pr-5 py-3.5 text-right whitespace-nowrap">
+                              <button type="button" aria-label={`Editar ${local.name}`}
+                                onClick={(e) => { e.stopPropagation(); setEditandoLocal(local) }}
+                                className="mr-1 inline-flex rounded-md p-1 text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))] hover:text-[hsl(var(--primary))]">
+                                <Pencil className="h-3.5 w-3.5" />
+                              </button>
                               <ChevronRight className="h-4 w-4 text-[hsl(var(--muted-foreground))] inline-block" />
                             </TableCell>
                           </TableRow>
@@ -359,6 +373,11 @@ function LocalsGrid({
                 </div>
               )}
             </div>
+          )}
+
+          {editandoLocal && (
+            <EditarLocalDialog local={editandoLocal} onClose={() => setEditandoLocal(null)}
+              onGuardado={() => { setEditandoLocal(null); onRefresh?.() }} />
           )}
 
           {/* Map — collapsible */}
