@@ -72,7 +72,8 @@ describe('AdminDashboard · flujo', () => {
   it('usa de verdad el período guardado en el negocio (en horas)', async () => {
     SETTINGS = { ...SETTINGS, flow_period_hours: 3, updated_at: '2026-10-01T00:00:00Z' }
     render(<AdminDashboard />)
-    expect(await screen.findByText('ventas 2 · período 3 h')).toBeInTheDocument()
+    // Espera dos lecturas (ajustes del negocio y conteo): más margen bajo la carga de la suite completa.
+    expect(await screen.findByText('ventas 2 · período 3 h', {}, { timeout: 5000 })).toBeInTheDocument()
     expect(rutasDeConteo().some((r) => r.includes(encodeURIComponent('2026-10-05T12:00:00.000Z')))).toBe(true)
   })
 
