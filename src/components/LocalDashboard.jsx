@@ -3,9 +3,7 @@ import { useParams } from 'react-router'
 import { m, AnimatePresence } from 'framer-motion'
 import { formatCLPDisplay as formatMoney } from '../lib/formatCLP'
 import { getInventoryKpisByLocal } from '../lib/inventoryApi'
-import { getLocalDashboard, getOrdersByLocal, getIncomeTrend } from '../lib/administrativeApi'
-import { getAuthContext } from '../lib/apiClient'
-import { generateIncomeTrendFromOrders } from '../utils/chartDataHelpers'
+import { getDashboardSalesReport } from '../lib/administrativeApi'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import PageTransition from './PageTransition'
 import LoadingSpinner from './LoadingSpinner'
@@ -18,17 +16,15 @@ import { isV2FeatureEnabled } from '../lib/v2Features'
 // oxlint-disable-next-line react-doctor/prefer-dynamic-import
 import {
   BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Tooltip,
-  PieChart, Pie, LabelList, LineChart, Line, Legend,
+  PieChart, Pie, LabelList,
 } from 'recharts'
 import {
   Package, CheckCircle, TrendingDown, AlertTriangle, DollarSign,
-  TrendingUp, Wallet, Clock, CreditCard, X, BarChart2, HelpCircle,
-  LineChart as LineChartIcon, PieChart as PieChartIcon, LifeBuoy,
+  TrendingUp, CreditCard, X, BarChart2, HelpCircle,
+  PieChart as PieChartIcon, LifeBuoy, XCircle,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import {
-  formatPaymentPct, paymentMethodLabel, CHILE_TZ, parseApiDate,
-} from '../utils/chileDateTime'
+import { formatPaymentPct, paymentMethodLabel } from '../utils/chileDateTime'
 
 const PIE_COLORS = ['#3BBF7A', '#F2A623', '#E8394A']
 const PAY_CHART_COLORS = ['var(--chart-cat-1)', 'var(--chart-cat-2)', 'var(--chart-cat-3)', 'var(--chart-cat-4)', 'var(--chart-cat-5)']
@@ -40,14 +36,6 @@ const STAGGER = {
 const ITEM = {
   hidden: { opacity: 0, y: 16 },
   visible: { opacity: 1, y: 0, transition: { duration: 0.28 } },
-}
-
-/** Agrupa método de pago en efectivo | mercadopago | null. */
-function paymentMethodBucket(method) {
-  const key = String(method || '').trim().toLowerCase()
-  if (key === 'mercadopago' || key.startsWith('mercadopago_point')) return 'mercadopago'
-  if (key === 'cash' || key === 'efectivo') return 'efectivo'
-  return null
 }
 
 function KpiCard({ icon: Icon, label, value, iconColor, iconBg, accentColor, loading }) {
@@ -74,81 +62,48 @@ function LocalDashboard() {
   const { localId } = useParams()
   const conFondo = isV2FeatureEnabled('fondoEmergencia')
 
-  const [trendRange, setTrendRange]       = useState('7d')
-  const [trendData, setTrendData]         = useState(null)
-  const [trendLoading, setTrendLoading]   = useState(false)
-  const [invKpis, setInvKpis]             = useState(null)
-  const [invLoading, setInvLoading]       = useState(true)
-  const [dashboard, setDashboard]         = useState(null)
-  const [dashLoading, setDashLoading]     = useState(true)
-  const [orders, setOrders]               = useState([])
-  const [ordersLoading, setOrdersLoading] = useState(true)
-  const [payChartView, setPayChartView]   = useState('line')
-  const [ordersRefreshTick, setOrdersRefreshTick] = useState(0)
+  const [inventoryState, setInventoryState] = useState({ localId: null, data: null })
+  const [salesReportState, setSalesReportState] = useState({ localId: null, refreshTick: -1, data: null, error: false })
+  const [payChartView, setPayChartView]   = useState('amount')
+  const [salesRefreshTick, setSalesRefreshTick] = useState(0)
   const [guideOpen, setGuideOpen]         = useState(false)
+
+  const invKpis = inventoryState.localId === localId ? inventoryState.data : null
+  const invLoading = Boolean(localId) && inventoryState.localId !== localId
+  const salesReportMatchesView = salesReportState.localId === localId
+    && salesReportState.refreshTick === salesRefreshTick
+  const salesReport = salesReportMatchesView ? salesReportState.data : null
+  const salesReportError = salesReportMatchesView && salesReportState.error
+  const salesReportLoading = Boolean(localId) && !salesReportMatchesView
 
   useEffect(() => {
     if (!localId) return
     let ignore = false
 
-    setInvLoading(true)
     getInventoryKpisByLocal(localId)
-      .then((data) => { if (!ignore) setInvKpis(data) })
-      .catch(() => { if (!ignore) setInvKpis(null) })
-      .finally(() => { if (!ignore) setInvLoading(false) })
-
-    setDashLoading(true)
-    setOrdersLoading(true)
-    getAuthContext()
-      .then(({ token }) => Promise.all([
-        getLocalDashboard(localId, token),
-        getOrdersByLocal(localId, token),
-      ]))
-      .then(([dash, ords]) => {
-        if (!ignore) {
-          setDashboard(dash)
-          setOrders(Array.isArray(ords) ? ords : [])
-        }
-      })
-      .catch(() => { if (!ignore) { setDashboard(null); setOrders([]) } })
-      .finally(() => { if (!ignore) { setDashLoading(false); setOrdersLoading(false) } })
+      .then((data) => { if (!ignore) setInventoryState({ localId, data }) })
+      .catch(() => { if (!ignore) setInventoryState({ localId, data: null }) })
 
     return () => { ignore = true }
   }, [localId])
 
   useEffect(() => {
-    const interval = setInterval(() => setOrdersRefreshTick((t) => t + 1), 10 * 60 * 1000)
+    const interval = setInterval(() => setSalesRefreshTick((t) => t + 1), 10 * 60 * 1000)
     return () => clearInterval(interval)
   }, [])
 
   useEffect(() => {
-    if (!localId || ordersRefreshTick === 0) return
-    let ignore = false
-    setOrdersLoading(true)
-    getAuthContext()
-      .then(({ token }) => getOrdersByLocal(localId, token))
-      .then((ords) => { if (!ignore) setOrders(Array.isArray(ords) ? ords : []) })
-      .catch(() => {})
-      .finally(() => { if (!ignore) setOrdersLoading(false) })
-    return () => { ignore = true }
-  }, [localId, ordersRefreshTick])
-
-  useEffect(() => {
     if (!localId) return
     let ignore = false
-    setTrendLoading(true)
-    getAuthContext()
-      .then(({ token }) => getIncomeTrend(localId, token, 7))
-      .then((data) => { if (!ignore) setTrendData(Array.isArray(data) ? data : null) })
-      .catch(() => { if (!ignore) setTrendData(null) })
-      .finally(() => { if (!ignore) setTrendLoading(false) })
+    getDashboardSalesReport(localId)
+      .then((data) => {
+        if (!ignore) setSalesReportState({ localId, refreshTick: salesRefreshTick, data, error: false })
+      })
+      .catch(() => {
+        if (!ignore) setSalesReportState({ localId, refreshTick: salesRefreshTick, data: null, error: true })
+      })
     return () => { ignore = true }
-  }, [localId])
-
-  const incomeTrend = useMemo(() => {
-    if (trendRange === '7d') return trendData ?? []
-    return generateIncomeTrendFromOrders(orders, trendRange)
-  }, [orders, trendRange, trendData])
+  }, [localId, salesRefreshTick])
 
   const pieData = useMemo(() => {
     if (!invKpis) return []
@@ -161,7 +116,7 @@ function LocalDashboard() {
 
   /** Monto recaudado por método de pago (CLP). */
   const payAmountData = useMemo(() => {
-    const rows = dashboard?.payment_breakdown
+    const rows = salesReport?.payment_breakdown
     if (!Array.isArray(rows) || !rows.length) return []
     const totalAmount = rows.reduce((s, p) => s + Number(p.total ?? 0), 0)
     return rows.map((p, i) => ({
@@ -170,11 +125,11 @@ function LocalDashboard() {
       color: PAY_CHART_COLORS[i % PAY_CHART_COLORS.length],
       pct:   totalAmount > 0 ? (Number(p.total ?? 0) / totalAmount * 100) : 0,
     }))
-  }, [dashboard?.payment_breakdown])
+  }, [salesReport?.payment_breakdown])
 
   /** Cantidad de ventas por método de pago. */
   const payCountData = useMemo(() => {
-    const rows = dashboard?.payment_breakdown
+    const rows = salesReport?.payment_breakdown
     if (!Array.isArray(rows) || !rows.length) return []
     const totalCount = rows.reduce((s, p) => s + Number(p.count ?? 0), 0)
     return rows.map((p, i) => ({
@@ -183,39 +138,13 @@ function LocalDashboard() {
       color: PAY_CHART_COLORS[i % PAY_CHART_COLORS.length],
       pct:   totalCount > 0 ? (Number(p.count ?? 0) / totalCount * 100) : 0,
     }))
-  }, [dashboard?.payment_breakdown])
-
-  /** Monto por día: evolución temporal Efectivo vs MercadoPago (eje X = fechas). */
-  const payAmountTimeSeries = useMemo(() => {
-    const now = new Date()
-    const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1))
-    const buckets = new Map()
-
-    for (const o of orders) {
-      if (String(o.status || '').toLowerCase() !== 'completed') continue
-      const d = parseApiDate(o.created_at)
-      if (!d || d < monthStart) continue
-
-      const sortKey = d.toLocaleDateString('en-CA', { timeZone: CHILE_TZ })
-      const label = d.toLocaleDateString('es-CL', { day: '2-digit', month: '2-digit', timeZone: CHILE_TZ })
-      const bucket = paymentMethodBucket(o.payment_method)
-      if (!bucket) continue
-
-      if (!buckets.has(sortKey)) {
-        buckets.set(sortKey, { label, sortKey, efectivo: 0, mercadopago: 0 })
-      }
-      const row = buckets.get(sortKey)
-      row[bucket] += Number(o.total ?? 0)
-    }
-
-    return Array.from(buckets.values()).sort((a, b) => a.sortKey.localeCompare(b.sortKey))
-  }, [orders])
+  }, [salesReport?.payment_breakdown])
 
   const finCards = [
-    { icon: TrendingUp, label: 'Ventas Hoy',      value: formatMoney(dashboard?.daily_sales),        iconColor: 'text-[hsl(var(--success))]', iconBg: 'bg-[hsl(var(--success)/0.12)]', accentColor: 'border-l-[hsl(var(--success))]' },
-    { icon: DollarSign, label: 'Ventas del Mes',   value: formatMoney(dashboard?.monthly_sales),     iconColor: 'text-[hsl(var(--primary))]', iconBg: 'bg-[hsl(var(--primary)/0.12)]', accentColor: 'border-l-[hsl(var(--primary))]' },
-    { icon: Wallet,     label: 'Caja Virtual',     value: formatMoney(dashboard?.monthly_cash_flow), iconColor: 'text-[hsl(var(--info-foreground))]', iconBg: 'bg-[hsl(var(--info))]', accentColor: 'border-l-[hsl(var(--info-foreground))]' },
-    { icon: DollarSign, label: 'Ticket Promedio',  value: formatMoney(dashboard?.avg_ticket ?? 0),   iconColor: 'text-[hsl(var(--info-foreground))]', iconBg: 'bg-[hsl(var(--info))]', accentColor: 'border-l-[hsl(var(--info-foreground))]' },
+    { icon: TrendingUp, label: 'Ventas Hoy', value: salesReport?.daily_sales == null ? '—' : formatMoney(salesReport.daily_sales), iconColor: 'text-[hsl(var(--success))]', iconBg: 'bg-[hsl(var(--success)/0.12)]', accentColor: 'border-l-[hsl(var(--success))]' },
+    { icon: DollarSign, label: 'Ventas últimos 7 días', value: salesReport?.total_sales == null ? '—' : formatMoney(salesReport.total_sales), iconColor: 'text-[hsl(var(--primary))]', iconBg: 'bg-[hsl(var(--primary)/0.12)]', accentColor: 'border-l-[hsl(var(--primary))]' },
+    { icon: DollarSign, label: 'Ticket Promedio', value: salesReport?.avg_ticket == null ? '—' : formatMoney(salesReport.avg_ticket), iconColor: 'text-[hsl(var(--info-foreground))]', iconBg: 'bg-[hsl(var(--info))]', accentColor: 'border-l-[hsl(var(--info-foreground))]' },
+    { icon: XCircle, label: 'Pedidos cancelados', value: salesReport?.cancelled_orders == null ? '—' : String(salesReport.cancelled_orders), iconColor: 'text-[hsl(var(--destructive))]', iconBg: 'bg-[hsl(var(--destructive)/0.1)]', accentColor: 'border-l-[hsl(var(--destructive))]' },
   ]
 
   const invCards = [
@@ -278,7 +207,7 @@ function LocalDashboard() {
                         title: 'Resumen Financiero',
                         icon: DollarSign,
                         color: 'text-emerald-600',
-                        desc: 'Muestra las ventas del día, ventas del mes, caja virtual, ticket promedio, tasa de cancelaciones y la hora de mayor actividad del local.',
+                        desc: 'Muestra las ventas de hoy y de los últimos 7 días, el ticket promedio y los pedidos cancelados.',
                       },
                       {
                         title: 'Inventario',
@@ -287,22 +216,22 @@ function LocalDashboard() {
                         desc: 'Estado del stock: total de productos, cuántos están en nivel óptimo, bajo o crítico, y el valor total del inventario disponible.',
                       },
                       {
-                        title: 'Tendencia de Ingresos',
+                        title: 'Ventas por día',
                         icon: BarChart2,
                         color: 'text-violet-600',
-                        desc: 'Gráfico de evolución de ingresos por período (7 días, 30 días o 3 meses). Permite detectar tendencias de crecimiento o caída.',
+                        desc: 'Compara las ventas de cada uno de los últimos 7 días, incluidos los días sin ventas.',
                       },
                       {
-                        title: 'Distribución de Pedidos',
+                        title: 'Comparativo Semanal',
                         icon: CheckCircle,
                         color: 'text-amber-600',
-                        desc: 'Proporción de pedidos por estado: completados, pendientes y cancelados. Indica la eficiencia operativa del local.',
+                        desc: 'Compara las ventas de esta semana con el período anterior y evita mostrar porcentajes cuando no hubo ventas antes.',
                       },
                       {
-                        title: 'Actividad por Hora',
-                        icon: Clock,
+                        title: 'Distribución por Pago',
+                        icon: CreditCard,
                         color: 'text-pink-600',
-                        desc: 'Muestra la cantidad de pedidos en cada hora del día para identificar los momentos de mayor y menor demanda.',
+                        desc: 'Resume el monto y la cantidad de ventas por método de pago durante los últimos 7 días.',
                       },
                       ...(conFondo ? [{
                         title: 'Fondo de emergencia',
@@ -343,13 +272,14 @@ function LocalDashboard() {
                 <p className="text-xs text-[hsl(var(--muted-foreground))]">Actividad del local</p>
               </div>
             </div>
+            {salesReportError && <p role="alert" className="mb-3 text-sm text-[hsl(var(--destructive))]">No se pudieron cargar los indicadores de ventas. Inténtalo nuevamente.</p>}
             <m.div
               className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3"
               variants={STAGGER} initial="hidden" animate="visible"
             >
               {finCards.map((k) => (
                 <m.div key={k.label} variants={ITEM}>
-                  <KpiCard {...k} loading={dashLoading} />
+                  <KpiCard {...k} loading={salesReportLoading} />
                 </m.div>
               ))}
             </m.div>
@@ -362,31 +292,21 @@ function LocalDashboard() {
             <Card className="lg:col-span-2">
               <CardHeader className="pb-2">
                 <div className="flex items-center justify-between flex-wrap gap-2">
-                  <CardTitle className="text-sm">Tendencia de Ingresos</CardTitle>
-                  <div className="flex items-center gap-1">
-                    {['1h','4h','12h','1d','7d'].map((key) => (
-                      <button
-                        key={key}
-                        onClick={() => setTrendRange(key)}
-                        className={`px-2.5 py-1 text-xs font-semibold rounded-md transition-colors ${
-                          trendRange === key
-                            ? 'bg-emerald-600 text-white shadow-sm'
-                            : 'text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))] hover:text-[hsl(var(--foreground))]'
-                        }`}
-                      >
-                        {key}
-                      </button>
-                    ))}
+                  <div>
+                    <CardTitle className="text-sm">Ventas por día</CardTitle>
+                    <p className="text-xs text-[hsl(var(--muted-foreground))]">Últimos 7 días, incluido hoy</p>
                   </div>
                 </div>
               </CardHeader>
               <CardContent>
-                {(trendRange === '7d' ? trendLoading : ordersLoading) ? (
+                {salesReportLoading ? (
                   <ChartSkeleton className="h-[220px]" />
-                ) : incomeTrend.length === 0 ? (
-                  <p className="text-sm text-[hsl(var(--muted-foreground))] py-8 text-center">Sin pedidos registrados en el período.</p>
+                ) : salesReportError ? (
+                  <p className="text-sm text-[hsl(var(--destructive))] py-8 text-center">No se pudo cargar la tendencia de ventas.</p>
+                ) : !salesReport?.by_day?.length ? (
+                  <p className="text-sm text-[hsl(var(--muted-foreground))] py-8 text-center">Sin datos para este período.</p>
                 ) : (
-                  <IncomeChart data={incomeTrend} showCashFlow={trendRange === '7d'} />
+                  <IncomeChart data={salesReport.by_day} />
                 )}
               </CardContent>
             </Card>
@@ -429,7 +349,7 @@ function LocalDashboard() {
           </div>
 
           {/* Comparativo semanal + distribución por pago */}
-          {dashLoading ? (
+          {salesReportLoading ? (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               <Card>
                 <CardHeader className="pb-2">
@@ -446,7 +366,7 @@ function LocalDashboard() {
                 <CardContent><ChartSkeleton className="h-[170px]" /></CardContent>
               </Card>
             </div>
-          ) : dashboard && (
+          ) : (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               <Card>
                 <CardHeader className="pb-2">
@@ -454,9 +374,11 @@ function LocalDashboard() {
                   <p className="text-xs text-[hsl(var(--muted-foreground))]">Esta semana vs semana anterior</p>
                 </CardHeader>
                 <CardContent>
-                  {dashboard.week_comparison ? (() => {
-                    const wc  = dashboard.week_comparison
-                    const pct = Number(wc.change_pct ?? 0)
+                  {salesReportError ? (
+                    <p role="alert" className="text-sm text-[hsl(var(--destructive))] py-4 text-center">No se pudo cargar la comparación semanal.</p>
+                  ) : salesReport?.week_comparison ? (() => {
+                    const wc  = salesReport.week_comparison
+                    const pct = wc.change_pct
                     const isUp = pct >= 0
                     return (
                       <div className="space-y-3">
@@ -470,9 +392,11 @@ function LocalDashboard() {
                             <p className="text-lg font-bold text-[hsl(var(--muted-foreground))]">{formatMoney(wc.prev_week_sales)}</p>
                           </div>
                         </div>
-                        <div className={`rounded-lg px-3 py-2 text-sm font-semibold text-center ${isUp ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>
-                          {isUp ? '▲' : '▼'} {isUp ? '+' : ''}{pct.toFixed(1)}% vs semana anterior
-                        </div>
+                        {pct === null
+                          ? <div className="rounded-lg px-3 py-2 text-sm font-semibold text-center bg-[hsl(var(--muted))] text-[hsl(var(--muted-foreground))]">Sin ventas en la semana anterior</div>
+                          : <div className={`rounded-lg px-3 py-2 text-sm font-semibold text-center ${isUp ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>
+                            {isUp ? '▲' : '▼'} {isUp ? '+' : ''}{pct.toFixed(1)}% vs semana anterior
+                          </div>}
                       </div>
                     )
                   })() : (
@@ -487,31 +411,31 @@ function LocalDashboard() {
                     <div>
                       <CardTitle className="text-sm flex items-center gap-2"><CreditCard size={15} /> Distribución por Pago</CardTitle>
                       <p className="text-xs text-[hsl(var(--muted-foreground))] mt-0.5">
-                        {payChartView === 'line'
-                          ? 'Evolución diaria del monto recaudado (Efectivo y MercadoPago)'
-                          : 'Cantidad de ventas por método este mes'}
+                        {payChartView === 'amount'
+                          ? 'Monto vendido por método (últimos 7 días)'
+                          : 'Cantidad de ventas por método (últimos 7 días)'}
                       </p>
                     </div>
                     <div className="flex items-center gap-1 shrink-0">
                       <button
                         type="button"
-                        onClick={() => setPayChartView('line')}
+                        onClick={() => setPayChartView('amount')}
                         className={cn(
                           'flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-md transition-colors',
-                          payChartView === 'line'
+                          payChartView === 'amount'
                             ? 'bg-emerald-600 text-white shadow-sm'
                             : 'text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))]',
                         )}
                       >
-                        <LineChartIcon size={13} />
+                        <DollarSign size={13} />
                         Por monto
                       </button>
                       <button
                         type="button"
-                        onClick={() => setPayChartView('pie')}
+                        onClick={() => setPayChartView('count')}
                         className={cn(
                           'flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-md transition-colors',
-                          payChartView === 'pie'
+                          payChartView === 'count'
                             ? 'bg-emerald-600 text-white shadow-sm'
                             : 'text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))]',
                         )}
@@ -523,92 +447,46 @@ function LocalDashboard() {
                   </div>
                 </CardHeader>
                 <CardContent>
-                  {(payChartView === 'line' ? payAmountTimeSeries.length > 0 : payCountData.length > 0) ? (
+                  {salesReportError ? (
+                    <p role="alert" className="text-sm text-[hsl(var(--destructive))] py-4 text-center">No se pudo cargar la distribución por método de pago.</p>
+                  ) : (payChartView === 'amount' ? payAmountData.length > 0 : payCountData.length > 0) ? (
                     <div className="flex flex-col items-center gap-3">
                       <ResponsiveContainer width="100%" height={170}>
-                        {payChartView === 'line' ? (
-                          <LineChart data={payAmountTimeSeries} margin={{ top: 8, right: 12, left: -8, bottom: 0 }}>
-                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
-                            <XAxis
-                              dataKey="label"
-                              tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }}
-                              tickLine={false}
-                              axisLine={false}
-                              interval="preserveStartEnd"
-                            />
-                            <YAxis
-                              tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`}
-                              tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }}
-                              tickLine={false}
-                              axisLine={false}
-                              width={40}
-                            />
-                            <Tooltip
-                              formatter={(v, name) => [
-                                formatMoney(v),
-                                name === 'efectivo' ? 'Efectivo' : name === 'mercadopago' ? 'MercadoPago' : name,
-                              ]}
-                              labelFormatter={(label) => `Día ${label}`}
-                              contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: '8px', fontSize: 12 }}
-                            />
-                            <Legend
-                              wrapperStyle={{ fontSize: 11, paddingTop: 4 }}
-                              formatter={(value) => (value === 'efectivo' ? 'Efectivo' : 'MercadoPago')}
-                            />
-                            <Line
-                              type="monotone"
-                              dataKey="efectivo"
-                              name="efectivo"
-                              stroke="#16a34a"
-                              className="chart-brand-stroke"
-                              strokeWidth={2}
-                              dot={{ r: 3, className: 'chart-brand-fill', fill: '#16a34a' }}
-                              activeDot={{ r: 5 }}
-                            />
-                            <Line
-                              type="monotone"
-                              dataKey="mercadopago"
-                              name="mercadopago"
-                              stroke="#3b82f6"
-                              strokeWidth={2}
-                              dot={{ r: 3, fill: '#3b82f6' }}
-                              activeDot={{ r: 5 }}
-                            />
-                          </LineChart>
-                        ) : (
-                          <PieChart>
-                            <Pie
-                              data={payCountData}
-                              cx="50%"
-                              cy="50%"
-                              innerRadius={46}
-                              outerRadius={70}
-                              paddingAngle={3}
-                              dataKey="ventas"
-                            >
-                              {payCountData.map((entry) => (
-                                <Cell key={entry.name} fill={entry.color} />
-                              ))}
-                            </Pie>
-                            <Tooltip
-                              formatter={(v, n, props) => {
-                                const pct = props?.payload?.pct
-                                return [`${v} venta${v === 1 ? '' : 's'} (${formatPaymentPct(pct)})`, n]
-                              }}
-                              contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: '8px', fontSize: 12 }}
-                            />
-                          </PieChart>
-                        )}
+                        <PieChart>
+                          <Pie
+                            data={payChartView === 'amount' ? payAmountData : payCountData}
+                            cx="50%"
+                            cy="50%"
+                            innerRadius={46}
+                            outerRadius={70}
+                            paddingAngle={3}
+                            dataKey={payChartView === 'amount' ? 'monto' : 'ventas'}
+                          >
+                            {(payChartView === 'amount' ? payAmountData : payCountData).map((entry) => (
+                              <Cell key={entry.name} fill={entry.color} />
+                            ))}
+                          </Pie>
+                          <Tooltip
+                            formatter={(value, name, props) => {
+                              const pct = props?.payload?.pct
+                              const formatted = payChartView === 'amount'
+                                ? formatMoney(value)
+                                : `${value} venta${value === 1 ? '' : 's'}`
+                              return [`${formatted} (${formatPaymentPct(pct)})`, name]
+                            }}
+                            contentStyle={{ backgroundColor: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: '8px', fontSize: 12 }}
+                          />
+                        </PieChart>
                       </ResponsiveContainer>
                       <div className="flex flex-wrap justify-center gap-x-4 gap-y-2">
-                        {payChartView === 'line' ? (
+                        {payChartView === 'amount' ? (
                           payAmountData.map((entry) => (
                             <div key={entry.name} className="flex items-center gap-1.5">
                               <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: entry.color }} />
                               <span className="text-xs text-[hsl(var(--muted-foreground))]">
                                 {entry.name}{' '}
                                 <span className="font-semibold text-[hsl(var(--foreground))]">{formatMoney(entry.monto)}</span>
-                                <span className="text-[hsl(var(--muted-foreground))]"> ({formatPaymentPct(entry.pct)} del mes)</span>
+                                <span className="text-[hsl(var(--muted-foreground))]"> ({formatPaymentPct(entry.pct)})</span>
                               </span>
                             </div>
                           ))

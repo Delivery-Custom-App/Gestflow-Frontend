@@ -10,6 +10,7 @@ import {
 import { apiRequest } from './apiClient'
 import { getProductsReport, getSalesReport } from './reportsApi'
 import { isV2FeatureEnabled } from './v2Features'
+import { CHILE_TZ } from '../utils/chileDateTime'
 
 const safeList = (v) => (Array.isArray(v) ? v : [])
 
@@ -123,6 +124,77 @@ export async function getLocalDashboard(localId, token) {
     return buildDashboardFromOrders(orders, { localCount: 1 })
   }
   return apiRequest(`/dashboard/local/${localId}`, { token })
+}
+
+function todayInChileIso(now = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: CHILE_TZ,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(now)
+  const values = Object.fromEntries(parts.map(({ type, value }) => [type, value]))
+  return `${values.year}-${values.month}-${values.day}`
+}
+
+function shiftIsoDate(isoDate, amount) {
+  const date = new Date(`${isoDate}T00:00:00Z`)
+  date.setUTCDate(date.getUTCDate() + amount)
+  return date.toISOString().slice(0, 10)
+}
+
+function nullableNumber(value) {
+  if (value === null || value === undefined || value === '') return null
+  const number = Number(value)
+  return Number.isFinite(number) ? number : null
+}
+
+function reportDateLabel(isoDate) {
+  const [, month, day] = String(isoDate || '').slice(0, 10).split('-')
+  return month && day ? `${day}/${month}` : '—'
+}
+
+/** Normaliza el reporte de ventas V2 para el dashboard local (T-31). */
+export function mapDashboardSalesReport(report) {
+  const byDay = safeList(report?.by_day).map((row) => ({
+    date: reportDateLabel(row.date),
+    ingresos: nullableNumber(row.total_sales) ?? 0,
+    ordenes: nullableNumber(row.total_orders) ?? 0,
+  }))
+  const currentSales = nullableNumber(report?.total_sales)
+  const previousSales = nullableNumber(report?.previous_period?.total_sales)
+  const changePct = previousSales > 0 && currentSales !== null
+    ? ((currentSales - previousSales) / previousSales) * 100
+    : null
+
+  return {
+    total_sales: currentSales,
+    total_orders: nullableNumber(report?.total_orders),
+    daily_sales: byDay.length ? byDay[byDay.length - 1].ingresos : null,
+    avg_ticket: nullableNumber(report?.avg_ticket),
+    cancelled_orders: nullableNumber(report?.cancelled_orders),
+    by_day: byDay,
+    payment_breakdown: safeList(report?.by_payment_method).map((row) => ({
+      method: String(row.method || ''),
+      total: nullableNumber(row.total) ?? 0,
+      count: nullableNumber(row.count) ?? 0,
+    })),
+    week_comparison: currentSales !== null && previousSales !== null
+      ? {
+          current_week_sales: currentSales,
+          prev_week_sales: previousSales,
+          change_pct: changePct,
+        }
+      : null,
+  }
+}
+
+/** Una llamada agregada para los indicadores de los últimos siete días (T-31). */
+export async function getDashboardSalesReport(localId, now = new Date()) {
+  const endDate = todayInChileIso(now)
+  const startDate = shiftIsoDate(endDate, -6)
+  const report = await getSalesReport(localId, { startDate, endDate })
+  return mapDashboardSalesReport(report)
 }
 
 export function getOrdersByLocal(localId, token, status) {

@@ -15,6 +15,8 @@ import {
   getCajasByLocal,
   getCajasFisicasByLocal,
   getVentasIndicadores,
+  getDashboardSalesReport,
+  mapDashboardSalesReport,
   provisionCajaFisicaMp,
   verifyCajaFisicaMpPairing,
 } from './administrativeApi'
@@ -173,6 +175,64 @@ describe('Vinculación MercadoPago por caja física', () => {
 
     expect(rutasPedidas().some((p) => p.includes('/mp/cajas-status'))).toBe(false)
     expect(rutasPedidas()).toContain('/cajas?local_id=loc-1')
+  })
+})
+
+describe('reporte de ventas del dashboard (T-31)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    apiRequest.mockResolvedValue({
+      total_sales: '16600.00',
+      total_orders: 3,
+      avg_ticket: '5533.33',
+      cancelled_orders: 2,
+      by_day: [
+        { date: '2026-10-08', total_sales: '0', total_orders: 0 },
+        { date: '2026-10-09', total_sales: '1000', total_orders: 1 },
+        { date: '2026-10-10', total_sales: '0', total_orders: 0 },
+        { date: '2026-10-11', total_sales: '0', total_orders: 0 },
+        { date: '2026-10-12', total_sales: '6200', total_orders: 1 },
+        { date: '2026-10-13', total_sales: '0', total_orders: 0 },
+        { date: '2026-10-14', total_sales: '9400', total_orders: 1 },
+      ],
+      by_payment_method: [
+        { method: 'cash', total: '10000.00', count: 2 },
+        { method: 'debit', total: '6600.00', count: 1 },
+      ],
+      previous_period: { total_sales: '0.00', total_orders: 0 },
+    })
+  })
+
+  it('hace una sola consulta para los últimos siete días usando la fecha de Chile', async () => {
+    const data = await getDashboardSalesReport(LOCAL, new Date('2026-10-15T02:30:00Z'))
+
+    expect(apiRequest).toHaveBeenCalledExactlyOnceWith(
+      '/reports/sales?local_id=loc-1&start_date=2026-10-08&end_date=2026-10-14',
+    )
+    expect(apiRequest.mock.calls.some(([path]) => String(path).startsWith('/orders'))).toBe(false)
+    expect(data.by_day).toHaveLength(7)
+    expect(data.by_day[0]).toMatchObject({ date: '08/10', ingresos: 0, ordenes: 0 })
+    expect(data.by_day[6]).toMatchObject({ date: '14/10', ingresos: 9400, ordenes: 1 })
+    expect(data).toMatchObject({
+      total_sales: 16600,
+      daily_sales: 9400,
+      avg_ticket: 5533.33,
+      cancelled_orders: 2,
+      week_comparison: { current_week_sales: 16600, prev_week_sales: 0, change_pct: null },
+    })
+    expect(data.payment_breakdown).toEqual([
+      { method: 'cash', total: 10000, count: 2 },
+      { method: 'debit', total: 6600, count: 1 },
+    ])
+  })
+
+  it('calcula la variación porcentual sin dividir por cero', () => {
+    const data = mapDashboardSalesReport({
+      total_sales: '15000',
+      previous_period: { total_sales: '5000', total_orders: 1 },
+    })
+
+    expect(data.week_comparison.change_pct).toBe(200)
   })
 })
 
