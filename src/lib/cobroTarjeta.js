@@ -20,6 +20,24 @@ import { isV2FeatureEnabled } from './v2Features'
  * avisa con un mensaje claro.
  */
 
+/**
+ * Errores del cobro con tarjeta en palabras de quien cobra (T-65). Marca
+ * `reintentable` cuando la terminal está ocupada con otra venta.
+ */
+export function errorDeCobroTarjeta(err) {
+  if (Number(err?.status) !== 409) return err
+  const detalle = String(err?.detail || err?.message || '').replace(/^\d{3}:\s*/, '')
+  if (/cobrando otra venta/i.test(detalle)) {
+    const e = new Error('La máquina está cobrando otra venta: espera unos segundos y vuelve a intentar.')
+    e.status = 409
+    e.reintentable = true
+    return e
+  }
+  const e = new Error(`${detalle || 'Hay un cobro anterior en la terminal'}. Cancélalo en el lector o espera a que venza y vuelve a intentar.`)
+  e.status = 409
+  return e
+}
+
 export const MENSAJE_HAULMER =
   'La máquina de tu turno cobra con Haulmer y la web todavía no puede cobrar con ella. Cobra desde la app o elige otra máquina.'
 
@@ -30,11 +48,23 @@ export function rutaBaseCobroTarjeta() {
 
 const rutaOrden = (orderId) => `${rutaBaseCobroTarjeta()}/orders/${encodeURIComponent(String(orderId))}`
 
-/** Envía el cobro de una orden a la terminal. */
+/**
+ * Envía el cobro de una orden a la terminal (T-65).
+ * - El monto lo decide el servidor (total del pedido más propina): `amount`
+ *   ya no se manda aunque venga.
+ * - Un doble toque devuelve el mismo cobro (mismo `charge_id`,
+ *   `point_charge_active` y «El cobro ya está en la terminal»): la pantalla
+ *   sigue el `charge_id` que recibe, no supone que es uno nuevo.
+ * - 409: la máquina está cobrando otra venta (reintentar en unos segundos) o
+ *   hay un cobro anterior vigente que no se pudo cancelar (cancelar en el
+ *   lector o esperar).
+ */
 export async function createPointCharge(orderId, body = {}) {
+  const { amount, ...resto } = body
+  void amount
   // T-42: el 403 «Solo quien abrió la mesa puede cobrarla» con la sugerencia.
-  const respuesta = await apiRequest(`${rutaOrden(orderId)}/charge`, { method: 'POST', body })
-    .catch((err) => { throw traducirErrorCobro(err) })
+  const respuesta = await apiRequest(`${rutaOrden(orderId)}/charge`, { method: 'POST', body: resto })
+    .catch((err) => { throw errorDeCobroTarjeta(traducirErrorCobro(err)) })
   if (String(respuesta?.provider || '').toLowerCase() === 'haulmer') {
     // La web no puede completar un cobro Haulmer: se suelta la terminal.
     await apiRequest(`${rutaOrden(orderId)}/charge`, { method: 'DELETE' }).catch(() => null)

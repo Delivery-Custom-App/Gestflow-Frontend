@@ -34,7 +34,7 @@ describe('MercadoPagoModal · cobro con tarjeta', () => {
     expect(await screen.findByText(/Esperando que el cliente pase la tarjeta/)).toBeInTheDocument()
   })
 
-  it('manda propina del 10% al pedido antes de cobrar con tarjeta e incluye el total', async () => {
+  it('manda propina del 10% al pedido antes de cobrar con tarjeta; el monto lo pone el servidor (T-65)', async () => {
     createPointCharge.mockResolvedValue({ charge_id: 'c-1', message: 'Esperando que el cliente pase la tarjeta...' })
     const user = userEvent.setup()
     montar({ createdAt: '2026-10-14T12:00:00Z' })
@@ -42,7 +42,7 @@ describe('MercadoPagoModal · cobro con tarjeta', () => {
     await user.click(screen.getByRole('button', { name: /MercadoPago Point/ }))
 
     expect(updateOrderFields).toHaveBeenCalledWith('o-1', { tip_amount: 440 }, '2026-10-14T12:00:00Z')
-    expect(createPointCharge).toHaveBeenCalledWith('o-1', { amount: 4840, description: 'Mesa 1' })
+    expect(createPointCharge).toHaveBeenCalledWith('o-1', { description: 'Mesa 1' })
   })
 
   it('suma la propina al efectivo recibido y la registra al completar la orden', async () => {
@@ -66,5 +66,27 @@ describe('MercadoPagoModal · cobro con tarjeta', () => {
     await user.click(screen.getByRole('button', { name: /MercadoPago Point/ }))
     expect(await screen.findByText(MENSAJE_HAULMER)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /Efectivo/ })).toBeInTheDocument()
+  })
+})
+
+describe('MercadoPagoModal · seguir el charge_id (T-65)', () => {
+  it('si el backend devuelve el cobro que ya estaba, lo dice', async () => {
+    createPointCharge.mockResolvedValue({ charge_id: 'c-1', point_charge_active: true, message: 'x' })
+    const user = userEvent.setup()
+    montar()
+    await user.click(screen.getByRole('button', { name: /MercadoPago Point/ }))
+    expect(await screen.findByText(/El cobro ya está en la terminal/)).toBeInTheDocument()
+  })
+
+  it('el 409 «cobrando otra venta» ofrece reintentar', async () => {
+    const err = Object.assign(new Error('La máquina está cobrando otra venta: espera unos segundos y vuelve a intentar.'), { status: 409, reintentable: true })
+    createPointCharge.mockRejectedValueOnce(err).mockResolvedValueOnce({ charge_id: 'c-2', message: 'Esperando que el cliente pase la tarjeta...' })
+    const user = userEvent.setup()
+    montar()
+    await user.click(screen.getByRole('button', { name: /MercadoPago Point/ }))
+    expect(await screen.findByRole('alert')).toHaveTextContent(/cobrando otra venta/)
+    await user.click(screen.getByRole('button', { name: 'Reintentar' }))
+    expect(createPointCharge).toHaveBeenCalledTimes(2)
+    expect(await screen.findByText(/Esperando que el cliente pase la tarjeta/)).toBeInTheDocument()
   })
 })

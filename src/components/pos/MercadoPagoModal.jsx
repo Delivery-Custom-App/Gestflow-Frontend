@@ -24,6 +24,8 @@ export default function MercadoPagoModal({ open, orderId, createdAt, total, desc
   const [terminalMsg, setTerminalMsg] = useState('Conectando con la terminal...')
   const [paymentDetail, setPaymentDetail] = useState(null)
   const [chargeInfo, setChargeInfo] = useState(null)
+  // T-65: si la terminal está cobrando otra venta, se ofrece reintentar.
+  const [reintentable, setReintentable] = useState(false)
   const [cashAmount, setCashAmount] = useState('')
   const [tipInput, setTipInput] = useState('0')
   const pollRef = useRef(null)
@@ -82,12 +84,19 @@ export default function MercadoPagoModal({ open, orderId, createdAt, total, desc
     setError(null)
     try {
       await updateOrderFields(orderId, { tip_amount: tipAmount }, createdAt)
-      const charge = await createPointCharge(orderId, { amount: paymentTotal, description })
+      // El monto lo pone el servidor (total + propina): no se manda.
+      const charge = await createPointCharge(orderId, { description })
+      // Se sigue el cobro que devuelve el backend: ante un doble toque es el mismo.
+      const mismoCobro = Boolean(charge?.charge_id && chargeInfo?.charge_id === charge.charge_id)
       setChargeInfo(charge || null)
+      setReintentable(false)
       setStep('point_waiting')
-      setTerminalMsg(charge?.message || 'Esperando que el cliente pase la tarjeta...')
+      setTerminalMsg(mismoCobro || charge?.point_charge_active
+        ? 'El cobro ya está en la terminal. Esperando que el cliente pague.'
+        : (charge?.message || 'Esperando que el cliente pase la tarjeta...'))
       startPolling()
     } catch (err) {
+      setReintentable(Boolean(err?.reintentable))
       setError(err.message || 'Error al conectar con la terminal')
     } finally {
       setLoading(false)
@@ -239,7 +248,13 @@ export default function MercadoPagoModal({ open, orderId, createdAt, total, desc
                   )}
                 </button>
               ))}
-              {error && <p className="text-xs text-red-600 text-center pt-1">{error}</p>}
+              {error && <p role="alert" className="text-xs text-red-600 text-center pt-1">{error}</p>}
+              {error && reintentable && (
+                <button type="button" onClick={handleSendToTerminal} disabled={loading}
+                  className="mx-auto block rounded-lg border border-[hsl(var(--border))] px-3 py-1.5 text-xs font-semibold">
+                  Reintentar
+                </button>
+              )}
             </>
           )}
 
