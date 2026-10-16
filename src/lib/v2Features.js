@@ -69,10 +69,9 @@ export const V2_FEATURES = {
    */
   fondoEmergencia: true,
   /**
-   * Desglose del efectivo de apertura (T-40). La pantalla ya cuenta billetes
-   * y monedas y manda el total como `monto_apertura`; con esta bandera además
-   * envía `apertura_desglose` ([{ denominacion, tipo, cantidad }]). Hoy el
-   * backend lo descartaría en silencio: encenderla cuando exista el B-28.
+   * Contar el efectivo del cierre por billetes y monedas (T-40): el cierre del
+   * turno ofrece el conteo y manda el total como `monto_cierre_declarado`. La
+   * apertura no cuenta: su monto se escribe a mano como un solo total.
    */
   desgloseEfectivo: false,
   /**

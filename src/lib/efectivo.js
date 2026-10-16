@@ -1,8 +1,7 @@
 /**
- * Efectivo contado por denominación (T-40): con qué billetes y monedas parte
- * la caja. El total es el `monto_apertura` del turno; el desglose viaja al
- * backend como `apertura_desglose` cuando exista el B-28 (bandera
- * `desgloseEfectivo`).
+ * Efectivo contado por denominación (T-40): billetes y monedas del cajón. Se
+ * usa al cerrar el turno (bandera `desgloseEfectivo`); la apertura no cuenta:
+ * su monto se escribe a mano como un solo total.
  */
 import { formatCLP } from './formatCLP'
 
@@ -49,14 +48,7 @@ export function totalesDelConteo(cantidades) {
   return { filas, totalBilletes, totalMonedas, total: totalBilletes + totalMonedas }
 }
 
-/** Lo que se manda al backend (B-28): solo las denominaciones con cantidad. */
-export function desgloseParaApi(cantidades) {
-  return totalesDelConteo(cantidades).filas
-    .filter((f) => f.cantidad > 0)
-    .map((f) => ({ denominacion: f.valor, tipo: f.tipo, cantidad: f.cantidad }))
-}
-
-/** Desglose que devuelve el backend → filas para mostrar, de mayor a menor. */
+/** Desglose que devuelve el backend (turnos abiertos con conteo) → filas para mostrar, de mayor a menor. */
 export function filasDelDesglose(desglose) {
   return (Array.isArray(desglose) ? desglose : [])
     .map((d) => ({ valor: Number(d.denominacion), tipo: d.tipo, cantidad: Number(d.cantidad) || 0 }))

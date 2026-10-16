@@ -412,7 +412,7 @@ describe('AdministrativeModule', () => {
     expect(screen.getByText(/el puesto donde está la terminal/)).toBeInTheDocument()
   })
 
-  it('el formulario de apertura pide caja física y el conteo del efectivo, sin elegir "con o sin efectivo"', async () => {
+  it('el formulario de apertura pide la caja física y un solo campo de texto: "Monto de apertura"', async () => {
     const user = userEvent.setup()
     renderAdmin('flujo-caja')
 
@@ -420,37 +420,50 @@ describe('AdministrativeModule', () => {
 
     expect(await screen.findByRole('heading', { name: 'Abrir turno de caja' })).toBeInTheDocument()
     expect(await screen.findByLabelText('Caja física')).toBeInTheDocument()
-    // El conteo está siempre a la vista (T-40): billetes y monedas.
-    expect(screen.getByRole('region', { name: 'Billetes' })).toBeInTheDocument()
-    expect(screen.getByRole('region', { name: 'Monedas' })).toBeInTheDocument()
-    expect(screen.queryByLabelText('Monto de apertura')).not.toBeInTheDocument()
+    // El único campo de texto es el monto, con el total escrito a mano.
+    const campos = screen.getAllByRole('textbox')
+    expect(campos).toHaveLength(1)
+    expect(campos[0]).toBe(screen.getByLabelText('Monto de apertura'))
+    // Ya no se cuenta por billetes y monedas.
+    expect(screen.queryByRole('region', { name: 'Billetes' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('region', { name: 'Monedas' })).not.toBeInTheDocument()
+    expect(screen.queryByText('Total en efectivo')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText(/Cantidad de billetes/)).not.toBeInTheDocument()
     expect(screen.queryByText(/con efectivo|sin efectivo/i)).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Abrir turno' })).toBeInTheDocument()
     // El turno no tiene nombre en el modelo: pedirlo era pedir un dato que se descartaba.
     expect(screen.queryByPlaceholderText('Ej: Turno mañana')).not.toBeInTheDocument()
   })
 
-  it('abre el turno sobre la caja física elegida con el total de lo contado', async () => {
+  it('abre el turno sobre la caja física elegida con el monto escrito', async () => {
     const user = userEvent.setup()
     renderAdmin('flujo-caja')
 
     await user.click(await screen.findByRole('button', { name: '+ Abrir turno de caja' }))
     await user.selectOptions(await screen.findByLabelText('Caja física'), 'cf-2')
-    await user.type(screen.getByLabelText('Cantidad de billetes de $20.000'), '2')
-    await user.type(screen.getByLabelText('Cantidad de billetes de $5.000'), '1')
-    await user.click(screen.getByRole('button', { name: 'Agregar uno: monedas de $500' }))
-    expect(screen.getByTestId('total-efectivo')).toHaveTextContent('$45.500')
+    await user.type(screen.getByLabelText('Monto de apertura'), '45500')
     await user.click(screen.getByRole('button', { name: 'Abrir turno' }))
 
-    // El contrato del backend (ticket #40): la caja física, no el local. Sin el
-    // B-28 (bandera apagada) el desglose no viaja: el backend lo descartaría.
+    // El contrato del backend (ticket #40): la caja física, no el local.
     await waitFor(() => expect(createCaja).toHaveBeenCalledWith({
       caja_fisica_id: 'cf-2',
       monto_apertura: 45500,
     }))
   })
 
-  it('con la bandera desgloseEfectivo, además manda los billetes y monedas contados', async () => {
+  it('el monto se entiende con puntos de miles o signo peso', async () => {
+    const user = userEvent.setup()
+    renderAdmin('flujo-caja')
+
+    await user.click(await screen.findByRole('button', { name: '+ Abrir turno de caja' }))
+    await user.selectOptions(await screen.findByLabelText('Caja física'), 'cf-1')
+    await user.type(screen.getByLabelText('Monto de apertura'), '$50.000')
+    await user.click(screen.getByRole('button', { name: 'Abrir turno' }))
+
+    await waitFor(() => expect(createCaja).toHaveBeenCalledWith({ caja_fisica_id: 'cf-1', monto_apertura: 50000 }))
+  })
+
+  it('aunque la bandera desgloseEfectivo esté encendida, la apertura manda solo el total', async () => {
     V2_FEATURES.desgloseEfectivo = true
     try {
       const user = userEvent.setup()
@@ -458,24 +471,17 @@ describe('AdministrativeModule', () => {
 
       await user.click(await screen.findByRole('button', { name: '+ Abrir turno de caja' }))
       await user.selectOptions(await screen.findByLabelText('Caja física'), 'cf-1')
-      await user.type(screen.getByLabelText('Cantidad de billetes de $10.000'), '3')
-      await user.type(screen.getByLabelText('Cantidad de monedas de $100'), '15')
+      await user.type(screen.getByLabelText('Monto de apertura'), '31500')
       await user.click(screen.getByRole('button', { name: 'Abrir turno' }))
 
-      await waitFor(() => expect(createCaja).toHaveBeenCalledWith({
-        caja_fisica_id: 'cf-1',
-        monto_apertura: 31500,
-        apertura_desglose: [
-          { denominacion: 10000, tipo: 'billete', cantidad: 3 },
-          { denominacion: 100, tipo: 'moneda', cantidad: 15 },
-        ],
-      }))
+      await waitFor(() => expect(createCaja).toHaveBeenCalledWith({ caja_fisica_id: 'cf-1', monto_apertura: 31500 }))
+      expect(createCaja.mock.calls[0][0]).not.toHaveProperty('apertura_desglose')
     } finally {
       V2_FEATURES.desgloseEfectivo = false
     }
   })
 
-  it('sin efectivo contado pide confirmar antes de abrir en $0', async () => {
+  it('sin monto escrito pide confirmar antes de abrir en $0', async () => {
     const user = userEvent.setup()
     renderAdmin('flujo-caja')
 
@@ -490,18 +496,18 @@ describe('AdministrativeModule', () => {
     await waitFor(() => expect(createCaja).toHaveBeenCalledWith({ caja_fisica_id: 'cf-1', monto_apertura: 0 }))
   })
 
-  it('"Volver a contar" cierra la confirmación sin abrir, y contar algo la quita', async () => {
+  it('"Volver al monto" cierra la confirmación sin abrir, y escribir un monto la quita', async () => {
     const user = userEvent.setup()
     renderAdmin('flujo-caja')
 
     await user.click(await screen.findByRole('button', { name: '+ Abrir turno de caja' }))
     await user.selectOptions(await screen.findByLabelText('Caja física'), 'cf-1')
     await user.click(screen.getByRole('button', { name: 'Abrir turno' }))
-    await user.click(screen.getByRole('button', { name: 'Volver a contar' }))
+    await user.click(screen.getByRole('button', { name: 'Volver al monto' }))
     expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'Abrir turno' }))
-    await user.click(screen.getByRole('button', { name: 'Agregar uno: billetes de $1.000' }))
+    await user.type(screen.getByLabelText('Monto de apertura'), '1000')
     expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
     expect(createCaja).not.toHaveBeenCalled()
   })
@@ -513,7 +519,7 @@ describe('AdministrativeModule', () => {
 
     await user.click(await screen.findByRole('button', { name: '+ Abrir turno de caja' }))
     await user.selectOptions(await screen.findByLabelText('Caja física'), 'cf-1')
-    await user.click(screen.getByRole('button', { name: 'Agregar uno: billetes de $1.000' }))
+    await user.type(screen.getByLabelText('Monto de apertura'), '1000')
     await user.click(screen.getByRole('button', { name: 'Abrir turno' }))
 
     expect(await screen.findByText(/ya tienes un turno abierto hoy en esa caja física/i)).toBeInTheDocument()
@@ -529,7 +535,7 @@ describe('AdministrativeModule', () => {
 
     expect(await screen.findByText(/todavía no tiene ninguna caja física registrada/i)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Crear caja física' })).toBeInTheDocument()
-    expect(screen.queryByRole('region', { name: 'Billetes' })).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('Monto de apertura')).not.toBeInTheDocument()
     expect(createCaja).not.toHaveBeenCalled()
   })
 
