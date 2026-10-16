@@ -1,26 +1,26 @@
 #!/bin/bash
 
-# Deploy manual de emergencia para Delivery-Custom-App-INGSW2-FRONTEND.
+# Deploy manual de emergencia del frontend a producción (aunaro).
 # El deploy normal es automático vía .github/workflows/deploy.yml (push a
-# main). Usar este script solo si el CI está caído — corre localmente
-# (no en el server, no hay docker compose ni git ahí; el server solo
-# recibe el build vía rsync).
+# main). Usar este script solo si el CI está caído — corre desde tu máquina,
+# que debe estar en la tailnet y tener acceso SSH al server.
+#
+# Uso: ./deploy.sh [ref]   (por defecto origin/main)
+# Variables opcionales: DEPLOY_HOST, DEPLOY_USER, SITE_URL.
 
-set -e
+set -euo pipefail
 
-SERVER="root@100.89.15.17"
-REMOTE_DIR="/var/www/delivery-frontend"
+DEPLOY_HOST="${DEPLOY_HOST:-100.109.30.79}"
+DEPLOY_USER="${DEPLOY_USER:-matias}"
+SITE_URL="${SITE_URL:-https://aunaro.mardev.cl}"
+REF="${1:-origin/main}"
 
-echo "🚀 Build local..."
-npm ci
-npm run build
+cd "$(dirname "$0")"
+git fetch --quiet origin main
+SHA=$(git rev-parse --verify "$REF^{commit}")
 
-echo "📦 Backup remoto..."
-STAMP=$(date +%Y%m%d_%H%M%S)
-ssh "$SERVER" "mkdir -p /var/www/backups/$STAMP && tar -C /var/www -czf /var/www/backups/$STAMP/delivery-frontend.tgz delivery-frontend"
-
-echo "📤 Sincronizando dist/ al server..."
-rsync -az --delete dist/ "$SERVER:$REMOTE_DIR/"
+echo "🚀 Deploy de ${SHA:0:7} a $DEPLOY_USER@$DEPLOY_HOST..."
+ssh "$DEPLOY_USER@$DEPLOY_HOST" bash -s -- "$SHA" < scripts/deploy-remote.sh
 
 echo "✅ Deploy completo!"
-curl -sf -o /dev/null -w "site:%{http_code}\n" "https://gestflow.mardev.cl"
+curl -sf -o /dev/null -w "site:%{http_code}\n" "$SITE_URL"
