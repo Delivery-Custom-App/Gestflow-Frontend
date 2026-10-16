@@ -2,6 +2,7 @@ import { memo } from 'react'
 import { Pencil, Trash2, Users, DollarSign, Link2, Unlink, Check, UserRound } from 'lucide-react'
 import { formatCLP } from '../../lib/formatCLP'
 import { cn } from '@/lib/utils'
+import AccionDeMesas from './AccionDeMesas'
 
 /**
  * Grilla de mesas pulida inspirada en:
@@ -300,15 +301,13 @@ const MesaCard = memo(function MesaCard({
             {grupo.capacidad ? ` · ${grupo.capacidad} personas` : ''}
           </span>
           {onDeshacerGrupo && !modoAgrupar && (
-            <button
-              type="button"
+            <AccionDeMesas
+              icon={Unlink}
               onClick={(e) => { e.stopPropagation(); onDeshacerGrupo(grupo) }}
-              className="inline-flex items-center gap-1 text-xs font-medium text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--primary))] transition-colors"
               title="Separar el grupo"
             >
-              <Unlink size={12} />
               Separar
-            </button>
+            </AccionDeMesas>
           )}
         </div>
       )}

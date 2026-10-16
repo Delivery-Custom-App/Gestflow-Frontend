@@ -23,6 +23,18 @@ beforeEach(() => {
   sesion.user = { id: 'u1', email: 'admin@demo.gestflow.dev', first_name: 'Ana', last_name: 'Rojas', avatar_url: 'data:image/jpeg;base64,xxx' }
 })
 
+describe('ConfiguracionPage · scroll', () => {
+  it('trae su propio scroll, porque el marco de la app corta lo que sobra', () => {
+    const { container } = render(<ConfiguracionPage />)
+    const raiz = container.firstChild
+    expect(raiz).toHaveClass('flex-1', 'overflow-y-auto')
+    expect(raiz).not.toHaveClass('min-h-full')
+    // Un solo scroll: las secciones van dentro, sin otro contenedor que desplace.
+    expect(raiz.querySelectorAll('.overflow-y-auto, .overflow-auto')).toHaveLength(0)
+    expect(screen.getByText('Apariencia')).toBeInTheDocument()
+  })
+})
+
 describe('ConfiguracionPage · perfil', () => {
   it('no hay foto de perfil ni forma de subirla: se ven las iniciales', () => {
     const { container } = render(<ConfiguracionPage />)

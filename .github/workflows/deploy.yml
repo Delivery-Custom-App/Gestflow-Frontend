@@ -77,24 +77,17 @@ jobs:
     concurrency:
       group: gestflow-frontend-deploy
       cancel-in-progress: false
+    # Configurables desde Settings > Environments > production > Variables,
+    # para poder mover el deploy a otro nodo de la tailnet sin tocar el YAML.
+    env:
+      DEPLOY_HOST: ${{ vars.DEPLOY_HOST || '100.109.30.79' }}
+      DEPLOY_USER: ${{ vars.DEPLOY_USER || 'matias' }}
+      SITE_URL: ${{ vars.SITE_URL || 'https://aunaro.mardev.cl' }}
 
+    # El build no se hace en el runner: aunaro construye la imagen del
+    # frontend desde su checkout en /opt/mardev/src/Gestflow-Frontend vía
+    # docker compose (el job "test" ya validó que el build compila).
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
-
-      - name: Fijar versión de npm
-        run: npm install -g npm@10.9.2
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Build
-        run: npm run build
-
       # El server solo es alcanzable dentro de la tailnet de GestFlow.
       - name: Connect to Tailscale
         uses: tailscale/github-action@v3
@@ -108,18 +101,33 @@ jobs:
 
       # Fuerza el establecimiento de la ruta en la tailnet antes de usar SSH
       # — justo después de "tailscale up" la ruta puede no estar lista aún.
+      # Si el nodo no responde, falla aquí con diagnóstico en vez de dejar
+      # que ssh-keyscan agote reintentos sin explicar por qué.
       - name: Wait for tailnet route
         run: |
-          for i in 1 2 3 4 5; do
-            tailscale ping -c 1 100.89.15.17 && break
-            sleep 3
-          done || true
+          for i in 1 2 3 4 5 6; do
+            if tailscale ping -c 1 --timeout 5s "$DEPLOY_HOST"; then
+              echo "tailnet ok hacia $DEPLOY_HOST (intento $i)"
+              if nc -zv -w 10 "$DEPLOY_HOST" 22; then
+                exit 0
+              fi
+              echo "::error::$DEPLOY_HOST responde por la tailnet pero el puerto 22 no acepta conexiones (sshd caído o ACL de Tailscale bloqueando :22)"
+              exit 1
+            fi
+            echo "tailscale ping intento $i falló, reintentando en 5s"
+            sleep 5
+          done
+          echo "::group::tailscale status"
+          tailscale status || true
+          echo "::endgroup::"
+          echo "::error::$DEPLOY_HOST no responde por la tailnet. Revisa que el nodo esté online en tailscale status y que el ACL permita al runner llegar a él."
+          exit 1
 
       - name: Trust host key
         run: |
           mkdir -p ~/.ssh
           for i in 1 2 3 4 5 6; do
-            if ssh-keyscan -T 10 -H 100.89.15.17 >> ~/.ssh/known_hosts 2>/tmp/keyscan.err && [ -s ~/.ssh/known_hosts ]; then
+            if ssh-keyscan -T 10 -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts 2>/tmp/keyscan.err && [ -s ~/.ssh/known_hosts ]; then
               echo "ssh-keyscan ok (intento $i)"
               exit 0
             fi
@@ -128,21 +136,42 @@ jobs:
           done
           echo "ssh-keyscan agotó los reintentos"; exit 1
 
-      - name: Backup remoto
+      # Actualiza el checkout del server al commit exacto de este run, guarda
+      # la imagen actual como "previous" y reconstruye solo el servicio
+      # frontend. Si el contenedor nuevo no responde, vuelve a la imagen
+      # anterior. Dockerfile y nginx.conf viven sin trackear en el server y
+      # "git reset --hard" no los toca.
+      - name: Deploy en el server
         run: |
-          STAMP=$(date +%Y%m%d_%H%M%S)
-          ssh root@100.89.15.17 "
-            mkdir -p /var/www/backups/$STAMP &&
-            tar -C /var/www -czf /var/www/backups/$STAMP/delivery-frontend.tgz delivery-frontend
-          "
+          ssh "$DEPLOY_USER@$DEPLOY_HOST" bash -s -- "$GITHUB_SHA" <<'EOF'
+          set -euo pipefail
+          SHA="$1"
+          SRC=/opt/mardev/src/Gestflow-Frontend
+          COMPOSE="docker compose -p aunaro -f /opt/mardev/compose/aunaro.compose.yaml --env-file /opt/mardev/aunaro/config/compose.env --env-file /opt/mardev/aunaro/config/runtime.env"
 
-      # --delete: los assets de Vite van hasheados por contenido — sin esto,
-      # los chunks de builds viejos se acumularían para siempre en el server.
-      - name: Sync frontend build (dist/)
-        run: |
-          rsync -az --delete \
-            dist/ root@100.89.15.17:/var/www/delivery-frontend/
+          cd "$SRC"
+          echo "Commit actual: $(git rev-parse --short HEAD) -> nuevo: ${SHA:0:7}"
+          git fetch --quiet origin main
+          git reset --hard "$SHA"
+
+          docker image tag aunaro-frontend:latest aunaro-frontend:previous
+          $COMPOSE up -d --no-deps --build frontend
+
+          for i in $(seq 1 12); do
+            if curl -sf -o /dev/null http://127.0.0.1:8080/; then
+              echo "frontend ok en :8080 (intento $i)"
+              exit 0
+            fi
+            sleep 5
+          done
+
+          echo "::error::el frontend nuevo no responde en :8080, volviendo a la imagen anterior"
+          $COMPOSE logs --tail 50 frontend || true
+          docker image tag aunaro-frontend:previous aunaro-frontend:latest
+          $COMPOSE up -d --no-deps --no-build frontend
+          exit 1
+          EOF
 
       - name: Health check
         run: |
-          curl -sf -o /dev/null -w "site:%{http_code}\n" "https://gestflow.mardev.cl"
+          curl -sf -o /dev/null -w "site:%{http_code}\n" "$SITE_URL"

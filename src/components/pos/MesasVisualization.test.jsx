@@ -45,6 +45,24 @@ describe('MesasVisualization — grupos de mesas', () => {
     expect(onDeshacerGrupo).toHaveBeenCalledWith(GRUPO)
   })
 
+  it('«Separar» es un botón de verdad: con borde, 40 px de alto y su ícono', () => {
+    render(<MesasVisualization mesas={MESAS} gruposPorMesa={conGrupo} onDeshacerGrupo={onDeshacerGrupo} />)
+
+    const [separar] = screen.getAllByRole('button', { name: 'Separar' })
+    expect(separar).toHaveClass('h-10', 'border', 'rounded-xl')
+    expect(separar.querySelector('svg')).toBeInTheDocument()
+  })
+
+  it('«Separar» no abre la mesa: solo deshace el grupo', async () => {
+    const user = userEvent.setup()
+    render(<MesasVisualization mesas={MESAS} gruposPorMesa={conGrupo} onDeshacerGrupo={onDeshacerGrupo} onMesaSelect={onMesaSelect} />)
+
+    await user.click(screen.getAllByRole('button', { name: 'Separar' })[0])
+
+    expect(onDeshacerGrupo).toHaveBeenCalledTimes(1)
+    expect(onMesaSelect).not.toHaveBeenCalled()
+  })
+
   it('sin grupos no aparece ningún distintivo', () => {
     render(<MesasVisualization mesas={MESAS} gruposPorMesa={new Map()} />)
 

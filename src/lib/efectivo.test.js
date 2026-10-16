@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
-  DENOMINACIONES, cantidadDesdeTexto, desgloseParaApi, etiquetaDenominacion, filasDelDesglose, totalesDelConteo,
+  DENOMINACIONES, cantidadDesdeTexto, etiquetaDenominacion, filasDelDesglose, totalesDelConteo,
 } from './efectivo'
 
 describe('efectivo', () => {
@@ -34,14 +34,6 @@ describe('efectivo', () => {
   it('sin nada contado el total es 0; cantidades inválidas cuentan como 0', () => {
     expect(totalesDelConteo({}).total).toBe(0)
     expect(totalesDelConteo({ 1000: -2, 500: 1.5, 100: 'x' }).total).toBe(0)
-  })
-
-  it('al backend van solo las denominaciones con cantidad', () => {
-    expect(desgloseParaApi({ 10000: 1, 5000: 0, 100: 7 })).toEqual([
-      { denominacion: 10000, tipo: 'billete', cantidad: 1 },
-      { denominacion: 100, tipo: 'moneda', cantidad: 7 },
-    ])
-    expect(desgloseParaApi({})).toEqual([])
   })
 
   it('el desglose que devuelve el backend se ordena de mayor a menor con su subtotal', () => {

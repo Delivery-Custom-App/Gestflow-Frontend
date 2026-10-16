@@ -21,6 +21,7 @@ import {
   atencionDeMesa, fueTraspasada, nombreDePersona, useDatosDeAtencion,
 } from '../../lib/atencionMesas'
 import TraspasarMesasModal from './TraspasarMesasModal'
+import AccionDeMesas from './AccionDeMesas'
 import MesasDadasDeBaja from './MesasDadasDeBaja'
 import { toast } from 'sonner'
 import { puedeVender } from '../../lib/rolesCaja'
@@ -126,6 +127,18 @@ export default function POSModule() {
     }
   }, [deshacerGrupo, refreshMesas, refreshKpis])
 
+  // Por qué una acción de mesas está desactivada (null = disponible). Se muestra
+  // junto al botón; no queda solo en un tooltip.
+  const primeraCarga = mesasLoading && mesas.length === 0
+  const motivoTraspaso = modoAgrupar ? 'Termina de juntar mesas para traspasar.'
+    : primeraCarga ? 'Cargando las mesas…'
+    : mesasError ? 'No se pudieron cargar las mesas.'
+    : mesasEnCurso.length === 0 ? 'No hay mesas en curso para traspasar.'
+    : null
+  const motivoAgrupar = modoAgrupar ? 'Elige las mesas de abajo para juntarlas.'
+    : mesasError ? 'No se pudieron cargar las mesas.'
+    : null
+
   const capacidadSeleccionada = useMemo(
     () => mesas
       .filter((m) => seleccionadas.has(String(m.id)))
@@ -218,21 +231,35 @@ export default function POSModule() {
                 Configura el salón y revisa el estado de las mesas en tiempo real.
               </p>
             </div>
-            {!isWorker && (
-              <div className="flex flex-wrap items-center gap-2">
-                {isV2FeatureEnabled('mpConfig') && (
-                  <button
-                    onClick={() => setShowMPConfig(true)}
-                    className="inline-flex h-10 items-center gap-2 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3 text-sm font-medium text-[hsl(var(--foreground))] hover:bg-[hsl(var(--muted))]"
-                  >
-                    <CreditCard size={16} />
-                    POS
-                  </button>
-                )}
+            {/* Un solo lugar, siempre en el mismo orden y del mismo alto (40 px) que «Crear mesa»:
+                al agrupar o quedarse sin mesas en curso las acciones no se mueven, se desactivan
+                y dicen por qué. El vendedor solo agrupa; traspasar y el resto son del encargado y el dueño. */}
+            <div role="group" aria-label="Acciones de mesas" className="flex flex-wrap items-start gap-2 sm:justify-end">
+              {!isWorker && isV2FeatureEnabled('mpConfig') && (
+                <button
+                  onClick={() => setShowMPConfig(true)}
+                  className="inline-flex h-10 items-center gap-2 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3 text-sm font-medium text-[hsl(var(--foreground))] hover:bg-[hsl(var(--muted))]"
+                >
+                  <CreditCard size={16} />
+                  POS
+                </button>
+              )}
+              {!isWorker && (
                 <label className="inline-flex h-10 items-center gap-2 rounded-xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3 text-sm text-[hsl(var(--foreground))]">
                   <input type="checkbox" checked={verDadasDeBaja} onChange={(e) => setVerDadasDeBaja(e.target.checked)} />
                   Ver dadas de baja
                 </label>
+              )}
+              {/* Solo encargado y dueño: el vendedor no puede ver a sus compañeros para elegir a quién. */}
+              {!isWorker && (
+                <AccionDeMesas icon={ArrowRightLeft} onClick={() => setTraspasando(true)} motivo={motivoTraspaso}>
+                  Traspasar mesas
+                </AccionDeMesas>
+              )}
+              <AccionDeMesas icon={Link2} onClick={() => setModoAgrupar(true)} motivo={motivoAgrupar}>
+                Agrupar mesas
+              </AccionDeMesas>
+              {!isWorker && (
                 <button
                   onClick={() => setShowModal(true)}
                   className="inline-flex h-10 items-center gap-2 rounded-xl bg-[hsl(var(--primary))] px-4 text-sm font-semibold text-white shadow-sm hover:opacity-90"
@@ -240,8 +267,8 @@ export default function POSModule() {
                   <PlusCircle size={16} />
                   Crear mesa
                 </button>
-              </div>
-            )}
+              )}
+            </div>
           </div>
         )}
         {selectedMesa ? (
@@ -291,7 +318,7 @@ export default function POSModule() {
                 <MesasFilters mesas={mesas} filters={mesaFilters} onFiltersChange={setMesaFilters} filteredCount={filteredMesas.length} />
 
                 {/* Juntar mesas para un grupo grande: la atención pasa a ser una sola. */}
-                {modoAgrupar ? (
+                {modoAgrupar && (
                   <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border-2 border-[hsl(var(--primary)/0.4)] bg-[hsl(var(--primary)/0.06)] px-4 py-3">
                     <div className="text-sm text-[hsl(var(--foreground))]">
                       <strong className="font-semibold">{seleccionadas.size} mesa{seleccionadas.size === 1 ? '' : 's'} elegida{seleccionadas.size === 1 ? '' : 's'}</strong>
@@ -300,47 +327,17 @@ export default function POSModule() {
                       )}
                       <p className="text-xs text-[hsl(var(--muted-foreground))]">Solo se pueden juntar mesas libres que no estén ya en un grupo.</p>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={salirDeAgrupar}
-                        className="rounded-lg border border-[hsl(var(--border))] px-3 py-1.5 text-sm text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))] transition-colors"
-                      >
-                        Cancelar
-                      </button>
-                      <button
-                        type="button"
+                    <div className="flex items-start gap-2">
+                      <AccionDeMesas onClick={salirDeAgrupar}>Cancelar</AccionDeMesas>
+                      <AccionDeMesas
+                        variante="primario"
                         onClick={handleCrearGrupo}
-                        disabled={seleccionadas.size < 2 || guardandoGrupo}
-                        className="rounded-lg bg-[hsl(var(--primary))] px-4 py-1.5 text-sm font-semibold text-white shadow-sm transition-opacity hover:opacity-90 disabled:opacity-40"
+                        disabled={guardandoGrupo}
+                        motivo={seleccionadas.size < 2 ? 'Elige al menos 2 mesas.' : null}
                       >
                         {guardandoGrupo ? 'Juntando…' : 'Juntar mesas'}
-                      </button>
+                      </AccionDeMesas>
                     </div>
-                  </div>
-                ) : (
-                  <div className="flex flex-wrap justify-end gap-2">
-                    {/* Solo encargado y dueño: el vendedor no puede ver a sus compañeros para elegir a quién. */}
-                    {!isWorker && (
-                      <button
-                        type="button"
-                        onClick={() => setTraspasando(true)}
-                        disabled={mesasEnCurso.length === 0}
-                        title={mesasEnCurso.length === 0 ? 'No hay mesas en curso' : undefined}
-                        className="inline-flex items-center gap-2 rounded-lg border border-[hsl(var(--border))] px-3 py-1.5 text-sm text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--primary))] hover:border-[hsl(var(--primary))] transition-colors disabled:opacity-40 disabled:hover:text-[hsl(var(--muted-foreground))] disabled:hover:border-[hsl(var(--border))]"
-                      >
-                        <ArrowRightLeft size={14} />
-                        Traspasar mesas
-                      </button>
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => setModoAgrupar(true)}
-                      className="inline-flex items-center gap-2 rounded-lg border border-[hsl(var(--border))] px-3 py-1.5 text-sm text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--primary))] hover:border-[hsl(var(--primary))] transition-colors"
-                    >
-                      <Link2 size={14} />
-                      Agrupar mesas
-                    </button>
                   </div>
                 )}
 
