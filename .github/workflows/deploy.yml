@@ -9,18 +9,20 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    # Fijado para no heredar el salto de ubuntu-latest a Ubuntu 26 sin probarlo.
+    runs-on: ubuntu-24.04
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           # Necesario para poder diffear contra el commit/base anterior en el
           # paso de "archivos modificados" de más abajo.
           fetch-depth: 0
 
-      - uses: actions/setup-node@v4
+      # Misma versión mayor que la imagen de producción (Dockerfile: node:22).
+      - uses: actions/setup-node@v7
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
 
       # Fija la versión de npm que generó package-lock.json. "npm ci" es
@@ -72,7 +74,8 @@ jobs:
     name: Deploy to production
     needs: test
     if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
-    runs-on: ubuntu-latest
+    # Fijado para no heredar el salto de ubuntu-latest a Ubuntu 26 sin probarlo.
+    runs-on: ubuntu-24.04
     environment: production
     concurrency:
       group: gestflow-frontend-deploy
@@ -88,14 +91,25 @@ jobs:
     # frontend desde su checkout en /opt/mardev/src/Gestflow-Frontend vía
     # docker compose (el job "test" ya validó que el build compila).
     steps:
-      # El server solo es alcanzable dentro de la tailnet de GestFlow.
-      - name: Connect to Tailscale
-        uses: tailscale/github-action@v3
+      # Solo para tener scripts/deploy-remote.sh disponible en el runner.
+      - uses: actions/checkout@v7
         with:
+          sparse-checkout: scripts
+
+      # El server solo es alcanzable dentro de la tailnet. Si existen los
+      # secrets TS_OAUTH_CLIENT_ID/TS_OAUTH_SECRET se usa el cliente OAuth
+      # (recomendado, no vence) con los tags de vars.TS_TAGS; si no, la auth
+      # key TS_AUTHKEY.
+      - name: Connect to Tailscale
+        uses: tailscale/github-action@v4
+        with:
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+          tags: ${{ secrets.TS_OAUTH_SECRET != '' && (vars.TS_TAGS || 'tag:ci') || '' }}
           authkey: ${{ secrets.TS_AUTHKEY }}
 
       - name: Set up deploy SSH key
-        uses: webfactory/ssh-agent@v0.9.0
+        uses: webfactory/ssh-agent@v0.10.0
         with:
           ssh-private-key: ${{ secrets.DEPLOY_SSH_KEY }}
 
@@ -136,41 +150,10 @@ jobs:
           done
           echo "ssh-keyscan agotó los reintentos"; exit 1
 
-      # Actualiza el checkout del server al commit exacto de este run, guarda
-      # la imagen actual como "previous" y reconstruye solo el servicio
-      # frontend. Si el contenedor nuevo no responde, vuelve a la imagen
-      # anterior. Dockerfile y nginx.conf viven sin trackear en el server y
-      # "git reset --hard" no los toca.
+      # Ver scripts/deploy-remote.sh: git reset al commit del run, rebuild
+      # solo del frontend y rollback automático a la imagen anterior si falla.
       - name: Deploy en el server
-        run: |
-          ssh "$DEPLOY_USER@$DEPLOY_HOST" bash -s -- "$GITHUB_SHA" <<'EOF'
-          set -euo pipefail
-          SHA="$1"
-          SRC=/opt/mardev/src/Gestflow-Frontend
-          COMPOSE="docker compose -p aunaro -f /opt/mardev/compose/aunaro.compose.yaml --env-file /opt/mardev/aunaro/config/compose.env --env-file /opt/mardev/aunaro/config/runtime.env"
-
-          cd "$SRC"
-          echo "Commit actual: $(git rev-parse --short HEAD) -> nuevo: ${SHA:0:7}"
-          git fetch --quiet origin main
-          git reset --hard "$SHA"
-
-          docker image tag aunaro-frontend:latest aunaro-frontend:previous
-          $COMPOSE up -d --no-deps --build frontend
-
-          for i in $(seq 1 12); do
-            if curl -sf -o /dev/null http://127.0.0.1:8080/; then
-              echo "frontend ok en :8080 (intento $i)"
-              exit 0
-            fi
-            sleep 5
-          done
-
-          echo "::error::el frontend nuevo no responde en :8080, volviendo a la imagen anterior"
-          $COMPOSE logs --tail 50 frontend || true
-          docker image tag aunaro-frontend:previous aunaro-frontend:latest
-          $COMPOSE up -d --no-deps --no-build frontend
-          exit 1
-          EOF
+        run: ssh "$DEPLOY_USER@$DEPLOY_HOST" bash -s -- "$GITHUB_SHA" < scripts/deploy-remote.sh
 
       - name: Health check
         run: |
