@@ -8,7 +8,7 @@ Pipeline en [`.github/workflows/deploy.yml`](../../.github/workflows/deploy.yml)
 PR/push → job "test" (lint diff + tests + cobertura + build)
                 │
                 ▼ (solo si pasa, y solo en push/dispatch sobre main)
-          job "deploy" (build + rsync vía Tailscale al servidor)
+          job "deploy" (Tailscale + SSH a aunaro → docker compose rebuild del frontend)
 ```
 
 ## Disparadores (`on:`)
@@ -29,12 +29,14 @@ PR/push → job "test" (lint diff + tests + cobertura + build)
 
 Depende de que `test` haya pasado (`needs: test`) y solo corre si el evento es `push` a `main` o `workflow_dispatch`.
 
-1. Build de nuevo (entorno limpio del runner de deploy).
-2. Se conecta a la tailnet de Tailscale de GestFlow — el servidor de producción no tiene IP pública, solo es alcanzable ahí.
-3. Carga la SSH key de deploy y espera a que la ruta de tailnet y el host SSH estén listos (con reintentos, porque justo después de levantar Tailscale puede no estar disponible aún).
-4. Hace un backup remoto (`tar`) del directorio actual antes de tocar nada.
-5. Sincroniza `dist/` al servidor con `rsync --delete` (necesario porque Vite hashea los assets por contenido; sin `--delete` los chunks viejos se acumulan para siempre).
-6. Health check contra `https://gestflow.mardev.cl`.
+Producción es **aunaro** (`https://aunaro.mardev.cl`, `100.109.30.79` en la tailnet). El frontend corre como servicio `frontend` del stack docker compose `/opt/mardev/compose/aunaro.compose.yaml`, construido desde el checkout `/opt/mardev/src/Gestflow-Frontend` con el [`Dockerfile`](../../Dockerfile) y el [`nginx.conf`](../../nginx.conf) de este repo. El dominio sale por Cloudflare Tunnel; el server no expone puertos web.
+
+1. Se conecta a la tailnet con `tailscale/github-action` (cliente OAuth si existen sus secrets, si no la auth key).
+2. Carga la SSH key de deploy y espera a que el host responda por la tailnet (`tailscale ping` con reintentos + `nc -zv` al 22). Si no responde, falla mostrando `tailscale status` y la causa probable.
+3. Corre [`scripts/deploy-remote.sh`](../../scripts/deploy-remote.sh) en el server por SSH: `git reset --hard` al commit del run, guarda la imagen actual como `aunaro-frontend:previous` y hace `docker compose up -d --no-deps --build frontend` (no toca backend ni db). Si el contenedor nuevo no responde en `127.0.0.1:8080`, vuelve solo a la imagen anterior y el job falla.
+4. Health check contra `SITE_URL` (`https://aunaro.mardev.cl`).
+
+El build no se repite en el runner de deploy: lo hace el server al construir la imagen (el job `test` ya validó que compila).
 
 Tiene `concurrency` con `cancel-in-progress: false`: si se dispara dos veces, los deploys se encolan en vez de pisarse.
 
@@ -68,7 +70,7 @@ Configurada a nivel de repo (GitHub → Settings → Branches), no en el workflo
 
 ### Si vas a tocar `package.json`/`package-lock.json` (agregar o actualizar una dependencia)
 
-Usá **npm 10.9.2** localmente antes de commitear el lockfile — es la versión fijada en el workflow (steps "Fijar versión de npm"), que corresponde a la que trae Node 20 en el runner de GitHub Actions. `npm ci` es estricto entre versiones de npm para paquetes opcionales por plataforma (ej. `@emnapi/*`, usados por lightningcss/Tailwind): un lockfile escrito con una versión de npm distinta puede fallar en CI con `Missing: X from lock file` aunque el lockfile sea perfectamente válido y funcione en tu máquina. Esto ya pasó una vez (2026-09-22, ver PR #50) al generar el lockfile con npm 11.
+Usá **npm 10.9.2** localmente antes de commitear el lockfile — es la versión fijada en el workflow (steps "Fijar versión de npm"), independiente de la versión de npm que trae Node 22 en el runner de GitHub Actions. `npm ci` es estricto entre versiones de npm para paquetes opcionales por plataforma (ej. `@emnapi/*`, usados por lightningcss/Tailwind): un lockfile escrito con una versión de npm distinta puede fallar en CI con `Missing: X from lock file` aunque el lockfile sea perfectamente válido y funcione en tu máquina. Esto ya pasó una vez (2026-09-22, ver PR #50) al generar el lockfile con npm 11.
 
 Para verificar antes de subir:
 ```bash
@@ -101,11 +103,32 @@ Si el deploy falló por una causa transitoria (ej. la tailnet no estaba lista) y
 
 ### Si el CI está caído y hay que deployar sí o sí
 
-Usar [`deploy.sh`](../../deploy.sh) desde tu máquina — hace el mismo build + backup + rsync que el job `deploy`, pero corriendo local. Requiere acceso SSH al servidor (`root@100.89.15.17`) vía la tailnet de GestFlow.
+Usar [`deploy.sh`](../../deploy.sh) desde tu máquina (`./deploy.sh` despliega `origin/main`, o `./deploy.sh <ref>`). Corre el mismo `scripts/deploy-remote.sh` que el job `deploy`. Requiere estar en la tailnet y acceso SSH a `matias@100.109.30.79`.
 
-### Secrets requeridos (GitHub → Settings → Secrets and variables → Actions, environment `production`)
+### Rollback manual
 
-- `TS_AUTHKEY` — auth key de Tailscale para que el runner se conecte a la tailnet.
-- `DEPLOY_SSH_KEY` — clave privada SSH con acceso a `root@100.89.15.17`.
+Si un deploy quedó arriba pero hay que volver atrás, en el server:
+
+```bash
+docker image tag aunaro-frontend:previous aunaro-frontend:latest
+docker compose -p aunaro -f /opt/mardev/compose/aunaro.compose.yaml --env-file /opt/mardev/aunaro/config/compose.env --env-file /opt/mardev/aunaro/config/runtime.env up -d --no-deps --no-build frontend
+```
+
+O redeployar un commit anterior con `./deploy.sh <sha>`.
+
+### Secrets y variables (GitHub → Settings → Environments → `production`)
+
+Secrets:
+- `DEPLOY_SSH_KEY` — clave privada SSH dedicada al deploy, autorizada en `matias@aunaro`.
+- `TS_OAUTH_CLIENT_ID` + `TS_OAUTH_SECRET` — cliente OAuth de Tailscale (recomendado: no vence). Necesita el scope `auth_keys` y el tag de `TS_TAGS`.
+- `TS_AUTHKEY` — auth key de Tailscale (reusable + ephemeral). Solo se usa si no está el cliente OAuth; vence a los 90 días como máximo.
+
+Las claves de Tailscale deben ser de la tailnet donde está aunaro (`tailaff3e4`), no de otra cuenta.
+
+Variables (todas opcionales, con estos valores por defecto):
+- `DEPLOY_HOST` = `100.109.30.79`
+- `DEPLOY_USER` = `matias`
+- `SITE_URL` = `https://aunaro.mardev.cl`
+- `TS_TAGS` = `tag:ci` (solo con OAuth)
 
 Ninguno de estos secrets es visible en logs ni en el código; están inyectados por GitHub Actions al momento de correr el job `deploy`.
