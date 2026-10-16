@@ -201,7 +201,8 @@ function ConfiguracionPage() {
   const planLabel = business?.plan ? (PLAN_LABEL[business.plan] || business.plan) : null
 
   return (
-    <div className="min-h-full bg-[hsl(var(--background))] px-6 py-8 sm:py-10">
+    // AppShell corta lo que sobra (overflow-hidden): la pantalla trae su propio scroll.
+    <div className="flex-1 overflow-y-auto bg-[hsl(var(--background))] px-6 py-8 sm:py-10">
       <div className="max-w-2xl mx-auto space-y-6">
         <div>
           <h1 className="font-marca text-3xl text-[hsl(var(--foreground))] tracking-tight">Configuración</h1>
