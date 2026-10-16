@@ -202,6 +202,18 @@ describe('MesaWorkspace', () => {
 
     expect(screen.getByRole('button', { name: 'Comanda' })).toBeDisabled()
   })
+
+  // T-42: Imprimir y Cancelar eran solo un ícono de 44 px.
+  it('los botones de la mesa miden 48 px y Imprimir y Cancelar llevan texto', () => {
+    setup({ activeOrders: [{ id: 'order-1', created_at: '2024-01-01T00:00:00Z', items: [] }] })
+    render(<MesaWorkspace mesa={{ ...mesa, state: 'ocupada' }} localId="local1" cajaId="caja1" puedeLiberarMesa onBack={() => {}} onTableUpdated={() => {}} />)
+
+    for (const nombre of ['Liberar mesa', 'Cobrar', 'Imprimir', 'Comanda', 'Cancelar orden']) {
+      const boton = screen.getByRole('button', { name: nombre })
+      expect(boton).toHaveTextContent(nombre)
+      expect(boton).toHaveClass('h-12')
+    }
+  })
 })
 
 describe('MesaWorkspace · editar y quitar ítems (T-30)', () => {

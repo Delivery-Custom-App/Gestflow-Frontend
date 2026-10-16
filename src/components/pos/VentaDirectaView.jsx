@@ -29,7 +29,7 @@ function ProductCard({ product, qty, onAdd, onRemove }) {
       )}
     >
       <div className="min-w-0 flex-1">
-        <p className="text-base font-bold leading-tight text-[hsl(var(--foreground))] line-clamp-2">{product.name}</p>
+        <p className="text-base font-bold leading-tight text-[hsl(var(--foreground))] break-words">{product.name}</p>
         <p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">Stock: {product.stock ?? 0}</p>
         <p className="mt-2 text-lg font-black text-[hsl(var(--primary))]">${formatCLP(product.price || 0)}</p>
       </div>
@@ -37,7 +37,7 @@ function ProductCard({ product, qty, onAdd, onRemove }) {
         {qty > 0 && (
           <button type="button" aria-label={`Quitar ${product.name}`}
             onClick={() => onRemove(product.id)}
-            className="flex h-11 w-11 touch-manipulation items-center justify-center rounded-full border border-[hsl(var(--border))] bg-[hsl(var(--background))] text-2xl font-black shadow-sm transition-colors hover:bg-[hsl(var(--accent))]"
+            className="flex h-12 w-12 touch-manipulation items-center justify-center rounded-full border border-[hsl(var(--border))] bg-[hsl(var(--background))] text-2xl font-black shadow-sm transition-colors hover:bg-[hsl(var(--accent))]"
           >
             −
           </button>

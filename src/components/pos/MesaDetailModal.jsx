@@ -273,7 +273,7 @@ export default function MesaDetailModal({ mesa, localId, cajaId, onClose, onTabl
                   {allItems.filter(it => it.type === 'product' && (selectedQtys[it.key] || 0) > 0).map(it => (
                     <div key={it.key} className="flex items-center justify-between rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-4 py-3 text-sm">
                       <div className="flex-1 min-w-0">
-                        <p className="font-bold truncate">{it.name}</p>
+                        <p className="font-bold break-words">{it.name}</p>
                         <p className="text-xs text-[hsl(var(--muted-foreground))]">${formatCLP(it.price)}</p>
                       </div>
                       <span className="ml-2 shrink-0 rounded-full bg-[hsl(var(--primary))]/10 px-3 py-1 font-black text-[hsl(var(--primary))]">×{selectedQtys[it.key]}</span>
