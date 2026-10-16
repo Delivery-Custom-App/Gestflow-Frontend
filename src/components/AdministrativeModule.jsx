@@ -30,8 +30,7 @@ import RegistrarMovimientoCaja from './turno/RegistrarMovimientoCaja'
 import CerrarTurno from './turno/CerrarTurno'
 import SupervisionTurno from './turno/SupervisionTurno'
 import HistorialTurno from './turno/HistorialTurno'
-import ConteoEfectivo from './turno/ConteoEfectivo'
-import { desgloseParaApi, totalesDelConteo } from '../lib/efectivo'
+import { montoDesdeTexto } from '../lib/fondoEmergencia'
 import TablaTurnos from './turno/TablaTurnos'
 import FondoEmergencia from './FondoEmergencia'
 import NoCobradas from './NoCobradas'
@@ -736,9 +735,9 @@ function AbrirTurnoModal({ localId, onClose, onSaved, onCrearCajaFisica }) {
   // null mientras se cargan: distingue "todavía no sé" de "no hay ninguna".
   const [cajasFisicas, setCajasFisicas] = useState(null)
   const [cajaFisicaId, setCajaFisicaId] = useState('')
-  // Efectivo contado por denominación (T-40): { [valor]: cantidad }.
-  const [cantidades, setCantidades] = useState({})
-  // Abrir en $0 se confirma: así no se abre vacía por olvidar contar.
+  // Total del efectivo con que parte la caja, escrito a mano ("50.000" o "50000").
+  const [monto, setMonto] = useState('')
+  // Abrir en $0 se confirma: así no se abre vacía por olvidar escribir el monto.
   const [confirmarSinEfectivo, setConfirmarSinEfectivo] = useState(false)
   const [saving,  setSaving]  = useState(false)
   const [err,     setErr]     = useState('')
@@ -769,23 +768,18 @@ function AbrirTurnoModal({ localId, onClose, onSaved, onCrearCajaFisica }) {
     setTimeout(onClose, 300)
   }
 
-  const { total } = totalesDelConteo(cantidades)
+  // Vacío es $0: el aviso de abrir sin efectivo lo confirma antes de abrir.
+  const total = montoDesdeTexto(monto) ?? 0
 
-  const cambiarConteo = (nuevas) => {
-    setCantidades(nuevas)
+  const cambiarMonto = (e) => {
+    setMonto(e.target.value)
     setConfirmarSinEfectivo(false)
   }
 
   const abrir = async () => {
     setSaving(true); setErr('')
-    const desglose = desgloseParaApi(cantidades)
     try {
-      await createCaja({
-        caja_fisica_id: cajaFisicaId,
-        monto_apertura: total,
-        // El backend guarda el desglose desde el B-28; antes lo descartaría.
-        ...(isV2FeatureEnabled('desgloseEfectivo') && desglose.length > 0 ? { apertura_desglose: desglose } : {}),
-      })
+      await createCaja({ caja_fisica_id: cajaFisicaId, monto_apertura: total })
       onSaved()
       handleClose()
     } catch (e) {
@@ -878,23 +872,24 @@ function AbrirTurnoModal({ localId, onClose, onSaved, onCrearCajaFisica }) {
               </div>
 
               <div className="flex flex-col gap-1.5">
-                <p className={labelCls}>Efectivo de apertura</p>
+                <label htmlFor="turno-monto" className={labelCls}>Monto de apertura</label>
+                <input id="turno-monto" type="text" inputMode="numeric" autoComplete="off" value={monto}
+                  onChange={cambiarMonto} placeholder="Ej: 50000" disabled={saving} className={inputCls} />
                 <p className="text-xs text-[hsl(var(--muted-foreground))]">
-                  Cuenta cuántos billetes y monedas de cada valor hay en la caja. El total es el efectivo con el que parte
-                  y se compara con él en el arqueo del cierre. Si no hay efectivo, deja todo en 0.
+                  El total del efectivo con el que parte la caja, escrito a mano. Se compara con él en el arqueo del cierre.
+                  Si no hay efectivo, déjalo vacío o en 0.
                 </p>
-                <ConteoEfectivo cantidades={cantidades} onChange={cambiarConteo} disabled={saving} />
               </div>
 
               {confirmarSinEfectivo ? (
                 <div role="alertdialog" aria-labelledby="sin-efectivo-titulo"
                   className="flex flex-col gap-3 rounded-xl border border-amber-300 bg-amber-50 p-4 dark:border-amber-700/50 dark:bg-amber-950/30">
                   <p id="sin-efectivo-titulo" className="text-sm font-semibold text-[hsl(var(--foreground))]">¿Abrir la caja sin efectivo?</p>
-                  <p className="text-xs text-[hsl(var(--muted-foreground))]">No anotaste billetes ni monedas: el turno parte en $0.</p>
+                  <p className="text-xs text-[hsl(var(--muted-foreground))]">No escribiste un monto de apertura: el turno parte en $0.</p>
                   <div className="flex gap-2 justify-end">
                     <button type="button" onClick={() => setConfirmarSinEfectivo(false)} disabled={saving}
                       className="h-11 px-4 rounded-xl text-sm font-medium border border-[hsl(var(--border))] bg-[hsl(var(--card))] text-[hsl(var(--foreground))] hover:bg-[hsl(var(--muted))] transition-colors disabled:opacity-40">
-                      Volver a contar
+                      Volver al monto
                     </button>
                     <button type="submit" disabled={saving}
                       className="h-11 px-5 rounded-xl text-sm font-semibold text-white bg-[hsl(var(--primary))] hover:opacity-90 shadow-sm transition-colors disabled:opacity-50">

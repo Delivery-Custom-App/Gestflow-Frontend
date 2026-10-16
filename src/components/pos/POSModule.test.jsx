@@ -6,19 +6,24 @@ import POSModule from './POSModule'
 
 const sesion = vi.hoisted(() => ({ isWorker: false, user: { id: 'enc' } }))
 const bajaDeMesa = vi.hoisted(() => vi.fn())
+const crearGrupo = vi.hoisted(() => vi.fn())
+// null = las mesas de siempre (MESAS); un test puede poner otras.
+const tablero = vi.hoisted(() => ({ mesas: null }))
 const MESAS = [
   { id: 'm1', name: 'Mesa 1', nombre: 'Mesa 1', state: 'ocupada', capacidad: 4, total: 5000,
     ordenes_en_curso: [{ id: 'o1', caja_id: 'caja-ana', waiter_user_id: 'beto' }] },
   { id: 'm2', name: 'Mesa 2', nombre: 'Mesa 2', state: 'libre', capacidad: 2, total: null, ordenes_en_curso: [] },
+  { id: 'm3', name: 'Mesa 3', nombre: 'Mesa 3', state: 'libre', capacidad: 2, total: null, ordenes_en_curso: [] },
 ]
+const SIN_MESAS_EN_CURSO = MESAS.filter((m) => m.ordenes_en_curso.length === 0)
 
 vi.mock('../../context/AuthContext', () => ({ useAuth: () => sesion }))
 vi.mock('../../hooks/useCajaActiva', () => ({ useCajaActiva: () => ({ cajaId: 'caja-enc' }) }))
 vi.mock('../../hooks/useMesasConEstado', () => ({
-  useMesasConEstado: () => ({ mesas: MESAS, loading: false, error: null, refresh: vi.fn(), deleteMesa: bajaDeMesa }),
+  useMesasConEstado: () => ({ mesas: tablero.mesas ?? MESAS, loading: false, error: null, refresh: vi.fn(), deleteMesa: bajaDeMesa }),
 }))
 vi.mock('../../hooks/useMesasKPIs', () => ({ useMesasKPIs: () => ({ kpis: null, loading: false, error: null, refresh: vi.fn() }) }))
-vi.mock('../../hooks/useGruposDeMesas', () => ({ useGruposDeMesas: () => ({ porMesa: new Map(), crear: vi.fn(), deshacer: vi.fn() }) }))
+vi.mock('../../hooks/useGruposDeMesas', () => ({ useGruposDeMesas: () => ({ porMesa: new Map(), crear: crearGrupo, deshacer: vi.fn() }) }))
 vi.mock('./MesasKPICards', () => ({ default: () => null }))
 vi.mock('./MPConfigDrawer', () => ({ default: () => null }))
 vi.mock('./MesaWorkspace', () => ({ default: ({ atencion }) => <p>mesa abierta · atiende {atencion?.atiende} · antes {atencion?.antes}</p> }))
@@ -47,7 +52,7 @@ function montar() {
 }
 const tarjeta = (nombre) => screen.getByText(nombre).closest('div.group')
 
-beforeEach(() => { sesion.isWorker = false; sesion.user = { id: 'enc' }; bajaDeMesa.mockReset() })
+beforeEach(() => { sesion.isWorker = false; sesion.user = { id: 'enc' }; bajaDeMesa.mockReset(); crearGrupo.mockReset(); tablero.mesas = null })
 
 describe('POSModule · quién atiende y traspasos', () => {
   it('el encargado ve quién atiende cada mesa en curso y quién la atendía', () => {
@@ -119,5 +124,94 @@ describe('POSModule · dar de baja una mesa (T-70)', () => {
     sesion.user = { id: 'ana' }
     montar()
     expect(screen.queryByRole('button', { name: 'Eliminar mesa' })).not.toBeInTheDocument()
+  })
+})
+
+describe('POSModule · acciones de mesas (UI de botones)', () => {
+  const acciones = () => screen.getByRole('group', { name: 'Acciones de mesas' })
+  const nombresDeBotones = () => within(acciones()).getAllByRole('button').map((b) => b.textContent.trim())
+
+  it('Traspasar y Agrupar miden lo mismo que «Crear mesa» (40 px)', () => {
+    montar()
+    for (const nombre of ['Crear mesa', 'Traspasar mesas', 'Agrupar mesas']) {
+      expect(screen.getByRole('button', { name: nombre })).toHaveClass('h-10')
+    }
+  })
+
+  it('están en un solo lugar, junto a «Crear mesa», y en el mismo orden', () => {
+    montar()
+    expect(nombresDeBotones()).toEqual(['POS', 'Traspasar mesas', 'Agrupar mesas', 'Crear mesa'])
+  })
+
+  it('sin mesas en curso, «Traspasar mesas» queda desactivado y dice por qué a la vista', () => {
+    tablero.mesas = SIN_MESAS_EN_CURSO
+    montar()
+
+    const boton = screen.getByRole('button', { name: 'Traspasar mesas' })
+    expect(boton).toBeDisabled()
+    expect(screen.getByText('No hay mesas en curso para traspasar.')).toBeVisible()
+    expect(boton).toHaveAccessibleDescription('No hay mesas en curso para traspasar.')
+    // Desactivado no es «casi invisible»: no se baja la opacidad del botón.
+    expect(boton.className).not.toMatch(/opacity/)
+  })
+
+  it('con mesas en curso «Traspasar mesas» está activo y no muestra ningún motivo', () => {
+    montar()
+    expect(screen.getByRole('button', { name: 'Traspasar mesas' })).toBeEnabled()
+    expect(screen.queryByText(/No hay mesas en curso/)).not.toBeInTheDocument()
+  })
+
+  it('al agrupar, las acciones siguen en su lugar: se desactivan y dicen por qué', async () => {
+    const user = userEvent.setup()
+    montar()
+
+    await user.click(screen.getByRole('button', { name: 'Agrupar mesas' }))
+
+    expect(nombresDeBotones()).toEqual(['POS', 'Traspasar mesas', 'Agrupar mesas', 'Crear mesa'])
+    expect(screen.getByRole('button', { name: 'Traspasar mesas' })).toBeDisabled()
+    expect(screen.getByText('Termina de juntar mesas para traspasar.')).toBeVisible()
+    expect(screen.getByRole('button', { name: 'Agrupar mesas' })).toBeDisabled()
+    expect(screen.getByText('Elige las mesas de abajo para juntarlas.')).toBeVisible()
+  })
+
+  it('«Juntar mesas» mide 40 px, dice que faltan mesas y se activa con dos elegidas', async () => {
+    const user = userEvent.setup()
+    montar()
+    await user.click(screen.getByRole('button', { name: 'Agrupar mesas' }))
+
+    const juntar = screen.getByRole('button', { name: 'Juntar mesas' })
+    expect(juntar).toHaveClass('h-10')
+    expect(screen.getByRole('button', { name: 'Cancelar' })).toHaveClass('h-10')
+    expect(juntar).toBeDisabled()
+    expect(screen.getByText('Elige al menos 2 mesas.')).toBeVisible()
+
+    await user.click(screen.getByText('Mesa 2').closest('button'))
+    expect(juntar).toBeDisabled()
+    await user.click(screen.getByText('Mesa 3').closest('button'))
+
+    expect(juntar).toBeEnabled()
+    expect(screen.queryByText('Elige al menos 2 mesas.')).not.toBeInTheDocument()
+    await user.click(juntar)
+    expect(crearGrupo).toHaveBeenCalledWith(['m2', 'm3'])
+  })
+
+  it('«Cancelar» sale de agrupar y las acciones vuelven a estar activas', async () => {
+    const user = userEvent.setup()
+    montar()
+    await user.click(screen.getByRole('button', { name: 'Agrupar mesas' }))
+    await user.click(screen.getByRole('button', { name: 'Cancelar' }))
+
+    expect(screen.getByRole('button', { name: 'Agrupar mesas' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: 'Traspasar mesas' })).toBeEnabled()
+    expect(screen.queryByRole('button', { name: 'Juntar mesas' })).not.toBeInTheDocument()
+  })
+
+  it('el vendedor solo tiene «Agrupar mesas», en el mismo grupo de acciones y del mismo alto', () => {
+    sesion.isWorker = true
+    sesion.user = { id: 'ana' }
+    montar()
+
+    expect(nombresDeBotones()).toEqual(['Agrupar mesas'])
+    expect(screen.getByRole('button', { name: 'Agrupar mesas' })).toHaveClass('h-10')
   })
 })
