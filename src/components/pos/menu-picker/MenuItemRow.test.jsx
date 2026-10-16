@@ -32,6 +32,20 @@ describe('MenuItemRow', () => {
     expect(onAdd).toHaveBeenCalledWith('p:1')
   })
 
+  // T-42: "Agua prueba…" se veía cortado. El nombre se parte en las líneas que necesite.
+  it('el nombre largo no se corta ni se recorta con «…»', () => {
+    const largo = { ...item, name: 'Agua prueba con nombre largo para que se corte' }
+    render(<MenuItemRow item={largo} qty={0} onAdd={() => {}} onRemove={() => {}} />)
+    const nombre = screen.getByText(largo.name)
+    expect(nombre.className).not.toMatch(/line-clamp|truncate|text-ellipsis/)
+  })
+
+  it('los botones de sumar y restar miden 48 px (h-12)', () => {
+    render(<MenuItemRow item={item} qty={1} onAdd={() => {}} onRemove={() => {}} />)
+    expect(screen.getByRole('button', { name: 'Agregar Bebida' })).toHaveClass('h-12', 'w-12')
+    expect(screen.getByRole('button', { name: 'Quitar Bebida' })).toHaveClass('h-12', 'w-12')
+  })
+
   it('tocar − llama onRemove con la key del item', async () => {
     const user = userEvent.setup()
     const onRemove = vi.fn()

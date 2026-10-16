@@ -119,7 +119,7 @@ function ProductList({ products = NO_PRODUCTS, orderId = null, createdAt = null,
                 tabIndex={isEditing ? -1 : 0}
                 onKeyDown={(e) => { if (!isEditing && (e.key === 'Enter' || e.key === ' ')) setSelectedProduct(product) }}
               >
-                <span className="text-[hsl(var(--foreground))] font-medium truncate">
+                <span className="text-[hsl(var(--foreground))] font-medium break-words">
                   {product.product_name || 'Producto sin nombre'}
                 </span>
                 {!validation.hasName && (

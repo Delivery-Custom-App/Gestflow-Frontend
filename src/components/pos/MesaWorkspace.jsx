@@ -32,6 +32,9 @@ import {
 
 const EMPTY_CUSTOMIZATION = { embutido: null, agregados: [] }
 
+// Botones de la barra de acciones de la mesa: 48 px de alto y con texto, para tocarlos en tablet.
+const BOTON_ACCION = 'h-12 min-w-[140px] flex-1 rounded-xl text-base [&_svg]:size-5'
+
 const formatItemName = (item) => item.item_name || item.product_name || '—'
 
 export default function MesaWorkspace({ mesa, atencion = null, localId, cajaId, puedeCobrar = true, puedeLiberarMesa = false, onBack, onTableUpdated }) {
@@ -415,7 +418,7 @@ export default function MesaWorkspace({ mesa, atencion = null, localId, cajaId, 
               variant="outline"
               onClick={() => { setErrorMsg(''); setOfferLiberar(false); setShowLiberarModal(true) }}
               disabled={cobrarLoading || cancelLoading}
-              className="h-11 rounded-xl"
+              className={BOTON_ACCION}
             >
               Liberar mesa
             </Button>
@@ -423,53 +426,53 @@ export default function MesaWorkspace({ mesa, atencion = null, localId, cajaId, 
           {puedeCobrar && <Button
             onClick={handleCobrar}
             disabled={cobrarLoading || cancelLoading || !detail?.active_orders?.length || (hasSplits && !splitFullyPaid)}
-            className="flex-1 min-w-[120px] h-11 rounded-xl font-semibold shadow-sm bg-[hsl(var(--primary))] hover:bg-[hsl(var(--primary))]/90 text-white disabled:opacity-50"
+            className={cn(BOTON_ACCION, 'font-semibold shadow-sm bg-[hsl(var(--primary))] hover:bg-[hsl(var(--primary))]/90 text-white disabled:opacity-50')}
             title={hasSplits && !splitFullyPaid ? 'Aprueba todos los pagos divididos primero' : ''}
           >
-            <DollarSign size={18} className="mr-2" />
+            <DollarSign />
             {cobrarLoading ? 'Procesando...' : 'Cobrar'}
           </Button>}
           <Button
             onClick={handlePrintChargeDetail}
             disabled={!detail?.active_orders?.length}
             variant="outline"
-            size="icon"
-            className="h-11 w-11 rounded-xl"
+            className={BOTON_ACCION}
             title="Imprimir detalle"
           >
-            <Printer size={18} />
+            <Printer />
+            Imprimir
           </Button>
           {/* La comanda de cocina se ve e imprime desde la mesa: la pantalla de Cocina está apagada (`kitchenView`). */}
           <ComandaActions
             orderId={firstOrder?.id}
             createdAt={firstOrder?.created_at}
-            className="h-11 rounded-xl"
+            className={BOTON_ACCION}
           />
           {isV2FeatureEnabled('splitPayments') && firstOrder?.id && (
             <Button
               onClick={() => setShowSplitModal(true)}
               disabled={!detail?.active_orders?.length}
               variant="outline"
-              size="icon"
               className={cn(
-                'h-11 w-11 rounded-xl',
+                BOTON_ACCION,
                 hasSplits && splitFullyPaid && 'border-green-500 bg-green-50 text-green-700 hover:bg-green-100',
                 hasSplits && !splitFullyPaid && 'border-yellow-500 bg-yellow-50 text-yellow-700 hover:bg-yellow-100'
               )}
               title={hasSplits && splitFullyPaid ? 'Pago dividido completo' : 'Dividir pago'}
             >
-              <Split size={18} />
+              <Split />
+              Dividir pago
             </Button>
           )}
           <Button
             onClick={handleCancelOrder}
             disabled={cancelLoading || cobrarLoading || !detail?.active_orders?.length}
             variant="outline"
-            size="icon"
-            className="h-11 w-11 rounded-xl border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300"
+            className={cn(BOTON_ACCION, 'border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300')}
             title="Cancelar orden"
           >
-            <X size={18} />
+            <X />
+            Cancelar orden
           </Button>
         </div>
         {!puedeCobrar && (
