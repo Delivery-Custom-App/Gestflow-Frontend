@@ -42,7 +42,7 @@ export function ordenCorta(orderId) {
 }
 
 /** Evita que un nombre con < o & rompa el papel. */
-function esc(texto) {
+export function esc(texto) {
   return String(texto ?? '').replace(/[&<>"']/g, (c) => (
     { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
   ))
@@ -63,7 +63,7 @@ const ESTILOS = `
   @media print { @page { margin: 0; size: ${ANCHO_TICKET_MM}mm auto; } }
 `
 
-function documento(titulo, cuerpo) {
+export function documento(titulo, cuerpo) {
   return `<!doctype html><html lang="es"><head><meta charset="utf-8"/><title>${esc(titulo)}</title><style>${ESTILOS}</style></head><body>${cuerpo}</body></html>`
 }
 

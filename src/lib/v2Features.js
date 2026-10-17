@@ -69,12 +69,6 @@ export const V2_FEATURES = {
    */
   fondoEmergencia: true,
   /**
-   * Contar el efectivo del cierre por billetes y monedas (T-40): el cierre del
-   * turno ofrece el conteo y manda el total como `monto_cierre_declarado`. La
-   * apertura no cuenta: su monto se escribe a mano como un solo total.
-   */
-  desgloseEfectivo: false,
-  /**
    * Cobro con tarjeta por el punto único del backend (T-76):
    * `/payments/card/orders/{id}/…` en vez de `/payments/point/orders/{id}/…`.
    * El servidor decide si la máquina del turno cobra con Mercado Pago o con

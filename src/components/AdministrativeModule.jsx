@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Navigate, useLocation, useParams } from 'react-router'
 import { parseApiDate } from '../utils/chileDateTime'
 import LoadingSpinner from './LoadingSpinner'
@@ -23,7 +23,9 @@ import { textosNoCobradas } from '../lib/noCobradas'
 import { isAlPasoLocal } from '../lib/salesModel'
 import { useSelectedLocal } from '../hooks/useSelectedLocal'
 import { nombreDeVendedor, opcionesDeVendedor, useTurnosFiltrados } from '../lib/registroTurnos'
-import { monto, textoDiferencia } from '../lib/arqueo'
+import { diferenciaDe, monto, textoDiferencia } from '../lib/arqueo'
+import { ultimoCierreDeCaja } from '../lib/cierreCaja'
+import { nombreVisible } from '../lib/altaUsuario'
 import { puedeVender } from '../lib/rolesCaja'
 import DetalleTurno from './turno/DetalleTurno'
 import RegistrarMovimientoCaja from './turno/RegistrarMovimientoCaja'
@@ -527,6 +529,8 @@ function FlujoCajaContent({ localId, dashboard, cajas, cajasFisicas, usuarios, r
               cerradoPor: c.closed_by_user_id ? nombreDeVendedor(usuariosPorId, c.closed_by_user_id) : null,
               nombreDeUsuario: (id) => nombreDeVendedor(usuariosPorId, id),
               usuarios: safeArray(usuarios),
+              // Si el rol no lista las cajas físicas, igual viaja el id: el cierre sabe de cuál es el turno.
+              cajaFisica: cajasFisicasList.find((cf) => String(cf.id) === String(c.caja_fisica_id)) ?? { id: c.caja_fisica_id },
             }) : undefined}
             vacio={filtrados.cargando ? 'Buscando turnos…' : filtroVendedor || filtroFecha ? 'No hay turnos con esos filtros.' : 'Este local todavía no tiene turnos de caja.'}
           />
@@ -731,7 +735,7 @@ function ConfiguracionContent({ localId }) {
 
 // ── Modal de apertura de turno ───────────────────────────────
 
-function AbrirTurnoModal({ localId, onClose, onSaved, onCrearCajaFisica }) {
+function AbrirTurnoModal({ localId, cajas = [], onClose, onSaved, onCrearCajaFisica }) {
   // null mientras se cargan: distingue "todavía no sé" de "no hay ninguna".
   const [cajasFisicas, setCajasFisicas] = useState(null)
   const [cajaFisicaId, setCajaFisicaId] = useState('')
@@ -770,6 +774,9 @@ function AbrirTurnoModal({ localId, onClose, onSaved, onCrearCajaFisica }) {
 
   // Vacío es $0: el aviso de abrir sin efectivo lo confirma antes de abrir.
   const total = montoDesdeTexto(monto) ?? 0
+  // Lo que se contó al cerrar el último turno de esta caja es lo que quedó en ella: se compara con lo que se escribe.
+  const cierreAnterior = cajaFisicaId ? ultimoCierreDeCaja(cajas, cajaFisicaId) : null
+  const diferenciaConCierre = cierreAnterior && monto.trim() !== '' ? diferenciaDe(total, cierreAnterior.contado) : null
 
   const cambiarMonto = (e) => {
     setMonto(e.target.value)
@@ -879,6 +886,26 @@ function AbrirTurnoModal({ localId, onClose, onSaved, onCrearCajaFisica }) {
                   El total del efectivo con el que parte la caja, escrito a mano. Se compara con él en el arqueo del cierre.
                   Si no hay efectivo, déjalo vacío o en 0.
                 </p>
+                {cierreAnterior && (
+                  <div role="note" aria-label="Lo que quedó en la caja al cerrar" className="flex flex-col gap-1 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--muted)/0.4)] px-3 py-2">
+                    <p className="text-xs text-[hsl(var(--foreground))]">
+                      Al cerrar el turno del {formatBusinessDate(cierreAnterior.businessDate)} quedaron{' '}
+                      <strong data-testid="quedo-en-la-caja">{formatMoney(cierreAnterior.contado)}</strong> en esta caja.
+                    </p>
+                    {diferenciaConCierre !== null && (
+                      <p data-testid="apertura-vs-cierre" className={cn('text-xs font-semibold',
+                        diferenciaConCierre < 0 ? 'text-red-600' : diferenciaConCierre > 0 ? 'text-amber-700' : 'text-emerald-700')}>
+                        {diferenciaConCierre === 0 ? 'Cuadra con lo que quedó' : `${textoDiferencia(diferenciaConCierre)} respecto de lo que quedó`}
+                      </p>
+                    )}
+                    {diferenciaConCierre !== 0 && (
+                      <button type="button" onClick={() => cambiarMonto({ target: { value: String(cierreAnterior.contado) } })} disabled={saving}
+                        className="self-start text-xs font-semibold text-[hsl(var(--primary))] hover:underline disabled:opacity-50">
+                        Usar este monto
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
 
               {confirmarSinEfectivo ? (
@@ -922,6 +949,7 @@ function AbrirTurnoModal({ localId, onClose, onSaved, onCrearCajaFisica }) {
  * egresos, apertura y total esperado (DetalleTurno), y el cierre del arqueo.
  */
 function CajaMovimientosModal({ caja, onClose, onClosed, puedeRegistrarMovimientos = false }) {
+  const { user } = useAuth()
   const [visible, setVisible] = useState(false)
   // T-55: el cierre pide el efectivo contado (arqueo).
   const [cerrandoTurno, setCerrandoTurno] = useState(false)
@@ -932,8 +960,11 @@ function CajaMovimientosModal({ caja, onClose, onClosed, puedeRegistrarMovimient
   // T-43: historial del turno, bajo pedido.
   const [verHistorial, setVerHistorial] = useState(false)
   const isOpen = caja.status === 'open' || caja.is_active
+  const formularioMovimiento = useRef(null)
 
   useEffect(() => { requestAnimationFrame(() => setVisible(true)) }, [])
+  // Al venir del cierre a registrar un retiro, el formulario queda arriba: se lleva a la vista.
+  useEffect(() => { if (registrando) formularioMovimiento.current?.scrollIntoView?.({ block: 'nearest' }) }, [registrando])
 
   const handleClose = () => {
     setVisible(false)
@@ -971,15 +1002,17 @@ function CajaMovimientosModal({ caja, onClose, onClosed, puedeRegistrarMovimient
           {aviso && <p role="status" className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800">{aviso}</p>}
           {isOpen && puedeRegistrarMovimientos && (
             registrando ? (
-              <RegistrarMovimientoCaja
-                cajaId={caja.id}
-                onCancelar={() => setRegistrando(false)}
-                onRegistrado={({ tipo, monto }) => {
-                  setRegistrando(false)
-                  setAviso(`${tipo === 'egreso' ? 'Retiro o gasto' : 'Ingreso'} de ${formatMoney(monto)} registrado.`)
-                  setVersion((v) => v + 1)
-                }}
-              />
+              <div ref={formularioMovimiento}>
+                <RegistrarMovimientoCaja
+                  cajaId={caja.id}
+                  onCancelar={() => setRegistrando(false)}
+                  onRegistrado={({ tipo, monto }) => {
+                    setRegistrando(false)
+                    setAviso(`${tipo === 'egreso' ? 'Retiro o gasto' : 'Ingreso'} de ${formatMoney(monto)} registrado.`)
+                    setVersion((v) => v + 1)
+                  }}
+                />
+              </div>
             ) : (
               <Button size="sm" variant="outline" className="self-start" onClick={() => { setRegistrando(true); setAviso('') }}>
                 Registrar movimiento
@@ -1005,8 +1038,17 @@ function CajaMovimientosModal({ caja, onClose, onClosed, puedeRegistrarMovimient
               <CerrarTurno
                 cajaId={caja.id}
                 localId={caja.local_id}
+                cajaFisica={caja.cajaFisica}
+                localNombre={caja.localNombre}
+                vendedor={caja.vendedor}
+                cierra={user ? nombreVisible(user) : ''}
+                usuarios={caja.usuarios}
+                nombreDeUsuario={caja.nombreDeUsuario}
+                // Un retiro cambia el efectivo esperado: se registra antes de contar (el cierre vuelve a abrirse después).
+                onRegistrarRetiro={puedeRegistrarMovimientos ? () => { setCerrandoTurno(false); setRegistrando(true); setAviso('') } : undefined}
                 onCancelar={() => setCerrandoTurno(false)}
-                onCerrado={() => { onClosed?.(); handleClose() }}
+                onCierreRegistrado={() => onClosed?.()}
+                onCerrado={handleClose}
               />
             ) : (
               <button
@@ -1146,6 +1188,7 @@ function AdministrativeModule() {
       {showNuevaCaja && (
         <AbrirTurnoModal
           localId={localId}
+          cajas={sectionData.cajas}
           onClose={() => setShowNuevaCaja(false)}
           onSaved={() => setRefreshKey(k => k + 1)}
           onCrearCajaFisica={puedeGestionarCajasFisicas
@@ -1266,7 +1309,7 @@ function AdministrativeModule() {
           onGestionarCajaFisica: puedeGestionarCajasFisicas && isV2FeatureEnabled('cajaMpPairing') ? setCajaFisicaModal : undefined,
           detalleLoading,
           onManagePairing: puedeGestionarCajasFisicas && isV2FeatureEnabled('cajaMpPairing') ? setPairingCaja : undefined,
-          onViewMovimientos: isV2FeatureEnabled('movimientosCaja') ? setMovimientosCaja : undefined,
+          onViewMovimientos: isV2FeatureEnabled('movimientosCaja') ? (c) => setMovimientosCaja({ ...c, localNombre: localActual?.name || '' }) : undefined,
         })}
       </main>
     </>

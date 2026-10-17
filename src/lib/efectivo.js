@@ -1,7 +1,7 @@
 /**
  * Efectivo contado por denominación (T-40): billetes y monedas del cajón. Se
- * usa al cerrar el turno (bandera `desgloseEfectivo`); la apertura no cuenta:
- * su monto se escribe a mano como un solo total.
+ * cuenta siempre al cerrar el turno de una caja física (T-55); la apertura no
+ * cuenta: su monto se escribe a mano como un solo total.
  */
 import { formatCLP } from './formatCLP'
 
