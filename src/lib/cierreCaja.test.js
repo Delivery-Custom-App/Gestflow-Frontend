@@ -105,7 +105,7 @@ describe('ultimoCierreDeCaja', () => {
   ]
 
   it('es lo contado al cerrar el último turno de esa caja física', () => {
-    expect(ultimoCierreDeCaja(CAJAS, 'cf1')).toEqual({ contado: 48200, closedAt: '2026-10-16T23:00:00Z', businessDate: '2026-10-16' })
+    expect(ultimoCierreDeCaja(CAJAS, 'cf1')).toEqual({ contado: 48200, closedAt: '2026-10-16T23:00:00Z', businessDate: '2026-10-16', closedBy: null })
   })
 
   it('si el último turno se cerró sin contar, no se usa un conteo más viejo', () => {

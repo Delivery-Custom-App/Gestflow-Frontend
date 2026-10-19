@@ -24,15 +24,16 @@ import { isAlPasoLocal } from '../lib/salesModel'
 import { useSelectedLocal } from '../hooks/useSelectedLocal'
 import { nombreDeVendedor, opcionesDeVendedor, useTurnosFiltrados } from '../lib/registroTurnos'
 import { diferenciaDe, monto, textoDiferencia } from '../lib/arqueo'
-import { ultimoCierreDeCaja } from '../lib/cierreCaja'
+import { esCajaDigital, ultimoCierreDeCaja } from '../lib/cierreCaja'
+import { totalesDelConteo } from '../lib/efectivo'
+import ConteoEfectivo from './turno/ConteoEfectivo'
 import { nombreVisible } from '../lib/altaUsuario'
-import { puedeVender } from '../lib/rolesCaja'
+import { puedeAbrirCaja } from '../lib/rolesCaja'
 import DetalleTurno from './turno/DetalleTurno'
 import RegistrarMovimientoCaja from './turno/RegistrarMovimientoCaja'
 import CerrarTurno from './turno/CerrarTurno'
 import SupervisionTurno from './turno/SupervisionTurno'
 import HistorialTurno from './turno/HistorialTurno'
-import { montoDesdeTexto } from '../lib/fondoEmergencia'
 import TablaTurnos from './turno/TablaTurnos'
 import FondoEmergencia from './FondoEmergencia'
 import NoCobradas from './NoCobradas'
@@ -264,7 +265,7 @@ function SectionActions({ activeSection, onNuevaCaja, puedeAbrirTurno = true }) 
   if (activeSection === 'ventas') {
     return null
   }
-  // A-03: en restaurante el administrador no tiene caja propia (no abre turno).
+  // El encargado y el dueño abren la caja con el fondo; el trabajador no (rolesCaja).
   if (activeSection === 'flujo-caja' && puedeAbrirTurno) {
     return (
       <div className="flex gap-2">
@@ -735,13 +736,26 @@ function ConfiguracionContent({ localId }) {
 
 // ── Modal de apertura de turno ───────────────────────────────
 
-function AbrirTurnoModal({ localId, cajas = [], onClose, onSaved, onCrearCajaFisica }) {
+/**
+ * Apertura de la caja del día por el encargado o el dueño.
+ *
+ * - Caja física: se cuentan billetes y monedas (`ConteoEfectivo`); el total va
+ *   como `monto_apertura`. Sin efectivo se abre en $0, confirmándolo.
+ * - Caja digital: no hay efectivo que contar; se abre en $0 sin preguntar.
+ * - Solo se ofrecen las cajas activas del local en que se trabaja, con su tipo,
+ *   y se dice dónde queda el turno.
+ * - En una caja física se muestra lo que se contó en su último cierre (quién y
+ *   cuándo) y se compara con lo contado ahora. El backend no guarda una nota de
+ *   apertura ni el desglose por billete: la comparación es por el total y solo
+ *   se avisa.
+ */
+function AbrirTurnoModal({ localId, localNombre = '', cajas = [], usuarios = [], onClose, onSaved, onCrearCajaFisica }) {
   // null mientras se cargan: distingue "todavía no sé" de "no hay ninguna".
   const [cajasFisicas, setCajasFisicas] = useState(null)
   const [cajaFisicaId, setCajaFisicaId] = useState('')
-  // Total del efectivo con que parte la caja, escrito a mano ("50.000" o "50000").
-  const [monto, setMonto] = useState('')
-  // Abrir en $0 se confirma: así no se abre vacía por olvidar escribir el monto.
+  // Billetes y monedas contados en una caja física: { [valor]: cantidad }.
+  const [cantidades, setCantidades] = useState({})
+  // Abrir en $0 se confirma: así no se abre vacía por olvidar contar.
   const [confirmarSinEfectivo, setConfirmarSinEfectivo] = useState(false)
   const [saving,  setSaving]  = useState(false)
   const [err,     setErr]     = useState('')
@@ -772,15 +786,30 @@ function AbrirTurnoModal({ localId, cajas = [], onClose, onSaved, onCrearCajaFis
     setTimeout(onClose, 300)
   }
 
-  // Vacío es $0: el aviso de abrir sin efectivo lo confirma antes de abrir.
-  const total = montoDesdeTexto(monto) ?? 0
-  // Lo que se contó al cerrar el último turno de esta caja es lo que quedó en ella: se compara con lo que se escribe.
-  const cierreAnterior = cajaFisicaId ? ultimoCierreDeCaja(cajas, cajaFisicaId) : null
-  const diferenciaConCierre = cierreAnterior && monto.trim() !== '' ? diferenciaDe(total, cierreAnterior.contado) : null
+  const cajaElegida = (cajasFisicas || []).find((cf) => String(cf.id) === String(cajaFisicaId)) || null
+  const digital = esCajaDigital(cajaElegida)
+  const { total: contado } = totalesDelConteo(cantidades)
+  // Una caja digital no tiene efectivo: parte en $0.
+  const total = digital ? 0 : contado
+  const contoAlgo = Object.values(cantidades).some((n) => Number(n) > 0)
+  // Lo que se contó al cerrar el último turno de esta caja es lo que quedó en ella: se compara con lo contado.
+  const cierreAnterior = cajaFisicaId && !digital ? ultimoCierreDeCaja(cajas, cajaFisicaId) : null
+  const diferenciaConCierre = cierreAnterior && contoAlgo ? diferenciaDe(total, cierreAnterior.contado) : null
+  const quienCerro = cierreAnterior?.closedBy
+    ? nombreDeVendedor(new Map((usuarios || []).map((u) => [String(u.id), u])), cierreAnterior.closedBy)
+    : null
 
-  const cambiarMonto = (e) => {
-    setMonto(e.target.value)
+  const cambiarConteo = (nuevas) => {
+    setCantidades(nuevas)
     setConfirmarSinEfectivo(false)
+  }
+
+  const elegirCaja = (id) => {
+    setCajaFisicaId(id)
+    // Al cambiar de caja (física o digital) no se arrastra lo contado en otra.
+    setCantidades({})
+    setConfirmarSinEfectivo(false)
+    setErr('')
   }
 
   const abrir = async () => {
@@ -803,7 +832,7 @@ function AbrirTurnoModal({ localId, cajas = [], onClose, onSaved, onCrearCajaFis
   const handleSubmit = (e) => {
     e.preventDefault()
     if (!cajaFisicaId) { setErr('Elige la caja física donde se abre el turno'); return }
-    if (total === 0 && !confirmarSinEfectivo) { setErr(''); setConfirmarSinEfectivo(true); return }
+    if (!digital && total === 0 && !confirmarSinEfectivo) { setErr(''); setConfirmarSinEfectivo(true); return }
     abrir()
   }
 
@@ -869,54 +898,61 @@ function AbrirTurnoModal({ localId, cajas = [], onClose, onSaved, onCrearCajaFis
                 <label htmlFor="turno-caja-fisica" className={labelCls}>Caja física</label>
                 {/* Foco al abrir el drawer: patrón de diálogo accesible (WAI-ARIA APG). */}
                 {/* oxlint-disable-next-line react-doctor/no-autofocus */}
-                <select id="turno-caja-fisica" value={cajaFisicaId} onChange={e => setCajaFisicaId(e.target.value)} className={inputCls} required autoFocus>
+                <select id="turno-caja-fisica" value={cajaFisicaId} onChange={e => elegirCaja(e.target.value)} className={inputCls} required autoFocus>
                   <option value="">Elige una caja física</option>
                   {cajasFisicas.map((cf) => (
-                    <option key={cf.id} value={cf.id}>{cf.name || 'Caja física sin nombre'}</option>
+                    <option key={cf.id} value={cf.id}>{`${cf.name || 'Caja física sin nombre'} · ${esCajaDigital(cf) ? 'Digital' : 'Física'}`}</option>
                   ))}
                 </select>
                 <p className="text-xs text-[hsl(var(--muted-foreground))]">El puesto donde se atiende. El turno queda asociado a ella.</p>
-              </div>
-
-              <div className="flex flex-col gap-1.5">
-                <label htmlFor="turno-monto" className={labelCls}>Monto de apertura</label>
-                <input id="turno-monto" type="text" inputMode="numeric" autoComplete="off" value={monto}
-                  onChange={cambiarMonto} placeholder="Ej: 50000" disabled={saving} className={inputCls} />
-                <p className="text-xs text-[hsl(var(--muted-foreground))]">
-                  El total del efectivo con el que parte la caja, escrito a mano. Se compara con él en el arqueo del cierre.
-                  Si no hay efectivo, déjalo vacío o en 0.
-                </p>
-                {cierreAnterior && (
-                  <div role="note" aria-label="Lo que quedó en la caja al cerrar" className="flex flex-col gap-1 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--muted)/0.4)] px-3 py-2">
-                    <p className="text-xs text-[hsl(var(--foreground))]">
-                      Al cerrar el turno del {formatBusinessDate(cierreAnterior.businessDate)} quedaron{' '}
-                      <strong data-testid="quedo-en-la-caja">{formatMoney(cierreAnterior.contado)}</strong> en esta caja.
-                    </p>
-                    {diferenciaConCierre !== null && (
-                      <p data-testid="apertura-vs-cierre" className={cn('text-xs font-semibold',
-                        diferenciaConCierre < 0 ? 'text-red-600' : diferenciaConCierre > 0 ? 'text-amber-700' : 'text-emerald-700')}>
-                        {diferenciaConCierre === 0 ? 'Cuadra con lo que quedó' : `${textoDiferencia(diferenciaConCierre)} respecto de lo que quedó`}
-                      </p>
-                    )}
-                    {diferenciaConCierre !== 0 && (
-                      <button type="button" onClick={() => cambiarMonto({ target: { value: String(cierreAnterior.contado) } })} disabled={saving}
-                        className="self-start text-xs font-semibold text-[hsl(var(--primary))] hover:underline disabled:opacity-50">
-                        Usar este monto
-                      </button>
-                    )}
-                  </div>
+                {cajaElegida && (
+                  <p data-testid="apertura-donde" className="text-xs font-medium text-[hsl(var(--foreground))]">
+                    Se abrirá en: {[localNombre, cajaElegida.name || 'Caja física sin nombre'].filter(Boolean).join(' · ')}
+                  </p>
                 )}
               </div>
+
+              {cajaElegida && digital && (
+                <p className="rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--muted)/0.4)] px-3 py-2 text-xs text-[hsl(var(--muted-foreground))]">
+                  Es una caja digital: no hay efectivo que contar y el turno parte en $0.
+                </p>
+              )}
+
+              {cajaElegida && !digital && (
+                <div className="flex flex-col gap-1.5">
+                  <p className={labelCls}>Efectivo de apertura</p>
+                  <p className="text-xs text-[hsl(var(--muted-foreground))]">
+                    Cuenta cuántos billetes y monedas de cada valor hay en la caja. El total es el efectivo con el que parte
+                    y se compara con él en el arqueo del cierre. Si no hay efectivo, deja todo en 0.
+                  </p>
+                  {cierreAnterior && (
+                    <div role="note" aria-label="Lo que quedó en la caja al cerrar" className="flex flex-col gap-1 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--muted)/0.4)] px-3 py-2">
+                      <p className="text-xs text-[hsl(var(--foreground))]">
+                        Al cerrar el turno del {formatBusinessDate(cierreAnterior.businessDate)}
+                        {quienCerro ? `, ${quienCerro} contó ` : ' se contaron '}
+                        <strong data-testid="quedo-en-la-caja">{formatMoney(cierreAnterior.contado)}</strong> en esta caja.
+                      </p>
+                      {diferenciaConCierre !== null && (
+                        <p data-testid="apertura-vs-cierre" className={cn('text-xs font-semibold',
+                          diferenciaConCierre < 0 ? 'text-red-600' : diferenciaConCierre > 0 ? 'text-amber-700' : 'text-emerald-700')}>
+                          {diferenciaConCierre === 0 ? 'Coincide con el último cierre' : `${textoDiferencia(diferenciaConCierre)} respecto del último cierre`}
+                        </p>
+                      )}
+                    </div>
+                  )}
+                  <ConteoEfectivo cantidades={cantidades} onChange={cambiarConteo} disabled={saving} />
+                </div>
+              )}
 
               {confirmarSinEfectivo ? (
                 <div role="alertdialog" aria-labelledby="sin-efectivo-titulo"
                   className="flex flex-col gap-3 rounded-xl border border-amber-300 bg-amber-50 p-4 dark:border-amber-700/50 dark:bg-amber-950/30">
                   <p id="sin-efectivo-titulo" className="text-sm font-semibold text-[hsl(var(--foreground))]">¿Abrir la caja sin efectivo?</p>
-                  <p className="text-xs text-[hsl(var(--muted-foreground))]">No escribiste un monto de apertura: el turno parte en $0.</p>
+                  <p className="text-xs text-[hsl(var(--muted-foreground))]">No anotaste billetes ni monedas: el turno parte en $0.</p>
                   <div className="flex gap-2 justify-end">
                     <button type="button" onClick={() => setConfirmarSinEfectivo(false)} disabled={saving}
                       className="h-11 px-4 rounded-xl text-sm font-medium border border-[hsl(var(--border))] bg-[hsl(var(--card))] text-[hsl(var(--foreground))] hover:bg-[hsl(var(--muted))] transition-colors disabled:opacity-40">
-                      Volver al monto
+                      Volver a contar
                     </button>
                     <button type="submit" disabled={saving}
                       className="h-11 px-5 rounded-xl text-sm font-semibold text-white bg-[hsl(var(--primary))] hover:opacity-90 shadow-sm transition-colors disabled:opacity-50">
@@ -1089,7 +1125,6 @@ function AdministrativeModule() {
   const location = useLocation()
   const { localId, sectionId } = useParams()
   const { userRole, user } = useAuth()
-  const puedeAbrirTurno = puedeVender(userRole, user?.local_sales_model)
   const puedeGestionarCajasFisicas = ROLES_CAJAS_FISICAS.has(normalizeRoleKey(userRole))
   const [sectionData, setSectionData] = useState({ dashboard: null, orders: null, ordersTotal: null, ordersOffset: 0, ordersLimit: DETALLE_ORDENES_POR_PAGINA, cajas: [], indicadores: null })
   const [detalleLoading, setDetalleLoading] = useState(false)
@@ -1126,6 +1161,8 @@ function AdministrativeModule() {
 
   // Sin sección o con una que ya no existe (rendiciones, reportes, alertas, bonos, dashboard) → Ventas.
   const localActual = useSelectedLocal(localId, 'state-then-locales')
+  // El encargado y el dueño abren la caja; el modelo de venta sale del local en pantalla.
+  const puedeAbrirTurno = puedeAbrirCaja(userRole, localActual?.sales_model ?? user?.local_sales_model)
   const sections = getSections(isAlPasoLocal(localActual))
   const isKnownSection = sections.some((s) => s.id === sectionId)
   const activeSection = isKnownSection ? sectionId : 'ventas'
@@ -1188,7 +1225,9 @@ function AdministrativeModule() {
       {showNuevaCaja && (
         <AbrirTurnoModal
           localId={localId}
+          localNombre={localActual?.name || ''}
           cajas={sectionData.cajas}
+          usuarios={sectionData.usuarios}
           onClose={() => setShowNuevaCaja(false)}
           onSaved={() => setRefreshKey(k => k + 1)}
           onCrearCajaFisica={puedeGestionarCajasFisicas

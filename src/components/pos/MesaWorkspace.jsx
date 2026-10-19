@@ -477,7 +477,7 @@ export default function MesaWorkspace({ mesa, atencion = null, localId, cajaId, 
         </div>
         {!puedeCobrar && (
           <p className="text-xs text-[hsl(var(--muted-foreground))]">
-            En restaurante el administrador no cobra: cobra quien abrió la mesa. Puedes cancelar la orden o traspasar la mesa.
+            En un restaurante el encargado y el dueño no cobran: cobra quien abrió la mesa. Puedes cancelar la orden o traspasar la mesa.
           </p>
         )}
       

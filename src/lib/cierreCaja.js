@@ -88,5 +88,5 @@ export function ultimoCierreDeCaja(cajas, cajaFisicaId) {
     .sort((a, b) => String(b.closed_at || '').localeCompare(String(a.closed_at || '')))
   const ultimo = cerrados[0]
   const contado = monto(ultimo?.monto_cierre_declarado)
-  return contado === null ? null : { contado, closedAt: ultimo.closed_at, businessDate: ultimo.business_date }
+  return contado === null ? null : { contado, closedAt: ultimo.closed_at, businessDate: ultimo.business_date, closedBy: ultimo.closed_by_user_id || null }
 }

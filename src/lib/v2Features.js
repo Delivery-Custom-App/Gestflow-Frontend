@@ -61,6 +61,15 @@ export const V2_FEATURES = {
    */
   eleccionMaquinaVendedor: true,
   /**
+   * El encargado de un restaurante abre la caja con el fondo del día
+   * (Administración → Caja y turnos). Es el flujo decidido por el equipo, pero
+   * el backend todavía responde 403 («En un restaurante el administrador no abre
+   * caja propia») a esa apertura (R7, `app/services/cajas.py`). Encenderla
+   * cuando el backend lo permita; el dueño y el encargado de un local al paso ya
+   * abren la caja sin ella.
+   */
+  aperturaCajaEncargadoRestaurante: false,
+  /**
    * Fondo de emergencia del local (T-26 · T-27): monto fijo, saldo, gastos y
    * reposiciones con fecha, correcciones de gastos e historial por páginas, en
    * Administración, más la tarjeta del dashboard. Lo manejan el dueño y el

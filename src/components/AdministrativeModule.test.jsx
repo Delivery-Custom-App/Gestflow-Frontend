@@ -412,109 +412,119 @@ describe('AdministrativeModule', () => {
     expect(screen.getByText(/el puesto donde está la terminal/)).toBeInTheDocument()
   })
 
-  it('el formulario de apertura pide la caja física y un solo campo de texto: "Monto de apertura"', async () => {
+  it('la apertura de una caja física pide la caja y el conteo de billetes y monedas', async () => {
     const user = userEvent.setup()
     renderAdmin('flujo-caja')
 
     await user.click(await screen.findByRole('button', { name: '+ Abrir turno de caja' }))
 
     expect(await screen.findByRole('heading', { name: 'Abrir turno de caja' })).toBeInTheDocument()
-    expect(await screen.findByLabelText('Caja física')).toBeInTheDocument()
-    // El único campo de texto es el monto, con el total escrito a mano.
-    const campos = screen.getAllByRole('textbox')
-    expect(campos).toHaveLength(1)
-    expect(campos[0]).toBe(screen.getByLabelText('Monto de apertura'))
-    // Ya no se cuenta por billetes y monedas.
+    const selector = await screen.findByLabelText('Caja física')
+    // Cada caja dice su tipo.
+    expect(within(selector).getByRole('option', { name: 'Caja principal · Física' })).toBeInTheDocument()
+    // Sin caja elegida todavía no hay qué contar.
     expect(screen.queryByRole('region', { name: 'Billetes' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('region', { name: 'Monedas' })).not.toBeInTheDocument()
-    expect(screen.queryByText('Total en efectivo')).not.toBeInTheDocument()
-    expect(screen.queryByLabelText(/Cantidad de billetes/)).not.toBeInTheDocument()
-    expect(screen.queryByText(/con efectivo|sin efectivo/i)).not.toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Abrir turno' })).toBeInTheDocument()
-    // El turno no tiene nombre en el modelo: pedirlo era pedir un dato que se descartaba.
+
+    await user.selectOptions(selector, 'cf-1')
+    expect(screen.getByRole('region', { name: 'Billetes' })).toBeInTheDocument()
+    expect(screen.getByRole('region', { name: 'Monedas' })).toBeInTheDocument()
+    expect(screen.getByTestId('apertura-donde')).toHaveTextContent('Se abrirá en: Caja principal')
+    // Ya no hay un monto escrito a mano, ni empleado ni máquina.
+    expect(screen.queryByLabelText('Monto de apertura')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('A nombre de')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('Máquina POS')).not.toBeInTheDocument()
     expect(screen.queryByPlaceholderText('Ej: Turno mañana')).not.toBeInTheDocument()
   })
 
-  it('abre el turno sobre la caja física elegida con el monto escrito', async () => {
+  it('abre el turno sobre la caja física elegida con el total de lo contado, sin desglose', async () => {
     const user = userEvent.setup()
     renderAdmin('flujo-caja')
 
     await user.click(await screen.findByRole('button', { name: '+ Abrir turno de caja' }))
     await user.selectOptions(await screen.findByLabelText('Caja física'), 'cf-2')
-    await user.type(screen.getByLabelText('Monto de apertura'), '45500')
+    await user.type(screen.getByLabelText('Cantidad de billetes de $20.000'), '2')
+    await user.type(screen.getByLabelText('Cantidad de billetes de $5.000'), '1')
+    await user.click(screen.getByRole('button', { name: 'Agregar uno: monedas de $500' }))
+    expect(screen.getByTestId('total-efectivo')).toHaveTextContent('$45.500')
     await user.click(screen.getByRole('button', { name: 'Abrir turno' }))
 
-    // El contrato del backend (ticket #40): la caja física, no el local.
-    await waitFor(() => expect(createCaja).toHaveBeenCalledWith({
-      caja_fisica_id: 'cf-2',
-      monto_apertura: 45500,
-    }))
-  })
-
-  it('el monto se entiende con puntos de miles o signo peso', async () => {
-    const user = userEvent.setup()
-    renderAdmin('flujo-caja')
-
-    await user.click(await screen.findByRole('button', { name: '+ Abrir turno de caja' }))
-    await user.selectOptions(await screen.findByLabelText('Caja física'), 'cf-1')
-    await user.type(screen.getByLabelText('Monto de apertura'), '$50.000')
-    await user.click(screen.getByRole('button', { name: 'Abrir turno' }))
-
-    await waitFor(() => expect(createCaja).toHaveBeenCalledWith({ caja_fisica_id: 'cf-1', monto_apertura: 50000 }))
-  })
-
-  it('la apertura manda solo el total, sin desglose de billetes', async () => {
-    const user = userEvent.setup()
-    renderAdmin('flujo-caja')
-
-    await user.click(await screen.findByRole('button', { name: '+ Abrir turno de caja' }))
-    await user.selectOptions(await screen.findByLabelText('Caja física'), 'cf-1')
-    await user.type(screen.getByLabelText('Monto de apertura'), '31500')
-    await user.click(screen.getByRole('button', { name: 'Abrir turno' }))
-
-    await waitFor(() => expect(createCaja).toHaveBeenCalledWith({ caja_fisica_id: 'cf-1', monto_apertura: 31500 }))
+    // El backend guarda solo el total: no tiene campo para el desglose.
+    await waitFor(() => expect(createCaja).toHaveBeenCalledWith({ caja_fisica_id: 'cf-2', monto_apertura: 45500 }))
     expect(createCaja.mock.calls[0][0]).not.toHaveProperty('apertura_desglose')
   })
 
-  it('T-55: al abrir muestra lo que quedó en la caja al cerrar su último turno y lo compara con el monto', async () => {
+  it('una caja digital no pide conteo y se abre en $0 sin confirmar', async () => {
+    listarCajasFisicas.mockResolvedValueOnce([...mockCajasFisicas, { id: 'cf-9', name: 'Caja online', tipo: 'digital', is_active: true }])
+    const user = userEvent.setup()
+    renderAdmin('flujo-caja')
+
+    await user.click(await screen.findByRole('button', { name: '+ Abrir turno de caja' }))
+    const selector = await screen.findByLabelText('Caja física')
+    expect(within(selector).getByRole('option', { name: 'Caja online · Digital' })).toBeInTheDocument()
+
+    // Contar en una física y pasar a la digital no arrastra lo contado.
+    await user.selectOptions(selector, 'cf-1')
+    await user.type(screen.getByLabelText('Cantidad de billetes de $1.000'), '3')
+    await user.selectOptions(selector, 'cf-9')
+    expect(screen.queryByRole('region', { name: 'Billetes' })).not.toBeInTheDocument()
+    expect(screen.getByText(/caja digital: no hay efectivo que contar/i)).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Abrir turno' }))
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
+    await waitFor(() => expect(createCaja).toHaveBeenCalledWith({ caja_fisica_id: 'cf-9', monto_apertura: 0 }))
+  })
+
+  it('al volver de una digital a una física, el conteo parte de cero', async () => {
+    listarCajasFisicas.mockResolvedValueOnce([...mockCajasFisicas, { id: 'cf-9', name: 'Caja online', tipo: 'digital', is_active: true }])
+    const user = userEvent.setup()
+    renderAdmin('flujo-caja')
+
+    await user.click(await screen.findByRole('button', { name: '+ Abrir turno de caja' }))
+    const selector = await screen.findByLabelText('Caja física')
+    await user.selectOptions(selector, 'cf-1')
+    await user.type(screen.getByLabelText('Cantidad de billetes de $1.000'), '3')
+    await user.selectOptions(selector, 'cf-9')
+    await user.selectOptions(selector, 'cf-1')
+    expect(screen.getByTestId('total-efectivo')).toHaveTextContent('$0')
+  })
+
+  it('compara lo contado con el último cierre de la caja, con quién lo cerró; es solo un aviso', async () => {
     const user = userEvent.setup()
     getCajasByLocal.mockResolvedValueOnce([...mockCajas, {
       id: 'caja-0', status: 'closed', is_active: false, caja_fisica_id: 'cf-2', cashier_user_id: 'u-beto',
-      business_date: '2026-10-16', closed_at: '2026-10-16T23:00:00Z', monto_cierre_declarado: '48200.00',
+      business_date: '2026-10-16', closed_at: '2026-10-16T23:00:00Z', monto_cierre_declarado: '48200.00', closed_by_user_id: 'u-ana',
     }])
     renderAdmin('flujo-caja')
 
     await user.click(await screen.findByRole('button', { name: '+ Abrir turno de caja' }))
-    // Sin caja elegida no hay con qué comparar; una caja que nunca se contó tampoco.
-    expect(screen.queryByTestId('quedo-en-la-caja')).not.toBeInTheDocument()
+    // Una caja que nunca se contó no tiene con qué comparar.
     await user.selectOptions(await screen.findByLabelText('Caja física'), 'cf-1')
     expect(screen.queryByTestId('quedo-en-la-caja')).not.toBeInTheDocument()
 
     await user.selectOptions(screen.getByLabelText('Caja física'), 'cf-2')
     const nota = screen.getByRole('note', { name: 'Lo que quedó en la caja al cerrar' })
-    expect(nota).toHaveTextContent('Al cerrar el turno del 16/10/2026 quedaron $48.200 en esta caja')
+    expect(nota).toHaveTextContent('Al cerrar el turno del 16/10/2026, Ana Rojas contó $48.200 en esta caja')
     expect(screen.queryByTestId('apertura-vs-cierre')).not.toBeInTheDocument()
 
-    await user.type(screen.getByLabelText('Monto de apertura'), '48000')
-    expect(screen.getByTestId('apertura-vs-cierre')).toHaveTextContent('Faltan $200 respecto de lo que quedó')
+    await user.type(screen.getByLabelText('Cantidad de billetes de $20.000'), '2')
+    await user.type(screen.getByLabelText('Cantidad de billetes de $5.000'), '1')
+    await user.type(screen.getByLabelText('Cantidad de billetes de $2.000'), '1')
+    await user.type(screen.getByLabelText('Cantidad de billetes de $1.000'), '1')
+    expect(screen.getByTestId('apertura-vs-cierre')).toHaveTextContent('Faltan $200 respecto del último cierre')
 
-    await user.clear(screen.getByLabelText('Monto de apertura'))
-    await user.type(screen.getByLabelText('Monto de apertura'), '48500')
-    expect(screen.getByTestId('apertura-vs-cierre')).toHaveTextContent('Sobran $300 respecto de lo que quedó')
+    await user.type(screen.getByLabelText('Cantidad de monedas de $500'), '1')
+    expect(screen.getByTestId('apertura-vs-cierre')).toHaveTextContent('Sobran $300 respecto del último cierre')
 
-    await user.click(within(nota).getByRole('button', { name: 'Usar este monto' }))
-    expect(screen.getByLabelText('Monto de apertura')).toHaveValue('48200')
-    expect(screen.getByTestId('apertura-vs-cierre')).toHaveTextContent('Cuadra con lo que quedó')
-    expect(within(nota).queryByRole('button', { name: 'Usar este monto' })).not.toBeInTheDocument()
+    await user.clear(screen.getByLabelText('Cantidad de monedas de $500'))
+    await user.type(screen.getByLabelText('Cantidad de monedas de $100'), '2')
+    expect(screen.getByTestId('apertura-vs-cierre')).toHaveTextContent('Coincide con el último cierre')
 
-    // Es un aviso: no impide abrir con otro monto.
-    await user.clear(screen.getByLabelText('Monto de apertura'))
-    await user.type(screen.getByLabelText('Monto de apertura'), '40000')
+    // No impide abrir: el backend no guarda una nota de apertura.
     await user.click(screen.getByRole('button', { name: 'Abrir turno' }))
-    await waitFor(() => expect(createCaja).toHaveBeenCalledWith({ caja_fisica_id: 'cf-2', monto_apertura: 40000 }))
+    await waitFor(() => expect(createCaja).toHaveBeenCalledWith({ caja_fisica_id: 'cf-2', monto_apertura: 48200 }))
   })
 
-  it('sin monto escrito pide confirmar antes de abrir en $0', async () => {
+  it('sin efectivo contado en una caja física pide confirmar antes de abrir en $0', async () => {
     const user = userEvent.setup()
     renderAdmin('flujo-caja')
 
@@ -529,18 +539,18 @@ describe('AdministrativeModule', () => {
     await waitFor(() => expect(createCaja).toHaveBeenCalledWith({ caja_fisica_id: 'cf-1', monto_apertura: 0 }))
   })
 
-  it('"Volver al monto" cierra la confirmación sin abrir, y escribir un monto la quita', async () => {
+  it('"Volver a contar" cierra la confirmación sin abrir, y contar algo la quita', async () => {
     const user = userEvent.setup()
     renderAdmin('flujo-caja')
 
     await user.click(await screen.findByRole('button', { name: '+ Abrir turno de caja' }))
     await user.selectOptions(await screen.findByLabelText('Caja física'), 'cf-1')
     await user.click(screen.getByRole('button', { name: 'Abrir turno' }))
-    await user.click(screen.getByRole('button', { name: 'Volver al monto' }))
+    await user.click(screen.getByRole('button', { name: 'Volver a contar' }))
     expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'Abrir turno' }))
-    await user.type(screen.getByLabelText('Monto de apertura'), '1000')
+    await user.type(screen.getByLabelText('Cantidad de billetes de $1.000'), '1')
     expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
     expect(createCaja).not.toHaveBeenCalled()
   })
@@ -552,7 +562,7 @@ describe('AdministrativeModule', () => {
 
     await user.click(await screen.findByRole('button', { name: '+ Abrir turno de caja' }))
     await user.selectOptions(await screen.findByLabelText('Caja física'), 'cf-1')
-    await user.type(screen.getByLabelText('Monto de apertura'), '1000')
+    await user.type(screen.getByLabelText('Cantidad de billetes de $1.000'), '1')
     await user.click(screen.getByRole('button', { name: 'Abrir turno' }))
 
     expect(await screen.findByText(/ya tienes un turno abierto hoy en esa caja física/i)).toBeInTheDocument()
@@ -568,19 +578,14 @@ describe('AdministrativeModule', () => {
 
     expect(await screen.findByText(/todavía no tiene ninguna caja física registrada/i)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Crear caja física' })).toBeInTheDocument()
-    expect(screen.queryByLabelText('Monto de apertura')).not.toBeInTheDocument()
+    expect(screen.queryByRole('region', { name: 'Billetes' })).not.toBeInTheDocument()
     expect(createCaja).not.toHaveBeenCalled()
   })
 
-  it('a un empleado sin cajas físicas se le dice a quién pedírsela, sin ofrecerle crearla', async () => {
-    listarCajasFisicas.mockResolvedValueOnce([])
-    const user = userEvent.setup()
+  it('el trabajador no abre la caja: no ve «Abrir turno de caja»', async () => {
     renderAdmin('flujo-caja', 'Empleado')
-
-    await user.click(await screen.findByRole('button', { name: '+ Abrir turno de caja' }))
-
-    expect(await screen.findByText(/pídele a un administrador/i)).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Crear caja física' })).not.toBeInTheDocument()
+    await screen.findByRole('heading', { name: 'Turnos de caja' })
+    expect(screen.queryByRole('button', { name: /Abrir turno de caja/ })).not.toBeInTheDocument()
   })
 
   it('la tabla de turnos dice sobre qué caja física se abrió cada uno', async () => {
@@ -685,26 +690,44 @@ describe('AdministrativeModule', () => {
     expect(within(lateral).queryByLabelText('Cantidad de billetes de $20.000')).not.toBeInTheDocument()
   })
 
-  it('A-03: en restaurante el administrador no ve «Abrir turno de caja»; el dueño sí', async () => {
-    render(
-      <AuthProvider user={{ id: 'u-1', local_sales_model: 'RESTAURANT' }} userRole="Admin" logout={() => {}}>
+  function renderConLocal(userRole, salesModel) {
+    return render(
+      <AuthProvider user={{ id: 'u-1', local_sales_model: salesModel }} userRole={userRole} logout={() => {}}>
         <MemoryRouter initialEntries={['/local/loc-1/administrativo/flujo-caja']}>
           <Routes><Route path="/local/:localId/administrativo/:sectionId?" element={<AdministrativeModule />} /></Routes>
         </MemoryRouter>
       </AuthProvider>,
     )
+  }
+
+  it('en un restaurante el dueño abre la caja', async () => {
+    renderConLocal('Admin Negocio', 'RESTAURANT')
+    expect(await screen.findByRole('button', { name: /Abrir turno de caja/ })).toBeInTheDocument()
+  })
+
+  it('en un restaurante el encargado abre la caja solo con la bandera (el backend aún responde 403)', async () => {
+    renderConLocal('Admin', 'RESTAURANT')
     await screen.findByRole('heading', { name: 'Turnos de caja' })
     expect(screen.queryByRole('button', { name: /Abrir turno de caja/ })).not.toBeInTheDocument()
   })
 
-  it('A-03: en al paso el administrador sí abre turno', async () => {
-    render(
-      <AuthProvider user={{ id: 'u-1', local_sales_model: 'AL_PASO' }} userRole="Admin" logout={() => {}}>
-        <MemoryRouter initialEntries={['/local/loc-1/administrativo/flujo-caja']}>
-          <Routes><Route path="/local/:localId/administrativo/:sectionId?" element={<AdministrativeModule />} /></Routes>
-        </MemoryRouter>
-      </AuthProvider>,
-    )
+  it('con la bandera, el encargado de un restaurante abre la caja contando el fondo', async () => {
+    V2_FEATURES.aperturaCajaEncargadoRestaurante = true
+    try {
+      const user = userEvent.setup()
+      renderConLocal('Admin', 'RESTAURANT')
+      await user.click(await screen.findByRole('button', { name: /Abrir turno de caja/ }))
+      await user.selectOptions(await screen.findByLabelText('Caja física'), 'cf-1')
+      await user.type(screen.getByLabelText('Cantidad de billetes de $10.000'), '3')
+      await user.click(screen.getByRole('button', { name: 'Abrir turno' }))
+      await waitFor(() => expect(createCaja).toHaveBeenCalledWith({ caja_fisica_id: 'cf-1', monto_apertura: 30000 }))
+    } finally {
+      V2_FEATURES.aperturaCajaEncargadoRestaurante = false
+    }
+  })
+
+  it('en un local al paso el encargado abre la caja', async () => {
+    renderConLocal('Admin', 'AL_PASO')
     expect(await screen.findByRole('button', { name: /Abrir turno de caja/ })).toBeInTheDocument()
   })
 
