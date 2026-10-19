@@ -1,5 +1,4 @@
 import { useState, useCallback, useMemo } from 'react'
-import { Link2, X as XIcon } from 'lucide-react'
 import { useParams, useLocation } from 'react-router'
 import { useMesasConEstado } from '../../hooks/useMesasConEstado'
 import { useMesasKPIs } from '../../hooks/useMesasKPIs'
@@ -8,6 +7,10 @@ import MesasFilters from './MesasFilters'
 import { applyFilters, EMPTY_MESA_FILTERS } from './filterMesas'
 import MesasVisualization from './MesasVisualization'
 import { useGruposDeMesas } from '../../hooks/useGruposDeMesas'
+import AvisoDeGrupo from './AvisoDeGrupo'
+import LiberarGrupoModal from './LiberarGrupoModal'
+import { estadoDelGrupo, nombresEnLista } from '../../lib/liberarGrupo'
+import { formatCLPDisplay } from '../../lib/formatCLP'
 import KitchenDisplay from './KitchenDisplay'
 import CreateMesaModal from './CreateMesaModal'
 import EditMesaModal from './EditMesaModal'
@@ -28,7 +31,7 @@ import { puedeVender } from '../../lib/rolesCaja'
 import { empleadosConTurnoHoy } from '../../lib/supervision'
 import { hoyEnChile } from '../../lib/fondoEmergencia'
 import { SALES_MODEL } from '../../lib/salesModel'
-import { ArrowRightLeft, CreditCard, PlusCircle } from 'lucide-react'
+import { ArrowRightLeft, CreditCard, Link2, PlusCircle } from 'lucide-react'
 
 export default function POSModule() {
   const { isWorker, user, userRole } = useAuth()
@@ -78,20 +81,24 @@ export default function POSModule() {
   }, [refreshMesas, recargarAtencion])
 
   // ── Agrupar mesas ───────────────────────────────────────────────────
-  const { porMesa: gruposPorMesa, crear: crearGrupo, deshacer: deshacerGrupo } = useGruposDeMesas(localId)
+  const { porMesa: gruposPorMesa, crear: crearGrupo, deshacer: deshacerGrupo, refresh: refreshGrupos } = useGruposDeMesas(localId)
   const [modoAgrupar, setModoAgrupar] = useState(false)
   const [seleccionadas, setSeleccionadas] = useState(() => new Set())
-  const [grupoError, setGrupoError] = useState(null)
+  // Lo que pasó con un grupo (error, mesas que siguen ocupadas, qué hacer): { tono, mensaje, detalle?, acciones? }.
+  const [aviso, setAviso] = useState(null)
   const [guardandoGrupo, setGuardandoGrupo] = useState(false)
+  // «Liberar grupo» es del encargado y del dueño: el vendedor no suelta mesas ajenas (el backend responde 403).
+  const puedeLiberarGrupo = !isWorker
+  const [grupoALiberar, setGrupoALiberar] = useState(null)
 
   const salirDeAgrupar = useCallback(() => {
     setModoAgrupar(false)
     setSeleccionadas(new Set())
-    setGrupoError(null)
+    setAviso(null)
   }, [])
 
   const handleToggleSeleccion = useCallback((mesa) => {
-    setGrupoError(null)
+    setAviso(null)
     setSeleccionadas((previas) => {
       const siguiente = new Set(previas)
       const clave = String(mesa.id)
@@ -103,29 +110,109 @@ export default function POSModule() {
 
   const handleCrearGrupo = useCallback(async () => {
     setGuardandoGrupo(true)
-    setGrupoError(null)
+    setAviso(null)
     try {
       await crearGrupo([...seleccionadas])
       salirDeAgrupar()
       refreshMesas()
       refreshKpis()
     } catch (e) {
-      setGrupoError(e?.message || 'No se pudieron juntar las mesas')
+      setAviso({ tono: 'error', mensaje: e?.message || 'No se pudieron juntar las mesas' })
     } finally {
       setGuardandoGrupo(false)
     }
   }, [crearGrupo, seleccionadas, salirDeAgrupar, refreshMesas, refreshKpis])
 
+  const abrirLiberarGrupo = useCallback((grupo) => {
+    setAviso(null)
+    setGrupoALiberar(grupo)
+  }, [])
+
+  // Lleva a una mesa del grupo que todavía tiene un pedido abierto, para cobrarlo.
+  const irAMesa = useCallback((mesa) => {
+    setAviso(null)
+    setSelectedMesa(mesas.find((m) => String(m.id) === String(mesa.id)) || { id: mesa.id, name: mesa.nombre, nombre: mesa.nombre, state: 'ocupada' })
+  }, [mesas])
+  const accionesIrAMesa = useCallback((conPedido) => conPedido.map((m) => ({ texto: `Ir a ${m.nombre}`, onClick: () => irAMesa(m) })), [irAMesa])
+
   const handleDeshacerGrupo = useCallback(async (grupo) => {
-    setGrupoError(null)
+    setAviso(null)
     try {
       await deshacerGrupo(grupo.id)
       refreshMesas()
       refreshKpis()
     } catch (e) {
-      setGrupoError(e?.message || 'No se pudo separar el grupo')
+      // 409: el backend solo separa un grupo con todas las mesas libres. En vez del texto del backend se dice
+      // cuáles siguen ocupadas y qué se puede hacer con cada una.
+      const ocupadas = estadoDelGrupo(grupo.mesaIds, mesas).filter((m) => m.ocupada)
+      if (Number(e?.status) === 409 && ocupadas.length > 0) {
+        setAviso({
+          tono: 'error',
+          mensaje: `No se puede separar ${grupo.etiqueta}: ${nombresEnLista(ocupadas)} ${ocupadas.length === 1 ? 'sigue ocupada' : 'siguen ocupadas'}.`,
+          detalle: [
+            ...ocupadas.map((m) => `${m.nombre}: ${m.conPedido ? `pedido abierto por ${formatCLPDisplay(m.total)} (cóbralo o libera el grupo)` : 'ocupada, sin pedido (hay que liberarla)'}`),
+            ...(puedeLiberarGrupo ? [] : ['Pídele al encargado o al dueño que libere el grupo.']),
+          ],
+          acciones: [
+            ...(puedeLiberarGrupo ? [{ texto: 'Liberar grupo', onClick: () => abrirLiberarGrupo(grupo) }] : []),
+            ...accionesIrAMesa(ocupadas.filter((m) => m.conPedido)),
+          ],
+        })
+      } else {
+        setAviso({ tono: 'error', mensaje: e?.message || 'No se pudo separar el grupo' })
+      }
     }
-  }, [deshacerGrupo, refreshMesas, refreshKpis])
+  }, [deshacerGrupo, refreshMesas, refreshKpis, mesas, puedeLiberarGrupo, abrirLiberarGrupo, accionesIrAMesa])
+
+  // Terminó «Liberar grupo»: la vista se refresca sola, y si faltó soltar alguna mesa queda dicho cuál.
+  const handleLiberarGrupoDone = useCallback((resultado) => {
+    const grupo = grupoALiberar
+    setGrupoALiberar(null)
+    refreshMesas()
+    refreshKpis()
+    refreshGrupos()
+    if (resultado.fallidas.length > 0 || resultado.errorAlSeparar) {
+      setAviso({
+        tono: 'error',
+        mensaje: resultado.fallidas.length > 0
+          ? `${grupo.etiqueta} sigue junto: no se pudo liberar ${nombresEnLista(resultado.fallidas)}.`
+          : `${grupo.etiqueta}: las mesas quedaron libres, pero no se pudo separar el grupo.`,
+        detalle: resultado.fallidas.length > 0
+          ? resultado.fallidas.map((m) => `${m.nombre}: ${m.mensaje}`)
+          : [resultado.errorAlSeparar],
+        acciones: [{ texto: 'Liberar grupo', onClick: () => abrirLiberarGrupo(grupo) }],
+      })
+    }
+  }, [grupoALiberar, refreshMesas, refreshKpis, refreshGrupos, abrirLiberarGrupo])
+
+  // Se cobró una mesa de un grupo: la mesa ya soltó las demás que quedaron ocupadas sin pedido (y separó el grupo).
+  const handleGrupoActualizado = useCallback((resultado) => {
+    refreshGrupos()
+    if (!resultado) return
+    const { liberadas, conPedido, fallidas, separado, errorAlSeparar, error, mesaCobrada } = resultado
+    const cobrada = mesaCobrada || 'La mesa'
+    const quedaronLibres = liberadas.length > 0
+      ? `${nombresEnLista(liberadas)} ${liberadas.length === 1 ? 'quedó libre' : 'quedaron libres'}`
+      : ''
+    if (error) {
+      setAviso({ tono: 'error', mensaje: `Se cobró ${cobrada}, pero no se pudo revisar el grupo: ${error}` })
+    } else if (conPedido.length > 0 || fallidas.length > 0) {
+      setAviso({
+        tono: fallidas.length > 0 ? 'error' : 'aviso',
+        mensaje: `Se cobró ${cobrada}, pero el grupo sigue junto.`,
+        detalle: [
+          ...(quedaronLibres ? [`${quedaronLibres}.`] : []),
+          ...conPedido.map((m) => `${m.nombre} todavía tiene un pedido abierto por ${formatCLPDisplay(m.total)}: cóbralo para liberar el grupo.`),
+          ...fallidas.map((m) => `No se pudo liberar ${m.nombre}: ${m.mensaje}`),
+        ],
+        acciones: accionesIrAMesa(conPedido),
+      })
+    } else if (errorAlSeparar) {
+      setAviso({ tono: 'error', mensaje: `Se cobró ${cobrada} y las mesas quedaron libres, pero no se pudo separar el grupo: ${errorAlSeparar}` })
+    } else if (separado) {
+      toast.success(`${cobrada} cobrada: ${quedaronLibres ? `${quedaronLibres} y ` : ''}el grupo se separó.`)
+    }
+  }, [refreshGrupos, accionesIrAMesa])
 
   // Por qué una acción de mesas está desactivada (null = disponible). Se muestra
   // junto al botón; no queda solo en un tooltip.
@@ -162,7 +249,8 @@ export default function POSModule() {
     setSelectedMesa(null)
     refreshMesas()
     refreshKpis()
-  }, [refreshMesas, refreshKpis])
+    refreshGrupos()
+  }, [refreshMesas, refreshKpis, refreshGrupos])
 
   const handleTableUpdated = useCallback(() => {
     refreshMesas()
@@ -281,6 +369,7 @@ export default function POSModule() {
             puedeLiberarMesa={!isWorker}
             onBack={handleWorkspaceBack}
             onTableUpdated={handleTableUpdated}
+            onGrupoActualizado={handleGrupoActualizado}
           />
         ) : activeView === 'mesas' ? (
           <div className="space-y-5">
@@ -341,14 +430,7 @@ export default function POSModule() {
                   </div>
                 )}
 
-                {grupoError && (
-                  <div className="flex items-start justify-between gap-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 dark:border-red-800/50 dark:bg-red-950/30">
-                    <p className="text-xs text-red-600 dark:text-red-400">{grupoError}</p>
-                    <button type="button" aria-label="Cerrar aviso" onClick={() => setGrupoError(null)} className="text-red-500 hover:opacity-70">
-                      <XIcon size={14} />
-                    </button>
-                  </div>
-                )}
+                <AvisoDeGrupo aviso={aviso} onCerrar={() => setAviso(null)} />
 
                 <MesasVisualization
                   mesas={filteredMesas}
@@ -361,6 +443,7 @@ export default function POSModule() {
                   seleccionadas={seleccionadas}
                   onToggleSeleccion={handleToggleSeleccion}
                   onDeshacerGrupo={handleDeshacerGrupo}
+                  onLiberarGrupo={puedeLiberarGrupo ? abrirLiberarGrupo : null}
                   atencionPorMesa={atencionPorMesa}
                 />
               </section>
@@ -378,6 +461,15 @@ export default function POSModule() {
           nombre={nombre}
           onClose={() => setTraspasando(false)}
           onDone={handleTraspasoHecho}
+        />
+      )}
+
+      {grupoALiberar && (
+        <LiberarGrupoModal
+          grupo={grupoALiberar}
+          mesas={estadoDelGrupo(grupoALiberar.mesaIds, mesas)}
+          onClose={() => setGrupoALiberar(null)}
+          onDone={handleLiberarGrupoDone}
         />
       )}
 
