@@ -31,7 +31,13 @@ describe('ConfiguracionPage · scroll', () => {
     expect(raiz).not.toHaveClass('min-h-full')
     // Un solo scroll: las secciones van dentro, sin otro contenedor que desplace.
     expect(raiz.querySelectorAll('.overflow-y-auto, .overflow-auto')).toHaveLength(0)
-    expect(screen.getByText('Apariencia')).toBeInTheDocument()
+    expect(raiz).toContainElement(screen.getByText('mis sesiones (simulado)'))
+  })
+
+  it('ya no trae el selector de apariencia (el tema se cambia desde el menú)', () => {
+    render(<ConfiguracionPage />)
+    expect(screen.queryByText('Apariencia')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Oscuro/ })).not.toBeInTheDocument()
   })
 })
 
