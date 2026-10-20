@@ -1,8 +1,10 @@
 import { apiRequest } from './apiClient'
 import {
   v2GetAuditLog,
+  v2GetAuditPageCount,
   v2GetBusinessStats,
   v2GetGlobalStats,
+  v2GetPlatformSummary,
   v2GetObservability,
   v2ListAllUsers,
 } from './v2SuperAdminAdapter'
@@ -50,6 +52,14 @@ export async function deleteBusiness(businessId, token) {
 
 export async function getAuditLog(opts = {}, token) {
   return v2GetAuditLog(opts, token)
+}
+
+export async function getAuditPageCount(opts = {}, token) {
+  return v2GetAuditPageCount(opts, token)
+}
+
+export function getPlatformSummary(range, token) {
+  return v2GetPlatformSummary(range, token)
 }
 
 export async function getGlobalStats(token) {
