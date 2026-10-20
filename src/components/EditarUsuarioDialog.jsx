@@ -16,12 +16,12 @@ const selectCls = 'w-full rounded-lg border border-[hsl(var(--border))] bg-[hsl(
  * también cambian el rol y el local. Un encargado o vendedor siempre lleva
  * local: sin él no se deja guardar. Solo se manda lo que cambió.
  */
-export default function EditarUsuarioDialog({ usuario, locales = [], miRol, onClose, onGuardado }) {
+export default function EditarUsuarioDialog({ usuario, locales = [], miRol, roles: rolesPermitidos = null, onClose, onGuardado }) {
   const [form, setForm] = useState(() => formularioDe(usuario))
   const [error, setError] = useState('')
   const [guardando, setGuardando] = useState(false)
   const conRolYLocal = puedeCambiarRolYLocal(miRol)
-  const roles = rolesAsignables(miRol)
+  const roles = rolesPermitidos || rolesAsignables(miRol)
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }))
 
   const guardar = async (e) => {
