@@ -1,11 +1,13 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Users, Loader2, Search } from 'lucide-react'
+import { Users, Loader2, Search, KeyRound } from 'lucide-react'
 import { getAuthContext, formatApiErrorDetail } from '../lib/apiClient'
 import { listAllUsers, listBusinesses, updateUser } from '../lib/superAdminApi'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
+import ClaveTemporalDialog from './ClaveTemporalDialog'
+import { restablecerClave, textoDeError } from '../lib/gestionUsuarios'
 
 function formatDate(value) {
   if (!value) return '—'
@@ -34,6 +36,7 @@ export default function AdminUsersPage() {
   const [busyId, setBusyId] = useState('')
   const [err, setErr] = useState('')
   const [meId, setMeId] = useState('')
+  const [claveTemporal, setClaveTemporal] = useState(null) // { nombre, clave, correoEnviado }, solo en memoria
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -75,6 +78,22 @@ export default function AdminUsersPage() {
       await load()
     } catch (e2) {
       setErr(formatApiErrorDetail(e2.detail) || e2.message || 'No se pudo actualizar el usuario')
+    } finally {
+      setBusyId('')
+    }
+  }
+
+  // #134: el superadmin restablece la clave de cualquier usuario de una franquicia.
+  const resetPassword = async (u) => {
+    const nombre = u.name || u.email
+    if (!window.confirm(`¿Restablecer la clave de ${nombre}? Se cerrarán sus sesiones y deberá cambiarla al entrar.`)) return
+    setBusyId(String(u.id))
+    setErr('')
+    try {
+      const r = await restablecerClave(u.id)
+      setClaveTemporal({ nombre, clave: r?.temporary_password || '', correoEnviado: Boolean(r?.email_sent) })
+    } catch (e2) {
+      setErr(textoDeError(e2, 'No se pudo restablecer la clave'))
     } finally {
       setBusyId('')
     }
@@ -137,6 +156,7 @@ export default function AdminUsersPage() {
           <td className="py-2.5 pr-3 text-xs text-[hsl(var(--muted-foreground))]">{formatDate(u.created_at)}</td>
           <td className="py-2.5">
             {!isSuper && (
+              <div className="flex items-center gap-1.5">
               <Button
                 variant="outline"
                 size="sm"
@@ -146,6 +166,17 @@ export default function AdminUsersPage() {
               >
                 {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : u.is_active === false ? 'Activar' : 'Desactivar'}
               </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                disabled={busy || isSelf || u.is_active === false}
+                onClick={() => resetPassword(u)}
+                title="Restablecer clave"
+                aria-label={`Restablecer la clave de ${u.name || u.email}`}
+              >
+                <KeyRound size={14} />
+              </Button>
+              </div>
             )}
           </td>
         </tr>
@@ -253,6 +284,7 @@ export default function AdminUsersPage() {
           </>
         )}
       </div>
+      {claveTemporal && <ClaveTemporalDialog {...claveTemporal} onClose={() => setClaveTemporal(null)} />}
     </div>
   )
 }

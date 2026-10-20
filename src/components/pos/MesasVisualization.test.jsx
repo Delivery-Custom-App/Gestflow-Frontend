@@ -63,6 +63,54 @@ describe('MesasVisualization — grupos de mesas', () => {
     expect(onMesaSelect).not.toHaveBeenCalled()
   })
 
+  describe('«Liberar grupo» (encargado y dueño)', () => {
+    let onLiberarGrupo
+    beforeEach(() => { onLiberarGrupo = vi.fn() })
+
+    it('está junto a «Separar» en la tarjeta del grupo, del mismo alto y con su ícono', () => {
+      render(<MesasVisualization mesas={MESAS} gruposPorMesa={conGrupo} onDeshacerGrupo={onDeshacerGrupo} onLiberarGrupo={onLiberarGrupo} />)
+
+      const [liberar] = screen.getAllByRole('button', { name: 'Liberar grupo' })
+      const [separar] = screen.getAllByRole('button', { name: 'Separar' })
+      expect(liberar).toHaveClass('h-10', 'border', 'rounded-xl')
+      expect(liberar.querySelector('svg')).toBeInTheDocument()
+      // Lado a lado: los dos botones comparten el mismo contenedor, «Liberar grupo» primero.
+      expect(liberar.closest('div.flex.flex-wrap')).toBe(separar.closest('div.flex.flex-wrap'))
+      expect(liberar.compareDocumentPosition(separar) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    })
+
+    it('llama con el grupo y no abre la mesa', async () => {
+      const user = userEvent.setup()
+      render(<MesasVisualization mesas={MESAS} gruposPorMesa={conGrupo} onDeshacerGrupo={onDeshacerGrupo} onLiberarGrupo={onLiberarGrupo} onMesaSelect={onMesaSelect} />)
+
+      await user.click(screen.getAllByRole('button', { name: 'Liberar grupo' })[0])
+
+      expect(onLiberarGrupo).toHaveBeenCalledTimes(1)
+      expect(onLiberarGrupo).toHaveBeenCalledWith(GRUPO)
+      expect(onDeshacerGrupo).not.toHaveBeenCalled()
+      expect(onMesaSelect).not.toHaveBeenCalled()
+    })
+
+    it('quien no puede liberarlo (el vendedor) solo ve «Separar»', () => {
+      render(<MesasVisualization mesas={MESAS} gruposPorMesa={conGrupo} onDeshacerGrupo={onDeshacerGrupo} />)
+
+      expect(screen.queryByRole('button', { name: 'Liberar grupo' })).not.toBeInTheDocument()
+      expect(screen.getAllByRole('button', { name: 'Separar' })).toHaveLength(2)
+    })
+
+    it('al agrupar mesas no se ofrece', () => {
+      render(<MesasVisualization mesas={MESAS} gruposPorMesa={conGrupo} onDeshacerGrupo={onDeshacerGrupo} onLiberarGrupo={onLiberarGrupo} modoAgrupar seleccionadas={new Set()} />)
+
+      expect(screen.queryByRole('button', { name: 'Liberar grupo' })).not.toBeInTheDocument()
+    })
+
+    it('una mesa fuera de un grupo no la tiene', () => {
+      render(<MesasVisualization mesas={MESAS} gruposPorMesa={new Map()} onLiberarGrupo={onLiberarGrupo} />)
+
+      expect(screen.queryByRole('button', { name: 'Liberar grupo' })).not.toBeInTheDocument()
+    })
+  })
+
   it('sin grupos no aparece ningún distintivo', () => {
     render(<MesasVisualization mesas={MESAS} gruposPorMesa={new Map()} />)
 

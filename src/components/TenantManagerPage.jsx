@@ -1,11 +1,10 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Link } from 'react-router'
 import { m, AnimatePresence } from 'framer-motion'
-import { Building2, Plus, Pencil, Trash2, X, Loader2, Search, History, Power, ShieldAlert, HelpCircle, ExternalLink } from 'lucide-react'
+import { Building2, Plus, Pencil, Trash2, X, Loader2, Search, History, Power, ShieldAlert, HelpCircle, ExternalLink, Eye, EyeOff, Wand2 } from 'lucide-react'
 import { getAuthContext } from '../lib/apiClient'
 import {
   listBusinesses,
-  createBusiness,
   updateBusiness,
   deleteBusiness,
   getAuditLog,
@@ -16,6 +15,9 @@ import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { formatApiErrorDetail } from '../lib/apiClient'
+import { FRANQUICIA_VACIA, crearFranquicia, generarClave, validarAltaFranquicia } from '../lib/altaFranquicia'
+import { LARGO_MINIMO_CONTRASENA, formatearRut, pideRut } from '../lib/altaUsuario'
+import { SALES_MODEL, SALES_MODEL_LABEL } from '../lib/salesModel'
 
 const PLANS = [
   { value: 'starter',     label: 'Standard' },
@@ -30,6 +32,8 @@ const PLAN_BADGE = {
 }
 
 const PLAN_LABEL = Object.fromEntries(PLANS.map((p) => [p.value, p.label]))
+
+const selectCls = 'w-full rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3 py-2 text-sm text-[hsl(var(--foreground))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary))]/40'
 
 const ACTION_LABEL = {
   'business.create': 'Creación de franquicia',
@@ -55,9 +59,10 @@ function formatDateTime(value) {
 
 // ── Drawer crear/editar franquicia ───────────────────────────────────────────
 function BusinessDrawer({ isOpen, onClose, onSuccess, editing }) {
-  const [form, setForm] = useState({ name: '', rut: '', plan: 'starter', is_active: true })
+  const [form, setForm] = useState(FRANQUICIA_VACIA)
   const [loading, setLoading] = useState(false)
   const [err, setErr] = useState('')
+  const [showPwd, setShowPwd] = useState(false)
 
   // Al abrirse (o cambiar la franquicia en edición) se carga el form en el mismo render (patrón de React docs).
   const openedFor = isOpen ? editing ?? 'new' : null
@@ -66,23 +71,28 @@ function BusinessDrawer({ isOpen, onClose, onSuccess, editing }) {
     setPrevOpenedFor(openedFor)
     if (isOpen) {
       setErr('')
+      setShowPwd(false)
       setForm(
         editing
           ? { name: editing.name || '', rut: editing.rut || '', plan: editing.plan || 'starter', is_active: editing.is_active !== false }
-          : { name: '', rut: '', plan: 'starter', is_active: true }
+          : FRANQUICIA_VACIA
       )
     }
   }
 
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }))
+  const setCheck = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.checked }))
+  const setDueno = (k, valor) => setForm((f) => ({ ...f, dueno: { ...f.dueno, [k]: valor } }))
 
   const handleClose = () => { if (!loading) onClose() }
 
   const onSubmit = async (e) => {
     e.preventDefault()
     setErr('')
-    if (!form.name.trim()) { setErr('El nombre de la franquicia es obligatorio.'); return }
-    if (!editing && !form.rut.trim()) { setErr('El RUT es obligatorio.'); return }
+    const problema = editing
+      ? (!form.name.trim() ? 'El nombre de la franquicia es obligatorio.' : null)
+      : validarAltaFranquicia(form)
+    if (problema) { setErr(problema); return }
     setLoading(true)
     try {
       const ctx = await getAuthContext()
@@ -99,17 +109,11 @@ function BusinessDrawer({ isOpen, onClose, onSuccess, editing }) {
           },
           ctx.token,
         )
+        onSuccess()
       } else {
-        await createBusiness(
-          {
-            name: form.name.trim(),
-            rut: form.rut.trim(),
-            plan: form.plan || 'basic',
-          },
-          ctx.token,
-        )
+        const { business, pendientes } = await crearFranquicia(form, ctx.token)
+        onSuccess(pendientes.length ? { business, pendientes } : null)
       }
-      onSuccess()
       onClose()
     } catch (e2) {
       setErr(formatApiErrorDetail(e2.detail) || e2.message || 'Error al guardar la franquicia')
@@ -167,6 +171,85 @@ function BusinessDrawer({ isOpen, onClose, onSuccess, editing }) {
               {PLANS.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
             </select>
           </div>
+
+          {!editing && (
+            <>
+              <div className="border-t border-[hsl(var(--border))] pt-4 flex flex-col gap-3">
+                <label className="flex items-center gap-2.5 cursor-pointer">
+                  <input type="checkbox" checked={form.conLocal} onChange={setCheck('conLocal')} disabled={loading}
+                    className="h-4 w-4 rounded border-[hsl(var(--border))] text-[hsl(var(--primary))] focus:ring-[hsl(var(--primary))]/40" />
+                  <span className="text-sm font-semibold text-[hsl(var(--foreground))]">Crear su primer local</span>
+                </label>
+                {form.conLocal && (
+                  <>
+                    <div className="flex flex-col gap-1.5">
+                      <Label htmlFor="b-local">Nombre del local <span className="text-red-500">*</span></Label>
+                      <Input id="b-local" placeholder="Casa matriz" value={form.localName} onChange={set('localName')} disabled={loading} />
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      <Label htmlFor="b-sales-model">Modo de venta</Label>
+                      <select id="b-sales-model" value={form.salesModel} onChange={set('salesModel')} disabled={loading} className={selectCls}>
+                        <option value={SALES_MODEL.RESTAURANT}>{SALES_MODEL_LABEL.RESTAURANT}</option>
+                        <option value={SALES_MODEL.AL_PASO}>{SALES_MODEL_LABEL.AL_PASO}</option>
+                      </select>
+                    </div>
+                  </>
+                )}
+              </div>
+
+              <div className="border-t border-[hsl(var(--border))] pt-4 flex flex-col gap-3">
+                <label className="flex items-center gap-2.5 cursor-pointer">
+                  <input type="checkbox" checked={form.conDueno} onChange={setCheck('conDueno')} disabled={loading}
+                    className="h-4 w-4 rounded border-[hsl(var(--border))] text-[hsl(var(--primary))] focus:ring-[hsl(var(--primary))]/40" />
+                  <span className="text-sm font-semibold text-[hsl(var(--foreground))]">Crear la cuenta del dueño</span>
+                </label>
+                {form.conDueno && (
+                  <>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="flex flex-col gap-1.5">
+                        <Label htmlFor="b-dueno-nombre">Nombre <span className="text-red-500">*</span></Label>
+                        <Input id="b-dueno-nombre" value={form.dueno.nombre} onChange={(e) => setDueno('nombre', e.target.value)} disabled={loading} />
+                      </div>
+                      <div className="flex flex-col gap-1.5">
+                        <Label htmlFor="b-dueno-apellido">Apellido</Label>
+                        <Input id="b-dueno-apellido" value={form.dueno.apellido} onChange={(e) => setDueno('apellido', e.target.value)} disabled={loading} />
+                      </div>
+                    </div>
+                    {pideRut() && (
+                      <div className="flex flex-col gap-1.5">
+                        <Label htmlFor="b-dueno-rut">RUT del dueño <span className="text-red-500">*</span></Label>
+                        <Input id="b-dueno-rut" placeholder="12.345.678-5" value={form.dueno.rut} onChange={(e) => setDueno('rut', formatearRut(e.target.value))} disabled={loading} />
+                      </div>
+                    )}
+                    <div className="flex flex-col gap-1.5">
+                      <Label htmlFor="b-dueno-email">Correo electrónico <span className="text-red-500">*</span></Label>
+                      <Input id="b-dueno-email" type="email" value={form.dueno.email} onChange={(e) => setDueno('email', e.target.value)} disabled={loading} />
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      <Label htmlFor="b-dueno-pwd">Contraseña inicial <span className="text-red-500">*</span></Label>
+                      <div className="flex items-center gap-2">
+                        <div className="relative flex-1">
+                          <Input id="b-dueno-pwd" type={showPwd ? 'text' : 'password'} placeholder={`Mínimo ${LARGO_MINIMO_CONTRASENA} caracteres`}
+                            value={form.dueno.password} onChange={(e) => setDueno('password', e.target.value)} disabled={loading} className="pr-9" />
+                          <button type="button" aria-label={showPwd ? 'Ocultar contraseña' : 'Mostrar contraseña'} onClick={() => setShowPwd((v) => !v)}
+                            className="absolute right-2.5 top-2.5 text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]">
+                            {showPwd ? <EyeOff size={16} /> : <Eye size={16} />}
+                          </button>
+                        </div>
+                        <Button type="button" variant="outline" size="sm" disabled={loading}
+                          onClick={() => { setDueno('password', generarClave()); setShowPwd(true) }}>
+                          <Wand2 size={14} /> Generar
+                        </Button>
+                      </div>
+                      <p className="text-xs text-[hsl(var(--muted-foreground))]">
+                        El dueño entra directo con esta clave: entrégasela y podrá cambiarla desde su perfil.
+                      </p>
+                    </div>
+                  </>
+                )}
+              </div>
+            </>
+          )}
 
           {editing && (
             <label className="flex items-center gap-2.5 cursor-pointer">
@@ -363,6 +446,7 @@ export default function TenantManagerPage() {
   const [suspending, setSuspending] = useState(false)
   const [auditTarget, setAuditTarget] = useState(null)
   const [guideOpen, setGuideOpen] = useState(false)
+  const [pendiente, setPendiente] = useState(null) // { business, pendientes } de un alta incompleta
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -443,7 +527,8 @@ export default function TenantManagerPage() {
               <div className="px-5 py-4 space-y-3">
                 {[
                   { title: 'Lista de franquicias', desc: 'Cada franquicia es un negocio con sus propios locales. Aquí las ves todas, con su RUT, plan y estado.' },
-                  { title: 'Crear / editar', desc: 'Registra una nueva franquicia con nombre, RUT y plan, o actualiza los datos de una existente.' },
+                  { title: 'Crear / editar', desc: 'Registra una nueva franquicia con nombre, RUT y plan —y, si quieres, su primer local y la cuenta del dueño—, o actualiza los datos de una existente.' },
+                  { title: 'Usuarios del negocio', desc: 'En el detalle de cada franquicia creas sus usuarios (dueño, encargados, vendedores), los editas, los desactivas y restableces su clave.' },
                   { title: 'Activar / desactivar', desc: 'Suspende el acceso de una franquicia: sus usuarios no pueden iniciar sesión. Los datos se conservan y puedes reactivarla cuando quieras.' },
                   { title: 'Auditoría', desc: 'Cada creación, edición o suspensión queda registrada con usuario y fecha.' },
                   { title: 'Eliminar', desc: 'Borrado irreversible de la franquicia y todos sus datos (locales, usuarios, catálogo, ventas). Preferí Suspender si solo querés cortar acceso.', highlight: true },
@@ -497,6 +582,18 @@ export default function TenantManagerPage() {
           </div>
 
           {err && <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{err}</div>}
+
+          {pendiente && (
+            <div role="alert" className="flex items-start justify-between gap-3 text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+              <p>
+                Se creó <span className="font-semibold">{pendiente.business.name}</span>, pero no se pudo crear {pendiente.pendientes.join(' ni ')}.{' '}
+                <Link to={`/gestor/negocios/${pendiente.business.id}`} className="font-semibold underline">Complétalo desde su detalle</Link>.
+              </p>
+              <button type="button" aria-label="Cerrar aviso" onClick={() => setPendiente(null)} className="shrink-0 rounded p-0.5 hover:bg-amber-100">
+                <X size={14} />
+              </button>
+            </div>
+          )}
 
           {loading ? (
             <p className="text-sm text-[hsl(var(--muted-foreground))] flex items-center gap-2">
@@ -563,7 +660,7 @@ export default function TenantManagerPage() {
         <BusinessDrawer
           isOpen={drawerOpen}
           onClose={() => setDrawerOpen(false)}
-          onSuccess={load}
+          onSuccess={(incompleta) => { setPendiente(incompleta || null); load() }}
           editing={editing}
         />
       </div>

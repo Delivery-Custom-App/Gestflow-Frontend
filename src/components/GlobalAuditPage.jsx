@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { m } from 'framer-motion'
 import { History, Loader2, Search } from 'lucide-react'
 import { getAuthContext, formatApiErrorDetail } from '../lib/apiClient'
-import { getAuditLog, listBusinesses } from '../lib/superAdminApi'
+import { getAuditLog, getAuditPageCount, listBusinesses } from '../lib/superAdminApi'
 import { isV2FeatureEnabled } from '../lib/v2Features'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -28,6 +28,25 @@ function formatDateTime(value) {
   return d.toLocaleString('es-CL', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
 }
 
+const PAGE_SIZE = 50
+
+/**
+ * Números de página a mostrar (base 0), con `null` donde va «…». Siempre
+ * incluye la primera, la última y las vecinas de la actual.
+ */
+function pageItems(current, total) {
+  const keep = new Set([0, total - 1, current - 1, current, current + 1])
+  const items = []
+  let prev = -1
+  for (let i = 0; i < total; i += 1) {
+    if (!keep.has(i)) continue
+    if (i - prev > 1) items.push(null)
+    items.push(i)
+    prev = i
+  }
+  return items
+}
+
 export default function GlobalAuditPage() {
   const [entries, setEntries] = useState(null)
   const [businesses, setBusinesses] = useState([])
@@ -36,14 +55,26 @@ export default function GlobalAuditPage() {
   const [loading, setLoading] = useState(true)
   const [err, setErr] = useState('')
   const [page, setPage] = useState(0)
-  const PAGE_SIZE = 50
+  // `contadas`: total real de páginas (se calcula aparte, ver más abajo). Mientras
+  // no llega, o si falla, se usan las `conocidas`: una página llena sugiere que hay
+  // una siguiente y una incompleta es la última.
+  const [contadas, setContadas] = useState(null)
+  const [conocidas, setConocidas] = useState(1)
+  const totalPages = contadas ?? conocidas
 
   const load = useCallback(async () => {
     setLoading(true)
     try {
       const ctx = await getAuthContext()
       const data = await getAuditLog({ businessId: businessId || undefined, limit: PAGE_SIZE, offset: page * PAGE_SIZE }, ctx.token)
-      setEntries(Array.isArray(data) ? data : [])
+      const rows = Array.isArray(data) ? data : []
+      if (rows.length === 0 && page > 0) {
+        setConocidas(page)
+        setPage(page - 1)
+        return
+      }
+      setEntries(rows)
+      setConocidas((known) => (rows.length === PAGE_SIZE ? Math.max(known, page + 2) : page + 1))
       setErr('')
     } catch (e2) {
       setErr(formatApiErrorDetail(e2.detail) || e2.message || 'Error al cargar la auditoría')
@@ -54,6 +85,21 @@ export default function GlobalAuditPage() {
   }, [businessId, page])
 
   useEffect(() => { load() }, [load])
+
+  // Total real de páginas, para poder ir directo a la última.
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      try {
+        const ctx = await getAuthContext()
+        const n = await getAuditPageCount({ businessId: businessId || undefined, pageSize: PAGE_SIZE }, ctx.token)
+        if (!cancelled && n > 0) setContadas(n)
+      } catch {
+        // sin conteo se queda con las páginas conocidas
+      }
+    })()
+    return () => { cancelled = true }
+  }, [businessId])
 
   useEffect(() => {
     let cancelled = false
@@ -105,7 +151,7 @@ export default function GlobalAuditPage() {
           </div>
           <select aria-label="Filtrar por negocio"
             value={businessId}
-            onChange={(e) => { setBusinessId(e.target.value); setPage(0) }}
+            onChange={(e) => { setBusinessId(e.target.value); setPage(0); setContadas(null); setConocidas(1) }}
             className="w-full sm:w-64 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3 py-2 text-sm text-[hsl(var(--foreground))] focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary))]/40"
           >
             <option value="">Todas las franquicias</option>
@@ -156,16 +202,32 @@ export default function GlobalAuditPage() {
                 ))}
               </div>
 
-              {(entries || []).length === PAGE_SIZE && (
-                <div className="flex items-center justify-between pt-4 border-t border-[hsl(var(--border))] mt-4">
+              {totalPages > 1 && (
+                <nav aria-label="Paginación" className="flex flex-wrap items-center justify-center gap-1.5 pt-4 border-t border-[hsl(var(--border))] mt-4">
                   <Button variant="outline" size="sm" disabled={page === 0} onClick={() => setPage((p) => Math.max(0, p - 1))}>
                     Anterior
                   </Button>
-                  <span className="text-xs text-[hsl(var(--muted-foreground))]">Página {page + 1}</span>
-                  <Button variant="outline" size="sm" onClick={() => setPage((p) => p + 1)}>
+                  {pageItems(page, totalPages).map((item, idx) => (
+                    item === null ? (
+                      <span key={`gap-${idx}`} aria-hidden="true" className="px-1 text-sm text-[hsl(var(--muted-foreground))]">…</span>
+                    ) : (
+                      <Button
+                        key={item}
+                        variant={item === page ? 'default' : 'outline'}
+                        size="sm"
+                        className="min-w-8 px-2"
+                        aria-label={`Página ${item + 1}`}
+                        aria-current={item === page ? 'page' : undefined}
+                        onClick={() => setPage(item)}
+                      >
+                        {item + 1}
+                      </Button>
+                    )
+                  ))}
+                  <Button variant="outline" size="sm" disabled={page >= totalPages - 1} onClick={() => setPage((p) => p + 1)}>
                     Siguiente
                   </Button>
-                </div>
+                </nav>
               )}
             </CardContent>
           </Card>

@@ -1,25 +1,11 @@
 import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
-import { Label } from '@/components/ui/label'
 import { listCajas } from '../../lib/salesApi'
 import { listarMaquinasDelLocal } from '../../lib/maquinasCobro'
 import { hoyEnChile } from '../../lib/fondoEmergencia'
 import { turnoTerminado } from '../../lib/turnos'
-import {
-  MOTIVO_MAX, empleadosConTurnoHoy, forzarTermino, liberarMaquina, mensajeSupervision, pideReasignar, validarMotivo,
-} from '../../lib/supervision'
-
-const CAMPO = 'w-full rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3 py-2 text-sm text-[hsl(var(--foreground))]'
-
-function Motivo({ id, valor, onChange, disabled, placeholder }) {
-  return (
-    <div className="flex flex-col gap-1.5">
-      <Label htmlFor={id}>Motivo</Label>
-      <textarea id={id} rows={2} maxLength={MOTIVO_MAX} value={valor} onChange={(e) => onChange(e.target.value)}
-        disabled={disabled} placeholder={placeholder} className={CAMPO} />
-    </div>
-  )
-}
+import { empleadosConTurnoHoy, liberarMaquina, mensajeSupervision, validarMotivo } from '../../lib/supervision'
+import ForzarTerminoForm, { Motivo } from './ForzarTerminoForm'
 
 /**
  * Supervisión de un turno abierto (T-42), para el administrador y el dueño:
@@ -31,15 +17,11 @@ function Motivo({ id, valor, onChange, disabled, placeholder }) {
 export default function SupervisionTurno({ turno, usuarios = [], onHecho }) {
   const [accion, setAccion] = useState(null) // 'liberar' | 'terminar'
   const [motivo, setMotivo] = useState('')
-  const [destino, setDestino] = useState('')
-  const [pedirDestino, setPedirDestino] = useState(false)
   const [error, setError] = useState('')
   const [aviso, setAviso] = useState('')
   const [ocupado, setOcupado] = useState(false)
   const [maquina, setMaquina] = useState(null)
   const [destinos, setDestinos] = useState([])
-  // T-54: cerrar también todas sus sesiones, con el mismo motivo.
-  const [cerrarSesion, setCerrarSesion] = useState(false)
 
   useEffect(() => {
     let ignore = false
@@ -55,35 +37,22 @@ export default function SupervisionTurno({ turno, usuarios = [], onHecho }) {
     return () => { ignore = true }
   }, [turno, usuarios])
 
-  const empezar = (cual) => { setAccion(cual); setMotivo(''); setDestino(''); setPedirDestino(false); setCerrarSesion(false); setError(''); setAviso('') }
+  const empezar = (cual) => { setAccion(cual); setMotivo(''); setError(''); setAviso('') }
 
-  const confirmar = async (e) => {
+  const liberar = async (e) => {
     e.preventDefault()
     const problema = validarMotivo(motivo)
     if (problema) { setError(problema); return }
-    if (pedirDestino && !destino) { setError('Elige a quién se le pasan las mesas abiertas.'); return }
     setOcupado(true)
     setError('')
     try {
-      if (accion === 'liberar') {
-        const r = await liberarMaquina(turno.pos_machine_id, motivo)
-        const n = Array.isArray(r?.turnos_liberados) ? r.turnos_liberados.length : 0
-        setAviso(`Se liberó la máquina. ${n === 1 ? 'Quedó 1 turno' : `Quedaron ${n} turnos`} sin máquina: deberán elegir otra para cobrar con tarjeta.`)
-      } else {
-        await forzarTermino(turno.id, { motivo, reasignarAUserId: destino || null, cerrarSesion })
-        setAviso(cerrarSesion
-          ? 'Se terminó el turno y se cerraron sus sesiones. El empleado recibe un aviso con el motivo.'
-          : 'Se terminó el turno. El empleado recibe un aviso con el motivo.')
-      }
+      const r = await liberarMaquina(turno.pos_machine_id, motivo)
+      const n = Array.isArray(r?.turnos_liberados) ? r.turnos_liberados.length : 0
+      setAviso(`Se liberó la máquina. ${n === 1 ? 'Quedó 1 turno' : `Quedaron ${n} turnos`} sin máquina: deberán elegir otra para cobrar con tarjeta.`)
       setAccion(null)
       onHecho?.()
     } catch (err) {
-      if (accion === 'terminar' && pideReasignar(err)) {
-        setPedirDestino(true)
-        setError(`${mensajeSupervision(err).replace(/ \(reasignar_a_user_id\)$/, '')}.`)
-      } else {
-        setError(mensajeSupervision(err))
-      }
+      setError(mensajeSupervision(err))
     } finally {
       setOcupado(false)
     }
@@ -106,41 +75,26 @@ export default function SupervisionTurno({ turno, usuarios = [], onHecho }) {
           {terminado && <p className="text-xs text-[hsl(var(--muted-foreground))]">Este turno ya terminó: queda contarlo y cerrarlo.</p>}
         </div>
       )}
-      {accion && (
-        <form onSubmit={confirmar} aria-label={accion === 'liberar' ? 'Liberar máquina' : 'Terminar este turno'} className="flex flex-col gap-3">
+      {accion === 'liberar' && (
+        <form onSubmit={liberar} aria-label="Liberar máquina" className="flex flex-col gap-3">
           <p className="text-xs text-[hsl(var(--muted-foreground))]">
-            {accion === 'liberar'
-              ? 'Se suelta la máquina de todos los turnos que la usan. Su turno sigue abierto; para cobrar con tarjeta deberán elegir otra.'
-              : 'El empleado ya no podrá vender en este turno y su máquina se suelta. La caja queda abierta para contarla y cerrarla.'}
+            Se suelta la máquina de todos los turnos que la usan. Su turno sigue abierto; para cobrar con tarjeta deberán elegir otra.
           </p>
-          <Motivo id={`motivo-${accion}`} valor={motivo} onChange={setMotivo} disabled={ocupado}
-            placeholder={accion === 'liberar' ? 'Ej: El lector quedó sin batería' : 'Ej: Se retiró por una emergencia'} />
-          {accion === 'terminar' && (
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="reasignar-a">{pedirDestino ? 'Pasar sus mesas abiertas a (obligatorio)' : 'Si tiene mesas abiertas, pasarlas a'}</Label>
-              <select id="reasignar-a" value={destino} onChange={(e) => setDestino(e.target.value)} disabled={ocupado} className={CAMPO}>
-                <option value="">{destinos.length ? 'Elige un empleado con turno hoy' : 'No hay otro empleado con turno hoy'}</option>
-                {destinos.map((d) => <option key={d.id} value={d.id}>{d.nombre}</option>)}
-              </select>
-            </div>
-          )}
-          {accion === 'terminar' && (
-            <label className="flex items-start gap-2 text-sm text-[hsl(var(--foreground))]">
-              <input type="checkbox" checked={cerrarSesion} onChange={(e) => setCerrarSesion(e.target.checked)} disabled={ocupado} className="mt-0.5" />
-              <span>
-                Cerrar también su sesión
-                <span className="block text-xs text-[hsl(var(--muted-foreground))]">Se cierran todas sus sesiones abiertas con el mismo motivo: tendrá que volver a iniciar sesión.</span>
-              </span>
-            </label>
-          )}
+          <Motivo id="motivo-liberar" valor={motivo} onChange={setMotivo} disabled={ocupado} placeholder="Ej: El lector quedó sin batería" />
           {error && <p role="alert" className="text-xs text-red-600">{error}</p>}
           <div className="flex justify-end gap-2">
             <Button type="button" size="sm" variant="outline" onClick={() => setAccion(null)} disabled={ocupado}>Cancelar</Button>
-            <Button type="submit" size="sm" variant="danger" disabled={ocupado}>
-              {ocupado ? 'Un momento…' : accion === 'liberar' ? 'Liberar' : 'Terminar turno'}
-            </Button>
+            <Button type="submit" size="sm" variant="danger" disabled={ocupado}>{ocupado ? 'Un momento…' : 'Liberar'}</Button>
           </div>
         </form>
+      )}
+      {accion === 'terminar' && (
+        <ForzarTerminoForm
+          turnoId={turno.id}
+          destinos={destinos}
+          onCancelar={() => setAccion(null)}
+          onHecho={(texto) => { setAviso(texto); setAccion(null); onHecho?.() }}
+        />
       )}
     </section>
   )

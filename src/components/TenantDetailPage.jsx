@@ -4,19 +4,38 @@ import { m } from 'framer-motion'
 import { formatCLPCurrency } from '../lib/formatCLP'
 import {
   ArrowLeft, Building2, Store, Users, ShoppingCart, DollarSign, TrendingUp,
-  Loader2, Shield, History, Power, UtensilsCrossed, Table2,
+  Loader2, Shield, History, Power, UtensilsCrossed, Table2, UserPlus, Pencil, KeyRound, Plus,
 } from 'lucide-react'
 import { getAuthContext, formatApiErrorDetail } from '../lib/apiClient'
 import {
+  createBusinessLocal,
   getBusinessStats,
+  listAllUsers,
   listBusinessLocals,
   updateBusiness,
   updateLocalSalesModel,
 } from '../lib/superAdminApi'
 import { SALES_MODEL, SALES_MODEL_LABEL, isAlPasoLocal } from '../lib/salesModel'
+import { ROL_LABEL } from '../lib/altaUsuario'
+import { cambiarEstadoUsuario, restablecerClave, textoDeError } from '../lib/gestionUsuarios'
+import { CreateUserDrawer } from './UsersListPage'
+import EditarUsuarioDialog from './EditarUsuarioDialog'
+import ClaveTemporalDialog from './ClaveTemporalDialog'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Dialog, DialogBody, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+
+// Roles que el superadmin asigna dentro de una franquicia (#134): nunca otro superadmin.
+const ROLES_DE_FRANQUICIA = ['ADMIN_NEGOCIO', 'ADMIN', 'EMPLEADO']
+const ORDEN_ROL = { ADMIN_NEGOCIO: 0, ADMIN: 1, EMPLEADO: 2 }
+const ROLE_BADGE = {
+  ADMIN_NEGOCIO: 'bg-indigo-100 text-indigo-700 border-indigo-200',
+  ADMIN: 'bg-blue-100 text-blue-700 border-blue-200',
+  EMPLEADO: 'bg-stone-100 text-stone-700 border-stone-200',
+}
 
 const PLAN_LABEL = { enterprise: 'Enterprise', professional: 'Professional', starter: 'Standard', basic: 'Standard' }
 const PLAN_BADGE = {
@@ -32,6 +51,7 @@ const ACTION_LABEL = {
   'business.delete': 'Eliminación de franquicia',
   'business.deactivate': 'Suspensión de franquicia',
   'business.reactivate': 'Reactivación de franquicia',
+  'local.create': 'Apertura de local',
   'user.create': 'Alta de usuario',
   'user.update': 'Actualización de usuario',
   'user.role_change': 'Cambio de rol',
@@ -98,6 +118,62 @@ function StatusBar({ data }) {
   )
 }
 
+function NuevoLocalDialog({ businessId, onClose, onCreado }) {
+  const [name, setName] = useState('')
+  const [salesModel, setSalesModel] = useState(SALES_MODEL.RESTAURANT)
+  const [guardando, setGuardando] = useState(false)
+  const [error, setError] = useState('')
+
+  const guardar = async (e) => {
+    e.preventDefault()
+    if (!name.trim()) { setError('Ingresa el nombre del local.'); return }
+    setGuardando(true)
+    setError('')
+    try {
+      const ctx = await getAuthContext()
+      await createBusinessLocal(businessId, { name: name.trim(), salesModel }, ctx.token)
+      onCreado()
+    } catch (e2) {
+      setError(textoDeError(e2, 'No se pudo crear el local'))
+      setGuardando(false)
+    }
+  }
+
+  return (
+    <Dialog open onOpenChange={(abierto) => { if (!abierto && !guardando) onClose() }}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Nuevo local</DialogTitle>
+          <DialogDescription>Abre un local para esta franquicia.</DialogDescription>
+        </DialogHeader>
+        <DialogBody>
+          <form onSubmit={guardar} className="flex flex-col gap-4">
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="nl-name">Nombre <span className="text-red-500">*</span></Label>
+              <Input id="nl-name" placeholder="Casa matriz" value={name} onChange={(e) => setName(e.target.value)} disabled={guardando} />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="nl-model">Modo de venta</Label>
+              <select id="nl-model" value={salesModel} onChange={(e) => setSalesModel(e.target.value)} disabled={guardando}
+                className="w-full rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3 py-2 text-sm text-[hsl(var(--foreground))]">
+                <option value={SALES_MODEL.RESTAURANT}>{SALES_MODEL_LABEL.RESTAURANT}</option>
+                <option value={SALES_MODEL.AL_PASO}>{SALES_MODEL_LABEL.AL_PASO}</option>
+              </select>
+            </div>
+            {error && <p role="alert" className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="outline" onClick={onClose} disabled={guardando}>Cancelar</Button>
+              <Button type="submit" disabled={guardando}>
+                {guardando ? <span className="flex items-center gap-2"><Loader2 className="h-3.5 w-3.5 animate-spin" />Creando…</span> : 'Crear local'}
+              </Button>
+            </div>
+          </form>
+        </DialogBody>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 export default function TenantDetailPage() {
   const { businessId } = useParams()
   const navigate = useNavigate()
@@ -107,22 +183,31 @@ export default function TenantDetailPage() {
   const [toggling, setToggling] = useState(false)
   const [savingLocalId, setSavingLocalId] = useState('')
   const [err, setErr] = useState('')
+  const [users, setUsers] = useState([])
+  const [creandoUsuario, setCreandoUsuario] = useState(false)
+  const [creandoLocal, setCreandoLocal] = useState(false)
+  const [editando, setEditando] = useState(null)
+  const [ocupadoId, setOcupadoId] = useState('')
+  const [claveTemporal, setClaveTemporal] = useState(null) // { nombre, clave, correoEnviado }, solo en memoria
 
   const load = useCallback(async () => {
     setLoading(true)
     try {
       const ctx = await getAuthContext()
-      const [stats, localRows] = await Promise.all([
+      const [stats, localRows, userRows] = await Promise.all([
         getBusinessStats(businessId, ctx.token),
         listBusinessLocals(businessId, ctx.token),
+        listAllUsers({ businessId }, ctx.token),
       ])
       setData(stats)
       setLocals(Array.isArray(localRows) ? localRows : [])
+      setUsers(Array.isArray(userRows) ? userRows : [])
       setErr('')
     } catch (e2) {
       setErr(formatApiErrorDetail(e2.detail) || e2.message || 'Error al cargar el detalle del negocio')
       setData(null)
       setLocals([])
+      setUsers([])
     } finally {
       setLoading(false)
     }
@@ -171,6 +256,42 @@ export default function TenantDetailPage() {
     }
   }
 
+  const nombreDe = (u) => u.name || u.email
+
+  const handleToggleUser = async (u) => {
+    const activar = u.is_active === false
+    const ok = window.confirm(
+      activar
+        ? `¿Reactivar a ${nombreDe(u)}? Podrá volver a iniciar sesión.`
+        : `¿Desactivar a ${nombreDe(u)}? No podrá iniciar sesión; su historial se conserva.`
+    )
+    if (!ok) return
+    setOcupadoId(String(u.id))
+    setErr('')
+    try {
+      await cambiarEstadoUsuario(u.id, activar)
+      await load()
+    } catch (e2) {
+      setErr(textoDeError(e2, 'No se pudo cambiar el estado del usuario'))
+    } finally {
+      setOcupadoId('')
+    }
+  }
+
+  const handleResetPassword = async (u) => {
+    if (!window.confirm(`¿Restablecer la clave de ${nombreDe(u)}? Se cerrarán sus sesiones y deberá cambiarla al entrar.`)) return
+    setOcupadoId(String(u.id))
+    setErr('')
+    try {
+      const r = await restablecerClave(u.id)
+      setClaveTemporal({ nombre: nombreDe(u), clave: r?.temporary_password || '', correoEnviado: Boolean(r?.email_sent) })
+    } catch (e2) {
+      setErr(textoDeError(e2, 'No se pudo restablecer la clave'))
+    } finally {
+      setOcupadoId('')
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex-1 overflow-y-auto no-scrollbar bg-[hsl(var(--background))] p-8">
@@ -181,7 +302,8 @@ export default function TenantDetailPage() {
     )
   }
 
-  if (err || !data) {
+  // Sin datos no hay página; un error de una acción se muestra en línea, sin perderla.
+  if (!data) {
     return (
       <div className="flex-1 overflow-y-auto no-scrollbar bg-[hsl(var(--background))] p-8">
         <button onClick={() => navigate('/gestor')} className="flex items-center gap-1.5 text-sm text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--primary))] mb-4">
@@ -272,45 +394,20 @@ export default function TenantDetailPage() {
             </CardContent>
           </Card>
 
-          {/* Administradores */}
-          <Card>
-            <CardContent className="p-5">
-              <h3 className="text-sm font-bold text-[hsl(var(--foreground))] mb-4">Administradores ({stats.admins || 0})</h3>
-              {(data.admins || []).length === 0 ? (
-                <p className="text-xs text-[hsl(var(--muted-foreground))]">Sin administradores registrados.</p>
-              ) : (
-                <div className="flex flex-col divide-y divide-[hsl(var(--border))]">
-                  {(data.admins || []).map((admin) => (
-                    <div key={admin.id} className="py-2.5 flex items-center justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="text-sm font-semibold text-[hsl(var(--foreground))] truncate">{admin.name || admin.email}</p>
-                        <p className="text-xs text-[hsl(var(--muted-foreground))] truncate">{admin.email}</p>
-                      </div>
-                      <div className="flex items-center gap-2 shrink-0">
-                        {admin.is_active === false && <span className="text-xs font-medium text-red-600">Inactivo</span>}
-                        <Badge className="text-[10px] font-bold uppercase tracking-wide rounded-full px-2 py-0.5 border bg-blue-100 text-blue-700 border-blue-200">
-                          {admin.role}
-                        </Badge>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Modo de venta por local */}
+        {/* Locales y su modo de venta */}
         <Card>
           <CardContent className="p-5">
             <div className="flex items-start justify-between gap-3 mb-4">
               <div>
-                <h3 className="text-sm font-bold text-[hsl(var(--foreground))]">Modo de venta por local</h3>
+                <h3 className="text-sm font-bold text-[hsl(var(--foreground))]">Locales ({locals.length})</h3>
                 <p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">
                   Activa <strong>comida al paso</strong> para locales sin mesas (solo caja + menú).
                   Con mesas mantiene el POS de restaurante.
                 </p>
               </div>
+              <Button variant="outline" size="sm" onClick={() => setCreandoLocal(true)}>
+                <Plus size={14} /> Nuevo local
+              </Button>
             </div>
             {locals.length === 0 ? (
               <p className="text-xs text-[hsl(var(--muted-foreground))]">Este negocio aún no tiene locales.</p>
@@ -351,6 +448,65 @@ export default function TenantDetailPage() {
             )}
           </CardContent>
         </Card>
+        </div>
+
+        {/* Usuarios del negocio (#134) */}
+        <Card>
+          <CardContent className="p-5">
+            <div className="flex items-start justify-between gap-3 mb-4">
+              <div>
+                <h3 className="text-sm font-bold text-[hsl(var(--foreground))]">Usuarios ({users.length})</h3>
+                <p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">
+                  Dueño, encargados y vendedores de esta franquicia. Los encargados y vendedores trabajan en un local.
+                </p>
+              </div>
+              <Button size="sm" onClick={() => setCreandoUsuario(true)}>
+                <UserPlus size={14} /> Nuevo usuario
+              </Button>
+            </div>
+            {users.length === 0 ? (
+              <p className="text-xs text-[hsl(var(--muted-foreground))]">
+                Sin usuarios. Crea la cuenta del dueño para que pueda entrar a configurar su negocio.
+              </p>
+            ) : (
+              <div className="flex flex-col divide-y divide-[hsl(var(--border))]">
+                {[...users]
+                  .sort((a, b) => (ORDEN_ROL[a.role] ?? 9) - (ORDEN_ROL[b.role] ?? 9) || nombreDe(a).localeCompare(nombreDe(b), 'es'))
+                  .map((u) => {
+                    const busy = String(ocupadoId) === String(u.id)
+                    const local = locals.find((l) => String(l.id) === String(u.local_id))
+                    const inactivo = u.is_active === false
+                    return (
+                      <div key={u.id} className={`py-2.5 flex flex-wrap items-center justify-between gap-3 ${inactivo ? 'opacity-70' : ''}`}>
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold text-[hsl(var(--foreground))] truncate">{nombreDe(u)}</p>
+                          <p className="text-xs text-[hsl(var(--muted-foreground))] truncate">
+                            {u.email}{local ? ` · ${local.name}` : ''}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          {inactivo && <span className="text-xs font-medium text-red-600 mr-1">Inactivo</span>}
+                          <Badge className={`text-[10px] font-bold uppercase tracking-wide rounded-full px-2 py-0.5 border ${ROLE_BADGE[u.role] || ROLE_BADGE.EMPLEADO}`}>
+                            {ROL_LABEL[u.role] || u.role}
+                          </Badge>
+                          <Button variant="ghost" size="sm" disabled={busy} onClick={() => setEditando(u)} title="Editar" aria-label={`Editar a ${nombreDe(u)}`}>
+                            <Pencil size={14} />
+                          </Button>
+                          <Button variant="ghost" size="sm" disabled={busy || inactivo} onClick={() => handleResetPassword(u)} title="Restablecer clave" aria-label={`Restablecer la clave de ${nombreDe(u)}`}>
+                            <KeyRound size={14} />
+                          </Button>
+                          <Button variant="ghost" size="sm" disabled={busy} onClick={() => handleToggleUser(u)}
+                            title={inactivo ? 'Reactivar' : 'Desactivar'} aria-label={`${inactivo ? 'Reactivar' : 'Desactivar'} a ${nombreDe(u)}`}>
+                            {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Power size={14} className={inactivo ? 'text-emerald-600' : 'text-red-500'} />}
+                          </Button>
+                        </div>
+                      </div>
+                    )
+                  })}
+              </div>
+            )}
+          </CardContent>
+        </Card>
 
         {/* Auditoría reciente */}
         <Card>
@@ -382,6 +538,35 @@ export default function TenantDetailPage() {
           </CardContent>
         </Card>
       </div>
+
+      <CreateUserDrawer
+        isOpen={creandoUsuario}
+        onClose={() => setCreandoUsuario(false)}
+        onSuccess={load}
+        locales={locals}
+        localesLoading={false}
+        userRole="SUPERADMIN"
+        roles={ROLES_DE_FRANQUICIA}
+        businessId={businessId}
+      />
+      {editando && (
+        <EditarUsuarioDialog
+          usuario={editando}
+          locales={locals}
+          miRol="SUPERADMIN"
+          roles={ROLES_DE_FRANQUICIA}
+          onClose={() => setEditando(null)}
+          onGuardado={() => { setEditando(null); load() }}
+        />
+      )}
+      {creandoLocal && (
+        <NuevoLocalDialog
+          businessId={businessId}
+          onClose={() => setCreandoLocal(false)}
+          onCreado={() => { setCreandoLocal(false); load() }}
+        />
+      )}
+      {claveTemporal && <ClaveTemporalDialog {...claveTemporal} onClose={() => setClaveTemporal(null)} />}
     </div>
   )
 }

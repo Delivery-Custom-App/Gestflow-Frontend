@@ -1,8 +1,10 @@
 import { apiRequest } from './apiClient'
 import {
   v2GetAuditLog,
+  v2GetAuditPageCount,
   v2GetBusinessStats,
   v2GetGlobalStats,
+  v2GetPlatformSummary,
   v2GetObservability,
   v2ListAllUsers,
 } from './v2SuperAdminAdapter'
@@ -52,6 +54,14 @@ export async function getAuditLog(opts = {}, token) {
   return v2GetAuditLog(opts, token)
 }
 
+export async function getAuditPageCount(opts = {}, token) {
+  return v2GetAuditPageCount(opts, token)
+}
+
+export function getPlatformSummary(range, token) {
+  return v2GetPlatformSummary(range, token)
+}
+
 export async function getGlobalStats(token) {
   return v2GetGlobalStats(token)
 }
@@ -67,6 +77,17 @@ export async function getBusinessStats(businessId, token) {
 
 export async function listBusinessLocals(businessId, token) {
   return apiRequest(`/locals?business_id=${encodeURIComponent(String(businessId))}`, { token })
+}
+
+// #134: el superadmin abre locales de una franquicia (POST /locals con su business_id).
+export async function createBusinessLocal(businessId, { name, salesModel }, token) {
+  const r = await apiRequest('/locals', {
+    method: 'POST',
+    body: { business_id: businessId, name, ...(salesModel ? { sales_model: salesModel } : {}) },
+    token,
+  })
+  invalidarLocales()
+  return r
 }
 
 export async function updateLocalSalesModel(localId, salesModel, token) {

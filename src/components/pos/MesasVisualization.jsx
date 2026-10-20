@@ -1,5 +1,5 @@
 import { memo } from 'react'
-import { Pencil, Trash2, Users, DollarSign, Link2, Unlink, Check, UserRound } from 'lucide-react'
+import { Pencil, Trash2, Users, DollarSign, Link2, Unlink, Check, UserRound, DoorOpen } from 'lucide-react'
 import { formatCLP } from '../../lib/formatCLP'
 import { cn } from '@/lib/utils'
 import AccionDeMesas from './AccionDeMesas'
@@ -11,7 +11,7 @@ import AccionDeMesas from './AccionDeMesas'
 function MesasVisualization({
   mesas = [], loading = false, onMesaSelect = null, onEditMesa = null, onDeleteMesa = null,
   gruposPorMesa = null, modoAgrupar = false, seleccionadas = null, onToggleSeleccion = null, onDeshacerGrupo = null,
-  atencionPorMesa = null,
+  onLiberarGrupo = null, atencionPorMesa = null,
 }) {
   if (loading) {
     return (
@@ -48,6 +48,7 @@ function MesasVisualization({
           seleccionada={Boolean(seleccionadas?.has(String(mesa.id)))}
           onToggleSeleccion={onToggleSeleccion}
           onDeshacerGrupo={onDeshacerGrupo}
+          onLiberarGrupo={onLiberarGrupo}
           atencion={atencionPorMesa?.get(String(mesa.id)) || null}
         />
       ))}
@@ -257,7 +258,7 @@ function TableIllustration({ chairs = 4, className, stateKey = 'libre' }) {
 const MesaCard = memo(function MesaCard({
   mesa, index, onMesaSelect, onEditMesa, onDeleteMesa,
   grupo = null, modoAgrupar = false, seleccionada = false, onToggleSeleccion = null, onDeshacerGrupo = null,
-  atencion = null,
+  onLiberarGrupo = null, atencion = null,
 }) {
   const stateKey = mesa.is_active === false ? 'inactiva' : (mesa.state || 'libre')
   const stateConfig = STATE_CONFIG[stateKey] || STATE_CONFIG.libre
@@ -294,20 +295,34 @@ const MesaCard = memo(function MesaCard({
       )}
     >
       {grupo && (
-        <div className="flex items-center justify-between gap-2 rounded-t-2xl bg-[hsl(var(--primary)/0.1)] px-4 py-1.5">
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-t-2xl bg-[hsl(var(--primary)/0.1)] px-4 py-1.5">
           <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-[hsl(var(--primary))]">
             <Link2 size={12} />
             {grupo.etiqueta} · {grupo.mesaIds.length} mesas
             {grupo.capacidad ? ` · ${grupo.capacidad} personas` : ''}
           </span>
-          {onDeshacerGrupo && !modoAgrupar && (
-            <AccionDeMesas
-              icon={Unlink}
-              onClick={(e) => { e.stopPropagation(); onDeshacerGrupo(grupo) }}
-              title="Separar el grupo"
-            >
-              Separar
-            </AccionDeMesas>
+          {!modoAgrupar && (onLiberarGrupo || onDeshacerGrupo) && (
+            <div className="flex flex-wrap items-start gap-2">
+              {/* Solo encargado y dueño: suelta todas las mesas del grupo y lo separa. */}
+              {onLiberarGrupo && (
+                <AccionDeMesas
+                  icon={DoorOpen}
+                  onClick={(e) => { e.stopPropagation(); onLiberarGrupo(grupo) }}
+                  title="Liberar todas las mesas del grupo y separarlo"
+                >
+                  Liberar grupo
+                </AccionDeMesas>
+              )}
+              {onDeshacerGrupo && (
+                <AccionDeMesas
+                  icon={Unlink}
+                  onClick={(e) => { e.stopPropagation(); onDeshacerGrupo(grupo) }}
+                  title="Separar el grupo"
+                >
+                  Separar
+                </AccionDeMesas>
+              )}
+            </div>
           )}
         </div>
       )}
