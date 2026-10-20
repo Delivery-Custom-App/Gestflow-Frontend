@@ -112,6 +112,11 @@ describe('datosDeAlta', () => {
   it('un dueño se crea sin local', () => {
     expect(datosDeAlta({ ...VALIDO, role: 'ADMIN_NEGOCIO' }, null).local_id).toBeNull()
   })
+
+  it('sin local, el negocio sale del businessId (#134: dueño creado por el superadmin)', () => {
+    expect(datosDeAlta({ ...VALIDO, role: 'ADMIN_NEGOCIO' }, null, 'b-9').business_id).toBe('b-9')
+    expect(datosDeAlta(VALIDO, { business_id: 'b-1' }, 'b-9').business_id).toBe('b-1')
+  })
 })
 
 describe('nombreVisible', () => {

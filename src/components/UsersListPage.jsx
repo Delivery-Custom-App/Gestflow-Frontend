@@ -51,16 +51,18 @@ function roleBadge(role) {
 }
 
 // ── Drawer crear usuario ─────────────────────────────────────────────────────
-export function CreateUserDrawer({ isOpen, onClose, onSuccess, locales, localesLoading, userRole, localIdPorDefecto = '', localFijo = '' }) {
+export function CreateUserDrawer({ isOpen, onClose, onSuccess, locales, localesLoading, userRole, localIdPorDefecto = '', localFijo = '', roles = null, businessId = null }) {
   // Abierto desde una franquicia, el alta llega con ese local elegido. El
   // encargado (T-47) solo crea vendedores de su local: rol y local fijos.
+  // Desde el detalle de un negocio (#134) el superadmin pasa `roles` (sin
+  // superadmin) y `businessId`, que es el negocio del dueño que no lleva local.
   const formInicial = { ...FORM_VACIO, local_id: localFijo || localIdPorDefecto || '' }
   const [form, setForm]       = useState(formInicial)
   const [loading, setLoading] = useState(false)
   const [err, setErr]         = useState('')
   const [showPwd, setShowPwd] = useState(false)
 
-  const availableRoles = rolesAsignables(userRole)
+  const availableRoles = roles || rolesAsignables(userRole)
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }))
   const setRut = (e) => setForm((f) => ({ ...f, rut: formatearRut(e.target.value) }))
 
@@ -80,7 +82,7 @@ export function CreateUserDrawer({ isOpen, onClose, onSuccess, locales, localesL
     setLoading(true)
     try {
       const local = locales.find((l) => String(l.id) === String(form.local_id))
-      await createUser(datosDeAlta(form, local))
+      await createUser(datosDeAlta(form, local, businessId))
       reset()
       onSuccess()
       onClose()

@@ -80,8 +80,12 @@ export function validarAlta(form) {
   return null
 }
 
-/** Cuerpo para `createUser`: el nombre viaja como first_name/last_name; el RUT, solo si el backend lo guarda. */
-export function datosDeAlta(form, local) {
+/**
+ * Cuerpo para `createUser`: el nombre viaja como first_name/last_name; el RUT, solo si el backend lo guarda.
+ * El negocio sale del local; sin local (un dueño), del `businessId` de quien da el alta (#134: el
+ * superadmin crea al dueño de una franquicia).
+ */
+export function datosDeAlta(form, local, businessId = null) {
   const apellido = String(form.apellido || '').trim()
   return {
     first_name: String(form.nombre).trim(),
@@ -91,7 +95,7 @@ export function datosDeAlta(form, local) {
     password: form.password,
     role: form.role,
     local_id: rolConLocal(form.role) ? form.local_id || null : null,
-    business_id: local?.business_id || null,
+    business_id: local?.business_id || businessId || null,
   }
 }
 

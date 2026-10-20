@@ -128,10 +128,13 @@ function aggregateLocalSummaries(locals, summaries) {
 
 function mapUserRow(user, businessNames) {
   const businessId = user.business_id ? String(user.business_id) : ''
+  const fullName = [user.first_name, user.last_name].map((s) => String(s || '').trim()).filter(Boolean).join(' ')
   return {
     id: user.id,
     email: user.email,
-    name: displayNameFromEmail(user.email),
+    name: fullName || displayNameFromEmail(user.email),
+    first_name: user.first_name ?? null,
+    last_name: user.last_name ?? null,
     role: user.role,
     is_active: user.is_active !== false,
     business_id: user.business_id ?? null,

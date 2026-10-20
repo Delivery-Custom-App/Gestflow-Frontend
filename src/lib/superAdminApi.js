@@ -79,6 +79,17 @@ export async function listBusinessLocals(businessId, token) {
   return apiRequest(`/locals?business_id=${encodeURIComponent(String(businessId))}`, { token })
 }
 
+// #134: el superadmin abre locales de una franquicia (POST /locals con su business_id).
+export async function createBusinessLocal(businessId, { name, salesModel }, token) {
+  const r = await apiRequest('/locals', {
+    method: 'POST',
+    body: { business_id: businessId, name, ...(salesModel ? { sales_model: salesModel } : {}) },
+    token,
+  })
+  invalidarLocales()
+  return r
+}
+
 export async function updateLocalSalesModel(localId, salesModel, token) {
   const r = await apiRequest(`/locals/${encodeURIComponent(String(localId))}`, {
     method: 'PATCH',

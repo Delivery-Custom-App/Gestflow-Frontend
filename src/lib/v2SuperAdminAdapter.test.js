@@ -101,6 +101,17 @@ describe('v2ListAllUsers', () => {
     expect(ana.business_name).toBe('Panadería Centro')
   })
 
+  it('usa nombre y apellido cuando el usuario los tiene', async () => {
+    apiRequest.mockImplementation(async (path) => {
+      if (path === '/businesses') return businesses
+      if (path === '/users') return [{ ...users[0], first_name: 'Ana María', last_name: 'Pérez' }]
+      if (path === '/locals') return locals
+      return []
+    })
+    const [ana] = await v2ListAllUsers()
+    expect(ana).toMatchObject({ name: 'Ana María Pérez', first_name: 'Ana María', last_name: 'Pérez' })
+  })
+
   it('usuario sin business_id → business_name null', async () => {
     mockPlatform()
     const rows = await v2ListAllUsers()
