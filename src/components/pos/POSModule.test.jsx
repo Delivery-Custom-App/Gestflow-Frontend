@@ -9,6 +9,13 @@ const bajaDeMesa = vi.hoisted(() => vi.fn())
 const crearGrupo = vi.hoisted(() => vi.fn())
 // null = las mesas de siempre (MESAS); un test puede poner otras.
 const tablero = vi.hoisted(() => ({ mesas: null }))
+// Grupos de mesas (#221): el índice mesa → grupo y lo que hace «Separar», que cada test decide.
+const grupos = vi.hoisted(() => ({ porMesa: new Map(), deshacer: vi.fn(), refresh: vi.fn() }))
+const refrescarMesas = vi.hoisted(() => vi.fn())
+const toastExito = vi.hoisted(() => vi.fn())
+const liberarGrupoMock = vi.hoisted(() => vi.fn())
+// Lo que le dice el cobro de una mesa al módulo cuando soltó el resto del grupo.
+const cobro = vi.hoisted(() => ({ resultado: null }))
 const MESAS = [
   { id: 'm1', name: 'Mesa 1', nombre: 'Mesa 1', state: 'ocupada', capacidad: 4, total: 5000,
     ordenes_en_curso: [{ id: 'o1', caja_id: 'caja-ana', waiter_user_id: 'beto' }] },
@@ -20,13 +27,25 @@ const SIN_MESAS_EN_CURSO = MESAS.filter((m) => m.ordenes_en_curso.length === 0)
 vi.mock('../../context/AuthContext', () => ({ useAuth: () => sesion }))
 vi.mock('../../hooks/useCajaActiva', () => ({ useCajaActiva: () => ({ cajaId: 'caja-enc' }) }))
 vi.mock('../../hooks/useMesasConEstado', () => ({
-  useMesasConEstado: () => ({ mesas: tablero.mesas ?? MESAS, loading: false, error: null, refresh: vi.fn(), deleteMesa: bajaDeMesa }),
+  useMesasConEstado: () => ({ mesas: tablero.mesas ?? MESAS, loading: false, error: null, refresh: refrescarMesas, deleteMesa: bajaDeMesa }),
 }))
 vi.mock('../../hooks/useMesasKPIs', () => ({ useMesasKPIs: () => ({ kpis: null, loading: false, error: null, refresh: vi.fn() }) }))
-vi.mock('../../hooks/useGruposDeMesas', () => ({ useGruposDeMesas: () => ({ porMesa: new Map(), crear: crearGrupo, deshacer: vi.fn() }) }))
+vi.mock('../../hooks/useGruposDeMesas', () => ({
+  useGruposDeMesas: () => ({ porMesa: grupos.porMesa, crear: crearGrupo, deshacer: grupos.deshacer, refresh: grupos.refresh }),
+}))
+vi.mock('sonner', () => ({ toast: { success: toastExito, error: vi.fn() } }))
+// La liberación en sí se prueba en lib/liberarGrupo.test.js: aquí solo importa cómo reacciona la pantalla.
+vi.mock('../../lib/liberarGrupo', async (importOriginal) => ({ ...(await importOriginal()), liberarGrupo: liberarGrupoMock }))
 vi.mock('./MesasKPICards', () => ({ default: () => null }))
 vi.mock('./MPConfigDrawer', () => ({ default: () => null }))
-vi.mock('./MesaWorkspace', () => ({ default: ({ atencion }) => <p>mesa abierta · atiende {atencion?.atiende} · antes {atencion?.antes}</p> }))
+vi.mock('./MesaWorkspace', () => ({
+  default: ({ atencion, onGrupoActualizado, onBack }) => (
+    <div>
+      <p>mesa abierta · atiende {atencion?.atiende} · antes {atencion?.antes}</p>
+      <button type="button" onClick={() => { onGrupoActualizado?.(cobro.resultado); onBack() }}>simular cobro</button>
+    </div>
+  ),
+}))
 vi.mock('../../lib/atencionMesas', async (importOriginal) => ({
   ...(await importOriginal()),
   useDatosDeAtencion: () => ({
@@ -52,7 +71,11 @@ function montar() {
 }
 const tarjeta = (nombre) => screen.getByText(nombre).closest('div.group')
 
-beforeEach(() => { sesion.isWorker = false; sesion.user = { id: 'enc' }; bajaDeMesa.mockReset(); crearGrupo.mockReset(); tablero.mesas = null })
+beforeEach(() => {
+  sesion.isWorker = false; sesion.user = { id: 'enc' }; bajaDeMesa.mockReset(); crearGrupo.mockReset(); tablero.mesas = null
+  grupos.porMesa = new Map(); grupos.deshacer.mockReset(); grupos.refresh.mockReset()
+  refrescarMesas.mockReset(); toastExito.mockReset(); liberarGrupoMock.mockReset(); cobro.resultado = null
+})
 
 describe('POSModule · quién atiende y traspasos', () => {
   it('el encargado ve quién atiende cada mesa en curso y quién la atendía', () => {
@@ -213,5 +236,233 @@ describe('POSModule · acciones de mesas (UI de botones)', () => {
 
     expect(nombresDeBotones()).toEqual(['Agrupar mesas'])
     expect(screen.getByRole('button', { name: 'Agrupar mesas' })).toHaveClass('h-10')
+  })
+})
+
+// Un grupo de 3 atascado: la del medio tiene un pedido sin cobrar y las otras dos quedaron ocupadas sin pedido.
+const GRUPO = { id: 'g1', etiqueta: 'Grupo 1', mesaIds: ['m1', 'm2', 'm3'], capacidad: null }
+const sinPedido = (id) => ({ id, name: `Mesa ${id[1]}`, nombre: `Mesa ${id[1]}`, state: 'ocupada', capacidad: 2, total: null, ordenes_en_curso: [] })
+const GRUPO_ATASCADO = [
+  sinPedido('m1'),
+  { ...sinPedido('m2'), total: 5400, ordenes_en_curso: [{ id: 'o2', caja_id: 'caja-ana', waiter_user_id: 'beto', total: 5400 }] },
+  sinPedido('m3'),
+]
+const RESULTADO_LIBERADO = { liberadas: [{ id: 'm1', nombre: 'Mesa 1' }, { id: 'm3', nombre: 'Mesa 3' }], fallidas: [], separado: true, errorAlSeparar: null, sinCobrar: 5400 }
+const alerta = () => screen.getByRole('alert')
+
+describe('POSModule · liberar el grupo completo (#221)', () => {
+  beforeEach(() => {
+    tablero.mesas = GRUPO_ATASCADO
+    grupos.porMesa = new Map(GRUPO.mesaIds.map((id) => [id, GRUPO]))
+  })
+
+  it('el encargado tiene «Liberar grupo» junto a «Separar»; el vendedor solo «Separar»', () => {
+    const { unmount } = montar()
+    expect(screen.getAllByRole('button', { name: 'Liberar grupo' })).toHaveLength(3)
+    expect(screen.getAllByRole('button', { name: 'Separar' })).toHaveLength(3)
+    unmount()
+
+    sesion.isWorker = true
+    sesion.user = { id: 'ana' }
+    montar()
+    expect(screen.queryByRole('button', { name: 'Liberar grupo' })).not.toBeInTheDocument()
+    expect(screen.getAllByRole('button', { name: 'Separar' })).toHaveLength(3)
+  })
+
+  describe('«Separar» con mesas todavía ocupadas (409)', () => {
+    beforeEach(() => {
+      grupos.deshacer.mockRejectedValue(Object.assign(
+        new Error('No se puede separar: Mesa 1, Mesa 2, Mesa 3 todavía no está(n) disponible(s). Libéralas antes de separarlas.'),
+        { status: 409 },
+      ))
+    })
+
+    it('en vez del texto del backend dice qué mesas siguen ocupadas y ofrece «Liberar grupo» y ir a la que tiene pedido', async () => {
+      const user = userEvent.setup()
+      montar()
+      await user.click(screen.getAllByRole('button', { name: 'Separar' })[0])
+
+      const aviso = await screen.findByRole('alert')
+      expect(aviso).toHaveTextContent('No se puede separar Grupo 1: Mesa 1, Mesa 2 y Mesa 3 siguen ocupadas.')
+      expect(aviso).toHaveTextContent('Mesa 1: ocupada, sin pedido (hay que liberarla)')
+      expect(aviso).toHaveTextContent('Mesa 2: pedido abierto por $5.400 (cóbralo o libera el grupo)')
+      expect(aviso).toHaveTextContent('Mesa 3: ocupada, sin pedido (hay que liberarla)')
+      expect(aviso).not.toHaveTextContent('Libéralas antes de separarlas')
+      expect(within(aviso).getByRole('button', { name: 'Liberar grupo' })).toBeInTheDocument()
+      expect(within(aviso).getByRole('button', { name: 'Ir a Mesa 2' })).toBeInTheDocument()
+      expect(within(aviso).queryByRole('button', { name: 'Ir a Mesa 1' })).not.toBeInTheDocument()
+    })
+
+    it('«Liberar grupo» del aviso abre la ventana del grupo', async () => {
+      const user = userEvent.setup()
+      montar()
+      await user.click(screen.getAllByRole('button', { name: 'Separar' })[0])
+      await user.click(within(await screen.findByRole('alert')).getByRole('button', { name: 'Liberar grupo' }))
+
+      expect(screen.getByRole('dialog', { name: 'Liberar grupo' })).toBeInTheDocument()
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    })
+
+    it('«Ir a Mesa 2» lleva a la mesa con el pedido abierto, para cobrarlo', async () => {
+      const user = userEvent.setup()
+      montar()
+      await user.click(screen.getAllByRole('button', { name: 'Separar' })[0])
+      await user.click(within(await screen.findByRole('alert')).getByRole('button', { name: 'Ir a Mesa 2' }))
+
+      expect(screen.getByText(/mesa abierta/)).toBeInTheDocument()
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    })
+
+    it('el vendedor ve lo mismo, pero sin «Liberar grupo»: le dice que lo pida al encargado', async () => {
+      sesion.isWorker = true
+      sesion.user = { id: 'ana' }
+      const user = userEvent.setup()
+      montar()
+      await user.click(screen.getAllByRole('button', { name: 'Separar' })[0])
+
+      const aviso = await screen.findByRole('alert')
+      expect(aviso).toHaveTextContent('No se puede separar Grupo 1: Mesa 1, Mesa 2 y Mesa 3 siguen ocupadas.')
+      expect(aviso).toHaveTextContent('Pídele al encargado o al dueño que libere el grupo.')
+      expect(within(aviso).queryByRole('button', { name: 'Liberar grupo' })).not.toBeInTheDocument()
+      expect(within(aviso).getByRole('button', { name: 'Ir a Mesa 2' })).toBeInTheDocument()
+    })
+
+    it('otra falla (no un 409) se muestra tal cual, sin ofrecer liberar nada', async () => {
+      grupos.deshacer.mockRejectedValue(new Error('Sin conexión'))
+      const user = userEvent.setup()
+      montar()
+      await user.click(screen.getAllByRole('button', { name: 'Separar' })[0])
+
+      expect(await screen.findByRole('alert')).toHaveTextContent('Sin conexión')
+      expect(within(alerta()).queryByRole('button', { name: 'Liberar grupo' })).not.toBeInTheDocument()
+    })
+  })
+
+  describe('ventana «Liberar grupo»', () => {
+    const abrir = async (user) => {
+      await user.click(screen.getAllByRole('button', { name: 'Liberar grupo' })[0])
+      return screen.getByRole('dialog', { name: 'Liberar grupo' })
+    }
+
+    it('avisa del pedido abierto, libera el grupo con el motivo y la vista de mesas se refresca sola', async () => {
+      const user = userEvent.setup()
+      liberarGrupoMock.mockResolvedValue(RESULTADO_LIBERADO)
+      montar()
+      const dialogo = await abrir(user)
+
+      expect(within(dialogo).getByRole('note', { name: 'Pedidos abiertos que quedarán sin cobrar' })).toHaveTextContent('$5.400')
+      await user.type(within(dialogo).getByLabelText('Motivo'), 'Se fueron los clientes')
+      await user.click(within(dialogo).getByRole('button', { name: 'Liberar grupo' }))
+
+      expect(liberarGrupoMock).toHaveBeenCalledWith({
+        grupoId: 'g1',
+        mesas: [
+          expect.objectContaining({ id: 'm1', ocupada: true, conPedido: false }),
+          expect.objectContaining({ id: 'm2', ocupada: true, conPedido: true, total: 5400 }),
+          expect.objectContaining({ id: 'm3', ocupada: true, conPedido: false }),
+        ],
+        motivo: 'Se fueron los clientes',
+      })
+      refrescarMesas.mockClear()
+      grupos.refresh.mockClear()
+      await user.click(await screen.findByRole('button', { name: 'Volver a mesas' }))
+
+      expect(refrescarMesas).toHaveBeenCalled()
+      expect(grupos.refresh).toHaveBeenCalled()
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    })
+
+    it('falla parcial: deja dicho en la vista de mesas cuáles no se pudieron liberar y permite reintentar', async () => {
+      const user = userEvent.setup()
+      liberarGrupoMock.mockResolvedValue({
+        liberadas: [{ id: 'm1', nombre: 'Mesa 1' }, { id: 'm3', nombre: 'Mesa 3' }],
+        fallidas: [{ id: 'm2', nombre: 'Mesa 2', mensaje: 'Hay un cobro con tarjeta en curso' }],
+        separado: false, errorAlSeparar: null, sinCobrar: 0,
+      })
+      montar()
+      const dialogo = await abrir(user)
+      await user.type(within(dialogo).getByLabelText('Motivo'), 'Cierre')
+      await user.click(within(dialogo).getByRole('button', { name: 'Liberar grupo' }))
+      await user.click(await screen.findByRole('button', { name: 'Volver a mesas' }))
+
+      const aviso = alerta()
+      expect(aviso).toHaveTextContent('Grupo 1 sigue junto: no se pudo liberar Mesa 2.')
+      expect(aviso).toHaveTextContent('Mesa 2: Hay un cobro con tarjeta en curso')
+      await user.click(within(aviso).getByRole('button', { name: 'Liberar grupo' }))
+      expect(screen.getByRole('dialog', { name: 'Liberar grupo' })).toBeInTheDocument()
+    })
+  })
+
+  describe('al cobrar una mesa del grupo', () => {
+    // El cobro de la mesa ya soltó lo que pudo: la pantalla le dice a quien cobró cómo quedó el grupo.
+    const cobrar = async (user) => {
+      await user.click(within(tarjeta('Mesa 2')).getAllByRole('button').at(-1))
+      await user.click(screen.getByRole('button', { name: 'simular cobro' }))
+    }
+
+    it('si quedó todo libre y el grupo separado, lo avisa y refresca los grupos', async () => {
+      const user = userEvent.setup()
+      cobro.resultado = { ...RESULTADO_LIBERADO, conPedido: [], mesaCobrada: 'Mesa 2' }
+      montar()
+      await cobrar(user)
+
+      expect(toastExito).toHaveBeenCalledWith('Mesa 2 cobrada: Mesa 1 y Mesa 3 quedaron libres y el grupo se separó.')
+      expect(grupos.refresh).toHaveBeenCalled()
+      expect(refrescarMesas).toHaveBeenCalled()
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    })
+
+    it('si otra mesa del grupo tiene un pedido abierto, avisa cuál es y ofrece ir a ella', async () => {
+      const user = userEvent.setup()
+      cobro.resultado = {
+        liberadas: [{ id: 'm1', nombre: 'Mesa 1' }], fallidas: [], separado: false, errorAlSeparar: null, error: null, mesaCobrada: 'Mesa 2',
+        conPedido: [{ id: 'm3', nombre: 'Mesa 3', total: 5400 }],
+      }
+      montar()
+      await cobrar(user)
+
+      const aviso = alerta()
+      expect(aviso).toHaveTextContent('Se cobró Mesa 2, pero el grupo sigue junto.')
+      expect(aviso).toHaveTextContent('Mesa 1 quedó libre.')
+      expect(aviso).toHaveTextContent('Mesa 3 todavía tiene un pedido abierto por $5.400: cóbralo para liberar el grupo.')
+      expect(toastExito).not.toHaveBeenCalled()
+      await user.click(within(aviso).getByRole('button', { name: 'Ir a Mesa 3' }))
+      expect(screen.getByText(/mesa abierta/)).toBeInTheDocument()
+    })
+
+    it('si una mesa no se pudo liberar, muestra cuál y por qué', async () => {
+      const user = userEvent.setup()
+      cobro.resultado = {
+        liberadas: [{ id: 'm3', nombre: 'Mesa 3' }], conPedido: [], separado: false, errorAlSeparar: null, error: null, mesaCobrada: 'Mesa 2',
+        fallidas: [{ id: 'm1', nombre: 'Mesa 1', mensaje: 'La mesa Mesa 1 tiene un pedido en curso' }],
+      }
+      montar()
+      await cobrar(user)
+
+      const aviso = alerta()
+      expect(aviso).toHaveTextContent('Se cobró Mesa 2, pero el grupo sigue junto.')
+      expect(aviso).toHaveTextContent('Mesa 3 quedó libre.')
+      expect(aviso).toHaveTextContent('No se pudo liberar Mesa 1: La mesa Mesa 1 tiene un pedido en curso')
+    })
+
+    it('si no se pudo revisar el grupo, el cobro igual quedó hecho y se explica', async () => {
+      const user = userEvent.setup()
+      cobro.resultado = { liberadas: [], conPedido: [], fallidas: [], separado: false, errorAlSeparar: null, error: 'Sin conexión', mesaCobrada: 'Mesa 2' }
+      montar()
+      await cobrar(user)
+
+      expect(alerta()).toHaveTextContent('Se cobró Mesa 2, pero no se pudo revisar el grupo: Sin conexión')
+    })
+
+    it('una mesa que no estaba en un grupo no muestra nada', async () => {
+      const user = userEvent.setup()
+      cobro.resultado = null
+      montar()
+      await cobrar(user)
+
+      expect(toastExito).not.toHaveBeenCalled()
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    })
   })
 })

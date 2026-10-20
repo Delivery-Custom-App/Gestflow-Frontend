@@ -6,6 +6,7 @@ import { useOrderTotals } from '../../hooks/useOrderTotals'
 import { useOrderManagement } from '../../hooks/useOrderManagement'
 import { addOrderItem, createOrder, removeOrderItem, setMesaLibre, updateOrderItem } from '../../lib/salesApi'
 import { obtenerClaveIdempotencia } from '../../lib/idempotency'
+import { liberarGrupoAlCobrar } from '../../lib/liberarGrupo'
 import { getSplitPaymentSummary } from '../../lib/apiClient'
 import { isV2FeatureEnabled } from '../../lib/v2Features'
 import { formatCLP } from '../../lib/formatCLP'
@@ -37,7 +38,7 @@ const BOTON_ACCION = 'h-12 min-w-[140px] flex-1 rounded-xl text-base [&_svg]:siz
 
 const formatItemName = (item) => item.item_name || item.product_name || '—'
 
-export default function MesaWorkspace({ mesa, atencion = null, localId, cajaId, puedeCobrar = true, puedeLiberarMesa = false, onBack, onTableUpdated }) {
+export default function MesaWorkspace({ mesa, atencion = null, localId, cajaId, puedeCobrar = true, puedeLiberarMesa = false, onBack, onTableUpdated, onGrupoActualizado }) {
   const { detail, loading, error: mesaError, refresh, updateAfterItemRemoval } = useMesaDetail(mesa.id)
   const { updateOrderStatus } = useOrderManagement()
   const { data: menuData, loading: menuLoading, fetch: fetchMenu } = useMenuPOS(localId)
@@ -229,15 +230,19 @@ export default function MesaWorkspace({ mesa, atencion = null, localId, cajaId, 
     setCobrarLoading(true)
     try {
       await setMesaLibre(mesa.id)
+      // Mesas juntadas: las demás del grupo que quedaron ocupadas sin pedido se sueltan y el grupo se separa (también si cobra
+      // un mesero). No lanza: el cobro ya está hecho y lo que pase con el grupo se le informa a quien cobró.
+      const grupo = await liberarGrupoAlCobrar({ localId, mesaCobrada: mesa })
       openPrintWindow({ mesa, firstOrder, allItems, subtotal, iva, total, tipAmount, totalWithTip: total + Number(tipAmount || 0) })
       onTableUpdated?.()
+      if (grupo) onGrupoActualizado?.({ ...grupo, mesaCobrada: mesa.name })
       onBack()
     } catch (err) {
       setErrorMsg(err.message || 'Error al finalizar el cobro')
       if (Number(err?.status) === 409 && puedeLiberarMesa) setOfferLiberar(true)
       setCobrarLoading(false)
     }
-  }, [mesa, firstOrder, allItems, subtotal, iva, total, onTableUpdated, onBack, puedeLiberarMesa])
+  }, [mesa, localId, firstOrder, allItems, subtotal, iva, total, onTableUpdated, onGrupoActualizado, onBack, puedeLiberarMesa])
 
   const handleMesaLiberada = useCallback(() => {
     setShowLiberarModal(false)

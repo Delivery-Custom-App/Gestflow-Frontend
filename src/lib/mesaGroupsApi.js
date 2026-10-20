@@ -8,13 +8,18 @@ import { apiRequest } from './apiClient'
  *  - hacen falta al menos dos mesas distintas del mismo local,
  *  - todas tienen que estar libres, y ninguna puede estar ya en otro grupo,
  *  - al juntarlas quedan ocupadas, porque pasan a atenderse como una sola,
- *  - solo se pueden separar cuando vuelven a estar libres.
+ *  - solo se pueden separar cuando vuelven a estar libres (para soltarlas, ver `liberarGrupo.js`).
  */
 
 export async function listarGruposDeMesas(localId) {
   if (!localId) return []
   const filas = await apiRequest(`/mesa-groups?local_id=${encodeURIComponent(String(localId))}`)
   return Array.isArray(filas) ? filas : []
+}
+
+/** Un grupo con sus mesas (`GET /mesa-groups/{id}`); 404 si ya se separó. */
+export async function obtenerGrupoDeMesas(grupoId) {
+  return apiRequest(`/mesa-groups/${encodeURIComponent(String(grupoId))}`)
 }
 
 export async function crearGrupoDeMesas(localId, mesaIds) {
@@ -34,7 +39,8 @@ export async function deshacerGrupoDeMesas(grupoId) {
   try {
     return await apiRequest(`/mesa-groups/${encodeURIComponent(String(grupoId))}`, { method: 'DELETE' })
   } catch (error) {
-    throw new Error(mensajeDeGrupo(error, 'No se pudo separar el grupo'))
+    // Se conserva el estado HTTP: un 409 es «hay mesas ocupadas» y la pantalla lo explica mesa por mesa.
+    throw Object.assign(new Error(mensajeDeGrupo(error, 'No se pudo separar el grupo')), { status: error?.status })
   }
 }
 
