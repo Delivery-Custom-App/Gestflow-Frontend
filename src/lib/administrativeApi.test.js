@@ -22,10 +22,17 @@ import {
   verifyCajaFisicaMpPairing,
 } from './administrativeApi'
 
+import { invalidarLocales } from './cacheLocales'
+
 vi.mock('./apiClient', () => ({ apiRequest: vi.fn() }))
 
 const LOCAL = 'loc-1'
 const CAJA_FISICA = 'cf-1'
+
+/** Responde el reporte pedido y, para `/locals/:id` (de donde sale el business_id), el local. */
+const respondeConLocal = (reporte) => apiRequest.mockImplementation((path) => (
+  Promise.resolve(String(path).startsWith('/locals/') ? { id: LOCAL, business_id: 'biz-1' } : reporte)
+))
 
 const rutasPedidas = () => apiRequest.mock.calls.map(([path]) => String(path))
 
@@ -182,7 +189,8 @@ describe('Vinculación MercadoPago por caja física', () => {
 describe('reporte de ventas del dashboard (T-31)', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    apiRequest.mockResolvedValue({
+    invalidarLocales()
+    respondeConLocal({
       total_sales: '16600.00',
       total_orders: 3,
       avg_ticket: '5533.33',
@@ -207,9 +215,9 @@ describe('reporte de ventas del dashboard (T-31)', () => {
   it('hace una sola consulta para los últimos siete días usando la fecha de Chile', async () => {
     const data = await getDashboardSalesReport(LOCAL, new Date('2026-10-15T02:30:00Z'))
 
-    expect(apiRequest).toHaveBeenCalledExactlyOnceWith(
-      '/reports/sales?local_id=loc-1&start_date=2026-10-08&end_date=2026-10-14',
-    )
+    expect(rutasPedidas().filter((p) => p.startsWith('/reports'))).toEqual([
+      '/reports/sales?local_id=loc-1&start_date=2026-10-08&end_date=2026-10-14&business_id=biz-1',
+    ])
     expect(apiRequest.mock.calls.some(([path]) => String(path).startsWith('/orders'))).toBe(false)
     expect(data.by_day).toHaveLength(7)
     expect(data.by_day[0]).toMatchObject({ date: '08/10', ingresos: 0, ordenes: 0 })
@@ -240,6 +248,7 @@ describe('reporte de ventas del dashboard (T-31)', () => {
 describe('fallback de dashboard local (A-04)', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    invalidarLocales()
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-09-27T02:00:00Z'))
   })
@@ -247,7 +256,7 @@ describe('fallback de dashboard local (A-04)', () => {
   afterEach(() => vi.useRealTimers())
 
   it('usa el reporte agregado del mes y no descarga órdenes', async () => {
-    apiRequest.mockResolvedValue({
+    respondeConLocal({
       total_sales: '62000.00',
       avg_ticket: '12400.00',
       by_day: [{ date: '2026-09-26', total_sales: '9400.00', total_orders: 3 }],
@@ -256,7 +265,9 @@ describe('fallback de dashboard local (A-04)', () => {
 
     const dashboard = await getLocalDashboard(LOCAL, 'token')
 
-    expect(apiRequest).toHaveBeenCalledExactlyOnceWith('/reports/sales?local_id=loc-1&start_date=2026-09-01&end_date=2026-09-26')
+    expect(rutasPedidas().filter((p) => p.startsWith('/reports'))).toEqual([
+      '/reports/sales?local_id=loc-1&start_date=2026-09-01&end_date=2026-09-26&business_id=biz-1',
+    ])
     expect(rutasPedidas().some((path) => path.startsWith('/orders'))).toBe(false)
     expect(dashboard).toMatchObject({ daily_sales: 9400, monthly_sales: 62000, avg_ticket: 12400, _source: 'reports_v2' })
   })

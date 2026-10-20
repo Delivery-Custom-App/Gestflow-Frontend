@@ -27,6 +27,9 @@ export function rangosMensuales(hoy = new Date(), count = 4) {
   })
 }
 
+/** `business_id` del local para /reports/sales (el backend lo exige a SUPERADMIN). */
+const businessParam = (local) => (local?.business_id != null ? { business_id: String(local.business_id) } : {})
+
 /** Variación porcentual redondeada; null si falta un dato o el anterior es 0. */
 export function variacion(actual, anterior) {
   if (actual == null || anterior == null || !(anterior > 0)) return null
@@ -42,7 +45,7 @@ async function totalDelRango(locals, token, { startDate, endDate }) {
   try {
     const reportes = await Promise.all(
       locals.map((l) => apiRequest(
-        `/reports/sales?${new URLSearchParams({ local_id: String(l.id), start_date: startDate, end_date: endDate })}`,
+        `/reports/sales?${new URLSearchParams({ local_id: String(l.id), ...businessParam(l), start_date: startDate, end_date: endDate })}`,
         { token },
       )),
     )
@@ -75,7 +78,7 @@ async function sumSalesReports(locals, token, startDate, endDate) {
   const responses = await Promise.all(
     locals.map((local) => apiRequest(
       `/reports/sales?${new URLSearchParams({
-        local_id: String(local.id), start_date: startDate, end_date: endDate,
+        local_id: String(local.id), ...businessParam(local), start_date: startDate, end_date: endDate,
       })}`,
       { token },
     )),
