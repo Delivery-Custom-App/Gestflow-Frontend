@@ -5,7 +5,8 @@ import MesaWorkspace from './MesaWorkspace'
 import { useMesaDetail } from '../../hooks/useMesaDetail'
 import { useMenuPOS } from '../../hooks/useMenuPOS'
 import { useOrderManagement } from '../../hooks/useOrderManagement'
-import { createOrder, addOrderItem, updateOrderItem, removeOrderItem, liberarMesa, setMesaLibre } from '../../lib/salesApi'
+import { createOrder, addOrderItem, updateOrderItem, removeOrderItem, liberarMesa, listMesasConTotales, setMesaLibre } from '../../lib/salesApi'
+import { deshacerGrupoDeMesas, obtenerGrupoDeMesas } from '../../lib/mesaGroupsApi'
 
 vi.mock('../../hooks/useMesaDetail', () => ({ useMesaDetail: vi.fn() }))
 vi.mock('../../hooks/useMenuPOS', () => ({ useMenuPOS: vi.fn() }))
@@ -15,9 +16,13 @@ vi.mock('../../lib/salesApi', () => ({
   addOrderItem: vi.fn(),
   setMesaLibre: vi.fn(),
   liberarMesa: vi.fn(),
+  listMesasConTotales: vi.fn(),
   updateOrderItem: vi.fn(),
   removeOrderItem: vi.fn(),
 }))
+vi.mock('../../lib/mesaGroupsApi', () => ({ obtenerGrupoDeMesas: vi.fn(), deshacerGrupoDeMesas: vi.fn() }))
+// El cobro manda la boleta a imprimir: acá no hay impresora.
+vi.mock('./order-panel/orderPrint', async (importOriginal) => ({ ...(await importOriginal()), openPrintWindow: vi.fn() }))
 vi.mock('../../lib/apiClient', () => ({
   getSplitPaymentSummary: vi.fn().mockResolvedValue({ splits: [], is_fully_paid: false }),
 }))
@@ -297,5 +302,113 @@ describe('MesaWorkspace · nota del ítem (A-06)', () => {
     await user.type(screen.getAllByLabelText('Nota de Agua')[0], 'sin gas')
     await user.click(screen.getAllByRole('button', { name: 'Guardar' })[0])
     expect(updateOrderItem).toHaveBeenCalledWith('order-1', 'it-1', { notes: 'sin gas' }, '2026-10-14T12:00:00Z')
+  })
+})
+
+// Mesas juntadas (#221): al cobrar una mesa del grupo, las otras que quedaron ocupadas sin pedido se sueltan y el grupo se separa.
+describe('MesaWorkspace · cobrar una mesa de un grupo', () => {
+  const delMedio = { ...mesa, id: 'm2', name: 'Mesa 2', state: 'ocupada', mesa_group_id: 'g1' }
+  const deGrupo = (id, nombre, extra = {}) => ({ id, name: nombre, nombre, state: 'ocupada', mesa_group_id: 'g1', ordenes_en_curso: [], ...extra })
+  // Tras cobrar la del medio: ella ya está libre; las otras dos siguen ocupadas sin pedido.
+  const TRAS_COBRAR = [deGrupo('m1', 'Mesa 1'), deGrupo('m2', 'Mesa 2', { state: 'libre' }), deGrupo('m3', 'Mesa 3')]
+
+  beforeEach(() => {
+    setMesaLibre.mockResolvedValue({})
+    deshacerGrupoDeMesas.mockResolvedValue(undefined)
+    obtenerGrupoDeMesas.mockResolvedValue({ id: 'g1', mesa_ids: ['m1', 'm2', 'm3'] })
+    listMesasConTotales.mockResolvedValue(TRAS_COBRAR)
+  })
+
+  async function cobrar(props = {}) {
+    const user = userEvent.setup()
+    const callbacks = { onBack: vi.fn(), onTableUpdated: vi.fn(), onGrupoActualizado: vi.fn() }
+    setup({ activeOrders: [{ id: 'order-1', created_at: '2024-01-01T00:00:00Z', items: [] }] })
+    render(<MesaWorkspace mesa={delMedio} localId="local1" cajaId="caja1" {...callbacks} {...props} />)
+    await user.click(screen.getByRole('button', { name: /cobrar/i }))
+    await user.click(screen.getByRole('button', { name: 'Simular pago aprobado' }))
+    return callbacks
+  }
+
+  it('cobrar en la del medio deja libres las tres y separa el grupo, también si cobra un mesero', async () => {
+    // Un mesero: `puedeLiberarMesa` apagado (no puede usar «Liberar mesa»), igual se sueltan las otras mesas.
+    const { onBack, onGrupoActualizado } = await cobrar({ puedeLiberarMesa: false })
+
+    await waitFor(() => expect(onBack).toHaveBeenCalledOnce())
+    expect(setMesaLibre.mock.calls.map(([id]) => id)).toEqual(['m2', 'm1', 'm3']) // primero la cobrada, después las otras
+    expect(deshacerGrupoDeMesas).toHaveBeenCalledWith('g1')
+    expect(liberarMesa).not.toHaveBeenCalled() // «liberar» es solo del encargado: el mesero usa PATCH
+    expect(listMesasConTotales).toHaveBeenCalledWith('local1')
+    expect(onGrupoActualizado).toHaveBeenCalledWith(expect.objectContaining({
+      separado: true, mesaCobrada: 'Mesa 2', conPedido: [], fallidas: [],
+      liberadas: [expect.objectContaining({ nombre: 'Mesa 1' }), expect.objectContaining({ nombre: 'Mesa 3' })],
+    }))
+  })
+
+  it('con el encargado pasa lo mismo', async () => {
+    const { onBack } = await cobrar({ puedeLiberarMesa: true })
+
+    await waitFor(() => expect(onBack).toHaveBeenCalledOnce())
+    expect(deshacerGrupoDeMesas).toHaveBeenCalledWith('g1')
+  })
+
+  it('el grupo se suelta antes de volver a la vista de mesas, para que ya se vean todas libres', async () => {
+    const orden = []
+    setMesaLibre.mockImplementation(async (id) => { orden.push(`libre ${id}`) })
+    deshacerGrupoDeMesas.mockImplementation(async () => { orden.push('separar') })
+    await cobrar({ onBack: () => orden.push('volver'), onTableUpdated: () => orden.push('refrescar') })
+
+    await waitFor(() => expect(orden).toContain('volver'))
+    expect(orden).toEqual(['libre m2', 'libre m1', 'libre m3', 'separar', 'refrescar', 'volver'])
+  })
+
+  it('una mesa del grupo con un pedido abierto no se libera sola: se avisa cuál es y el cobro igual termina', async () => {
+    listMesasConTotales.mockResolvedValue([
+      deGrupo('m1', 'Mesa 1'),
+      deGrupo('m2', 'Mesa 2', { state: 'libre' }),
+      deGrupo('m3', 'Mesa 3', { ordenes_en_curso: [{ id: 'o3', total: '5400.00' }] }),
+    ])
+    const { onBack, onGrupoActualizado } = await cobrar()
+
+    await waitFor(() => expect(onBack).toHaveBeenCalledOnce())
+    expect(setMesaLibre.mock.calls.map(([id]) => id)).toEqual(['m2', 'm1']) // la Mesa 3, con pedido, no se toca
+    expect(deshacerGrupoDeMesas).not.toHaveBeenCalled()
+    expect(onGrupoActualizado).toHaveBeenCalledWith(expect.objectContaining({
+      separado: false, conPedido: [expect.objectContaining({ id: 'm3', nombre: 'Mesa 3', total: 5400 })],
+    }))
+  })
+
+  it('falla parcial: sigue con las demás y avisa cuáles no se pudieron liberar', async () => {
+    setMesaLibre.mockImplementation(async (id) => {
+      if (id === 'm1') throw Object.assign(new Error('409: x'), { status: 409, detail: 'La mesa Mesa 1 tiene un pedido en curso' })
+      return {}
+    })
+    const { onBack, onGrupoActualizado } = await cobrar()
+
+    await waitFor(() => expect(onBack).toHaveBeenCalledOnce())
+    expect(setMesaLibre.mock.calls.map(([id]) => id)).toEqual(['m2', 'm1', 'm3'])
+    expect(deshacerGrupoDeMesas).not.toHaveBeenCalled()
+    expect(onGrupoActualizado).toHaveBeenCalledWith(expect.objectContaining({
+      separado: false,
+      liberadas: [expect.objectContaining({ id: 'm3' })],
+      fallidas: [expect.objectContaining({ id: 'm1', mensaje: 'La mesa Mesa 1 tiene un pedido en curso' })],
+    }))
+  })
+
+  it('si no se puede revisar el grupo, el cobro igual queda hecho y se informa', async () => {
+    listMesasConTotales.mockRejectedValue(new Error('Sin conexión'))
+    const { onBack, onGrupoActualizado } = await cobrar()
+
+    await waitFor(() => expect(onBack).toHaveBeenCalledOnce())
+    expect(onGrupoActualizado).toHaveBeenCalledWith(expect.objectContaining({ error: 'Sin conexión', separado: false }))
+  })
+
+  it('una mesa que no está en un grupo se cobra como siempre: no toca ningún grupo', async () => {
+    const { onBack, onGrupoActualizado } = await cobrar({ mesa: { ...delMedio, mesa_group_id: null } })
+
+    await waitFor(() => expect(onBack).toHaveBeenCalledOnce())
+    expect(setMesaLibre).toHaveBeenCalledTimes(1)
+    expect(obtenerGrupoDeMesas).not.toHaveBeenCalled()
+    expect(listMesasConTotales).not.toHaveBeenCalled()
+    expect(onGrupoActualizado).not.toHaveBeenCalled()
   })
 })

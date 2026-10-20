@@ -80,8 +80,9 @@ async function countOrders(localId, statuses, token, dateFrom, dateTo) {
   return Number.isFinite(response?.total) ? response.total : 0
 }
 
-async function salesForLocal(localId, startDate, endDate, token) {
+async function salesForLocal(localId, businessId, startDate, endDate, token) {
   const query = new URLSearchParams({ local_id: String(localId), start_date: startDate, end_date: endDate })
+  if (businessId != null) query.set('business_id', String(businessId))
   const report = await apiRequest(`/reports/sales?${query.toString()}`, { token }).catch(() => null)
   return Number(report?.total_sales) || 0
 }
@@ -96,8 +97,8 @@ async function summarizeLocalOrders(local, business, token, today, monthStart, n
       await countOrders(local.id, status, token),
     ])),
     countOrders(local.id, NON_CANCELLED_STATUSES, token, monthStartInstant, nowInstant),
-    salesForLocal(local.id, startDate, today, token),
-    salesForLocal(local.id, monthStart, today, token),
+    salesForLocal(local.id, local.business_id, startDate, today, token),
+    salesForLocal(local.id, local.business_id, monthStart, today, token),
   ])
   const ordersByStatus = Object.fromEntries(statusCounts)
   const orders = NON_CANCELLED_STATUSES.reduce((sum, status) => sum + ordersByStatus[status], 0)
@@ -286,6 +287,88 @@ export async function v2GetAuditLog({ businessId, action, limit = 50, offset = 0
   })
   const data = await apiRequest(path, { token })
   return Array.isArray(data) ? data : []
+}
+
+const countsToMap = (rows, keyOf) => Object.fromEntries(
+  (Array.isArray(rows) ? rows : []).map((row) => [keyOf(row), Number(row.count) || 0]),
+)
+
+/**
+ * Resumen Global en UNA llamada (`GET /reports/platform-summary`, solo SUPERADMIN).
+ * Reemplaza el recorrido por local (cientos de GET /orders y /reports/sales).
+ * Devuelve la forma que ya consume la pantalla: `totals`, distribuciones como
+ * mapa, `tenants` y `sales` (totales del rango + `by_business`). Las órdenes por
+ * estado son las del rango pedido, no el histórico.
+ */
+export async function v2GetPlatformSummary({ startDate, endDate } = {}, token) {
+  const path = withQuery('/reports/platform-summary', { start_date: startDate, end_date: endDate })
+  const data = await apiRequest(path, { token })
+  const byBusiness = Array.isArray(data?.by_business) ? data.by_business : []
+
+  return {
+    generated_at: data?.generated_at || new Date().toISOString(),
+    totals: {
+      businesses: Number(data?.businesses_total) || 0,
+      active_businesses: Number(data?.businesses_active) || 0,
+      users: Number(data?.users_total) || 0,
+      locals: Number(data?.locals_total) || 0,
+    },
+    orders_by_status: countsToMap(data?.orders_by_status, (row) => row.status),
+    users_by_role: countsToMap(data?.users_by_role, (row) => String(row.role || 'EMPLEADO').toUpperCase()),
+    businesses_by_plan: countsToMap(data?.businesses_by_plan, (row) => String(row.plan || 'starter')),
+    tenants: byBusiness.map((row) => ({
+      id: row.business_id,
+      name: row.name,
+      plan: row.plan || 'starter',
+      is_active: row.is_active !== false,
+      locals: Number(row.locals_count) || 0,
+      users: Number(row.users_count) || 0,
+    })),
+    sales: {
+      start_date: data?.start_date ?? startDate,
+      end_date: data?.end_date ?? endDate,
+      total_orders: Number(data?.orders_period) || 0,
+      total_sales: Number(data?.revenue_period) || 0,
+      by_business: byBusiness.map((row) => ({
+        business_id: row.business_id,
+        name: row.name,
+        total_orders: Number(row.orders) || 0,
+        total_sales: Number(row.sales) || 0,
+      })),
+    },
+  }
+}
+
+/**
+ * Cantidad de páginas de la auditoría. `/audit` devuelve una lista sin total,
+ * así que: si el backend manda `X-Total-Count` se usa; si no, se busca la última
+ * página con datos pidiendo 1 evento por página (crecimiento por doblar y luego
+ * búsqueda binaria: ~2·log2(páginas) peticiones).
+ */
+export async function v2GetAuditPageCount({ businessId, action, pageSize = 50 } = {}, token) {
+  const base = { business_id: businessId, action, limit: 1 }
+  const first = await apiRequest(withQuery('/audit', { ...base, offset: 0 }), { token, withTotal: true })
+  if (!Array.isArray(first?.data) || first.data.length === 0) return 0
+  if (first.total != null) return Math.max(1, Math.ceil(first.total / pageSize))
+
+  const existe = async (page) => {
+    const rows = await apiRequest(withQuery('/audit', { ...base, offset: page * pageSize }), { token })
+    return Array.isArray(rows) && rows.length > 0
+  }
+  const MAX_PAGES = 1 << 16
+  let lo = 0 // última página que se sabe que existe
+  let hi = 1
+  while (hi < MAX_PAGES && (await existe(hi))) {
+    lo = hi
+    hi *= 2
+  }
+  // La página `lo` existe y la `hi` no (o se llegó al tope): la última está en [lo, hi).
+  while (hi - lo > 1) {
+    const mid = Math.floor((lo + hi) / 2)
+    if (await existe(mid)) lo = mid
+    else hi = mid
+  }
+  return lo + 1
 }
 
 export async function v2GetObservability(token, { businessId } = {}) {

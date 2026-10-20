@@ -4,7 +4,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { apiRequest } from './apiClient'
-import { crearGrupoDeMesas, deshacerGrupoDeMesas, indexarGruposPorMesa, listarGruposDeMesas } from './mesaGroupsApi'
+import { crearGrupoDeMesas, deshacerGrupoDeMesas, indexarGruposPorMesa, listarGruposDeMesas, obtenerGrupoDeMesas } from './mesaGroupsApi'
 
 vi.mock('./apiClient', () => ({ apiRequest: vi.fn() }))
 
@@ -29,6 +29,17 @@ describe('listarGruposDeMesas', () => {
   it('sin local no pide nada', async () => {
     expect(await listarGruposDeMesas(null)).toEqual([])
     expect(apiRequest).not.toHaveBeenCalled()
+  })
+})
+
+describe('obtenerGrupoDeMesas', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('pide un grupo con sus mesas', async () => {
+    apiRequest.mockResolvedValue(GRUPO)
+
+    expect(await obtenerGrupoDeMesas('g-1')).toEqual(GRUPO)
+    expect(apiRequest).toHaveBeenCalledWith('/mesa-groups/g-1')
   })
 })
 
@@ -92,6 +103,12 @@ describe('deshacerGrupoDeMesas', () => {
     apiRequest.mockRejectedValue(new Error('409: No se puede separar: Mesa 1 todavía no está disponible'))
 
     await expect(deshacerGrupoDeMesas('g-1')).rejects.toThrow(/libéralas antes de separarlas/i)
+  })
+
+  it('conserva el estado HTTP: un 409 es «hay mesas ocupadas» y la pantalla lo explica mesa por mesa', async () => {
+    apiRequest.mockRejectedValue(Object.assign(new Error('409: No se puede separar: Mesa 1 todavía no está disponible'), { status: 409 }))
+
+    await expect(deshacerGrupoDeMesas('g-1')).rejects.toMatchObject({ status: 409 })
   })
 })
 

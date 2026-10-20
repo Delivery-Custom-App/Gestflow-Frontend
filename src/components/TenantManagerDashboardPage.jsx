@@ -7,7 +7,7 @@ import {
   Loader2, ChevronRight, Activity,
 } from 'lucide-react'
 import { getAuthContext, formatApiErrorDetail } from '../lib/apiClient'
-import { getGlobalSalesReport, getGlobalStats } from '../lib/superAdminApi'
+import { getPlatformSummary } from '../lib/superAdminApi'
 import { CHILE_TZ } from '../utils/chileDateTime'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -135,11 +135,7 @@ export default function TenantManagerDashboardPage() {
     try {
       const ctx = await getAuthContext()
       const range = currentMonthRangeInChile()
-      const [stats, sales] = await Promise.all([
-        getGlobalStats(ctx.token),
-        getGlobalSalesReport(range, ctx.token),
-      ])
-      setData({ ...stats, sales })
+      setData(await getPlatformSummary(range, ctx.token))
       setErr('')
     } catch (e2) {
       setErr(formatApiErrorDetail(e2.detail) || e2.message || 'Error al cargar el resumen global')
@@ -172,16 +168,19 @@ export default function TenantManagerDashboardPage() {
   const totals = data.totals || {}
   const sales = data.sales || {}
   const tenantsById = new Map((data.tenants || []).map((tenant) => [String(tenant.id), tenant]))
-  const businessRows = (Array.isArray(sales.by_business) ? sales.by_business : []).map((row) => {
-    const tenant = tenantsById.get(String(row.business_id)) || {}
-    return {
-      ...tenant,
-      id: row.business_id,
-      name: row.name || tenant.name || 'Negocio sin nombre',
-      total_orders: Number(row.total_orders) || 0,
-      total_sales: Number(row.total_sales) || 0,
-    }
-  })
+  // La tabla solo lista negocios con actividad en el período (el resumen trae todos).
+  const businessRows = (Array.isArray(sales.by_business) ? sales.by_business : [])
+    .filter((row) => Number(row.total_orders) > 0 || Number(row.total_sales) > 0)
+    .map((row) => {
+      const tenant = tenantsById.get(String(row.business_id)) || {}
+      return {
+        ...tenant,
+        id: row.business_id,
+        name: row.name || tenant.name || 'Negocio sin nombre',
+        total_orders: Number(row.total_orders) || 0,
+        total_sales: Number(row.total_sales) || 0,
+      }
+    })
 
   return (
     <div className="flex-1 overflow-y-auto no-scrollbar bg-[hsl(var(--background))]">

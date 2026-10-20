@@ -6,6 +6,8 @@ import {
   v2GetGlobalStats,
   v2GetBusinessStats,
   v2GetAuditLog,
+  v2GetAuditPageCount,
+  v2GetPlatformSummary,
   v2GetObservability,
 } from './v2SuperAdminAdapter'
 
@@ -228,5 +230,73 @@ describe('v2GetObservability', () => {
     expect(apiRequest).toHaveBeenCalledWith('/tenant-manager/observability?business_id=b1', { token: 'tok' })
     expect(res.unavailable).toBe(true)
     expect(res.tenants).toEqual([{ id: 'b1' }])
+  })
+})
+
+describe('v2GetAuditPageCount', () => {
+  // Simula una auditoría de `total` eventos que no manda X-Total-Count.
+  const simular = (total) => apiRequest.mockImplementation((path, opts = {}) => {
+    const offset = Number(new URL(path, 'http://x').searchParams.get('offset'))
+    const data = offset < total ? [{ id: `e${offset}` }] : []
+    return Promise.resolve(opts.withTotal ? { data, total: null } : data)
+  })
+
+  beforeEach(() => vi.clearAllMocks())
+
+  it.each([
+    [0, 0], [1, 1], [50, 1], [51, 2], [100, 2], [101, 3], [450, 9], [451, 10], [3333, 67],
+  ])('%i eventos → %i páginas', async (eventos, paginas) => {
+    simular(eventos)
+    expect(await v2GetAuditPageCount({ pageSize: 50 }, 't')).toBe(paginas)
+  })
+
+  it('usa X-Total-Count si el backend lo manda, con una sola petición', async () => {
+    apiRequest.mockResolvedValue({ data: [{ id: 'e0' }], total: 123 })
+    expect(await v2GetAuditPageCount({ pageSize: 50 }, 't')).toBe(3)
+    expect(apiRequest).toHaveBeenCalledTimes(1)
+  })
+
+  it('filtra por negocio', async () => {
+    simular(10)
+    await v2GetAuditPageCount({ businessId: 'b1', pageSize: 50 }, 't')
+    expect(apiRequest.mock.calls[0][0]).toContain('business_id=b1')
+  })
+})
+
+describe('v2GetPlatformSummary', () => {
+  beforeEach(() => vi.clearAllMocks())
+
+  it('hace una sola llamada y la deja con la forma que usa el Resumen Global', async () => {
+    apiRequest.mockResolvedValue({
+      generated_at: '2026-10-14T12:00:00Z',
+      start_date: '2026-10-01',
+      end_date: '2026-10-14',
+      businesses_total: 3,
+      businesses_active: 2,
+      users_total: 9,
+      locals_total: 4,
+      orders_period: 7,
+      revenue_period: '12300.50',
+      orders_by_status: [{ status: 'completed', count: 5 }, { status: 'open', count: 0 }],
+      users_by_role: [{ role: 'ADMIN', count: 2 }],
+      businesses_by_plan: [{ plan: 'pro', count: 1 }, { plan: null, count: 2 }],
+      by_business: [
+        { business_id: 'b1', name: 'Alfa', plan: 'pro', is_active: false, locals_count: 2, users_count: 3, orders: 5, sales: '9000.00' },
+      ],
+    })
+
+    const r = await v2GetPlatformSummary({ startDate: '2026-10-01', endDate: '2026-10-14' }, 'tok')
+
+    expect(apiRequest).toHaveBeenCalledExactlyOnceWith(
+      '/reports/platform-summary?start_date=2026-10-01&end_date=2026-10-14',
+      { token: 'tok' },
+    )
+    expect(r.totals).toEqual({ businesses: 3, active_businesses: 2, users: 9, locals: 4 })
+    expect(r.sales).toMatchObject({ total_orders: 7, total_sales: 12300.5 })
+    expect(r.sales.by_business).toEqual([{ business_id: 'b1', name: 'Alfa', total_orders: 5, total_sales: 9000 }])
+    expect(r.orders_by_status).toEqual({ completed: 5, open: 0 })
+    expect(r.users_by_role).toEqual({ ADMIN: 2 })
+    expect(r.businesses_by_plan).toEqual({ pro: 1, starter: 2 })
+    expect(r.tenants[0]).toEqual({ id: 'b1', name: 'Alfa', plan: 'pro', is_active: false, locals: 2, users: 3 })
   })
 })

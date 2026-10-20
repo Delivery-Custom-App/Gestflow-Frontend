@@ -463,22 +463,55 @@ describe('AdministrativeModule', () => {
     await waitFor(() => expect(createCaja).toHaveBeenCalledWith({ caja_fisica_id: 'cf-1', monto_apertura: 50000 }))
   })
 
-  it('aunque la bandera desgloseEfectivo esté encendida, la apertura manda solo el total', async () => {
-    V2_FEATURES.desgloseEfectivo = true
-    try {
-      const user = userEvent.setup()
-      renderAdmin('flujo-caja')
+  it('la apertura manda solo el total, sin desglose de billetes', async () => {
+    const user = userEvent.setup()
+    renderAdmin('flujo-caja')
 
-      await user.click(await screen.findByRole('button', { name: '+ Abrir turno de caja' }))
-      await user.selectOptions(await screen.findByLabelText('Caja física'), 'cf-1')
-      await user.type(screen.getByLabelText('Monto de apertura'), '31500')
-      await user.click(screen.getByRole('button', { name: 'Abrir turno' }))
+    await user.click(await screen.findByRole('button', { name: '+ Abrir turno de caja' }))
+    await user.selectOptions(await screen.findByLabelText('Caja física'), 'cf-1')
+    await user.type(screen.getByLabelText('Monto de apertura'), '31500')
+    await user.click(screen.getByRole('button', { name: 'Abrir turno' }))
 
-      await waitFor(() => expect(createCaja).toHaveBeenCalledWith({ caja_fisica_id: 'cf-1', monto_apertura: 31500 }))
-      expect(createCaja.mock.calls[0][0]).not.toHaveProperty('apertura_desglose')
-    } finally {
-      V2_FEATURES.desgloseEfectivo = false
-    }
+    await waitFor(() => expect(createCaja).toHaveBeenCalledWith({ caja_fisica_id: 'cf-1', monto_apertura: 31500 }))
+    expect(createCaja.mock.calls[0][0]).not.toHaveProperty('apertura_desglose')
+  })
+
+  it('T-55: al abrir muestra lo que quedó en la caja al cerrar su último turno y lo compara con el monto', async () => {
+    const user = userEvent.setup()
+    getCajasByLocal.mockResolvedValueOnce([...mockCajas, {
+      id: 'caja-0', status: 'closed', is_active: false, caja_fisica_id: 'cf-2', cashier_user_id: 'u-beto',
+      business_date: '2026-10-16', closed_at: '2026-10-16T23:00:00Z', monto_cierre_declarado: '48200.00',
+    }])
+    renderAdmin('flujo-caja')
+
+    await user.click(await screen.findByRole('button', { name: '+ Abrir turno de caja' }))
+    // Sin caja elegida no hay con qué comparar; una caja que nunca se contó tampoco.
+    expect(screen.queryByTestId('quedo-en-la-caja')).not.toBeInTheDocument()
+    await user.selectOptions(await screen.findByLabelText('Caja física'), 'cf-1')
+    expect(screen.queryByTestId('quedo-en-la-caja')).not.toBeInTheDocument()
+
+    await user.selectOptions(screen.getByLabelText('Caja física'), 'cf-2')
+    const nota = screen.getByRole('note', { name: 'Lo que quedó en la caja al cerrar' })
+    expect(nota).toHaveTextContent('Al cerrar el turno del 16/10/2026 quedaron $48.200 en esta caja')
+    expect(screen.queryByTestId('apertura-vs-cierre')).not.toBeInTheDocument()
+
+    await user.type(screen.getByLabelText('Monto de apertura'), '48000')
+    expect(screen.getByTestId('apertura-vs-cierre')).toHaveTextContent('Faltan $200 respecto de lo que quedó')
+
+    await user.clear(screen.getByLabelText('Monto de apertura'))
+    await user.type(screen.getByLabelText('Monto de apertura'), '48500')
+    expect(screen.getByTestId('apertura-vs-cierre')).toHaveTextContent('Sobran $300 respecto de lo que quedó')
+
+    await user.click(within(nota).getByRole('button', { name: 'Usar este monto' }))
+    expect(screen.getByLabelText('Monto de apertura')).toHaveValue('48200')
+    expect(screen.getByTestId('apertura-vs-cierre')).toHaveTextContent('Cuadra con lo que quedó')
+    expect(within(nota).queryByRole('button', { name: 'Usar este monto' })).not.toBeInTheDocument()
+
+    // Es un aviso: no impide abrir con otro monto.
+    await user.clear(screen.getByLabelText('Monto de apertura'))
+    await user.type(screen.getByLabelText('Monto de apertura'), '40000')
+    await user.click(screen.getByRole('button', { name: 'Abrir turno' }))
+    await waitFor(() => expect(createCaja).toHaveBeenCalledWith({ caja_fisica_id: 'cf-2', monto_apertura: 40000 }))
   })
 
   it('sin monto escrito pide confirmar antes de abrir en $0', async () => {
@@ -617,6 +650,39 @@ describe('AdministrativeModule', () => {
     const lateral = (await screen.findByRole('heading', { name: 'Resumen del turno' })).closest('.fixed')
     await user.click(within(lateral).getByRole('button', { name: 'Registrar movimiento' }))
     expect(within(lateral).getByRole('form', { name: 'Registrar movimiento' })).toBeInTheDocument()
+  })
+
+  it('T-55: «Cerrar turno» de una caja física pide contar billetes y monedas y lleva a registrar un retiro antes', async () => {
+    const user = userEvent.setup()
+    renderAdmin('flujo-caja', 'Admin')
+    const panel = (await screen.findByRole('heading', { name: 'Turnos de caja' })).closest('article')
+    const filaAna = (await within(within(panel).getByRole('table')).findByText('Ana Rojas')).closest('tr')
+    await user.click(within(filaAna).getByRole('button', { name: 'Ver resumen' }))
+    const lateral = (await screen.findByRole('heading', { name: 'Resumen del turno' })).closest('.fixed')
+    await user.click(within(lateral).getByRole('button', { name: /Cerrar turno \(arqueo del día\)/ }))
+
+    expect(await within(lateral).findByLabelText('Cantidad de billetes de $20.000')).toBeInTheDocument()
+    expect(within(lateral).getByRole('region', { name: 'Resumen del cierre' })).toBeInTheDocument()
+
+    // El retiro cambia lo esperado: se registra antes de contar.
+    await user.click(within(lateral).getByRole('button', { name: 'Registrar un retiro' }))
+    expect(within(lateral).getByRole('form', { name: 'Registrar movimiento' })).toBeInTheDocument()
+    expect(within(lateral).queryByLabelText('Cantidad de billetes de $20.000')).not.toBeInTheDocument()
+    expect(within(lateral).getByRole('button', { name: /Cerrar turno \(arqueo del día\)/ })).toBeInTheDocument()
+  })
+
+  it('T-55: la caja digital se cierra sin conteo de efectivo', async () => {
+    const user = userEvent.setup()
+    getCajasFisicasByLocal.mockResolvedValueOnce([{ ...mockCajasFisicas[0], tipo: 'digital' }, mockCajasFisicas[1]])
+    renderAdmin('flujo-caja', 'Admin')
+    const panel = (await screen.findByRole('heading', { name: 'Turnos de caja' })).closest('article')
+    const filaAna = (await within(within(panel).getByRole('table')).findByText('Ana Rojas')).closest('tr')
+    await user.click(within(filaAna).getByRole('button', { name: 'Ver resumen' }))
+    const lateral = (await screen.findByRole('heading', { name: 'Resumen del turno' })).closest('.fixed')
+    await user.click(within(lateral).getByRole('button', { name: /Cerrar turno \(arqueo del día\)/ }))
+
+    expect(await within(lateral).findByText(/Esta caja es digital: no hay efectivo que contar/)).toBeInTheDocument()
+    expect(within(lateral).queryByLabelText('Cantidad de billetes de $20.000')).not.toBeInTheDocument()
   })
 
   it('A-03: en restaurante el administrador no ve «Abrir turno de caja»; el dueño sí', async () => {
