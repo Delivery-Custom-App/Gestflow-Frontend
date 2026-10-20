@@ -115,12 +115,15 @@ jobs:
 
       # Fuerza el establecimiento de la ruta en la tailnet antes de usar SSH
       # — justo después de "tailscale up" la ruta puede no estar lista aún.
+      # --until-direct=false: un pong por relay DERP ya es ruta válida (SSH
+      # funciona igual por el relay). Sin el flag, `tailscale ping` sale con 1
+      # ("direct connection not established") aunque el nodo respondió.
       # Si el nodo no responde, falla aquí con diagnóstico en vez de dejar
       # que ssh-keyscan agote reintentos sin explicar por qué.
       - name: Wait for tailnet route
         run: |
           for i in 1 2 3 4 5 6; do
-            if tailscale ping -c 1 --timeout 5s "$DEPLOY_HOST"; then
+            if tailscale ping -c 1 --until-direct=false --timeout 5s "$DEPLOY_HOST"; then
               echo "tailnet ok hacia $DEPLOY_HOST (intento $i)"
               if nc -zv -w 10 "$DEPLOY_HOST" 22; then
                 exit 0
