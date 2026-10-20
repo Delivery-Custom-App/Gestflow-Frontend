@@ -1,7 +1,6 @@
 import { useState } from 'react'
-import { Loader2, Moon, Sun } from 'lucide-react'
+import { Loader2 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
-import { useTheme } from '../context/ThemeContext'
 import { useCurrentBusiness } from '../hooks/useCurrentBusiness'
 import { changeMyPassword } from '../lib/apiClient'
 import { guardarMiNombre, tieneNombre, validarNombre } from '../lib/perfil'
@@ -160,41 +159,6 @@ function ChangePasswordForm() {
   )
 }
 
-function AppearanceToggle() {
-  const { darkMode, setDarkMode } = useTheme()
-
-  const applyMode = (dark) => {
-    setDarkMode(dark)
-    try {
-      document.documentElement.classList.toggle('dark', dark)
-      window.localStorage.setItem('theme', dark ? 'dark' : 'light')
-    } catch {
-      // localStorage puede fallar en modo privado — no crítico, el toggle en memoria ya se aplicó
-    }
-  }
-
-  return (
-    <div className="flex gap-2">
-      <Button
-        type="button"
-        variant={!darkMode ? 'default' : 'outline'}
-        onClick={() => applyMode(false)}
-        className="gap-2"
-      >
-        <Sun className="h-4 w-4" /> Claro
-      </Button>
-      <Button
-        type="button"
-        variant={darkMode ? 'default' : 'outline'}
-        onClick={() => applyMode(true)}
-        className="gap-2"
-      >
-        <Moon className="h-4 w-4" /> Oscuro
-      </Button>
-    </div>
-  )
-}
-
 function ConfiguracionPage() {
   const { user, userRole } = useAuth()
   const { business } = useCurrentBusiness()
@@ -255,16 +219,6 @@ function ConfiguracionPage() {
           </CardHeader>
           <CardContent>
             <MisSesiones />
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Apariencia</CardTitle>
-            <CardDescription>Modo claro u oscuro para toda la aplicación.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <AppearanceToggle />
           </CardContent>
         </Card>
       </div>
