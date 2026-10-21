@@ -13,6 +13,7 @@ import TicketModal from './TicketModal'
 import MPConfigDrawer from './MPConfigDrawer'
 import { isV2FeatureEnabled } from '../../lib/v2Features'
 import IniciarMiTurno from '../caja/IniciarMiTurno'
+import MiTurnoDeVenta from '../caja/MiTurnoDeVenta'
 
 /**
  * Venta directa "al paso": listado plano de todos los productos sin receta
@@ -59,7 +60,7 @@ function ProductCard({ product, qty, onAdd, onRemove }) {
 export default function VentaDirectaView() {
   const { localId } = useParams()
   const { isWorker } = useAuth()
-  const { cajaId, loading: buscandoTurno, recargar: recargarTurno } = useCajaActiva(localId)
+  const { cajaId, caja: miTurno, loading: buscandoTurno, recargar: recargarTurno } = useCajaActiva(localId)
 
   const [products, setProducts] = useState([])
   const [loading, setLoading] = useState(false)
@@ -178,6 +179,10 @@ export default function VentaDirectaView() {
         {/* #133: el dueño o el encargado vende con su propio turno, sobre una caja abierta. */}
         {!isWorker && isV2FeatureEnabled('cajaFisicaManda') && !buscandoTurno && !cajaId && (
           <IniciarMiTurno localId={localId} onIniciado={recargarTurno} />
+        )}
+        {/* #141: con su turno abierto, lo puede terminar (hace falta para cerrar la caja). */}
+        {!isWorker && isV2FeatureEnabled('cajaFisicaManda') && !buscandoTurno && cajaId && (
+          <MiTurnoDeVenta turno={miTurno} onTerminado={recargarTurno} />
         )}
 
         {!isWorker && isV2FeatureEnabled('mpConfig') && (

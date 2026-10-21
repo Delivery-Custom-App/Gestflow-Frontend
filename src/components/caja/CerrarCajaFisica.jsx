@@ -8,6 +8,9 @@ import TurnosDeLaApertura from './TurnosDeLaApertura'
 import { totalesDelConteo } from '../../lib/efectivo'
 import { formatCLPCurrency as formatMoney } from '../../lib/formatCLP'
 import { forzarTermino } from '../../lib/supervision'
+import { terminarTurno } from '../../lib/salesApi'
+import { mensajeTerminarTurno } from '../../lib/turnos'
+import { useAuth } from '../../context/AuthContext'
 import { comprobanteCierreHtml, descargarComprobante, nombreDelComprobante } from '../../lib/comprobanteCierre'
 import { imprimirEnNavegador } from '../../lib/ticketPrint'
 import {
@@ -62,6 +65,37 @@ function TerminarTurno({ turno, nombre, onHecho }) {
 }
 
 /**
+ * El turno abierto es de quien está cerrando la caja (#141): el backend no deja
+ * forzarlo («Es tu propio turno»), así que se termina con `terminar-turno`, sin
+ * motivo y sin cerrar la sesión.
+ */
+function TerminarMiTurno({ turno, onHecho }) {
+  const [error, setError] = useState('')
+  const [terminando, setTerminando] = useState(false)
+
+  const terminar = async () => {
+    setTerminando(true)
+    setError('')
+    try {
+      await terminarTurno(turno.caja_id)
+      onHecho()
+    } catch (err) {
+      setError(mensajeTerminarTurno(err))
+      setTerminando(false)
+    }
+  }
+
+  return (
+    <div className="flex flex-col items-end gap-1">
+      <Button type="button" size="sm" variant="outline" onClick={terminar} disabled={terminando}>
+        {terminando ? 'Terminando…' : 'Terminar mi turno'}
+      </Button>
+      {error && <p role="alert" className="text-xs text-red-600">{error}</p>}
+    </div>
+  )
+}
+
+/**
  * Cerrar una caja física en dos pasos (#133 y #140).
  *
  * 1. **Revisar** (`GET …/cierre`, no cierra nada): en orden, los pedidos que
@@ -86,6 +120,8 @@ export default function CerrarCajaFisica({ caja, localNombre = '', cierra = '', 
   const [guardando, setGuardando] = useState(false)
   const [cerrada, setCerrada] = useState(null)
   const [resumen, setResumen] = useState(null)
+  const { user } = useAuth()
+  const esMio = (t) => Boolean(user?.id) && String(t.cashier_user_id) === String(user.id)
   // Nombre de la persona (por su id o su correo); sin la lista de usuarios, el correo.
   const persona = (id, email) => (nombreDe ? nombreDe(id, email) : email) || '—'
 
@@ -199,8 +235,10 @@ export default function CerrarCajaFisica({ caja, localNombre = '', cierra = '', 
                     <ul className="flex flex-col gap-2">
                       {turnos.map((t) => (
                         <li key={t.caja_id} className="flex flex-wrap items-center justify-between gap-2 text-xs">
-                          <span>{persona(t.cashier_user_id, t.email)} sigue en turno.</span>
-                          <TerminarTurno turno={t} nombre={persona(t.cashier_user_id, t.email)} onHecho={revisarDeNuevo} />
+                          <span>{esMio(t) ? 'Tú sigues en turno.' : `${persona(t.cashier_user_id, t.email)} sigue en turno.`}</span>
+                          {esMio(t)
+                            ? <TerminarMiTurno turno={t} onHecho={revisarDeNuevo} />
+                            : <TerminarTurno turno={t} nombre={persona(t.cashier_user_id, t.email)} onHecho={revisarDeNuevo} />}
                         </li>
                       ))}
                     </ul>

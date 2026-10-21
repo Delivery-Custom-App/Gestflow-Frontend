@@ -12,7 +12,8 @@ import RegistroAperturas from './RegistroAperturas'
 import IniciarMiTurno from './IniciarMiTurno'
 import ResumenDelDiaCajas from './ResumenDelDiaCajas'
 import { MemoryRouter } from 'react-router'
-import { createCajaV2 } from '../../lib/salesApi'
+import { createCajaV2, terminarTurno } from '../../lib/salesApi'
+import MiTurnoDeVenta from './MiTurnoDeVenta'
 import {
   abrirCajaFisica, aperturasDelLocal, resumenesDeHoy, asignarCajaAMaquina, cerrarCajaFisica, listarAperturas, listarCajasFisicasDelLocal, registrarMovimientoCajaFisica, resumenDeApertura, revisarCierreCajaFisica,
 } from '../../lib/cajaFisica'
@@ -32,7 +33,10 @@ vi.mock('../../lib/cajaFisica', async (importOriginal) => ({
   listarCajasFisicasDelLocal: vi.fn(),
   resumenesDeHoy: vi.fn(),
 }))
-vi.mock('../../lib/salesApi', async (importOriginal) => ({ ...(await importOriginal()), createCajaV2: vi.fn() }))
+vi.mock('../../lib/salesApi', async (importOriginal) => ({ ...(await importOriginal()), createCajaV2: vi.fn(), terminarTurno: vi.fn() }))
+// Quién tiene la sesión: sirve para saber si un turno abierto es el propio (#141).
+const sesion = vi.hoisted(() => ({ user: { id: 'u-dueno', email: 'admin@demo' } }))
+vi.mock('../../context/AuthContext', () => ({ useAuth: () => ({ user: sesion.user }) }))
 vi.mock('../../lib/supervision', async (importOriginal) => ({ ...(await importOriginal()), forzarTermino: vi.fn() }))
 vi.mock('../../lib/maquinasCobro', async (importOriginal) => ({ ...(await importOriginal()), listarMaquinasDelLocal: vi.fn() }))
 
@@ -410,5 +414,47 @@ describe('ResumenDelDiaCajas · el día con las aperturas', () => {
     resumenesDeHoy.mockResolvedValue([])
     render(<ResumenDelDiaCajas cajasFisicas={[{ id: 'cf-1' }]} hoy="2026-10-21" />)
     expect(await screen.findByText('Hoy todavía no se ha abierto ninguna caja en este local.')).toBeInTheDocument()
+  })
+})
+
+describe('#141 · el propio turno al cerrar la caja y en la venta directa', () => {
+  it('si el turno abierto es de quien cierra, «Terminar mi turno» usa terminar-turno, sin motivo ni cerrar sesión', async () => {
+    revisarCierreCajaFisica
+      .mockResolvedValueOnce({ pedidos_abiertos: [], cobro_en_curso: false, turnos_abiertos: [{ caja_id: 't-mio', cashier_user_id: 'u-dueno', email: 'admin@demo' }, { caja_id: 't-otro', cashier_user_id: 'u-ana', email: 'ana@demo' }], puede_contar: false })
+      .mockResolvedValueOnce({ pedidos_abiertos: [], cobro_en_curso: false, turnos_abiertos: [{ caja_id: 't-otro', cashier_user_id: 'u-ana', email: 'ana@demo' }], puede_contar: false })
+    terminarTurno.mockResolvedValue({})
+    const user = userEvent.setup()
+    render(<CerrarCajaFisica caja={{ ...CAJA, abierta: true }} onClose={() => {}} />)
+    const seccion = await screen.findByRole('region', { name: 'Empleados en turno' })
+    expect(seccion).toHaveTextContent('Tú sigues en turno.')
+    // El de otra persona sigue con forzar término.
+    expect(within(seccion).getByRole('button', { name: 'Terminar el turno de ana@demo' })).toBeInTheDocument()
+    await user.click(within(seccion).getByRole('button', { name: 'Terminar mi turno' }))
+    expect(terminarTurno).toHaveBeenCalledWith('t-mio')
+    expect(forzarTermino).not.toHaveBeenCalled()
+    await waitFor(() => expect(screen.queryByText('Tú sigues en turno.')).not.toBeInTheDocument())
+  })
+
+  it('si el backend no deja terminar el propio turno, lo dice', async () => {
+    revisarCierreCajaFisica.mockResolvedValue({ pedidos_abiertos: [], cobro_en_curso: false, turnos_abiertos: [{ caja_id: 't-mio', cashier_user_id: 'u-dueno' }], puede_contar: false })
+    terminarTurno.mockRejectedValue(Object.assign(new Error('409'), { status: 409, detail: 'Tienes pedidos abiertos' }))
+    const user = userEvent.setup()
+    render(<CerrarCajaFisica caja={{ ...CAJA, abierta: true }} onClose={() => {}} />)
+    await user.click(await screen.findByRole('button', { name: 'Terminar mi turno' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('Tienes pedidos abiertos')
+  })
+
+  it('en la venta directa, «Terminar mi turno» pide confirmar y termina el turno', async () => {
+    terminarTurno.mockResolvedValue({})
+    const onTerminado = vi.fn()
+    const user = userEvent.setup()
+    render(<MiTurnoDeVenta turno={{ id: 't-mio', opened_at: '2026-10-21T15:00:00Z' }} onTerminado={onTerminado} />)
+    expect(screen.getByRole('region', { name: 'Tu turno de venta' })).toHaveTextContent(/Vendes en tu turno desde las/)
+    await user.click(screen.getByRole('button', { name: /Terminar mi turno/ }))
+    expect(await screen.findByRole('heading', { name: '¿Terminar tu turno?' })).toBeInTheDocument()
+    const botones = screen.getAllByRole('button', { name: /Terminar mi turno/ })
+    await user.click(botones[botones.length - 1])
+    expect(terminarTurno).toHaveBeenCalledWith('t-mio')
+    expect(onTerminado).toHaveBeenCalled()
   })
 })
