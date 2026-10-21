@@ -6,6 +6,7 @@ import { useAuth } from '../../context/AuthContext'
 import { TurnoVendedorContext } from '../../context/turnoVendedor'
 import { createCajaV2, getMiTurnoDeHoy } from '../../lib/salesApi'
 import { listarCajasFisicas } from '../../lib/administrativeApi'
+import { cajasAbiertas, listarCajasFisicasDelLocal } from '../../lib/cajaFisica'
 import { isV2FeatureEnabled } from '../../lib/v2Features'
 import { isAlPasoLocal } from '../../lib/salesModel'
 import { mensajeTurnoTerminado, turnoTerminado } from '../../lib/turnos'
@@ -61,6 +62,13 @@ function Aviso({ children }) {
  *   otra con `PUT /cajas/{id}/maquina` o sigue cobrando sin tarjeta.
  * - Comida al paso: la máquina está anclada a la caja física; no elige nada.
  *
+ * Con la caja física mandando (#133, bandera `cajaFisicaManda`):
+ * - solo se ofrecen las cajas físicas abiertas ahora por el encargado o el
+ *   dueño; si no hay ninguna, «El encargado todavía no abre la caja»;
+ * - en un restaurante la caja sale de la máquina elegida: solo se pueden
+ *   elegir máquinas que están en una caja abierta;
+ * - el turno no lleva plata (el backend ignora `monto_apertura`).
+ *
  * Igual que el cambio de contraseña obligatorio, se muestra en lugar de la
  * aplicación sin tocar la URL: al abrir el turno, sigue donde iba.
  */
@@ -75,6 +83,9 @@ export default function InicioDeTurno({ localId, children }) {
   const [intento, setIntento] = useState(0)
   // Restaurante con la bandera encendida: el turno se abre eligiendo la máquina POS.
   const eligeMaquina = isV2FeatureEnabled('eleccionMaquinaVendedor') && !isAlPasoLocal(user?.local_sales_model)
+  const cajaFisicaManda = isV2FeatureEnabled('cajaFisicaManda')
+  // Cajas físicas abiertas ahora (#133): de ahí sale la caja del turno.
+  const [abiertas, setAbiertas] = useState([])
 
   // ¿Ya tiene su turno de hoy? Se vuelve a preguntar al reintentar o al cerrarse el turno.
   useEffect(() => {
@@ -101,6 +112,23 @@ export default function InicioDeTurno({ localId, children }) {
     setError('')
     setFase('formulario')
     setCajasFisicas(null)
+    if (cajaFisicaManda) {
+      listarCajasFisicasDelLocal(localId)
+        .then((filas) => {
+          const lista = cajasAbiertas(filas)
+          setAbiertas(lista)
+          if (lista.length === 0) { setFase('sin-caja'); return }
+          // En un restaurante la caja sale de la máquina: se elige la máquina directamente.
+          if (eligeMaquina) { setFase('maquina-apertura'); return }
+          setCajasFisicas(lista)
+          setCajaFisicaId(lista.length === 1 ? String(lista[0].id) : '')
+        })
+        .catch(() => {
+          setCajasFisicas([])
+          setError('No se pudieron cargar las cajas de tu local')
+        })
+      return
+    }
     listarCajasFisicas(localId)
       .then((filas) => {
         setCajasFisicas(filas)
@@ -128,6 +156,7 @@ export default function InicioDeTurno({ localId, children }) {
       setFase('listo')
     } catch (err) {
       const mensaje = String(err?.message || '')
+      if (/todavía no abre la caja/i.test(String(err?.detail || mensaje))) { setFase('sin-caja'); return }
       if (/409|ya existe una caja abierta/i.test(mensaje)) {
         // Ya tenía un turno abierto hoy en esa caja: se lo toma y entra.
         reintentar()
@@ -154,16 +183,26 @@ export default function InicioDeTurno({ localId, children }) {
   const abrirConMaquina = useCallback(async (maquina, { compartir }) => {
     try {
       const nuevo = await createCajaV2({
-        caja_fisica_id: cajaFisicaId, monto_apertura: 0, pos_machine_id: maquina.id, compartir,
+        // #133: en un restaurante la caja física es la de la máquina elegida.
+        caja_fisica_id: cajaFisicaManda ? maquina.cajaFisicaId : cajaFisicaId, monto_apertura: 0, pos_machine_id: maquina.id, compartir,
       })
       setTurno(nuevo)
       setFase('listo')
     } catch (err) {
       // Ya tenía su turno de hoy en esa caja: se lo toma y entra.
       if (/ya existe una caja abierta/i.test(String(err?.detail || err?.message || ''))) { reintentar(); return }
+      if (/todavía no abre la caja/i.test(String(err?.detail || err?.message || ''))) { setFase('sin-caja'); return }
       throw errorAlTomarMaquina(err)
     }
-  }, [cajaFisicaId, reintentar])
+  }, [cajaFisicaId, cajaFisicaManda, reintentar])
+
+  // #133: solo se elige una máquina que está en una caja abierta.
+  const motivoNoElegible = useMemo(() => {
+    if (!cajaFisicaManda) return null
+    const ids = new Set(abiertas.map((c) => String(c.id)))
+    return (m) => (!m.cajaFisicaId ? 'Sin caja: pídele al encargado que la asigne a una caja'
+      : !ids.has(String(m.cajaFisicaId)) ? 'Su caja no está abierta' : null)
+  }, [cajaFisicaManda, abiertas])
 
   // Turno ya abierto sin máquina: elige otra.
   const tomarMaquinaDelTurno = useCallback(async (maquina, { compartir }) => {
@@ -221,6 +260,23 @@ export default function InicioDeTurno({ localId, children }) {
     )
   }
 
+  if (fase === 'sin-caja') {
+    return (
+      <Tarjeta titulo="El encargado todavía no abre la caja" subtitulo={subtitulo}>
+        <p role="status" className="mb-5 text-sm text-[hsl(var(--muted-foreground))]">
+          Para iniciar tu turno, el encargado o el dueño tiene que abrir la caja de tu local. Avísale y vuelve a revisar.
+        </p>
+        <div className="flex items-center justify-between gap-2">
+          {salir}
+          <div className="flex items-center gap-2">
+            <CambiarLocal />
+            <Button onClick={irAlFormulario}>Volver a revisar</Button>
+          </div>
+        </div>
+      </Tarjeta>
+    )
+  }
+
   if (fase === 'maquina-apertura') {
     return (
       <Tarjeta titulo="Elige tu máquina de cobro" subtitulo={subtitulo}>
@@ -228,8 +284,9 @@ export default function InicioDeTurno({ localId, children }) {
           localId={localId}
           onConfirmar={abrirConMaquina}
           textoConfirmar="Abrir turno con esta máquina"
-          onSinMaquina={() => setFase('formulario')}
+          onSinMaquina={() => setFase(cajaFisicaManda ? 'pregunta' : 'formulario')}
           textoSinMaquina="Volver"
+          motivoNoElegible={motivoNoElegible}
         />
       </Tarjeta>
     )

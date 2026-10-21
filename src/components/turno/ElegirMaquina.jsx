@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { CreditCard } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
-  listarMaquinasDelLocal, maquinasElegibles, requiereCompartir, textoDeOcupacion, webCobraCon,
+  listarMaquinasDelLocal, maquinasElegibles, requiereCompartir, textoDeOcupacion, maxPorMaquina, webCobraCon,
 } from '../../lib/maquinasCobro'
 
 const ETIQUETA = {
@@ -25,10 +25,12 @@ const ETIQUETA = {
  *
  * `maquinaActualId`: la que ya tiene el turno (no se ofrece de nuevo).
  * `onSinMaquina`: si se pasa, permite seguir sin máquina (solo cobros sin tarjeta).
+ * `motivoNoElegible(maquina)`: si devuelve un texto, la máquina se muestra pero
+ * no se puede elegir (por ejemplo, su caja física no está abierta; #133).
  */
 export default function ElegirMaquina({
   localId, maquinaActualId = null, onConfirmar, onSinMaquina = null,
-  textoConfirmar = 'Usar esta máquina', textoSinMaquina = 'Seguir sin máquina',
+  textoConfirmar = 'Usar esta máquina', textoSinMaquina = 'Seguir sin máquina', motivoNoElegible = null,
 }) {
   const [maquinas, setMaquinas] = useState(null) // null = cargando
   const [falloCarga, setFalloCarga] = useState(false)
@@ -61,7 +63,8 @@ export default function ElegirMaquina({
   const recargar = useCallback(() => { setMaquinas(null); setIntento((n) => n + 1) }, [])
 
   const esActual = (m) => maquinaActualId && String(m.id) === String(maquinaActualId)
-  const elegibles = maquinasElegibles(maquinas).filter((m) => !esActual(m))
+  const noElegible = (m) => (motivoNoElegible ? motivoNoElegible(m) : null)
+  const elegibles = maquinasElegibles(maquinas).filter((m) => !esActual(m) && !noElegible(m))
   const seleccion = elegibles.find((m) => String(m.id) === elegida) || null
 
   const confirmar = async () => {
@@ -107,7 +110,7 @@ export default function ElegirMaquina({
   return (
     <div className="flex flex-col gap-4">
       <p className="text-sm text-[hsl(var(--muted-foreground))]">
-        Elige con qué máquina cobrarás con tarjeta. Una máquina la pueden usar hasta dos personas:
+        Elige con qué máquina cobrarás con tarjeta. Una máquina la pueden usar hasta {maxPorMaquina() === 3 ? 'tres' : 'dos'} personas:
         si ya la usa alguien, la compartes. Queda contigo hasta que termines tu turno.
       </p>
 
@@ -136,6 +139,7 @@ export default function ElegirMaquina({
                   <span className="min-w-0 flex-1">
                     <span className="block text-sm font-medium text-[hsl(var(--foreground))]">{m.nombre}</span>
                     {m.proveedorLabel && <span className="block text-xs text-[hsl(var(--muted-foreground))]">{m.proveedorLabel}</span>}
+                    {!actual && noElegible(m) && <span className="block text-xs text-amber-700 dark:text-amber-300">{noElegible(m)}</span>}
                     {!webCobraCon(m.proveedor) && (
                       <span className="block text-xs text-amber-700 dark:text-amber-300">La web todavía no cobra con Haulmer</span>
                     )}
@@ -152,7 +156,9 @@ export default function ElegirMaquina({
 
       {maquinas.length > 0 && elegibles.length === 0 && (
         <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-800/50 dark:bg-amber-950/30 dark:text-amber-300">
-          Todas las máquinas están llenas o desactivadas. Pídele al encargado que libere una.
+          {motivoNoElegible
+            ? 'Ninguna máquina se puede usar ahora: están llenas, desactivadas o su caja no está abierta. Pídele ayuda al encargado.'
+            : 'Todas las máquinas están llenas o desactivadas. Pídele al encargado que libere una.'}
         </p>
       )}
 
