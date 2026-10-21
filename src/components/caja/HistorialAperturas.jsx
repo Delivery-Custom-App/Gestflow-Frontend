@@ -1,21 +1,51 @@
 import { useEffect, useState } from 'react'
+import TurnosDeLaApertura from './TurnosDeLaApertura'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { cn } from '@/lib/utils'
 import { fechaHora } from '../../lib/sesiones'
 import { formatCLPCurrency as formatMoney } from '../../lib/formatCLP'
 import { textoDiferencia } from '../../lib/arqueo'
-import { APERTURAS_POR_PAGINA, listarAperturas, mensajeCajaFisica } from '../../lib/cajaFisica'
+import { APERTURAS_POR_PAGINA, listarAperturas, mensajeCajaFisica, resumenDeApertura } from '../../lib/cajaFisica'
 
 const dinero = (v) => (v === null || v === undefined || v === '' ? '—' : formatMoney(Number(v)))
 const claseDif = (v) => (Number(v) < 0 ? 'text-red-600' : Number(v) > 0 ? 'text-amber-700' : 'text-emerald-700')
 
+/** «Ver turnos» de una apertura: se piden al abrir, desde su resumen. */
+function VerTurnos({ aperturaId, nombreDe }) {
+  const [abierto, setAbierto] = useState(false)
+  const [estado, setEstado] = useState({ turnos: null, error: '' })
+
+  useEffect(() => {
+    if (!abierto || estado.turnos !== null) return undefined
+    let ignore = false
+    resumenDeApertura(aperturaId)
+      .then((r) => { if (!ignore) setEstado({ turnos: Array.isArray(r?.turnos) ? r.turnos : [], error: '' }) })
+      .catch((err) => { if (!ignore) setEstado({ turnos: [], error: mensajeCajaFisica(err, 'No se pudieron cargar los turnos') }) })
+    return () => { ignore = true }
+  }, [abierto, aperturaId, estado.turnos])
+
+  return (
+    <div className="mt-1.5 flex flex-col gap-1.5">
+      <Button type="button" size="sm" variant="ghost" className="self-start" aria-expanded={abierto} onClick={() => setAbierto((v) => !v)}>
+        {abierto ? 'Ocultar turnos' : 'Ver turnos'}
+      </Button>
+      {abierto && (estado.error
+        ? <p role="alert" className="text-xs text-red-600">{estado.error}</p>
+        : estado.turnos === null
+          ? <p className="text-xs text-[hsl(var(--muted-foreground))]">Cargando los turnos…</p>
+          : <TurnosDeLaApertura turnos={estado.turnos} nombreDe={nombreDe} />)}
+    </div>
+  )
+}
+
 /**
  * Historial de aperturas de una caja física (#133): cada apertura con quién la
  * abrió, el fondo y su nota, y —si se cerró— quién, lo contado, lo esperado,
- * la diferencia y la nota. De la más nueva a la más vieja, paginado.
+ * la diferencia y la nota, más los turnos que se trabajaron en ella. De la más
+ * nueva a la más vieja, paginado.
  */
-export default function HistorialAperturas({ caja, onClose }) {
+export default function HistorialAperturas({ caja, nombreDe = null, onClose }) {
   const [pagina, setPagina] = useState(0)
   const [estado, setEstado] = useState({ clave: '', aperturas: [], total: 0, error: '' })
   const clave = `${caja.id}|${pagina}`
@@ -70,6 +100,7 @@ export default function HistorialAperturas({ caja, onClose }) {
                     {a.nota_cierre && <p>Nota de cierre: {a.nota_cierre}</p>}
                   </>
                 )}
+                <VerTurnos aperturaId={a.id} nombreDe={nombreDe} />
               </li>
             ))}
           </ol>

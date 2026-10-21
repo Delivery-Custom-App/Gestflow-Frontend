@@ -433,7 +433,8 @@ function FlujoCajaContent({ localId, localNombre = '', cierra = '', puedeGestion
       )}
       {cajaFisicaManda && puedeGestionarCaja && (
         <Panel title="La caja del día" sub="Abrir y cerrar cada caja física, con su conteo; retiros e ingresos del cajón">
-          <AperturaCierreCajas cajasFisicas={cajasFisicasList} localNombre={localNombre} cierra={cierra} puedeGestionar={puedeGestionarCaja} onCambio={onRefresh} />
+          <AperturaCierreCajas cajasFisicas={cajasFisicasList} localNombre={localNombre} cierra={cierra} puedeGestionar={puedeGestionarCaja} onCambio={onRefresh}
+            nombreDe={(id) => nombreDeVendedor(usuariosPorId, id)} />
         </Panel>
       )}
       <div className="grid grid-cols-2 gap-4">

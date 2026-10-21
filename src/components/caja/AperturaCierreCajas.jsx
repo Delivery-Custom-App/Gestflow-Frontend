@@ -15,7 +15,7 @@ import HistorialAperturas from './HistorialAperturas'
  * cierre) y, para el encargado y el dueño, abrir, registrar un retiro o
  * ingreso, cerrar y ver el historial.
  */
-export default function AperturaCierreCajas({ cajasFisicas = [], localNombre = '', cierra = '', puedeGestionar = false, onCambio }) {
+export default function AperturaCierreCajas({ cajasFisicas = [], localNombre = '', cierra = '', puedeGestionar = false, nombreDe = null, onCambio }) {
   const [accion, setAccion] = useState(null) // { tipo: 'abrir' | 'cerrar' | 'movimiento' | 'historial', caja }
   const [aviso, setAviso] = useState('')
   const activas = (Array.isArray(cajasFisicas) ? cajasFisicas : []).filter((c) => c.is_active !== false)
@@ -37,7 +37,7 @@ export default function AperturaCierreCajas({ cajasFisicas = [], localNombre = '
                 <div className="min-w-0 flex-1">
                   <p className="flex items-center gap-2 font-semibold text-[hsl(var(--foreground))]">
                     {c.name || 'Caja física'}
-                    <Badge variant={c.abierta ? 'success' : 'outline'}>{c.abierta ? 'Abierta' : 'Cerrada'}</Badge>
+                    <Badge variant={c.abierta ? 'success' : 'destructive'} data-estado={c.abierta ? 'abierta' : 'cerrada'}>{c.abierta ? 'Abierta' : 'Cerrada'}</Badge>
                   </p>
                   <p className="text-xs text-[hsl(var(--muted-foreground))]">
                     {c.abierta && actual
@@ -77,7 +77,7 @@ export default function AperturaCierreCajas({ cajasFisicas = [], localNombre = '
           onAbierta={(a) => hecho(`${accion.caja.name || 'La caja'} quedó abierta con ${formatMoney(Number(a?.monto_apertura) || 0)}.`)} />
       )}
       {accion?.tipo === 'cerrar' && (
-        <CerrarCajaFisica caja={accion.caja} localNombre={localNombre} cierra={cierra}
+        <CerrarCajaFisica caja={accion.caja} localNombre={localNombre} cierra={cierra} nombreDe={nombreDe}
           onClose={() => { setAccion(null); onCambio?.() }}
           onCerrada={() => setAviso(`${accion.caja.name || 'La caja'} quedó cerrada.`)} />
       )}
@@ -85,7 +85,7 @@ export default function AperturaCierreCajas({ cajasFisicas = [], localNombre = '
         <MovimientoCajaFisica caja={accion.caja} onClose={cerrar}
           onRegistrado={({ tipo, monto }) => hecho(`${tipo === 'egreso' ? 'Retiro' : 'Ingreso'} de ${formatMoney(monto)} registrado en ${accion.caja.name || 'la caja'}.`)} />
       )}
-      {accion?.tipo === 'historial' && <HistorialAperturas caja={accion.caja} onClose={cerrar} />}
+      {accion?.tipo === 'historial' && <HistorialAperturas caja={accion.caja} nombreDe={nombreDe} onClose={cerrar} />}
     </div>
   )
 }

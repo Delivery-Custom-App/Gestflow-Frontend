@@ -7,8 +7,9 @@ import CerrarCajaFisica from './CerrarCajaFisica'
 import MovimientoCajaFisica from './MovimientoCajaFisica'
 import AperturaCierreCajas from './AperturaCierreCajas'
 import MaquinasDeLasCajas from './MaquinasDeLasCajas'
+import HistorialAperturas from './HistorialAperturas'
 import {
-  abrirCajaFisica, asignarCajaAMaquina, cerrarCajaFisica, registrarMovimientoCajaFisica, resumenDeApertura, revisarCierreCajaFisica,
+  abrirCajaFisica, asignarCajaAMaquina, cerrarCajaFisica, listarAperturas, registrarMovimientoCajaFisica, resumenDeApertura, revisarCierreCajaFisica,
 } from '../../lib/cajaFisica'
 import { forzarTermino } from '../../lib/supervision'
 import { listarMaquinasDelLocal } from '../../lib/maquinasCobro'
@@ -196,6 +197,9 @@ describe('AperturaCierreCajas', () => {
     expect(within(items[0]).getByRole('button', { name: 'Cerrar Caja principal' })).toBeInTheDocument()
     expect(within(items[0]).getByRole('button', { name: 'Retiro o ingreso en Caja principal' })).toBeInTheDocument()
     expect(items[1]).toHaveTextContent('Último cierre: $50.000')
+    // Abierta en verde y cerrada en rojo.
+    expect(within(items[0]).getByText('Abierta')).toHaveClass('text-[hsl(149,60%,28%)]')
+    expect(within(items[1]).getByText('Cerrada')).toHaveClass('text-[hsl(354,70%,36%)]')
     expect(within(items[1]).getByRole('button', { name: 'Abrir Caja terraza' })).toBeInTheDocument()
   })
 
@@ -239,5 +243,49 @@ describe('MaquinasDeLasCajas (#140)', () => {
     await user.selectOptions(select, 'cf-1')
     expect(asignarCajaAMaquina).toHaveBeenCalledWith('pm-1', 'cf-1')
     expect(await screen.findByRole('status')).toHaveTextContent('Point barra quedó en Caja principal')
+  })
+})
+
+describe('los turnos trabajados en cada apertura', () => {
+  const TURNOS = [
+    { caja_id: 't-1', cashier_user_id: 'u-ana', status: 'closed', opened_at: '2026-10-21T12:00:00Z', turno_terminado_at: '2026-10-21T18:00:00Z', total_vendido: '45000.00' },
+    { caja_id: 't-2', cashier_user_id: 'u-luis', status: 'open', opened_at: '2026-10-21T13:00:00Z', turno_terminado_at: null, total_vendido: '12000.00' },
+  ]
+  const nombreDe = (id) => ({ 'u-ana': 'Ana Rojas', 'u-luis': 'Luis Soto' }[id])
+
+  it('al cerrar la caja se ven los turnos que se trabajaron, con quién y cuánto vendió', async () => {
+    revisarCierreCajaFisica.mockResolvedValue({ pedidos_abiertos: [], cobro_en_curso: false, turnos_abiertos: [], puede_contar: true })
+    cerrarCajaFisica.mockResolvedValue({ id: 'ap-1', cerrada_at: '2026-10-21T23:00:00Z' })
+    resumenDeApertura.mockResolvedValue({ fondo: '0', efectivo_esperado: '0', turnos: TURNOS })
+    const user = userEvent.setup()
+    render(<CerrarCajaFisica caja={{ ...CAJA, abierta: true }} nombreDe={nombreDe} onClose={() => {}} />)
+    await user.click(await screen.findByRole('button', { name: 'Contar el efectivo' }))
+    await user.click(screen.getByRole('button', { name: /Cerrar caja con/ }))
+    const turnos = within(await screen.findByRole('region', { name: 'Turnos de esta apertura' })).getAllByRole('listitem')
+    expect(turnos[0]).toHaveTextContent('Ana Rojas')
+    expect(turnos[0]).toHaveTextContent('Vendió $45.000')
+    expect(turnos[1]).toHaveTextContent('Luis Soto')
+    expect(turnos[1]).toHaveTextContent('en turno')
+  })
+
+  it('en el historial, «Ver turnos» muestra los de esa apertura', async () => {
+    listarAperturas.mockResolvedValueOnce({ aperturas: [{ id: 'ap-1', status: 'closed', abierta_por_email: 'enc@demo', monto_apertura: '0', abierta_at: '2026-10-21T11:00:00Z' }], total: 1 })
+    resumenDeApertura.mockResolvedValue({ turnos: TURNOS })
+    const user = userEvent.setup()
+    render(<HistorialAperturas caja={CAJA} nombreDe={nombreDe} onClose={() => {}} />)
+    await user.click(await screen.findByRole('button', { name: 'Ver turnos' }))
+    expect(resumenDeApertura).toHaveBeenCalledWith('ap-1')
+    const lista = await screen.findByRole('list', { name: 'Turnos trabajados' })
+    expect(lista).toHaveTextContent('Ana Rojas')
+    expect(lista).toHaveTextContent('Luis Soto')
+  })
+
+  it('una apertura sin turnos lo dice', async () => {
+    listarAperturas.mockResolvedValueOnce({ aperturas: [{ id: 'ap-2', status: 'open', monto_apertura: '0', abierta_at: '2026-10-21T11:00:00Z' }], total: 1 })
+    resumenDeApertura.mockResolvedValue({ turnos: [] })
+    const user = userEvent.setup()
+    render(<HistorialAperturas caja={CAJA} onClose={() => {}} />)
+    await user.click(await screen.findByRole('button', { name: 'Ver turnos' }))
+    expect(await screen.findByText('No se trabajaron turnos en esta apertura.')).toBeInTheDocument()
   })
 })

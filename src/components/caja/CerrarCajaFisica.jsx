@@ -4,6 +4,7 @@ import { Label } from '@/components/ui/label'
 import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import ConteoEfectivo from '../turno/ConteoEfectivo'
 import ResumenCierre from '../turno/ResumenCierre'
+import TurnosDeLaApertura from './TurnosDeLaApertura'
 import { totalesDelConteo } from '../../lib/efectivo'
 import { formatCLPCurrency as formatMoney } from '../../lib/formatCLP'
 import { forzarTermino } from '../../lib/supervision'
@@ -71,7 +72,7 @@ function TerminarTurno({ turno, onHecho }) {
  *    la diferencia, y si no cuadra pide la nota (422).
  * 3. **Cerrada**: el resumen de la apertura y el comprobante.
  */
-export default function CerrarCajaFisica({ caja, localNombre = '', cierra = '', onClose, onCerrada }) {
+export default function CerrarCajaFisica({ caja, localNombre = '', cierra = '', nombreDe = null, onClose, onCerrada }) {
   const [paso, setPaso] = useState('revisar') // revisar | contar | cerrada
   const [revision, setRevision] = useState(null)
   const [errorRevision, setErrorRevision] = useState('')
@@ -245,6 +246,12 @@ export default function CerrarCajaFisica({ caja, localNombre = '', cierra = '', 
             </p>
             <ResumenCierre resumen={resumen ? resumenParaPantalla(resumen) : null} etiquetaRetiros="Retiros" />
             {cerrada?.nota_cierre && <p className="text-xs">Nota: {cerrada.nota_cierre}</p>}
+            {resumen && (
+              <section aria-label="Turnos de esta apertura" className="flex flex-col gap-1.5">
+                <h3 className="text-xs font-bold uppercase tracking-wide text-[hsl(var(--muted-foreground))]">Turnos trabajados</h3>
+                <TurnosDeLaApertura turnos={resumen.turnos} nombreDe={nombreDe} />
+              </section>
+            )}
           </DialogBody>
           <DialogFooter className="flex-wrap">
               {datosComprobante && (
