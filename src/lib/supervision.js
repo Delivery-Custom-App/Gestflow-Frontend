@@ -33,13 +33,20 @@ export async function liberarMaquina(machineId, motivo) {
   })
 }
 
-export async function forzarTermino(cajaId, { motivo, reasignarAUserId = null, cerrarSesion = false } = {}) {
+/**
+ * Termina a la fuerza el turno de un empleado. `paraCerrarLaCaja` (#140) solo
+ * se manda desde el cierre de la caja física: el turno termina aunque tenga
+ * pedidos abiertos, sin reasignarlos (quedan «no cobrados» al cerrar la caja).
+ * Durante el día no se usa: hay que reasignar.
+ */
+export async function forzarTermino(cajaId, { motivo, reasignarAUserId = null, cerrarSesion = false, paraCerrarLaCaja = false } = {}) {
   return apiRequest(`/cajas/${encodeURIComponent(String(cajaId))}/forzar-termino`, {
     method: 'POST',
     body: {
       motivo: String(motivo || '').trim(),
       ...(reasignarAUserId ? { reasignar_a_user_id: String(reasignarAUserId) } : {}),
       ...(cerrarSesion ? { cerrar_sesion: true } : {}),
+      ...(paraCerrarLaCaja ? { para_cerrar_la_caja: true } : {}),
     },
   })
 }

@@ -55,6 +55,7 @@ const fila = (etiqueta, valor, clase = '') => `<tr><td>${esc(etiqueta)}</td><td 
  * @param {object} datos.resumen lo de `armarResumenCierre`
  * @param {Array} [datos.desglose] filas del conteo ({ valor, cantidad, subtotal }), vacío si se escribió el total
  * @param {string} [datos.nota] nota del cierre
+ * @param {string} [datos.etiquetaRetiros] «Retiros y gastos» (turno) o «Retiros» (caja física, #133)
  */
 export function comprobanteCierreHtml(datos) {
   const { resumen = {}, desglose = [], nota = '' } = datos || {}
@@ -103,7 +104,7 @@ export function comprobanteCierreHtml(datos) {
       ${fila('Fondo inicial', money(resumen.fondo))}
       ${filasVentas}
       ${fila('Ingresos de caja', money(resumen.ingresosCaja))}
-      ${fila('Retiros y gastos', money(resumen.retiros))}
+      ${fila(datos?.etiquetaRetiros || 'Retiros y gastos', money(resumen.retiros))}
       ${fila('Efectivo esperado', money(resumen.esperado), 'total')}
     </tbody></table>
     <hr/>

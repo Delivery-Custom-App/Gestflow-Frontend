@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { TIPOS_CAJA_FISICA, crearCajaFisica, renombrarCajaFisica } from '../../lib/administrativeApi'
+import { isV2FeatureEnabled } from '../../lib/v2Features'
 
 /**
  * Alta y renombrado de cajas físicas.
@@ -87,7 +88,8 @@ export default function CajaFisicaModal({ localId, cajaFisica, onClose, onSaved 
             />
           </div>
 
-          <div className="space-y-1.5">
+          {/* #133: con la caja física mandando ya no hay caja «digital»: la caja virtual es la máquina POS. */}
+          {!isV2FeatureEnabled('cajaFisicaManda') && <div className="space-y-1.5">
             <Label htmlFor="caja-fisica-tipo">Tipo</Label>
             <select
               id="caja-fisica-tipo"
@@ -99,7 +101,7 @@ export default function CajaFisicaModal({ localId, cajaFisica, onClose, onSaved 
               {Object.entries(TIPOS_CAJA_FISICA).map(([valor, etiqueta]) => <option key={valor} value={valor}>{etiqueta}</option>)}
             </select>
             <p className="text-[11px] text-[hsl(var(--muted-foreground))]">Es solo un dato para distinguirlas: las dos abren turno con cualquier monto, también $0.</p>
-          </div>
+          </div>}
 
           {error && (
             <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{error}</p>

@@ -30,6 +30,8 @@ import { puedeVender } from '../lib/rolesCaja'
 import DetalleTurno from './turno/DetalleTurno'
 import RegistrarMovimientoCaja from './turno/RegistrarMovimientoCaja'
 import CerrarTurno from './turno/CerrarTurno'
+import AperturaCierreCajas from './caja/AperturaCierreCajas'
+import MaquinasDeLasCajas from './caja/MaquinasDeLasCajas'
 import SupervisionTurno from './turno/SupervisionTurno'
 import HistorialTurno from './turno/HistorialTurno'
 import { montoDesdeTexto } from '../lib/fondoEmergencia'
@@ -265,7 +267,8 @@ function SectionActions({ activeSection, onNuevaCaja, puedeAbrirTurno = true }) 
     return null
   }
   // A-03: en restaurante el administrador no tiene caja propia (no abre turno).
-  if (activeSection === 'flujo-caja' && puedeAbrirTurno) {
+  // #133: con la caja física mandando, la caja se abre en «La caja del día» y el turno no lleva plata.
+  if (activeSection === 'flujo-caja' && puedeAbrirTurno && !isV2FeatureEnabled('cajaFisicaManda')) {
     return (
       <div className="flex gap-2">
         <Button onClick={onNuevaCaja}>+ Abrir turno de caja</Button>
@@ -390,7 +393,8 @@ const MP_PAIRING_ACTION = {
   paired:           'Ver vinculación',
 }
 
-function FlujoCajaContent({ localId, dashboard, cajas, cajasFisicas, usuarios, resumenDiario, loading, error, onManagePairing, onViewMovimientos, onGestionarCajaFisica }) {
+function FlujoCajaContent({ localId, localNombre = '', cierra = '', puedeGestionarCaja = false, onRefresh, dashboard, cajas, cajasFisicas, usuarios, resumenDiario, loading, error, onManagePairing, onViewMovimientos, onGestionarCajaFisica }) {
+  const cajaFisicaManda = isV2FeatureEnabled('cajaFisicaManda')
   const [filtroVendedor, setFiltroVendedor] = useState('')
   const [filtroFecha, setFiltroFecha] = useState('')
   const cajasList = safeArray(cajas)
@@ -416,10 +420,22 @@ function FlujoCajaContent({ localId, dashboard, cajas, cajasFisicas, usuarios, r
   return (
     <div className="space-y-5">
       {/* «Caja» significaba dos cosas en esta pantalla: se aclara en una línea. */}
-      <p className="text-xs text-[hsl(var(--muted-foreground))]">
-        <span className="font-semibold text-[hsl(var(--foreground))]">Turno de caja:</span> se abre y se cierra cada día, con su arqueo.{' '}
-        <span className="font-semibold text-[hsl(var(--foreground))]">Caja física:</span> el puesto donde está la terminal; es permanente.
-      </p>
+      {cajaFisicaManda ? (
+        <p className="text-xs text-[hsl(var(--muted-foreground))]">
+          <span className="font-semibold text-[hsl(var(--foreground))]">Caja física:</span> el encargado o el dueño la abre y la cierra, contando el efectivo.{' '}
+          <span className="font-semibold text-[hsl(var(--foreground))]">Turno:</span> el de cada empleado sobre una caja abierta; no lleva plata y se cierra con la caja.
+        </p>
+      ) : (
+        <p className="text-xs text-[hsl(var(--muted-foreground))]">
+          <span className="font-semibold text-[hsl(var(--foreground))]">Turno de caja:</span> se abre y se cierra cada día, con su arqueo.{' '}
+          <span className="font-semibold text-[hsl(var(--foreground))]">Caja física:</span> el puesto donde está la terminal; es permanente.
+        </p>
+      )}
+      {cajaFisicaManda && puedeGestionarCaja && (
+        <Panel title="La caja del día" sub="Abrir y cerrar cada caja física, con su conteo; retiros e ingresos del cajón">
+          <AperturaCierreCajas cajasFisicas={cajasFisicasList} localNombre={localNombre} cierra={cierra} puedeGestionar={puedeGestionarCaja} onCambio={onRefresh} />
+        </Panel>
+      )}
       <div className="grid grid-cols-2 gap-4">
         <KpiCard label="Ingresos del Mes" value={formatMoney(dashboard?.monthly_sales)} sub="Mes actual" />
         <KpiCard label="Turnos Abiertos"  value={String(openCajasCount)} sub={`De ${cajasList.length} registrado${cajasList.length !== 1 ? 's' : ''}`} accent="blue" />
@@ -559,7 +575,7 @@ function FlujoCajaContent({ localId, dashboard, cajas, cajasFisicas, usuarios, r
               return [
                 <span className="inline-flex items-center gap-2" key={`nombre-${cf.id}`}>
                   {cf.name || 'Caja física sin nombre'}
-                  <Badge variant="outline">{cf.tipo === 'digital' ? 'Digital' : 'Física'}</Badge>
+                  {!cajaFisicaManda && <Badge variant="outline">{cf.tipo === 'digital' ? 'Digital' : 'Física'}</Badge>}
                   {!activa && <Badge variant="warning">Desactivada</Badge>}
                 </span>,
                 <div className="flex items-center gap-2" key={`mp-${cf.id}`}>
@@ -600,6 +616,11 @@ function FlujoCajaContent({ localId, dashboard, cajas, cajasFisicas, usuarios, r
             })}
             emptyMessage="No hay cajas físicas registradas para este local."
           />
+        </Panel>
+      )}
+      {cajaFisicaManda && puedeGestionarCaja && (
+        <Panel title="Máquinas POS" sub="Toda máquina pertenece a una caja física: quien la usa queda en esa caja y ahí busca el vuelto">
+          <MaquinasDeLasCajas localId={localId} cajasFisicas={cajasFisicasList} puedeGestionar={puedeGestionarCaja} />
         </Panel>
       )}
     </div>
@@ -1000,7 +1021,7 @@ function CajaMovimientosModal({ caja, onClose, onClosed, puedeRegistrarMovimient
         {/* Body */}
         <div className="p-6 flex flex-col gap-5 flex-1">
           {aviso && <p role="status" className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800">{aviso}</p>}
-          {isOpen && puedeRegistrarMovimientos && (
+          {isOpen && puedeRegistrarMovimientos && !isV2FeatureEnabled('cajaFisicaManda') && (
             registrando ? (
               <div ref={formularioMovimiento}>
                 <RegistrarMovimientoCaja
@@ -1032,7 +1053,12 @@ function CajaMovimientosModal({ caja, onClose, onClosed, puedeRegistrarMovimient
         </div>
 
         {/* Footer */}
-        {isOpen && (
+        {isOpen && isV2FeatureEnabled('cajaFisicaManda') && (
+          <p className="border-t border-[hsl(var(--border))] px-6 py-4 text-xs text-[hsl(var(--muted-foreground))]">
+            El turno no se cuenta ni se cierra solo: se cierra con su caja física, en «La caja del día».
+          </p>
+        )}
+        {isOpen && !isV2FeatureEnabled('cajaFisicaManda') && (
           <div className="px-6 py-4 border-t border-[hsl(var(--border))] shrink-0">
             {cerrandoTurno ? (
               <CerrarTurno
@@ -1070,7 +1096,7 @@ function CajaMovimientosModal({ caja, onClose, onClosed, puedeRegistrarMovimient
 function renderSectionContent(activeSection, payload) {
   switch (activeSection) {
     case 'flujo-caja':
-      return <FlujoCajaContent localId={payload.localId} dashboard={payload.dashboard} cajas={payload.cajas} cajasFisicas={payload.cajasFisicas} usuarios={payload.usuarios} resumenDiario={payload.resumenDiario} loading={payload.loading} error={payload.error} onManagePairing={payload.onManagePairing} onViewMovimientos={payload.onViewMovimientos} onGestionarCajaFisica={payload.onGestionarCajaFisica} />
+      return <FlujoCajaContent localId={payload.localId} localNombre={payload.localNombre} cierra={payload.cierra} puedeGestionarCaja={payload.puedeGestionarCaja} onRefresh={payload.onRefresh} dashboard={payload.dashboard} cajas={payload.cajas} cajasFisicas={payload.cajasFisicas} usuarios={payload.usuarios} resumenDiario={payload.resumenDiario} loading={payload.loading} error={payload.error} onManagePairing={payload.onManagePairing} onViewMovimientos={payload.onViewMovimientos} onGestionarCajaFisica={payload.onGestionarCajaFisica} />
     case 'fondo-emergencia':
       return <FondoEmergencia localId={payload.localId} />
     case 'no-cobradas':
@@ -1310,6 +1336,9 @@ function AdministrativeModule() {
           detalleLoading,
           onManagePairing: puedeGestionarCajasFisicas && isV2FeatureEnabled('cajaMpPairing') ? setPairingCaja : undefined,
           onViewMovimientos: isV2FeatureEnabled('movimientosCaja') ? (c) => setMovimientosCaja({ ...c, localNombre: localActual?.name || '' }) : undefined,
+          localNombre: localActual?.name || '',
+          cierra: user ? nombreVisible(user) : '',
+          puedeGestionarCaja: puedeGestionarCajasFisicas,
         })}
       </main>
     </>

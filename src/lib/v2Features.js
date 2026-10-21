@@ -61,6 +61,20 @@ export const V2_FEATURES = {
    */
   eleccionMaquinaVendedor: true,
   /**
+   * La caja física manda (#133 y #140; backend #42, #40 y #49). Encendida:
+   * - el encargado y el dueño abren y cierran la caja física (Caja y turnos),
+   *   con conteo de billetes, nota si no coincide y cierre en dos pasos;
+   * - los ingresos y retiros son de la caja física; el turno no cuenta ni se
+   *   cierra solo (se cierra con su caja);
+   * - el empleado inicia su turno sin plata y solo sobre una caja abierta;
+   * - no hay caja «digital»; una máquina se comparte entre hasta 3 personas y
+   *   el encargado le asigna su caja.
+   * Se enciende junto con el interruptor `CAJA_FISICA_MANDA` del backend (con
+   * él apagado, lo de hoy sigue igual). Para probarla en local:
+   * `VITE_CAJA_FISICA_MANDA=true`.
+   */
+  cajaFisicaManda: import.meta.env?.VITE_CAJA_FISICA_MANDA === 'true',
+  /**
    * Fondo de emergencia del local (T-26 · T-27): monto fijo, saldo, gastos y
    * reposiciones con fecha, correcciones de gastos e historial por páginas, en
    * Administración, más la tarjeta del dashboard. Lo manejan el dueño y el
