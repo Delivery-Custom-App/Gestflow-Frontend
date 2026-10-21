@@ -2,7 +2,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { apiRequest } from './apiClient'
 import { V2_FEATURES } from './v2Features'
-import { errorDeCobroTarjeta,
+import { cancelarCobroEnTerminal, MENSAJE_COBRO_SIGUE_VIVO, errorDeCobroTarjeta,
   MENSAJE_HAULMER, cancelPointCharge, createPointCharge, getPointOrderStatus, rutaBaseCobroTarjeta,
 } from './cobroTarjeta'
 
@@ -79,5 +79,28 @@ describe('T-65 · cobro con el Point', () => {
     const anterior = errorDeCobroTarjeta({ status: 409, detail: 'Hay un cobro vigente en el lector que no se pudo cancelar' })
     expect(anterior.reintentable).toBeUndefined()
     expect(anterior.message).toMatch(/Cancélalo en el lector o espera/)
+  })
+})
+
+describe('#131 · cancelarCobroEnTerminal', () => {
+  it('200: el cobro se canceló', async () => {
+    apiRequest.mockResolvedValueOnce({ cancelled: true })
+    expect(await cancelarCobroEnTerminal('o-1')).toEqual({ cancelado: true })
+    expect(apiRequest).toHaveBeenCalledWith(expect.stringMatching(/\/orders\/o-1\/charge$/), { method: 'DELETE' })
+  })
+
+  it('409: el cobro sigue vivo y trae el detail del backend', async () => {
+    apiRequest.mockRejectedValueOnce(Object.assign(new Error('409: x'), { status: 409, detail: 'El cobro ya está en la terminal…' }))
+    expect(await cancelarCobroEnTerminal('o-1')).toEqual({ cancelado: false, mensaje: 'El cobro ya está en la terminal…' })
+  })
+
+  it('409 sin detail: usa el texto del contrato', async () => {
+    apiRequest.mockRejectedValueOnce(Object.assign(new Error('409'), { status: 409 }))
+    expect(await cancelarCobroEnTerminal('o-1')).toEqual({ cancelado: false, mensaje: MENSAJE_COBRO_SIGUE_VIVO })
+  })
+
+  it('otros errores (por ejemplo, ya había vencido) se tratan como cancelado, igual que antes', async () => {
+    apiRequest.mockRejectedValueOnce(Object.assign(new Error('404'), { status: 404 }))
+    expect(await cancelarCobroEnTerminal('o-1')).toEqual({ cancelado: true })
   })
 })

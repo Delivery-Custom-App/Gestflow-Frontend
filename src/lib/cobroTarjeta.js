@@ -87,3 +87,28 @@ export async function getPointOrderStatus(orderId) {
 export async function cancelPointCharge(orderId) {
   return apiRequest(`${rutaOrden(orderId)}/charge`, { method: 'DELETE' })
 }
+
+export const MENSAJE_COBRO_SIGUE_VIVO = 'El cobro ya está en la terminal y Mercado Pago no deja cancelarlo desde aquí. Cancélalo en el lector (o espera a que venza): si el cliente paga, la venta se registra.'
+
+/**
+ * Intenta cancelar el cobro en la terminal (#131).
+ *
+ * Cuando la máquina ya muestra el cobro, Mercado Pago no deja cancelarlo por
+ * internet y el backend responde **409**: el cobro sigue vivo y, si el cliente
+ * paga, la venta se registra. Entonces no hay que volver a «elegir pago» (se
+ * podría cobrar dos veces): hay que mostrar el aviso y seguir consultando el
+ * estado hasta que se apruebe, se cancele en la máquina o venza.
+ *
+ * Devuelve `{ cancelado: true }` o `{ cancelado: false, mensaje }`. Otros
+ * errores se tratan como hasta ahora: el cobro ya había vencido o se canceló.
+ */
+export async function cancelarCobroEnTerminal(orderId) {
+  try {
+    await cancelPointCharge(orderId)
+    return { cancelado: true }
+  } catch (err) {
+    if (Number(err?.status) !== 409) return { cancelado: true }
+    const detalle = String(err?.detail || '').trim()
+    return { cancelado: false, mensaje: detalle || MENSAJE_COBRO_SIGUE_VIVO }
+  }
+}
