@@ -33,6 +33,7 @@ import CerrarTurno from './turno/CerrarTurno'
 import AperturaCierreCajas from './caja/AperturaCierreCajas'
 import MaquinasDeLasCajas from './caja/MaquinasDeLasCajas'
 import RegistroAperturas from './caja/RegistroAperturas'
+import ResumenDelDiaCajas from './caja/ResumenDelDiaCajas'
 import { crearNombreDe } from '../lib/cajaFisica'
 import SupervisionTurno from './turno/SupervisionTurno'
 import HistorialTurno from './turno/HistorialTurno'
@@ -445,7 +446,13 @@ function FlujoCajaContent({ localId, localNombre = '', cierra = '', usuarioActua
         <KpiCard label="Ingresos del Mes" value={formatMoney(dashboard?.monthly_sales)} sub="Mes actual" />
         <KpiCard label="Turnos Abiertos"  value={String(openCajasCount)} sub={`De ${cajasList.length} registrado${cajasList.length !== 1 ? 's' : ''}`} accent="blue" />
       </div>
-      {resumenDiario && (
+      {/* #133: con la caja física mandando, el día se arma con las aperturas de hoy (el resumen por turnos ya no aplica). */}
+      {cajaFisicaManda && puedeGestionarCaja && (
+        <Panel title="Resumen del día" sub="Todas las cajas que se abrieron hoy en este local: fondo, ventas, retiros, lo esperado y lo contado">
+          <ResumenDelDiaCajas cajasFisicas={cajasFisicasList} version={version} />
+        </Panel>
+      )}
+      {!cajaFisicaManda && resumenDiario && (
         <Panel title="Resumen del día" sub={`Consolidado de todos los turnos del local · ${formatBusinessDate(resumenDiario.business_date)}`}>
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
             <div className="rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--muted))] p-3">

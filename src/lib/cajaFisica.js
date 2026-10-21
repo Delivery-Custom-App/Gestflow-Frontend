@@ -113,6 +113,50 @@ export async function aperturasDelLocal(cajasFisicas, { porCaja = 20 } = {}) {
   return grupos.flat().sort((a, b) => String(b.abierta_at || '').localeCompare(String(a.abierta_at || '')))
 }
 
+/**
+ * Las aperturas de hoy de todas las cajas del local, cada una con su resumen
+ * (calculado por el backend). El «día» es el de la apertura (`business_date`):
+ * una caja abierta a las 23:00 y cerrada a la 01:30 cuenta en el día en que se
+ * abrió. Si el resumen de una apertura no se puede leer, viene en null.
+ */
+export async function resumenesDeHoy(cajasFisicas, hoy) {
+  const deHoy = (await aperturasDelLocal(cajasFisicas)).filter((a) => a.business_date === hoy)
+  return Promise.all(deHoy.map((apertura) => resumenDeApertura(apertura.id)
+    .then((resumen) => ({ apertura, resumen }))
+    .catch(() => ({ apertura, resumen: null }))))
+}
+
+/**
+ * El resumen del día del local: la suma de los resúmenes de sus aperturas de
+ * hoy. Lo contado y la diferencia suman solo las cajas ya cerradas; el efectivo
+ * esperado incluye las abiertas (lo que debería haber hasta ahora).
+ */
+export function sumarResumenDelDia(items) {
+  const filas = lista(items).filter((i) => i?.resumen)
+  const suma = (f) => filas.reduce((s, i) => s + (numero(f(i.resumen)) ?? 0), 0)
+  const cerradas = filas.filter((i) => String(i.apertura?.status) === 'closed')
+  const sumaCerradas = (f) => cerradas.reduce((s, i) => s + (numero(f(i.resumen)) ?? 0), 0)
+  return {
+    aperturas: lista(items).length,
+    abiertas: lista(items).filter((i) => String(i.apertura?.status) === 'open').length,
+    cerradas: cerradas.length,
+    sinResumen: lista(items).length - filas.length,
+    fondo: suma((r) => r.fondo),
+    ventas: {
+      efectivo: suma((r) => r.ventas_por_medio?.efectivo),
+      tarjeta: suma((r) => r.ventas_por_medio?.tarjeta),
+      transferencia: suma((r) => r.ventas_por_medio?.transferencia),
+      otros: suma((r) => r.ventas_por_medio?.otros),
+    },
+    totalVendido: suma((r) => r.total_vendido),
+    ingresosCaja: suma((r) => r.total_ingresos_manuales),
+    retiros: suma((r) => r.total_retiros),
+    esperado: suma((r) => r.efectivo_esperado),
+    contado: cerradas.length ? sumaCerradas((r) => r.monto_cierre_declarado) : null,
+    diferencia: cerradas.length ? sumaCerradas((r) => r.diferencia) : null,
+  }
+}
+
 export function resumenDeApertura(aperturaId) {
   return apiRequest(`/cajas-fisicas/aperturas/${encodeURIComponent(String(aperturaId))}/resumen`)
 }

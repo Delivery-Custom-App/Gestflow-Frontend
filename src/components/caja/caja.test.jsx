@@ -10,10 +10,11 @@ import MaquinasDeLasCajas from './MaquinasDeLasCajas'
 import HistorialAperturas from './HistorialAperturas'
 import RegistroAperturas from './RegistroAperturas'
 import IniciarMiTurno from './IniciarMiTurno'
+import ResumenDelDiaCajas from './ResumenDelDiaCajas'
 import { MemoryRouter } from 'react-router'
 import { createCajaV2 } from '../../lib/salesApi'
 import {
-  abrirCajaFisica, aperturasDelLocal, asignarCajaAMaquina, cerrarCajaFisica, listarAperturas, listarCajasFisicasDelLocal, registrarMovimientoCajaFisica, resumenDeApertura, revisarCierreCajaFisica,
+  abrirCajaFisica, aperturasDelLocal, resumenesDeHoy, asignarCajaAMaquina, cerrarCajaFisica, listarAperturas, listarCajasFisicasDelLocal, registrarMovimientoCajaFisica, resumenDeApertura, revisarCierreCajaFisica,
 } from '../../lib/cajaFisica'
 import { forzarTermino } from '../../lib/supervision'
 import { listarMaquinasDelLocal } from '../../lib/maquinasCobro'
@@ -29,6 +30,7 @@ vi.mock('../../lib/cajaFisica', async (importOriginal) => ({
   asignarCajaAMaquina: vi.fn(),
   aperturasDelLocal: vi.fn(),
   listarCajasFisicasDelLocal: vi.fn(),
+  resumenesDeHoy: vi.fn(),
 }))
 vi.mock('../../lib/salesApi', async (importOriginal) => ({ ...(await importOriginal()), createCajaV2: vi.fn() }))
 vi.mock('../../lib/supervision', async (importOriginal) => ({ ...(await importOriginal()), forzarTermino: vi.fn() }))
@@ -379,5 +381,34 @@ describe('IniciarMiTurno · el dueño o el encargado que vende en un local al pa
     montar()
     expect(await screen.findByRole('link', { name: 'Administración → Caja y turnos' })).toHaveAttribute('href', '/local/loc-1/administrativo/flujo-caja')
     expect(screen.queryByRole('button')).not.toBeInTheDocument()
+  })
+})
+
+describe('ResumenDelDiaCajas · el día con las aperturas', () => {
+  const RES = (o) => ({ fondo: '0', ventas_por_medio: { efectivo: '0', tarjeta: '0', transferencia: '0', otros: '0' }, total_vendido: '0', total_ingresos_manuales: '0', total_retiros: '0', efectivo_esperado: '0', monto_cierre_declarado: null, diferencia: null, ...o })
+
+  it('muestra los totales del día y cada caja con su estado', async () => {
+    resumenesDeHoy.mockResolvedValue([
+      { apertura: { id: 'a1', status: 'closed', cajaNombre: 'Caja principal' }, resumen: RES({ fondo: '40000', total_vendido: '2500', total_ingresos_manuales: '1000', total_retiros: '5000', efectivo_esperado: '38500', monto_cierre_declarado: '20000', diferencia: '-18500' }) },
+      { apertura: { id: 'a2', status: 'open', cajaNombre: 'caja' }, resumen: RES({ fondo: '0' }) },
+    ])
+    render(<ResumenDelDiaCajas cajasFisicas={[{ id: 'cf-1' }, { id: 'cf-2' }]} hoy="2026-10-21" />)
+    expect(await screen.findByTestId('dia-fondo')).toHaveTextContent('$40.000')
+    expect(screen.getByTestId('dia-esperado')).toHaveTextContent('$38.500')
+    expect(screen.getByTestId('dia-retiros')).toHaveTextContent('$5.000')
+    expect(screen.getByTestId('dia-contado')).toHaveTextContent('$20.000')
+    expect(screen.getByTestId('dia-diferencia')).toHaveTextContent('Faltan $18.500')
+    expect(screen.getByText(/2 aperturas hoy · 1 abierta · 1 cerrada/)).toBeInTheDocument()
+    const [principal, otra] = within(screen.getByRole('list', { name: 'Cajas de hoy' })).getAllByRole('listitem')
+    expect(principal).toHaveTextContent('Cerrada')
+    expect(principal).toHaveTextContent('Contado $20.000')
+    expect(otra).toHaveTextContent('Sin cerrar')
+    expect(resumenesDeHoy).toHaveBeenCalledWith([{ id: 'cf-1' }, { id: 'cf-2' }], '2026-10-21')
+  })
+
+  it('sin aperturas hoy lo dice', async () => {
+    resumenesDeHoy.mockResolvedValue([])
+    render(<ResumenDelDiaCajas cajasFisicas={[{ id: 'cf-1' }]} hoy="2026-10-21" />)
+    expect(await screen.findByText('Hoy todavía no se ha abierto ninguna caja en este local.')).toBeInTheDocument()
   })
 })

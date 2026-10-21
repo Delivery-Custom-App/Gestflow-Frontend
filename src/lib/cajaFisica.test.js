@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { apiRequest, formatApiErrorDetail } from './apiClient'
 import { V2_FEATURES } from './v2Features'
 import {
-  abrirCajaFisica, aperturasDelLocal, asignarCajaAMaquina, crearNombreDe, cajasAbiertas, cerrarCajaFisica, desgloseParaApi, faltaNota,
+  abrirCajaFisica, aperturasDelLocal, asignarCajaAMaquina, crearNombreDe, resumenesDeHoy, sumarResumenDelDia, cajasAbiertas, cerrarCajaFisica, desgloseParaApi, faltaNota,
   listarAperturas, listarCajasFisicasDelLocal, mensajeCajaFisica, registrarMovimientoCajaFisica,
   resumenParaPantalla, revisarCierreCajaFisica, ultimoCierreDe, validarMovimientoCajaFisica,
 } from './cajaFisica'
@@ -163,5 +163,39 @@ describe('el nombre de quien abrió o cerró', () => {
     expect(nombreDe(null, 'admin@demo')).toBe('Dueño Demo')
     expect(nombreDe(null, 'otro@demo')).toBe('otro@demo')
     expect(nombreDe(null, null)).toBe('—')
+  })
+})
+
+describe('resumen del día con las aperturas (#133)', () => {
+  const R = (o) => ({ fondo: '0', ventas_por_medio: { efectivo: '0', tarjeta: '0', transferencia: '0', otros: '0' }, total_vendido: '0', total_ingresos_manuales: '0', total_retiros: '0', efectivo_esperado: '0', monto_cierre_declarado: null, diferencia: null, ...o })
+
+  it('suma fondo, ventas, ingresos, retiros y esperado de todas; contado y diferencia solo de las cerradas', () => {
+    const dia = sumarResumenDelDia([
+      { apertura: { id: 'a1', status: 'closed' }, resumen: R({ fondo: '40000.00', ventas_por_medio: { efectivo: '2500.00', tarjeta: '8000.00', transferencia: '0', otros: '0' }, total_vendido: '10500.00', total_ingresos_manuales: '1000.00', total_retiros: '5000.00', efectivo_esperado: '38500.00', monto_cierre_declarado: '20000.00', diferencia: '-18500.00' }) },
+      { apertura: { id: 'a2', status: 'open' }, resumen: R({ fondo: '20000.00', ventas_por_medio: { efectivo: '2500.00', tarjeta: '0', transferencia: '0', otros: '0' }, total_vendido: '2500.00', efectivo_esperado: '22500.00' }) },
+      { apertura: { id: 'a3', status: 'open' }, resumen: null },
+    ])
+    expect(dia).toMatchObject({
+      aperturas: 3, abiertas: 2, cerradas: 1, sinResumen: 1,
+      fondo: 60000, ventas: { efectivo: 5000, tarjeta: 8000, transferencia: 0, otros: 0 }, totalVendido: 13000,
+      ingresosCaja: 1000, retiros: 5000, esperado: 61000, contado: 20000, diferencia: -18500,
+    })
+  })
+
+  it('sin cajas cerradas, contado y diferencia quedan en null', () => {
+    const dia = sumarResumenDelDia([{ apertura: { status: 'open' }, resumen: R({ fondo: '1000' }) }])
+    expect(dia.contado).toBeNull()
+    expect(dia.diferencia).toBeNull()
+    expect(dia.fondo).toBe(1000)
+  })
+
+  it('resumenesDeHoy toma solo las aperturas del día y pide el resumen de cada una', async () => {
+    apiRequest.mockImplementation(async (ruta) => {
+      if (ruta.includes('/aperturas?')) return { data: [{ id: 'hoy', business_date: '2026-10-21', abierta_at: '2026-10-21T12:00:00Z' }, { id: 'ayer', business_date: '2026-10-20', abierta_at: '2026-10-20T12:00:00Z' }], total: 2 }
+      if (ruta.endsWith('/hoy/resumen')) return { fondo: '5000.00' }
+      throw new Error('no esperado')
+    })
+    const items = await resumenesDeHoy([{ id: 'cf-1', name: 'Caja principal' }], '2026-10-21')
+    expect(items).toEqual([{ apertura: expect.objectContaining({ id: 'hoy', cajaNombre: 'Caja principal' }), resumen: { fondo: '5000.00' } }])
   })
 })
