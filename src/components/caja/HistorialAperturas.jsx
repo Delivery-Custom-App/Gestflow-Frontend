@@ -58,6 +58,8 @@ export default function HistorialAperturas({ caja, nombreDe = null, onClose }) {
     return () => { ignore = true }
   }, [caja.id, pagina, clave])
 
+  // Nombre de la persona (por su id o su correo); sin la lista de usuarios, el correo.
+  const persona = (id, email) => (nombreDe ? nombreDe(id, email) : email) || '—'
   const cargando = estado.clave !== clave
   const totalPaginas = Math.max(1, Math.ceil(estado.total / APERTURAS_POR_PAGINA))
 
@@ -80,7 +82,7 @@ export default function HistorialAperturas({ caja, nombreDe = null, onClose }) {
             {estado.aperturas.map((a) => (
               <li key={a.id} className="rounded-lg border border-[hsl(var(--border))] px-3 py-2 text-xs">
                 <p className="font-semibold text-[hsl(var(--foreground))]">
-                  {a.status === 'open' ? 'Abierta' : 'Cerrada'} · abrió {a.abierta_por_email || '—'} el {fechaHora(a.abierta_at)}
+                  {a.status === 'open' ? 'Abierta' : 'Cerrada'} · abrió {persona(a.abierta_por_user_id, a.abierta_por_email)} el {fechaHora(a.abierta_at)}
                 </p>
                 <p>
                   Fondo {dinero(a.monto_apertura)}
@@ -92,7 +94,7 @@ export default function HistorialAperturas({ caja, nombreDe = null, onClose }) {
                 {a.status !== 'open' && (
                   <>
                     <p className="mt-1">
-                      Cerró {a.cerrada_por_email || '—'} el {fechaHora(a.cerrada_at)} · contado {dinero(a.monto_cierre_declarado)} · esperado {dinero(a.efectivo_esperado_cierre)}
+                      Cerró {persona(a.cerrada_por_user_id, a.cerrada_por_email)} el {fechaHora(a.cerrada_at)} · contado {dinero(a.monto_cierre_declarado)} · esperado {dinero(a.efectivo_esperado_cierre)}
                     </p>
                     {a.diferencia_cierre !== null && a.diferencia_cierre !== undefined && (
                       <p className={cn('font-semibold', claseDif(a.diferencia_cierre))}>{textoDiferencia(Number(a.diferencia_cierre))}</p>

@@ -18,7 +18,7 @@ const NOTA_MAXIMA = 300
 const AREA = 'w-full rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 py-2 text-sm'
 
 /** Terminar el turno de un empleado para poder cerrar la caja: también cierra su sesión. */
-function TerminarTurno({ turno, onHecho }) {
+function TerminarTurno({ turno, nombre, onHecho }) {
   const [abierto, setAbierto] = useState(false)
   const [motivo, setMotivo] = useState('')
   const [error, setError] = useState('')
@@ -41,7 +41,7 @@ function TerminarTurno({ turno, onHecho }) {
 
   if (!abierto) {
     return (
-      <Button type="button" size="sm" variant="outline" onClick={() => setAbierto(true)} aria-label={`Terminar el turno de ${turno.email || 'este empleado'}`}>
+      <Button type="button" size="sm" variant="outline" onClick={() => setAbierto(true)} aria-label={`Terminar el turno de ${nombre || 'este empleado'}`}>
         Terminar turno y cerrar sesión
       </Button>
     )
@@ -86,6 +86,8 @@ export default function CerrarCajaFisica({ caja, localNombre = '', cierra = '', 
   const [guardando, setGuardando] = useState(false)
   const [cerrada, setCerrada] = useState(null)
   const [resumen, setResumen] = useState(null)
+  // Nombre de la persona (por su id o su correo); sin la lista de usuarios, el correo.
+  const persona = (id, email) => (nombreDe ? nombreDe(id, email) : email) || '—'
 
   useEffect(() => {
     if (paso !== 'revisar') return undefined
@@ -132,7 +134,7 @@ export default function CerrarCajaFisica({ caja, localNombre = '', cierra = '', 
   const datosComprobante = cerrada && resumen ? {
     local: localNombre,
     caja: nombreCaja,
-    cerro: cerrada.cerrada_por_email || cierra,
+    cerro: (cerrada.cerrada_por_user_id || cerrada.cerrada_por_email) ? persona(cerrada.cerrada_por_user_id, cerrada.cerrada_por_email) : cierra,
     cerradoAt: cerrada.cerrada_at,
     resumen: resumenParaPantalla(resumen),
     desglose: filas.filter((f) => f.cantidad > 0),
@@ -171,7 +173,7 @@ export default function CerrarCajaFisica({ caja, localNombre = '', cierra = '', 
                       <ul className="flex flex-col gap-1 text-xs">
                         {pedidos.map((p) => (
                           <li key={p.order_id} className="flex justify-between gap-2">
-                            <span>{[p.mesa || 'Sin mesa', p.email].filter(Boolean).join(' · ')}</span>
+                            <span>{[p.mesa || 'Sin mesa', persona(p.cashier_user_id, p.email)].filter(Boolean).join(' · ')}</span>
                             <span className="tabular-nums">{formatMoney(Number(p.total) || 0)}</span>
                           </li>
                         ))}
@@ -197,8 +199,8 @@ export default function CerrarCajaFisica({ caja, localNombre = '', cierra = '', 
                     <ul className="flex flex-col gap-2">
                       {turnos.map((t) => (
                         <li key={t.caja_id} className="flex flex-wrap items-center justify-between gap-2 text-xs">
-                          <span>{t.email || 'Empleado'} sigue en turno.</span>
-                          <TerminarTurno turno={t} onHecho={revisarDeNuevo} />
+                          <span>{persona(t.cashier_user_id, t.email)} sigue en turno.</span>
+                          <TerminarTurno turno={t} nombre={persona(t.cashier_user_id, t.email)} onHecho={revisarDeNuevo} />
                         </li>
                       ))}
                     </ul>

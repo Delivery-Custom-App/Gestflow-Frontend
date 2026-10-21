@@ -17,6 +17,8 @@ function Fila({ apertura: a, nombreDe }) {
   const [turnos, setTurnos] = useState(null)
   const [error, setError] = useState('')
   const abierta = String(a.status) === 'open'
+  // Nombre de la persona (por su id o su correo); sin la lista de usuarios, el correo.
+  const persona = (id, email) => (nombreDe ? nombreDe(id, email) : email) || '—'
 
   useEffect(() => {
     if (!verTurnos || turnos !== null) return undefined
@@ -39,12 +41,12 @@ function Fila({ apertura: a, nombreDe }) {
         </Button>
       </div>
       <p className="mt-0.5">
-        Abrió {a.abierta_por_email || '—'} el {fechaHora(a.abierta_at)} con {dinero(a.monto_apertura)}
+        Abrió {persona(a.abierta_por_user_id, a.abierta_por_email)} el {fechaHora(a.abierta_at)} con {dinero(a.monto_apertura)}
         {a.nota_apertura ? ` · Nota: ${a.nota_apertura}` : ''}
       </p>
       {!abierta && (
         <p className="mt-0.5">
-          Cerró {a.cerrada_por_email || '—'} el {fechaHora(a.cerrada_at)} · contado {dinero(a.monto_cierre_declarado)} · esperado {dinero(a.efectivo_esperado_cierre)}
+          Cerró {persona(a.cerrada_por_user_id, a.cerrada_por_email)} el {fechaHora(a.cerrada_at)} · contado {dinero(a.monto_cierre_declarado)} · esperado {dinero(a.efectivo_esperado_cierre)}
           {a.diferencia_cierre !== null && a.diferencia_cierre !== undefined && (
             <span className={cn('font-semibold', claseDif(a.diferencia_cierre))}> · {textoDiferencia(Number(a.diferencia_cierre))}</span>
           )}
@@ -92,7 +94,7 @@ export default function RegistroAperturas({ cajasFisicas = [], version = 0, nomb
   const visibles = todas ? estado.aperturas : estado.aperturas.slice(0, VISIBLES)
   return (
     <div className="flex flex-col gap-2">
-      <ol aria-label="Aperturas y cierres de caja" className="flex flex-col gap-2">
+      <ol aria-label="Apertura de caja" className="flex flex-col gap-2">
         {visibles.map((a) => <Fila key={a.id} apertura={a} nombreDe={nombreDe} />)}
       </ol>
       {estado.aperturas.length > VISIBLES && (

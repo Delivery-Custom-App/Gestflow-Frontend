@@ -302,7 +302,7 @@ describe('RegistroAperturas · aperturas y cierres de todas las cajas', () => {
   it('lista cada apertura con su estado en color, el fondo y el cierre', async () => {
     aperturasDelLocal.mockResolvedValue(APERTURAS)
     render(<RegistroAperturas cajasFisicas={[{ id: 'cf-1' }, { id: 'cf-2' }]} />)
-    const [abierta, cerrada] = within(await screen.findByRole('list', { name: 'Aperturas y cierres de caja' })).getAllByRole('listitem')
+    const [abierta, cerrada] = within(await screen.findByRole('list', { name: 'Apertura de caja' })).getAllByRole('listitem')
     expect(abierta).toHaveTextContent('Caja terraza')
     expect(within(abierta).getByText('Abierta')).toHaveClass('text-[hsl(149,60%,28%)]')
     expect(abierta).toHaveTextContent('Abrió enc@demo')
@@ -313,13 +313,23 @@ describe('RegistroAperturas · aperturas y cierres de todas las cajas', () => {
     expect(cerrada).toHaveTextContent('Nota: Faltó cambio')
   })
 
+  it('dice el nombre de quien abrió y cerró, no su correo', async () => {
+    aperturasDelLocal.mockResolvedValue([{ ...APERTURAS[1], abierta_por_user_id: 'u-admin', cerrada_por_user_id: 'u-enc' }])
+    const nombreDe = (id) => ({ 'u-admin': 'Dueño Demo', 'u-enc': 'Encargada Centro' }[id])
+    render(<RegistroAperturas cajasFisicas={[{ id: 'cf-1' }]} nombreDe={nombreDe} />)
+    const fila = within(await screen.findByRole('list', { name: 'Apertura de caja' })).getByRole('listitem')
+    expect(fila).toHaveTextContent('Abrió Dueño Demo')
+    expect(fila).toHaveTextContent('Cerró Encargada Centro')
+    expect(fila).not.toHaveTextContent('admin@demo')
+  })
+
   it('vuelve a pedir la lista cuando se abre o se cierra una caja', async () => {
     aperturasDelLocal.mockResolvedValue([])
     const { rerender } = render(<RegistroAperturas cajasFisicas={[{ id: 'cf-1' }]} version={0} />)
     expect(await screen.findByText('Todavía no se ha abierto ninguna caja en este local.')).toBeInTheDocument()
     aperturasDelLocal.mockResolvedValue(APERTURAS)
     rerender(<RegistroAperturas cajasFisicas={[{ id: 'cf-1' }]} version={1} />)
-    expect(await screen.findByRole('list', { name: 'Aperturas y cierres de caja' })).toBeInTheDocument()
+    expect(await screen.findByRole('list', { name: 'Apertura de caja' })).toBeInTheDocument()
     expect(aperturasDelLocal).toHaveBeenCalledTimes(2)
   })
 

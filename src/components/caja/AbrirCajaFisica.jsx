@@ -18,7 +18,7 @@ const NOTA_MAXIMA = 300
  * esa caja; si no coincide, la nota es obligatoria (el backend responde 422 sin
  * ella). La primera apertura de una caja no tiene con qué comparar.
  */
-export default function AbrirCajaFisica({ caja, localNombre = '', onClose, onAbierta }) {
+export default function AbrirCajaFisica({ caja, localNombre = '', nombreDe = null, onClose, onAbierta }) {
   const [cantidades, setCantidades] = useState({})
   const [nota, setNota] = useState('')
   const [confirmarSinEfectivo, setConfirmarSinEfectivo] = useState(false)
@@ -73,7 +73,7 @@ export default function AbrirCajaFisica({ caja, localNombre = '', onClose, onAbi
           {ultimo ? (
             <div role="note" aria-label="Último cierre de la caja" className="flex flex-col gap-1 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--muted)/0.4)] px-3 py-2 text-xs">
               <p className="text-[hsl(var(--foreground))]">
-                Al cerrar la caja el {fechaHora(ultimo.cerradaAt)}{ultimo.cerro ? `, ${ultimo.cerro} contó ` : ' se contaron '}
+                Al cerrar la caja el {fechaHora(ultimo.cerradaAt)}{ultimo.cerro ? `, ${nombreDe ? nombreDe(null, ultimo.cerro) : ultimo.cerro} contó ` : ' se contaron '}
                 <strong data-testid="ultimo-cierre">{formatMoney(ultimo.contado)}</strong>.
               </p>
               <p data-testid="apertura-vs-cierre" className={cn('font-semibold',

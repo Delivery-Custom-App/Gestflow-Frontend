@@ -24,6 +24,7 @@
  */
 import { apiRequest } from './apiClient'
 import { totalesDelConteo } from './efectivo'
+import { nombreVisible } from './altaUsuario'
 
 const ruta = (id) => `/cajas-fisicas/${encodeURIComponent(String(id))}`
 const lista = (v) => (Array.isArray(v) ? v : [])
@@ -38,6 +39,23 @@ export function desgloseParaApi(cantidades) {
   return totalesDelConteo(cantidades).filas
     .filter((f) => f.cantidad > 0)
     .map((f) => ({ denominacion: f.valor, tipo: f.tipo, cantidad: f.cantidad }))
+}
+
+/**
+ * El nombre de una persona para mostrar en la caja: el backend entrega quién
+ * abrió o cerró por su id o su correo. Se busca en los usuarios del local (y en
+ * quien tiene la sesión); si no aparece, queda el correo.
+ * Devuelve `(id, email) => nombre`.
+ */
+export function crearNombreDe(usuarios = [], usuarioActual = null) {
+  const todos = [...lista(usuarios), ...(usuarioActual ? [usuarioActual] : [])]
+  const porId = new Map(todos.filter((u) => u?.id).map((u) => [String(u.id), u]))
+  const porEmail = new Map(todos.filter((u) => u?.email).map((u) => [String(u.email).toLowerCase(), u]))
+  return (id, email) => {
+    const u = (id && porId.get(String(id))) || (email && porEmail.get(String(email).toLowerCase()))
+    if (u) return nombreVisible(u)
+    return email || (id ? `Usuario ${String(id).slice(0, 8)}` : '—')
+  }
 }
 
 /** Las cajas físicas del local con su estado (abierta, apertura actual y último cierre). */

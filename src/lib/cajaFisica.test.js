@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { apiRequest, formatApiErrorDetail } from './apiClient'
 import { V2_FEATURES } from './v2Features'
 import {
-  abrirCajaFisica, aperturasDelLocal, asignarCajaAMaquina, cajasAbiertas, cerrarCajaFisica, desgloseParaApi, faltaNota,
+  abrirCajaFisica, aperturasDelLocal, asignarCajaAMaquina, crearNombreDe, cajasAbiertas, cerrarCajaFisica, desgloseParaApi, faltaNota,
   listarAperturas, listarCajasFisicasDelLocal, mensajeCajaFisica, registrarMovimientoCajaFisica,
   resumenParaPantalla, revisarCierreCajaFisica, ultimoCierreDe, validarMovimientoCajaFisica,
 } from './cajaFisica'
@@ -149,5 +149,19 @@ describe('registro de aperturas del local', () => {
       return { data: [{ id: 'a2', abierta_at: '2026-10-20T15:00:00Z' }], total: 1 }
     })
     expect((await aperturasDelLocal([{ id: 'cf-1' }, { id: 'cf-2', name: 'Caja terraza' }])).map((a) => a.id)).toEqual(['a2'])
+  })
+})
+
+describe('el nombre de quien abrió o cerró', () => {
+  const usuarios = [{ id: 'u-1', email: 'centro.admin@demo', first_name: 'Carla', last_name: 'Muñoz' }]
+  const yo = { id: 'u-yo', email: 'admin@demo', first_name: 'Dueño', last_name: 'Demo' }
+
+  it('se busca por id o por correo, también quien tiene la sesión; si no aparece, queda el correo', () => {
+    const nombreDe = crearNombreDe(usuarios, yo)
+    expect(nombreDe('u-1', 'centro.admin@demo')).toBe('Carla Muñoz')
+    expect(nombreDe(null, 'CENTRO.ADMIN@demo')).toBe('Carla Muñoz')
+    expect(nombreDe(null, 'admin@demo')).toBe('Dueño Demo')
+    expect(nombreDe(null, 'otro@demo')).toBe('otro@demo')
+    expect(nombreDe(null, null)).toBe('—')
   })
 })

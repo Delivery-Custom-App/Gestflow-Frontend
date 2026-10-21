@@ -33,6 +33,7 @@ import CerrarTurno from './turno/CerrarTurno'
 import AperturaCierreCajas from './caja/AperturaCierreCajas'
 import MaquinasDeLasCajas from './caja/MaquinasDeLasCajas'
 import RegistroAperturas from './caja/RegistroAperturas'
+import { crearNombreDe } from '../lib/cajaFisica'
 import SupervisionTurno from './turno/SupervisionTurno'
 import HistorialTurno from './turno/HistorialTurno'
 import { montoDesdeTexto } from '../lib/fondoEmergencia'
@@ -394,8 +395,10 @@ const MP_PAIRING_ACTION = {
   paired:           'Ver vinculación',
 }
 
-function FlujoCajaContent({ localId, localNombre = '', cierra = '', puedeGestionarCaja = false, onRefresh, version = 0, dashboard, cajas, cajasFisicas, usuarios, resumenDiario, loading, error, onManagePairing, onViewMovimientos, onGestionarCajaFisica }) {
+function FlujoCajaContent({ localId, localNombre = '', cierra = '', usuarioActual = null, puedeGestionarCaja = false, onRefresh, version = 0, dashboard, cajas, cajasFisicas, usuarios, resumenDiario, loading, error, onManagePairing, onViewMovimientos, onGestionarCajaFisica }) {
   const cajaFisicaManda = isV2FeatureEnabled('cajaFisicaManda')
+  // Quién abrió o cerró una caja: su nombre, no su correo.
+  const nombreDe = useMemo(() => crearNombreDe(usuarios, usuarioActual), [usuarios, usuarioActual])
   const [filtroVendedor, setFiltroVendedor] = useState('')
   const [filtroFecha, setFiltroFecha] = useState('')
   const cajasList = safeArray(cajas)
@@ -435,7 +438,7 @@ function FlujoCajaContent({ localId, localNombre = '', cierra = '', puedeGestion
       {cajaFisicaManda && puedeGestionarCaja && (
         <Panel title="La caja del día" sub="Abrir y cerrar cada caja física, con su conteo; retiros e ingresos del cajón">
           <AperturaCierreCajas cajasFisicas={cajasFisicasList} localNombre={localNombre} cierra={cierra} puedeGestionar={puedeGestionarCaja} onCambio={onRefresh}
-            nombreDe={(id) => nombreDeVendedor(usuariosPorId, id)} />
+            nombreDe={nombreDe} />
         </Panel>
       )}
       <div className="grid grid-cols-2 gap-4">
@@ -527,8 +530,8 @@ function FlujoCajaContent({ localId, localNombre = '', cierra = '', puedeGestion
         </Panel>
       )}
       {cajaFisicaManda && puedeGestionarCaja && (
-        <Panel title="Aperturas y cierres de caja" sub="Cada vez que se abrió y se cerró una caja: el fondo, quién abrió y cerró, lo contado y los turnos que se trabajaron">
-          <RegistroAperturas cajasFisicas={cajasFisicasList} version={version} nombreDe={(id) => nombreDeVendedor(usuariosPorId, id)} />
+        <Panel title="Apertura de caja" sub="Cada vez que se abrió y se cerró una caja: el fondo, quién la abrió y la cerró, lo contado y los turnos que se trabajaron">
+          <RegistroAperturas cajasFisicas={cajasFisicasList} version={version} nombreDe={nombreDe} />
         </Panel>
       )}
       <Panel title="Turnos de caja" sub={cajaFisicaManda
@@ -1105,7 +1108,7 @@ function CajaMovimientosModal({ caja, onClose, onClosed, puedeRegistrarMovimient
 function renderSectionContent(activeSection, payload) {
   switch (activeSection) {
     case 'flujo-caja':
-      return <FlujoCajaContent localId={payload.localId} version={payload.version} localNombre={payload.localNombre} cierra={payload.cierra} puedeGestionarCaja={payload.puedeGestionarCaja} onRefresh={payload.onRefresh} dashboard={payload.dashboard} cajas={payload.cajas} cajasFisicas={payload.cajasFisicas} usuarios={payload.usuarios} resumenDiario={payload.resumenDiario} loading={payload.loading} error={payload.error} onManagePairing={payload.onManagePairing} onViewMovimientos={payload.onViewMovimientos} onGestionarCajaFisica={payload.onGestionarCajaFisica} />
+      return <FlujoCajaContent localId={payload.localId} version={payload.version} usuarioActual={payload.usuarioActual} localNombre={payload.localNombre} cierra={payload.cierra} puedeGestionarCaja={payload.puedeGestionarCaja} onRefresh={payload.onRefresh} dashboard={payload.dashboard} cajas={payload.cajas} cajasFisicas={payload.cajasFisicas} usuarios={payload.usuarios} resumenDiario={payload.resumenDiario} loading={payload.loading} error={payload.error} onManagePairing={payload.onManagePairing} onViewMovimientos={payload.onViewMovimientos} onGestionarCajaFisica={payload.onGestionarCajaFisica} />
     case 'fondo-emergencia':
       return <FondoEmergencia localId={payload.localId} />
     case 'no-cobradas':
@@ -1349,6 +1352,7 @@ function AdministrativeModule() {
           cierra: user ? nombreVisible(user) : '',
           puedeGestionarCaja: puedeGestionarCajasFisicas,
           version: refreshKey,
+          usuarioActual: user,
         })}
       </main>
     </>

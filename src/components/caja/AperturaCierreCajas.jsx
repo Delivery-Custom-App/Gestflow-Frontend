@@ -19,6 +19,8 @@ export default function AperturaCierreCajas({ cajasFisicas = [], localNombre = '
   const [accion, setAccion] = useState(null) // { tipo: 'abrir' | 'cerrar' | 'movimiento' | 'historial', caja }
   const [aviso, setAviso] = useState('')
   const activas = (Array.isArray(cajasFisicas) ? cajasFisicas : []).filter((c) => c.is_active !== false)
+  // Nombre de la persona (por su id o su correo); sin la lista de usuarios, el correo.
+  const persona = (id, email) => (nombreDe ? nombreDe(id, email) : email) || '—'
   const cerrar = () => setAccion(null)
   const hecho = (texto) => { setAviso(texto); setAccion(null); onCambio?.() }
 
@@ -41,7 +43,7 @@ export default function AperturaCierreCajas({ cajasFisicas = [], localNombre = '
                   </p>
                   <p className="text-xs text-[hsl(var(--muted-foreground))]">
                     {c.abierta && actual
-                      ? `Abierta el ${fechaHora(actual.abierta_at)} por ${actual.abierta_por_email || '—'}${actual.monto_apertura !== null && actual.monto_apertura !== undefined ? ` · fondo ${formatMoney(Number(actual.monto_apertura))}` : ''}`
+                      ? `Abierta el ${fechaHora(actual.abierta_at)} por ${persona(actual.abierta_por_user_id, actual.abierta_por_email)}${actual.monto_apertura !== null && actual.monto_apertura !== undefined ? ` · fondo ${formatMoney(Number(actual.monto_apertura))}` : ''}`
                       : ultimo ? `Último cierre: ${formatMoney(ultimo.contado)} el ${fechaHora(ultimo.cerradaAt)}` : 'Todavía no se ha abierto'}
                   </p>
                 </div>
@@ -73,7 +75,7 @@ export default function AperturaCierreCajas({ cajasFisicas = [], localNombre = '
       )}
 
       {accion?.tipo === 'abrir' && (
-        <AbrirCajaFisica caja={accion.caja} localNombre={localNombre} onClose={cerrar}
+        <AbrirCajaFisica caja={accion.caja} localNombre={localNombre} nombreDe={nombreDe} onClose={cerrar}
           onAbierta={(a) => hecho(`${accion.caja.name || 'La caja'} quedó abierta con ${formatMoney(Number(a?.monto_apertura) || 0)}.`)} />
       )}
       {accion?.tipo === 'cerrar' && (
