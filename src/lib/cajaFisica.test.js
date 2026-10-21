@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { apiRequest, formatApiErrorDetail } from './apiClient'
 import { V2_FEATURES } from './v2Features'
 import {
-  abrirCajaFisica, asignarCajaAMaquina, cajasAbiertas, cerrarCajaFisica, desgloseParaApi, faltaNota,
+  abrirCajaFisica, aperturasDelLocal, asignarCajaAMaquina, cajasAbiertas, cerrarCajaFisica, desgloseParaApi, faltaNota,
   listarAperturas, listarCajasFisicasDelLocal, mensajeCajaFisica, registrarMovimientoCajaFisica,
   resumenParaPantalla, revisarCierreCajaFisica, ultimoCierreDe, validarMovimientoCajaFisica,
 } from './cajaFisica'
@@ -130,5 +130,24 @@ describe('el 409 del cierre trae un detail con estructura', () => {
     expect(formatApiErrorDetail({ motivo: 'turnos_abiertos', mensaje: 'Hay 1 empleado(s) todavía en turno en esta caja', turnos: [] }))
       .toBe('Hay 1 empleado(s) todavía en turno en esta caja')
     expect(formatApiErrorDetail({ otra: 'cosa' })).toBe('{"otra":"cosa"}')
+  })
+})
+
+describe('registro de aperturas del local', () => {
+  it('junta las aperturas de todas las cajas, de la más nueva a la más vieja, con el nombre de su caja', async () => {
+    apiRequest.mockImplementation(async (ruta) => (ruta.startsWith('/cajas-fisicas/cf-1/')
+      ? { data: [{ id: 'a1', abierta_at: '2026-10-20T10:00:00Z' }, { id: 'a3', abierta_at: '2026-10-21T10:00:00Z' }], total: 2 }
+      : { data: [{ id: 'a2', abierta_at: '2026-10-20T15:00:00Z' }], total: 1 }))
+    const aperturas = await aperturasDelLocal([{ id: 'cf-1', name: 'Caja principal' }, { id: 'cf-2', name: 'Caja terraza' }])
+    expect(aperturas.map((a) => [a.id, a.cajaNombre])).toEqual([['a3', 'Caja principal'], ['a2', 'Caja terraza'], ['a1', 'Caja principal']])
+    expect(apiRequest).toHaveBeenCalledWith('/cajas-fisicas/cf-1/aperturas?limit=20&offset=0', { withTotal: true })
+  })
+
+  it('si una caja falla, igual muestra las demás', async () => {
+    apiRequest.mockImplementation(async (ruta) => {
+      if (ruta.startsWith('/cajas-fisicas/cf-1/')) throw new Error('500')
+      return { data: [{ id: 'a2', abierta_at: '2026-10-20T15:00:00Z' }], total: 1 }
+    })
+    expect((await aperturasDelLocal([{ id: 'cf-1' }, { id: 'cf-2', name: 'Caja terraza' }])).map((a) => a.id)).toEqual(['a2'])
   })
 })

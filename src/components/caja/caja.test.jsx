@@ -8,8 +8,9 @@ import MovimientoCajaFisica from './MovimientoCajaFisica'
 import AperturaCierreCajas from './AperturaCierreCajas'
 import MaquinasDeLasCajas from './MaquinasDeLasCajas'
 import HistorialAperturas from './HistorialAperturas'
+import RegistroAperturas from './RegistroAperturas'
 import {
-  abrirCajaFisica, asignarCajaAMaquina, cerrarCajaFisica, listarAperturas, registrarMovimientoCajaFisica, resumenDeApertura, revisarCierreCajaFisica,
+  abrirCajaFisica, aperturasDelLocal, asignarCajaAMaquina, cerrarCajaFisica, listarAperturas, registrarMovimientoCajaFisica, resumenDeApertura, revisarCierreCajaFisica,
 } from '../../lib/cajaFisica'
 import { forzarTermino } from '../../lib/supervision'
 import { listarMaquinasDelLocal } from '../../lib/maquinasCobro'
@@ -23,6 +24,7 @@ vi.mock('../../lib/cajaFisica', async (importOriginal) => ({
   registrarMovimientoCajaFisica: vi.fn(),
   listarAperturas: vi.fn(() => Promise.resolve({ aperturas: [], total: 0 })),
   asignarCajaAMaquina: vi.fn(),
+  aperturasDelLocal: vi.fn(),
 }))
 vi.mock('../../lib/supervision', async (importOriginal) => ({ ...(await importOriginal()), forzarTermino: vi.fn() }))
 vi.mock('../../lib/maquinasCobro', async (importOriginal) => ({ ...(await importOriginal()), listarMaquinasDelLocal: vi.fn() }))
@@ -287,5 +289,46 @@ describe('los turnos trabajados en cada apertura', () => {
     render(<HistorialAperturas caja={CAJA} onClose={() => {}} />)
     await user.click(await screen.findByRole('button', { name: 'Ver turnos' }))
     expect(await screen.findByText('No se trabajaron turnos en esta apertura.')).toBeInTheDocument()
+  })
+})
+
+describe('RegistroAperturas · aperturas y cierres de todas las cajas', () => {
+  const APERTURAS = [
+    { id: 'ap-2', cajaNombre: 'Caja terraza', status: 'open', abierta_at: '2026-10-21T12:00:00Z', abierta_por_email: 'enc@demo', monto_apertura: '30000.00' },
+    { id: 'ap-1', cajaNombre: 'Caja principal', status: 'closed', abierta_at: '2026-10-21T09:00:00Z', abierta_por_email: 'admin@demo', monto_apertura: '50000.00',
+      cerrada_at: '2026-10-21T18:00:00Z', cerrada_por_email: 'admin@demo', monto_cierre_declarado: '49000.00', efectivo_esperado_cierre: '50000.00', diferencia_cierre: '-1000.00', nota_cierre: 'Faltó cambio' },
+  ]
+
+  it('lista cada apertura con su estado en color, el fondo y el cierre', async () => {
+    aperturasDelLocal.mockResolvedValue(APERTURAS)
+    render(<RegistroAperturas cajasFisicas={[{ id: 'cf-1' }, { id: 'cf-2' }]} />)
+    const [abierta, cerrada] = within(await screen.findByRole('list', { name: 'Aperturas y cierres de caja' })).getAllByRole('listitem')
+    expect(abierta).toHaveTextContent('Caja terraza')
+    expect(within(abierta).getByText('Abierta')).toHaveClass('text-[hsl(149,60%,28%)]')
+    expect(abierta).toHaveTextContent('Abrió enc@demo')
+    expect(abierta).toHaveTextContent('$30.000')
+    expect(within(cerrada).getByText('Cerrada')).toHaveClass('text-[hsl(354,70%,36%)]')
+    expect(cerrada).toHaveTextContent('contado $49.000 · esperado $50.000')
+    expect(cerrada).toHaveTextContent('Faltan $1.000')
+    expect(cerrada).toHaveTextContent('Nota: Faltó cambio')
+  })
+
+  it('vuelve a pedir la lista cuando se abre o se cierra una caja', async () => {
+    aperturasDelLocal.mockResolvedValue([])
+    const { rerender } = render(<RegistroAperturas cajasFisicas={[{ id: 'cf-1' }]} version={0} />)
+    expect(await screen.findByText('Todavía no se ha abierto ninguna caja en este local.')).toBeInTheDocument()
+    aperturasDelLocal.mockResolvedValue(APERTURAS)
+    rerender(<RegistroAperturas cajasFisicas={[{ id: 'cf-1' }]} version={1} />)
+    expect(await screen.findByRole('list', { name: 'Aperturas y cierres de caja' })).toBeInTheDocument()
+    expect(aperturasDelLocal).toHaveBeenCalledTimes(2)
+  })
+
+  it('«Ver turnos» muestra los turnos de esa apertura', async () => {
+    aperturasDelLocal.mockResolvedValue([APERTURAS[1]])
+    resumenDeApertura.mockResolvedValue({ turnos: [{ caja_id: 't-1', cashier_user_id: 'u-ana', status: 'closed', opened_at: '2026-10-21T10:00:00Z', turno_terminado_at: '2026-10-21T17:00:00Z', total_vendido: '20000.00' }] })
+    const user = userEvent.setup()
+    render(<RegistroAperturas cajasFisicas={[{ id: 'cf-1' }]} nombreDe={() => 'Ana Rojas'} />)
+    await user.click(await screen.findByRole('button', { name: 'Ver turnos' }))
+    expect(await screen.findByRole('list', { name: 'Turnos trabajados' })).toHaveTextContent('Ana Rojas')
   })
 })

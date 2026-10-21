@@ -86,6 +86,15 @@ export async function listarAperturas(cajaFisicaId, { offset = 0, limit = APERTU
   return { aperturas: lista(data), total: total ?? lista(data).length }
 }
 
+/** Las aperturas de todas las cajas del local (hasta 20 por caja), de la más nueva a la más vieja. */
+export async function aperturasDelLocal(cajasFisicas, { porCaja = 20 } = {}) {
+  const cajas = lista(cajasFisicas)
+  const grupos = await Promise.all(cajas.map((c) => listarAperturas(c.id, { limit: porCaja })
+    .then(({ aperturas }) => aperturas.map((a) => ({ ...a, cajaNombre: c.name || c.nombre || 'Caja física' })))
+    .catch(() => [])))
+  return grupos.flat().sort((a, b) => String(b.abierta_at || '').localeCompare(String(a.abierta_at || '')))
+}
+
 export function resumenDeApertura(aperturaId) {
   return apiRequest(`/cajas-fisicas/aperturas/${encodeURIComponent(String(aperturaId))}/resumen`)
 }

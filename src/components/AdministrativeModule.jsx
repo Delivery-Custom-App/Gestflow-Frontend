@@ -32,6 +32,7 @@ import RegistrarMovimientoCaja from './turno/RegistrarMovimientoCaja'
 import CerrarTurno from './turno/CerrarTurno'
 import AperturaCierreCajas from './caja/AperturaCierreCajas'
 import MaquinasDeLasCajas from './caja/MaquinasDeLasCajas'
+import RegistroAperturas from './caja/RegistroAperturas'
 import SupervisionTurno from './turno/SupervisionTurno'
 import HistorialTurno from './turno/HistorialTurno'
 import { montoDesdeTexto } from '../lib/fondoEmergencia'
@@ -393,7 +394,7 @@ const MP_PAIRING_ACTION = {
   paired:           'Ver vinculación',
 }
 
-function FlujoCajaContent({ localId, localNombre = '', cierra = '', puedeGestionarCaja = false, onRefresh, dashboard, cajas, cajasFisicas, usuarios, resumenDiario, loading, error, onManagePairing, onViewMovimientos, onGestionarCajaFisica }) {
+function FlujoCajaContent({ localId, localNombre = '', cierra = '', puedeGestionarCaja = false, onRefresh, version = 0, dashboard, cajas, cajasFisicas, usuarios, resumenDiario, loading, error, onManagePairing, onViewMovimientos, onGestionarCajaFisica }) {
   const cajaFisicaManda = isV2FeatureEnabled('cajaFisicaManda')
   const [filtroVendedor, setFiltroVendedor] = useState('')
   const [filtroFecha, setFiltroFecha] = useState('')
@@ -525,7 +526,14 @@ function FlujoCajaContent({ localId, localNombre = '', cierra = '', puedeGestion
           )}
         </Panel>
       )}
-      <Panel title="Turnos de caja" sub="Los turnos de cada vendedor: cuándo abrieron y cerraron y cuánto vendieron">
+      {cajaFisicaManda && puedeGestionarCaja && (
+        <Panel title="Aperturas y cierres de caja" sub="Cada vez que se abrió y se cerró una caja: el fondo, quién abrió y cerró, lo contado y los turnos que se trabajaron">
+          <RegistroAperturas cajasFisicas={cajasFisicasList} version={version} nombreDe={(id) => nombreDeVendedor(usuariosPorId, id)} />
+        </Panel>
+      )}
+      <Panel title="Turnos de caja" sub={cajaFisicaManda
+        ? 'Los turnos de cada empleado sobre una caja abierta: cuándo empezaron y terminaron y cuánto vendieron. Abrir una caja no crea un turno'
+        : 'Los turnos de cada vendedor: cuándo abrieron y cerraron y cuánto vendieron'}>
         <div className="flex flex-col gap-4">
           <FiltrosTurnos
             vendedores={opcionesDeVendedor(cajasList, usuariosPorId)}
@@ -1097,7 +1105,7 @@ function CajaMovimientosModal({ caja, onClose, onClosed, puedeRegistrarMovimient
 function renderSectionContent(activeSection, payload) {
   switch (activeSection) {
     case 'flujo-caja':
-      return <FlujoCajaContent localId={payload.localId} localNombre={payload.localNombre} cierra={payload.cierra} puedeGestionarCaja={payload.puedeGestionarCaja} onRefresh={payload.onRefresh} dashboard={payload.dashboard} cajas={payload.cajas} cajasFisicas={payload.cajasFisicas} usuarios={payload.usuarios} resumenDiario={payload.resumenDiario} loading={payload.loading} error={payload.error} onManagePairing={payload.onManagePairing} onViewMovimientos={payload.onViewMovimientos} onGestionarCajaFisica={payload.onGestionarCajaFisica} />
+      return <FlujoCajaContent localId={payload.localId} version={payload.version} localNombre={payload.localNombre} cierra={payload.cierra} puedeGestionarCaja={payload.puedeGestionarCaja} onRefresh={payload.onRefresh} dashboard={payload.dashboard} cajas={payload.cajas} cajasFisicas={payload.cajasFisicas} usuarios={payload.usuarios} resumenDiario={payload.resumenDiario} loading={payload.loading} error={payload.error} onManagePairing={payload.onManagePairing} onViewMovimientos={payload.onViewMovimientos} onGestionarCajaFisica={payload.onGestionarCajaFisica} />
     case 'fondo-emergencia':
       return <FondoEmergencia localId={payload.localId} />
     case 'no-cobradas':
@@ -1340,6 +1348,7 @@ function AdministrativeModule() {
           localNombre: localActual?.name || '',
           cierra: user ? nombreVisible(user) : '',
           puedeGestionarCaja: puedeGestionarCajasFisicas,
+          version: refreshKey,
         })}
       </main>
     </>
