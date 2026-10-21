@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { cn } from '@/lib/utils'
 import ConteoEfectivo from '../turno/ConteoEfectivo'
 import { totalesDelConteo } from '../../lib/efectivo'
@@ -61,14 +61,15 @@ export default function AbrirCajaFisica({ caja, localNombre = '', onClose, onAbi
 
   return (
     <Dialog open onOpenChange={(abierto) => { if (!abierto && !guardando) onClose() }}>
-      <DialogContent className="max-h-[90vh] max-w-lg overflow-y-auto">
+      <DialogContent overlayClassName="bg-black/60 backdrop-blur-md" className="flex max-h-[90vh] max-w-lg flex-col">
         <DialogHeader>
           <DialogTitle>Abrir caja</DialogTitle>
           <DialogDescription>
             {[localNombre, caja?.name || 'Caja física'].filter(Boolean).join(' · ')}. Cuenta los billetes y monedas con que parte la caja.
           </DialogDescription>
         </DialogHeader>
-        <form onSubmit={enviar} className="flex flex-col gap-4">
+        <form onSubmit={enviar} className="flex min-h-0 flex-1 flex-col">
+          <DialogBody className="min-h-0 flex-1 overflow-y-auto">
           {ultimo ? (
             <div role="note" aria-label="Último cierre de la caja" className="flex flex-col gap-1 rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--muted)/0.4)] px-3 py-2 text-xs">
               <p className="text-[hsl(var(--foreground))]">
@@ -94,9 +95,10 @@ export default function AbrirCajaFisica({ caja, localNombre = '', onClose, onAbi
           </div>
 
           {error && <p role="alert" className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{error}</p>}
+          </DialogBody>
 
           {confirmarSinEfectivo ? (
-            <div role="alertdialog" aria-labelledby="abrir-sin-efectivo" className="flex flex-col gap-3 rounded-xl border border-amber-300 bg-amber-50 p-4 dark:border-amber-700/50 dark:bg-amber-950/30">
+            <div role="alertdialog" aria-labelledby="abrir-sin-efectivo" className="mx-6 mb-5 flex flex-col gap-3 rounded-xl border border-amber-300 bg-amber-50 p-4 dark:border-amber-700/50 dark:bg-amber-950/30">
               <p id="abrir-sin-efectivo" className="text-sm font-semibold text-[hsl(var(--foreground))]">¿Abrir la caja sin efectivo?</p>
               <p className="text-xs text-[hsl(var(--muted-foreground))]">No anotaste billetes ni monedas: la caja parte en $0.</p>
               <div className="flex justify-end gap-2">
@@ -105,10 +107,10 @@ export default function AbrirCajaFisica({ caja, localNombre = '', onClose, onAbi
               </div>
             </div>
           ) : (
-            <div className="flex justify-end gap-2">
+            <DialogFooter>
               <Button type="button" variant="outline" onClick={onClose} disabled={guardando}>Cancelar</Button>
               <Button type="submit" disabled={guardando}>{guardando ? 'Abriendo…' : 'Abrir caja'}</Button>
-            </div>
+            </DialogFooter>
           )}
         </form>
       </DialogContent>

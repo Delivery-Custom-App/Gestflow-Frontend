@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { cn } from '@/lib/utils'
 import { fechaHora } from '../../lib/sesiones'
 import { formatCLPCurrency as formatMoney } from '../../lib/formatCLP'
@@ -33,11 +33,12 @@ export default function HistorialAperturas({ caja, onClose }) {
 
   return (
     <Dialog open onOpenChange={(abierto) => { if (!abierto) onClose() }}>
-      <DialogContent className="max-h-[90vh] max-w-lg overflow-y-auto">
+      <DialogContent overlayClassName="bg-black/60 backdrop-blur-md" className="flex max-h-[90vh] max-w-lg flex-col">
         <DialogHeader>
           <DialogTitle>Historial de la caja</DialogTitle>
           <DialogDescription>{caja?.name || 'Caja física'}: cada vez que se abrió y se cerró.</DialogDescription>
         </DialogHeader>
+        <DialogBody className="min-h-0 flex-1 overflow-y-auto">
         {cargando ? (
           <p className="text-sm text-[hsl(var(--muted-foreground))]">Cargando el historial…</p>
         ) : estado.error ? (
@@ -73,14 +74,15 @@ export default function HistorialAperturas({ caja, onClose }) {
             ))}
           </ol>
         )}
+        </DialogBody>
         {estado.total > APERTURAS_POR_PAGINA && (
-          <div className="flex items-center justify-between text-xs text-[hsl(var(--muted-foreground))]">
+          <DialogFooter className="items-center justify-between text-xs text-[hsl(var(--muted-foreground))] sm:justify-between">
             <span>Página {pagina + 1} de {totalPaginas}</span>
             <span className="flex gap-2">
               <Button size="sm" variant="outline" disabled={pagina === 0} onClick={() => setPagina(pagina - 1)}>Anterior</Button>
               <Button size="sm" variant="outline" disabled={pagina >= totalPaginas - 1} onClick={() => setPagina(pagina + 1)}>Siguiente</Button>
             </span>
-          </div>
+          </DialogFooter>
         )}
       </DialogContent>
     </Dialog>

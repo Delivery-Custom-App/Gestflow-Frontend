@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { METODOS_MOVIMIENTO } from '../../lib/movimientosCaja'
 import { montoDesdeTexto } from '../../lib/fondoEmergencia'
 import { mensajeCajaFisica, registrarMovimientoCajaFisica, validarMovimientoCajaFisica } from '../../lib/cajaFisica'
@@ -39,12 +39,13 @@ export default function MovimientoCajaFisica({ caja, onClose, onRegistrado }) {
 
   return (
     <Dialog open onOpenChange={(abierto) => { if (!abierto && !guardando) onClose() }}>
-      <DialogContent className="max-w-md">
+      <DialogContent overlayClassName="bg-black/60 backdrop-blur-md" className="flex max-h-[90vh] max-w-md flex-col">
         <DialogHeader>
           <DialogTitle>Retiro o ingreso de caja</DialogTitle>
           <DialogDescription>{caja?.name || 'Caja física'}. Los gastos del local salen del fondo de emergencia, no de la caja.</DialogDescription>
         </DialogHeader>
-        <form onSubmit={guardar} className="flex flex-col gap-3">
+        <form onSubmit={guardar} className="flex min-h-0 flex-1 flex-col">
+          <DialogBody className="min-h-0 flex-1 overflow-y-auto">
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="movcf-tipo">Tipo</Label>
             <select id="movcf-tipo" value={tipo} onChange={(e) => setTipo(e.target.value)} disabled={guardando} className={CAMPO}>
@@ -69,10 +70,11 @@ export default function MovimientoCajaFisica({ caja, onClose, onRegistrado }) {
               placeholder={tipo === 'egreso' ? 'Ej: Depósito en el banco' : 'Ej: Sencillo del banco'} className={CAMPO} />
           </div>
           {error && <p role="alert" className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{error}</p>}
-          <div className="flex justify-end gap-2">
+          </DialogBody>
+          <DialogFooter>
             <Button type="button" variant="outline" onClick={onClose} disabled={guardando}>Cancelar</Button>
             <Button type="submit" disabled={guardando}>{guardando ? 'Guardando…' : 'Registrar'}</Button>
-          </div>
+          </DialogFooter>
         </form>
       </DialogContent>
     </Dialog>

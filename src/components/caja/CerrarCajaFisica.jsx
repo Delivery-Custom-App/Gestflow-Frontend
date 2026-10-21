@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import ConteoEfectivo from '../turno/ConteoEfectivo'
 import ResumenCierre from '../turno/ResumenCierre'
 import { totalesDelConteo } from '../../lib/efectivo'
@@ -145,14 +145,15 @@ export default function CerrarCajaFisica({ caja, localNombre = '', cierra = '', 
 
   return (
     <Dialog open onOpenChange={(abierto) => { if (!abierto && !guardando) onClose() }}>
-      <DialogContent className="max-h-[90vh] max-w-lg overflow-y-auto">
+      <DialogContent overlayClassName="bg-black/60 backdrop-blur-md" className="flex max-h-[90vh] max-w-lg flex-col">
         <DialogHeader>
           <DialogTitle>{paso === 'cerrada' ? 'Caja cerrada' : 'Cerrar caja'}</DialogTitle>
           <DialogDescription>{[localNombre, nombreCaja].filter(Boolean).join(' · ')}</DialogDescription>
         </DialogHeader>
 
         {paso === 'revisar' && (
-          <div className="flex flex-col gap-4">
+          <>
+          <DialogBody className="min-h-0 flex-1 overflow-y-auto">
             <p className="text-xs text-[hsl(var(--muted-foreground))]">Antes de contar se revisa lo que está pendiente. Todavía no se cierra nada.</p>
             {avisoCierre && <p role="alert" className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900">{avisoCierre}</p>}
             {errorRevision && <p role="alert" className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{errorRevision}</p>}
@@ -204,18 +205,20 @@ export default function CerrarCajaFisica({ caja, localNombre = '', cierra = '', 
                 </section>
               </>
             )}
-            <div className="flex justify-end gap-2">
-              <Button type="button" variant="outline" onClick={onClose}>Cancelar</Button>
-              <Button type="button" variant="outline" onClick={revisarDeNuevo}>Volver a revisar</Button>
-              <Button type="button" disabled={!revision?.puede_contar} onClick={() => { setAvisoCierre(''); setPaso('contar') }}>
-                Contar el efectivo
-              </Button>
-            </div>
-          </div>
+          </DialogBody>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={onClose}>Cancelar</Button>
+            <Button type="button" variant="outline" onClick={revisarDeNuevo}>Volver a revisar</Button>
+            <Button type="button" disabled={!revision?.puede_contar} onClick={() => { setAvisoCierre(''); setPaso('contar') }}>
+              Contar el efectivo
+            </Button>
+          </DialogFooter>
+          </>
         )}
 
         {paso === 'contar' && (
-          <form onSubmit={contar} className="flex flex-col gap-4">
+          <form onSubmit={contar} className="flex min-h-0 flex-1 flex-col">
+            <DialogBody className="min-h-0 flex-1 overflow-y-auto">
             <p className="text-xs text-[hsl(var(--muted-foreground))]">
               Cuenta los billetes y monedas que hay en la caja. Lo contado es lo que queda para la próxima apertura:
               si vas a retirar plata (por ejemplo, un depósito), regístrala antes como retiro.
@@ -226,21 +229,24 @@ export default function CerrarCajaFisica({ caja, localNombre = '', cierra = '', 
               <textarea id="cierre-nota" rows={2} maxLength={NOTA_MAXIMA} value={nota} onChange={(e) => setNota(e.target.value)} disabled={guardando} className={AREA} />
             </div>
             {error && <p role="alert" className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{error}</p>}
-            <div className="flex justify-end gap-2">
+            </DialogBody>
+            <DialogFooter>
               <Button type="button" variant="outline" onClick={() => { setPaso('revisar'); revisarDeNuevo() }} disabled={guardando}>Volver</Button>
               <Button type="submit" disabled={guardando}>{guardando ? 'Cerrando…' : `Cerrar caja con ${formatMoney(total)}`}</Button>
-            </div>
+            </DialogFooter>
           </form>
         )}
 
         {paso === 'cerrada' && (
-          <div className="flex flex-col gap-4">
+          <>
+          <DialogBody className="min-h-0 flex-1 overflow-y-auto">
             <p role="status" className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
               Caja cerrada. Los turnos de esta apertura quedaron cerrados con ella.
             </p>
             <ResumenCierre resumen={resumen ? resumenParaPantalla(resumen) : null} etiquetaRetiros="Retiros" />
             {cerrada?.nota_cierre && <p className="text-xs">Nota: {cerrada.nota_cierre}</p>}
-            <div className="flex flex-wrap justify-end gap-2">
+          </DialogBody>
+          <DialogFooter className="flex-wrap">
               {datosComprobante && (
                 <>
                   <Button type="button" size="sm" variant="outline" onClick={() => imprimirEnNavegador(comprobanteCierreHtml(datosComprobante))}>Imprimir comprobante</Button>
@@ -251,8 +257,8 @@ export default function CerrarCajaFisica({ caja, localNombre = '', cierra = '', 
                 </>
               )}
               <Button type="button" onClick={onClose}>Listo</Button>
-            </div>
-          </div>
+          </DialogFooter>
+          </>
         )}
       </DialogContent>
     </Dialog>
