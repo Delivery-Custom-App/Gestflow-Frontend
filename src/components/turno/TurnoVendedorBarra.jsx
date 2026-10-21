@@ -167,7 +167,7 @@ export default function TurnoVendedorBarra() {
         <Clock3 size={13} /> Turno abierto{desde ? ` desde las ${desde}` : ''}
       </span>
       <span className="hidden lg:inline text-[11px] text-[hsl(var(--muted-foreground))]" data-testid="recordatorio-terminar">
-        Al terminar tu jornada, termina tu turno
+        {isV2FeatureEnabled('cajaFisicaManda') ? 'Al irte, termina tu turno: se cierra con la caja' : 'Al terminar tu jornada, termina tu turno'}
       </span>
       <MaquinaDelTurno key={turno.id} turnoInicial={turno} alPaso={isAlPasoLocal(user?.local_sales_model)} onTerminado={avisarTerminado} />
       <button type="button" onClick={() => { setConfirmando(true); setError('') }} className={BOTON}

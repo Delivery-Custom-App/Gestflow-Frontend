@@ -10,6 +10,7 @@ const ETIQUETA = {
   compartible: 'bg-sky-50 text-sky-700 dark:bg-sky-950/40 dark:text-sky-300',
   llena: 'bg-[hsl(var(--muted))] text-[hsl(var(--muted-foreground))]',
   desactivada: 'bg-amber-50 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300',
+  noDisponible: 'bg-[hsl(var(--muted))] text-[hsl(var(--muted-foreground))]',
 }
 
 /**
@@ -125,7 +126,8 @@ export default function ElegirMaquina({
           {maquinas.map((m) => {
             const actual = esActual(m)
             const bloqueada = actual || !elegibles.includes(m)
-            const ocupacion = actual ? 'Tu máquina' : textoDeOcupacion(m)
+            // Bloqueada por otro motivo (por ejemplo, su caja no está abierta): no se dice «Libre».
+            const ocupacion = actual ? 'Tu máquina' : noElegible(m) ? 'No disponible' : textoDeOcupacion(m)
             return (
               <li key={m.id}>
                 <label className={`flex items-center gap-3 rounded-xl border p-3 transition-colors ${
@@ -144,7 +146,7 @@ export default function ElegirMaquina({
                       <span className="block text-xs text-amber-700 dark:text-amber-300">La web todavía no cobra con Haulmer</span>
                     )}
                   </span>
-                  <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${actual ? ETIQUETA.libre : ETIQUETA[m.estado]}`}>
+                  <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${actual ? ETIQUETA.libre : noElegible(m) ? ETIQUETA.noDisponible : ETIQUETA[m.estado]}`}>
                     {ocupacion}
                   </span>
                 </label>

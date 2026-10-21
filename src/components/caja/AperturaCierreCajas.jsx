@@ -37,10 +37,10 @@ export default function AperturaCierreCajas({ cajasFisicas = [], localNombre = '
             return (
               <li key={c.id} className="flex flex-wrap items-center gap-3 rounded-lg border border-[hsl(var(--border))] px-3 py-2 text-sm">
                 <div className="min-w-0 flex-1">
-                  <p className="flex items-center gap-2 font-semibold text-[hsl(var(--foreground))]">
+                  <div className="flex items-center gap-2 font-semibold text-[hsl(var(--foreground))]">
                     {c.name || 'Caja física'}
                     <Badge variant={c.abierta ? 'success' : 'destructive'} data-estado={c.abierta ? 'abierta' : 'cerrada'}>{c.abierta ? 'Abierta' : 'Cerrada'}</Badge>
-                  </p>
+                  </div>
                   <p className="text-xs text-[hsl(var(--muted-foreground))]">
                     {c.abierta && actual
                       ? `Abierta el ${fechaHora(actual.abierta_at)} por ${persona(actual.abierta_por_user_id, actual.abierta_por_email)}${actual.monto_apertura !== null && actual.monto_apertura !== undefined ? ` · fondo ${formatMoney(Number(actual.monto_apertura))}` : ''}`

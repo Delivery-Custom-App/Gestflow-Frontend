@@ -117,6 +117,8 @@ describe('MaquinasNegocioPage · la caja física manda (#140)', () => {
     const user = userEvent.setup()
     render(<MaquinasNegocioPage />)
     await user.click(await screen.findByRole('button', { name: 'Mover Point caja a otro local' }))
+    // Antes de elegir el local no hay caja que elegir.
+    expect(screen.queryByLabelText('Caja física')).not.toBeInTheDocument()
     await user.selectOptions(screen.getByLabelText('Local'), 'l1')
     expect(await screen.findByRole('option', { name: 'Sin caja por ahora (se asigna después)' })).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Confirmar' }))

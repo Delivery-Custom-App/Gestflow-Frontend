@@ -41,7 +41,7 @@ export default function MiTurnoDeVenta({ turno, onTerminado }) {
       </Button>
       {confirmando && (
         <Dialog open onOpenChange={(abierto) => { if (!abierto && !terminando) setConfirmando(false) }}>
-          <DialogContent overlayClassName="bg-black/60 backdrop-blur-md" className="mx-4 flex max-h-[90vh] max-w-md flex-col">
+          <DialogContent overlayClassName="bg-black/60 backdrop-blur-md" className="w-[calc(100%-2rem)] flex max-h-[90vh] max-w-md flex-col">
             <DialogHeader>
               <DialogTitle>¿Terminar tu turno?</DialogTitle>
               <DialogDescription>Ya no podrás vender en este turno. La caja sigue abierta hasta que la cierres en Caja y turnos.</DialogDescription>

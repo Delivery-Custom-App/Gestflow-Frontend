@@ -61,7 +61,7 @@ export default function AbrirCajaFisica({ caja, localNombre = '', nombreDe = nul
 
   return (
     <Dialog open onOpenChange={(abierto) => { if (!abierto && !guardando) onClose() }}>
-      <DialogContent overlayClassName="bg-black/60 backdrop-blur-md" className="flex max-h-[90vh] max-w-lg flex-col">
+      <DialogContent overlayClassName="bg-black/60 backdrop-blur-md" className="w-[calc(100%-2rem)] flex max-h-[90vh] max-w-lg flex-col">
         <DialogHeader>
           <DialogTitle>Abrir caja</DialogTitle>
           <DialogDescription>
@@ -94,16 +94,18 @@ export default function AbrirCajaFisica({ caja, localNombre = '', nombreDe = nul
               className="w-full rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--background))] px-3 py-2 text-sm" />
           </div>
 
-          {error && <p role="alert" className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{error}</p>}
           </DialogBody>
+          {/* Fuera del cuerpo con scroll: siempre a la vista, junto a los botones. */}
+          {error && <p role="alert" className="mx-6 mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{error}</p>}
 
           {confirmarSinEfectivo ? (
             <div role="alertdialog" aria-labelledby="abrir-sin-efectivo" className="mx-6 mb-5 flex flex-col gap-3 rounded-xl border border-amber-300 bg-amber-50 p-4 dark:border-amber-700/50 dark:bg-amber-950/30">
               <p id="abrir-sin-efectivo" className="text-sm font-semibold text-[hsl(var(--foreground))]">¿Abrir la caja sin efectivo?</p>
               <p className="text-xs text-[hsl(var(--muted-foreground))]">No anotaste billetes ni monedas: la caja parte en $0.</p>
+              {/* «Volver a contar» queda donde estaba «Abrir caja»: un doble clic no confirma sin querer. */}
               <div className="flex justify-end gap-2">
-                <Button type="button" variant="outline" onClick={() => setConfirmarSinEfectivo(false)} disabled={guardando}>Volver a contar</Button>
-                <Button type="submit" disabled={guardando}>{guardando ? 'Abriendo…' : 'Sí, abrir sin efectivo'}</Button>
+                <Button type="submit" variant="outline" disabled={guardando}>{guardando ? 'Abriendo…' : 'Sí, abrir sin efectivo'}</Button>
+                <Button type="button" onClick={() => setConfirmarSinEfectivo(false)} disabled={guardando}>Volver a contar</Button>
               </div>
             </div>
           ) : (

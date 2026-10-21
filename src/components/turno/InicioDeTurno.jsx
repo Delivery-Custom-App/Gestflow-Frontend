@@ -309,8 +309,9 @@ export default function InicioDeTurno({ localId, children }) {
     return (
       <Tarjeta titulo="¿Iniciar turno?" subtitulo={subtitulo}>
         <p className="text-sm text-[hsl(var(--muted-foreground))] mb-5">
-          Para vender necesitas tu turno abierto. Queda a tu nombre durante el día; lo cierra el
-          encargado del local con el arqueo.
+          {cajaFisicaManda
+            ? 'Para vender necesitas tu turno abierto, sobre una caja que abrió el encargado. No lleva plata: al irte, termínalo; se cierra con la caja.'
+            : 'Para vender necesitas tu turno abierto. Queda a tu nombre durante el día; lo cierra el encargado del local con el arqueo.'}
         </p>
         <div className="flex items-center justify-between gap-2">
           {salir}

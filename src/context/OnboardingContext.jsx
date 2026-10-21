@@ -25,7 +25,7 @@ const STEPS = {
     {
       target: 'nav-administracion',
       title: 'Administración',
-      desc: 'Ventas y caja virtual de cada local desde aquí.',
+      desc: 'Ventas, caja y turnos de cada local desde aquí.',
     },
     {
       target: 'nav-pos',
@@ -42,7 +42,7 @@ const STEPS = {
     {
       target: 'nav-administracion',
       title: 'Administración',
-      desc: 'Revisa las ventas y la caja virtual de tu local.',
+      desc: 'Revisa las ventas, la caja y los turnos de tu local.',
     },
     {
       target: 'nav-pos',

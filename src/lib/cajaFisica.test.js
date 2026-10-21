@@ -161,7 +161,14 @@ describe('el nombre de quien abrió o cerró', () => {
     expect(nombreDe('u-1', 'centro.admin@demo')).toBe('Carla Muñoz')
     expect(nombreDe(null, 'CENTRO.ADMIN@demo')).toBe('Carla Muñoz')
     expect(nombreDe(null, 'admin@demo')).toBe('Dueño Demo')
-    expect(nombreDe(null, 'otro@demo')).toBe('otro@demo')
+    // Quien no está en la lista se muestra como si estuviera (sin nombre cargado: lo del correo), igual para todos.
+    expect(nombreDe(null, 'otro@demo')).toBe('Otro')
+    // Un dueño sin nombre cargado: él se ve en la sesión; el encargado no lo tiene en su lista. Los dos ven lo mismo.
+    const duenoSinNombre = { id: 'u-dueno', email: 'admin@demo.gestflow.dev' }
+    const comoLoVeElDueno = crearNombreDe([], duenoSinNombre)('u-dueno', 'admin@demo.gestflow.dev')
+    const comoLoVeElEncargado = crearNombreDe(usuarios, { id: 'u-1', email: 'centro.admin@demo' })('u-dueno', 'admin@demo.gestflow.dev')
+    expect(comoLoVeElDueno).toBe('Admin')
+    expect(comoLoVeElEncargado).toBe(comoLoVeElDueno)
     expect(nombreDe(null, null)).toBe('—')
   })
 })

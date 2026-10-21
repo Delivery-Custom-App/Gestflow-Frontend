@@ -418,7 +418,8 @@ function FlujoCajaContent({ localId, localNombre = '', cierra = '', usuarioActua
   // A-01: con filtros, la lista la trae el servidor (GET /cajas?business_date=&cashier_user_id=).
   const filtrados = useTurnosFiltrados(localId, cajasList, { vendedorId: filtroVendedor, fecha: filtroFecha })
   const stateNode = <SectionState loading={loading} error={error} isEmpty={!dashboard && !loading && !error} emptyMessage="Sin datos de flujo. Completa órdenes desde el POS y registra gastos para ver gráficos." />
-  if (loading || error || (!dashboard && !loading && !error)) return stateNode
+  // Una recarga (al abrir o cerrar una caja) no desmonta los paneles: si no, se pierden sus mensajes.
+  if (error || !dashboard) return stateNode
 
   const openCajasCount = cajasList.filter((c) => c.is_active).length
 
@@ -1062,7 +1063,7 @@ function CajaMovimientosModal({ caja, onClose, onClosed, puedeRegistrarMovimient
           {isOpen && puedeRegistrarMovimientos && (
             <SupervisionTurno turno={caja} usuarios={caja.usuarios} onHecho={() => { setVersion((v) => v + 1); onClosed?.() }} />
           )}
-          <DetalleTurno key={version} caja={caja} conArqueo cerradoPor={caja.cerradoPor} nombreDeUsuario={caja.nombreDeUsuario} />
+          <DetalleTurno key={version} caja={caja} conArqueo={!isV2FeatureEnabled('cajaFisicaManda')} cerradoPor={caja.cerradoPor} nombreDeUsuario={caja.nombreDeUsuario} />
           <div className="flex flex-col gap-2">
             <Button size="sm" variant="outline" className="self-start" onClick={() => setVerHistorial((v) => !v)} aria-expanded={verHistorial}>
               {verHistorial ? 'Ocultar historial' : 'Historial'}

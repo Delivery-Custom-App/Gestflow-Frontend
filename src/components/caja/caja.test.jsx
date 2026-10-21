@@ -189,7 +189,9 @@ describe('MovimientoCajaFisica', () => {
     expect(screen.getByRole('alert')).toHaveTextContent(/a dónde fue la plata/)
     await user.type(screen.getByLabelText('A dónde fue la plata'), 'Depósito')
     await user.click(screen.getByRole('button', { name: 'Registrar' }))
-    expect(registrarMovimientoCajaFisica).toHaveBeenCalledWith('cf-1', { tipo: 'egreso', monto: 20000, note: 'Depósito', paymentMethod: 'cash' })
+    // Es plata del cajón: no se pregunta el método (va siempre en efectivo).
+    expect(screen.queryByLabelText('Método')).not.toBeInTheDocument()
+    expect(registrarMovimientoCajaFisica).toHaveBeenCalledWith('cf-1', { tipo: 'egreso', monto: 20000, note: 'Depósito' })
     expect(onRegistrado).toHaveBeenCalledWith({ tipo: 'egreso', monto: 20000 })
   })
 })
@@ -456,5 +458,44 @@ describe('#141 · el propio turno al cerrar la caja y en la venta directa', () =
     await user.click(botones[botones.length - 1])
     expect(terminarTurno).toHaveBeenCalledWith('t-mio')
     expect(onTerminado).toHaveBeenCalled()
+  })
+})
+
+describe('#142 · ajustes tras las pruebas', () => {
+  it('la confirmación de abrir en $0 deja «Volver a contar» donde estaba «Abrir caja» (un doble clic no confirma)', async () => {
+    const user = userEvent.setup()
+    render(<AbrirCajaFisica caja={CAJA} onClose={() => {}} onAbierta={() => {}} />)
+    await user.click(screen.getByRole('button', { name: 'Abrir caja' }))
+    const confirmacion = screen.getByRole('alertdialog', { name: '¿Abrir la caja sin efectivo?' })
+    const botones = within(confirmacion).getAllByRole('button').map((b) => b.textContent)
+    expect(botones).toEqual(['Sí, abrir sin efectivo', 'Volver a contar'])
+    expect(abrirCajaFisica).not.toHaveBeenCalled()
+  })
+
+  it('el error de la nota queda fuera del cuerpo con scroll, junto a los botones', async () => {
+    const user = userEvent.setup()
+    render(<AbrirCajaFisica caja={CERRADA_CON_50} onClose={() => {}} onAbierta={() => {}} />)
+    await user.type(screen.getByLabelText('Cantidad de billetes de $20.000'), '2')
+    await user.click(screen.getByRole('button', { name: 'Abrir caja' }))
+    const alerta = screen.getByRole('alert')
+    expect(alerta).toHaveTextContent('explica la diferencia en la nota')
+    expect(alerta.closest('.overflow-y-auto')).toBeNull()
+  })
+
+  it('«quedaron cerrados con ella» solo si hubo turnos', async () => {
+    revisarCierreCajaFisica.mockResolvedValue({ pedidos_abiertos: [], cobro_en_curso: false, turnos_abiertos: [], puede_contar: true })
+    cerrarCajaFisica.mockResolvedValue({ id: 'ap-1' })
+    resumenDeApertura.mockResolvedValue({ fondo: '0', efectivo_esperado: '0', turnos: [] })
+    const user = userEvent.setup()
+    render(<CerrarCajaFisica caja={{ ...CAJA, abierta: true }} onClose={() => {}} />)
+    await user.click(await screen.findByRole('button', { name: 'Contar el efectivo' }))
+    await user.click(screen.getByRole('button', { name: /Cerrar caja con/ }))
+    await screen.findByText('No se trabajaron turnos en esta apertura.')
+    expect(screen.getByRole('status')).toHaveTextContent(/^Caja cerrada\.$/)
+  })
+
+  it('la insignia del estado no va dentro de un párrafo', () => {
+    render(<AperturaCierreCajas cajasFisicas={[{ id: 'cf-1', name: 'Caja principal', is_active: true, abierta: true }]} />)
+    expect(screen.getByText('Abierta').closest('p')).toBeNull()
   })
 })

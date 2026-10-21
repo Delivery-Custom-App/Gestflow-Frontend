@@ -54,7 +54,9 @@ export function crearNombreDe(usuarios = [], usuarioActual = null) {
   return (id, email) => {
     const u = (id && porId.get(String(id))) || (email && porEmail.get(String(email).toLowerCase()))
     if (u) return nombreVisible(u)
-    return email || (id ? `Usuario ${String(id).slice(0, 8)}` : '—')
+    // Quien no está en la lista (por ejemplo, el dueño visto por el encargado) se muestra igual que si estuviera.
+    if (email) return nombreVisible({ email })
+    return id ? `Usuario ${String(id).slice(0, 8)}` : '—'
   }
 }
 

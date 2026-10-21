@@ -184,7 +184,7 @@ export default function CerrarCajaFisica({ caja, localNombre = '', cierra = '', 
 
   return (
     <Dialog open onOpenChange={(abierto) => { if (!abierto && !guardando) onClose() }}>
-      <DialogContent overlayClassName="bg-black/60 backdrop-blur-md" className="flex max-h-[90vh] max-w-lg flex-col">
+      <DialogContent overlayClassName="bg-black/60 backdrop-blur-md" className="w-[calc(100%-2rem)] flex max-h-[90vh] max-w-lg flex-col">
         <DialogHeader>
           <DialogTitle>{paso === 'cerrada' ? 'Caja cerrada' : 'Cerrar caja'}</DialogTitle>
           <DialogDescription>{[localNombre, nombreCaja].filter(Boolean).join(' · ')}</DialogDescription>
@@ -269,8 +269,8 @@ export default function CerrarCajaFisica({ caja, localNombre = '', cierra = '', 
               <Label htmlFor="cierre-nota">{pideNota ? 'Nota (obligatoria: explica la diferencia)' : 'Nota (opcional)'}</Label>
               <textarea id="cierre-nota" rows={2} maxLength={NOTA_MAXIMA} value={nota} onChange={(e) => setNota(e.target.value)} disabled={guardando} className={AREA} />
             </div>
-            {error && <p role="alert" className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{error}</p>}
             </DialogBody>
+            {error && <p role="alert" className="mx-6 mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{error}</p>}
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => { setPaso('revisar'); revisarDeNuevo() }} disabled={guardando}>Volver</Button>
               <Button type="submit" disabled={guardando}>{guardando ? 'Cerrando…' : `Cerrar caja con ${formatMoney(total)}`}</Button>
@@ -282,7 +282,7 @@ export default function CerrarCajaFisica({ caja, localNombre = '', cierra = '', 
           <>
           <DialogBody className="min-h-0 flex-1 overflow-y-auto">
             <p role="status" className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
-              Caja cerrada. Los turnos de esta apertura quedaron cerrados con ella.
+              Caja cerrada.{resumen?.turnos?.length ? ' Los turnos de esta apertura quedaron cerrados con ella.' : ''}
             </p>
             <ResumenCierre resumen={resumen ? resumenParaPantalla(resumen) : null} etiquetaRetiros="Retiros" />
             {cerrada?.nota_cierre && <p className="text-xs">Nota: {cerrada.nota_cierre}</p>}

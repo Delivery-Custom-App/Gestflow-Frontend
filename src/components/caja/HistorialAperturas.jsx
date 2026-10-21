@@ -65,7 +65,7 @@ export default function HistorialAperturas({ caja, nombreDe = null, onClose }) {
 
   return (
     <Dialog open onOpenChange={(abierto) => { if (!abierto) onClose() }}>
-      <DialogContent overlayClassName="bg-black/60 backdrop-blur-md" className="flex max-h-[90vh] max-w-lg flex-col">
+      <DialogContent overlayClassName="bg-black/60 backdrop-blur-md" className="w-[calc(100%-2rem)] flex max-h-[90vh] max-w-lg flex-col">
         <DialogHeader>
           <DialogTitle>Historial de la caja</DialogTitle>
           <DialogDescription>{caja?.name || 'Caja física'}: cada vez que se abrió y se cerró.</DialogDescription>

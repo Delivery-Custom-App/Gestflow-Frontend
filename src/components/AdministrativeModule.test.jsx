@@ -806,6 +806,23 @@ describe('AdministrativeModule · la caja física manda (#133)', () => {
     expect(within(lateral).getByText(/se cierra con su caja física/)).toBeInTheDocument()
   })
 
+  it('#142: al abrir una caja el mensaje verde sigue visible aunque la sección se recargue', async () => {
+    apiRequest.mockImplementation(async (ruta) => (String(ruta).includes('/abrir') ? { id: 'ap-1', monto_apertura: '10000.00' } : []))
+    const user = userEvent.setup()
+    renderAdmin('flujo-caja', 'Admin')
+    const panel = (await screen.findByRole('heading', { name: 'La caja del día' })).closest('article')
+    const llamadasAntes = getCajasFisicasByLocal.mock.calls.length
+    await user.click(within(panel).getByRole('button', { name: 'Abrir Caja terraza' }))
+    await user.type(await screen.findByLabelText('Cantidad de billetes de $10.000'), '1')
+    await user.click(screen.getByRole('button', { name: 'Abrir caja' }))
+    // La sección se vuelve a pedir…
+    await waitFor(() => expect(getCajasFisicasByLocal.mock.calls.length).toBeGreaterThan(llamadasAntes))
+    // …y el mensaje no se pierde.
+    expect(await screen.findByText('Caja terraza quedó abierta con $10.000.')).toBeInTheDocument()
+    await new Promise((r) => setTimeout(r, 50))
+    expect(screen.getByText('Caja terraza quedó abierta con $10.000.')).toBeInTheDocument()
+  })
+
   it('el trabajador no ve la caja del día', async () => {
     renderAdmin('flujo-caja', 'Empleado')
     await screen.findByRole('heading', { name: 'Turnos de caja' })

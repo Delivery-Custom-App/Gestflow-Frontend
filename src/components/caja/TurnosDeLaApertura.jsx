@@ -21,7 +21,7 @@ export default function TurnosDeLaApertura({ turnos, nombreDe = null }) {
           <li key={t.caja_id} className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 rounded-lg border border-[hsl(var(--border))] px-3 py-1.5 text-xs">
             <span className="font-semibold text-[hsl(var(--foreground))]">{nombre(t.cashier_user_id)}</span>
             <span className="text-[hsl(var(--muted-foreground))]">
-              {fechaHora(t.opened_at)} → {abierto ? 'en turno' : fechaHora(t.turno_terminado_at)}
+              {fechaHora(t.opened_at)} → {abierto ? 'en turno' : t.turno_terminado_at ? `terminó ${fechaHora(t.turno_terminado_at)}` : 'cerrado con la caja'}
             </span>
             <span className="tabular-nums">Vendió {formatMoney(Number(t.total_vendido) || 0)}</span>
           </li>

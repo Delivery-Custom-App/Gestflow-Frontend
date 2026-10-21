@@ -30,7 +30,7 @@ function ElegirDestino({ titulo, descripcion, conNombre = false, onConfirmar, on
   // la caja no es obligatoria al moverla: si el local tiene una sola la pone el
   // backend; si tiene varias, se elige aquí o después en Caja y turnos.
   const cajaFisicaManda = isV2FeatureEnabled('cajaFisicaManda')
-  const ofreceCaja = !conNombre && (cajaFisicaManda || alPaso)
+  const ofreceCaja = !conNombre && Boolean(localId) && (cajaFisicaManda || alPaso)
   const exigeCaja = alPaso && !conNombre && !cajaFisicaManda
 
   useEffect(() => {
