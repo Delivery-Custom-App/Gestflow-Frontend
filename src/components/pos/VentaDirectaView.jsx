@@ -12,6 +12,7 @@ import MercadoPagoModal from './MercadoPagoModal'
 import TicketModal from './TicketModal'
 import MPConfigDrawer from './MPConfigDrawer'
 import { isV2FeatureEnabled } from '../../lib/v2Features'
+import IniciarMiTurno from '../caja/IniciarMiTurno'
 
 /**
  * Venta directa "al paso": listado plano de todos los productos sin receta
@@ -58,7 +59,7 @@ function ProductCard({ product, qty, onAdd, onRemove }) {
 export default function VentaDirectaView() {
   const { localId } = useParams()
   const { isWorker } = useAuth()
-  const { cajaId } = useCajaActiva(localId)
+  const { cajaId, loading: buscandoTurno, recargar: recargarTurno } = useCajaActiva(localId)
 
   const [products, setProducts] = useState([])
   const [loading, setLoading] = useState(false)
@@ -173,6 +174,11 @@ export default function VentaDirectaView() {
           <h2 className="text-lg font-black text-[hsl(var(--foreground))]">Venta directa</h2>
           <p className="text-sm text-[hsl(var(--muted-foreground))]">Selecciona productos y cobra sin pasar por mesa.</p>
         </div>
+
+        {/* #133: el dueño o el encargado vende con su propio turno, sobre una caja abierta. */}
+        {!isWorker && isV2FeatureEnabled('cajaFisicaManda') && !buscandoTurno && !cajaId && (
+          <IniciarMiTurno localId={localId} onIniciado={recargarTurno} />
+        )}
 
         {!isWorker && isV2FeatureEnabled('mpConfig') && (
           <button

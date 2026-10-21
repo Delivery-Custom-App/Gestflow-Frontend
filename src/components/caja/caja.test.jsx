@@ -9,8 +9,11 @@ import AperturaCierreCajas from './AperturaCierreCajas'
 import MaquinasDeLasCajas from './MaquinasDeLasCajas'
 import HistorialAperturas from './HistorialAperturas'
 import RegistroAperturas from './RegistroAperturas'
+import IniciarMiTurno from './IniciarMiTurno'
+import { MemoryRouter } from 'react-router'
+import { createCajaV2 } from '../../lib/salesApi'
 import {
-  abrirCajaFisica, aperturasDelLocal, asignarCajaAMaquina, cerrarCajaFisica, listarAperturas, registrarMovimientoCajaFisica, resumenDeApertura, revisarCierreCajaFisica,
+  abrirCajaFisica, aperturasDelLocal, asignarCajaAMaquina, cerrarCajaFisica, listarAperturas, listarCajasFisicasDelLocal, registrarMovimientoCajaFisica, resumenDeApertura, revisarCierreCajaFisica,
 } from '../../lib/cajaFisica'
 import { forzarTermino } from '../../lib/supervision'
 import { listarMaquinasDelLocal } from '../../lib/maquinasCobro'
@@ -25,7 +28,9 @@ vi.mock('../../lib/cajaFisica', async (importOriginal) => ({
   listarAperturas: vi.fn(() => Promise.resolve({ aperturas: [], total: 0 })),
   asignarCajaAMaquina: vi.fn(),
   aperturasDelLocal: vi.fn(),
+  listarCajasFisicasDelLocal: vi.fn(),
 }))
+vi.mock('../../lib/salesApi', async (importOriginal) => ({ ...(await importOriginal()), createCajaV2: vi.fn() }))
 vi.mock('../../lib/supervision', async (importOriginal) => ({ ...(await importOriginal()), forzarTermino: vi.fn() }))
 vi.mock('../../lib/maquinasCobro', async (importOriginal) => ({ ...(await importOriginal()), listarMaquinasDelLocal: vi.fn() }))
 
@@ -340,5 +345,39 @@ describe('RegistroAperturas · aperturas y cierres de todas las cajas', () => {
     render(<RegistroAperturas cajasFisicas={[{ id: 'cf-1' }]} nombreDe={() => 'Ana Rojas'} />)
     await user.click(await screen.findByRole('button', { name: 'Ver turnos' }))
     expect(await screen.findByRole('list', { name: 'Turnos trabajados' })).toHaveTextContent('Ana Rojas')
+  })
+})
+
+describe('IniciarMiTurno · el dueño o el encargado que vende en un local al paso', () => {
+  const montar = (props) => render(<MemoryRouter><IniciarMiTurno localId="loc-1" {...props} /></MemoryRouter>)
+
+  it('con una caja abierta ofrece iniciar su turno sobre ella, sin plata', async () => {
+    listarCajasFisicasDelLocal.mockResolvedValue([{ id: 'cf-1', name: 'Caja principal', is_active: true, abierta: true }, { id: 'cf-2', is_active: true, abierta: false }])
+    createCajaV2.mockResolvedValue({ id: 't-1' })
+    const onIniciado = vi.fn()
+    const user = userEvent.setup()
+    montar({ onIniciado })
+    await user.click(await screen.findByRole('button', { name: 'Iniciar mi turno en Caja principal' }))
+    expect(createCajaV2).toHaveBeenCalledWith({ caja_fisica_id: 'cf-1', monto_apertura: 0 })
+    expect(onIniciado).toHaveBeenCalled()
+  })
+
+  it('con varias cajas abiertas pide elegir', async () => {
+    listarCajasFisicasDelLocal.mockResolvedValue([{ id: 'cf-1', name: 'Caja 1', is_active: true, abierta: true }, { id: 'cf-2', name: 'Caja 2', is_active: true, abierta: true }])
+    createCajaV2.mockResolvedValue({ id: 't-1' })
+    const user = userEvent.setup()
+    montar()
+    await user.click(await screen.findByRole('button', { name: 'Iniciar mi turno' }))
+    expect(screen.getByRole('alert')).toHaveTextContent('Elige la caja')
+    await user.selectOptions(screen.getByLabelText('Caja donde vas a vender'), 'cf-2')
+    await user.click(screen.getByRole('button', { name: 'Iniciar mi turno' }))
+    expect(createCajaV2).toHaveBeenCalledWith({ caja_fisica_id: 'cf-2', monto_apertura: 0 })
+  })
+
+  it('sin cajas abiertas dice dónde abrir una', async () => {
+    listarCajasFisicasDelLocal.mockResolvedValue([{ id: 'cf-1', is_active: true, abierta: false }])
+    montar()
+    expect(await screen.findByRole('link', { name: 'Administración → Caja y turnos' })).toHaveAttribute('href', '/local/loc-1/administrativo/flujo-caja')
+    expect(screen.queryByRole('button')).not.toBeInTheDocument()
   })
 })
