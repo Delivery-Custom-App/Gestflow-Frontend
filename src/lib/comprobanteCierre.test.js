@@ -147,3 +147,23 @@ describe('descargarComprobante', () => {
     }
   })
 })
+
+describe('comprobante de la caja física (#133)', () => {
+  it('trae los turnos trabajados y dice «Retiros»', () => {
+    const html = comprobanteCierreHtml({
+      local: 'Sucursal Centro', caja: 'Caja principal', cerradoAt: '2026-10-21T15:00:00Z', etiquetaRetiros: 'Retiros',
+      resumen: { fondo: 60000, ventas: { efectivo: 2500, tarjeta: 0, transferencia: 0, otros: 0 }, ingresosCaja: 1000, retiros: 5000, esperado: 58500, contado: 20000, diferencia: -38500 },
+      turnos: [{ nombre: 'Ana', desde: '21/10/2026 12:04', hasta: '21/10/2026 12:08', vendido: 2500 }],
+    })
+    expect(html).toContain('Turnos trabajados')
+    expect(html).toContain('Ana')
+    expect(html).toContain('21/10/2026 12:04 → 21/10/2026 12:08')
+    expect(html).toContain('$2.500')
+    expect(html).toContain('>Retiros<')
+  })
+
+  it('sin turnos no agrega la sección', () => {
+    const html = comprobanteCierreHtml({ caja: 'Caja', resumen: {}, turnos: [] })
+    expect(html).not.toContain('Turnos trabajados')
+  })
+})

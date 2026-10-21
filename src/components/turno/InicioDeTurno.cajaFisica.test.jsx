@@ -116,3 +116,14 @@ describe('InicioDeTurno · la caja física manda', () => {
     expect(await screen.findByRole('heading', { name: 'El encargado todavía no abre la caja' })).toBeInTheDocument()
   })
 })
+
+describe('InicioDeTurno · quién inicia', () => {
+  it('se ve el nombre de la persona, no su correo', async () => {
+    getMiTurnoDeHoy.mockResolvedValue(null)
+    montar()
+    expect(await screen.findByRole('heading', { name: '¿Iniciar turno?' })).toBeInTheDocument()
+    // La sesión de prueba no tiene nombre cargado: se muestra lo del correo («Ana»), no «ana@demo».
+    expect(screen.getByText('Ana')).toBeInTheDocument()
+    expect(screen.queryByText('ana@demo')).not.toBeInTheDocument()
+  })
+})

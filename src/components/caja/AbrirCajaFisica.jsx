@@ -61,7 +61,7 @@ export default function AbrirCajaFisica({ caja, localNombre = '', nombreDe = nul
 
   return (
     <Dialog open onOpenChange={(abierto) => { if (!abierto && !guardando) onClose() }}>
-      <DialogContent overlayClassName="bg-black/60 backdrop-blur-md" className="w-[calc(100%-2rem)] flex max-h-[90vh] max-w-lg flex-col">
+      <DialogContent overlayClassName="bg-black/60 backdrop-blur-md" className="top-[6vh] translate-y-0 w-[calc(100%-2rem)] flex max-h-[88vh] max-w-lg flex-col">
         <DialogHeader>
           <DialogTitle>Abrir caja</DialogTitle>
           <DialogDescription>
@@ -95,8 +95,6 @@ export default function AbrirCajaFisica({ caja, localNombre = '', nombreDe = nul
           </div>
 
           </DialogBody>
-          {/* Fuera del cuerpo con scroll: siempre a la vista, junto a los botones. */}
-          {error && <p role="alert" className="mx-6 mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{error}</p>}
 
           {confirmarSinEfectivo ? (
             <div role="alertdialog" aria-labelledby="abrir-sin-efectivo" className="mx-6 mb-5 flex flex-col gap-3 rounded-xl border border-amber-300 bg-amber-50 p-4 dark:border-amber-700/50 dark:bg-amber-950/30">
@@ -114,6 +112,8 @@ export default function AbrirCajaFisica({ caja, localNombre = '', nombreDe = nul
               <Button type="submit" disabled={guardando}>{guardando ? 'Abriendo…' : 'Abrir caja'}</Button>
             </DialogFooter>
           )}
+          {/* Debajo de los botones y fuera del cuerpo con scroll: a la vista, sin moverlos. */}
+          {error && <p role="alert" className="mx-6 mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{error}</p>}
         </form>
       </DialogContent>
     </Dialog>

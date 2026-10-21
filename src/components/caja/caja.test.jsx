@@ -499,3 +499,23 @@ describe('#142 · ajustes tras las pruebas', () => {
     expect(screen.getByText('Abierta').closest('p')).toBeNull()
   })
 })
+
+describe('#142 ronda 2 · el error no mueve los botones', () => {
+  it('en retiro o ingreso, el error aparece debajo de los botones', async () => {
+    const user = userEvent.setup()
+    render(<MovimientoCajaFisica caja={CAJA} onClose={() => {}} onRegistrado={() => {}} />)
+    await user.type(screen.getByLabelText('Monto'), '1000')
+    await user.click(screen.getByRole('button', { name: 'Registrar' }))
+    const alerta = screen.getByRole('alert')
+    const registrar = screen.getByRole('button', { name: 'Registrar' })
+    // El error va después de los botones en la página: no los empuja.
+    expect(registrar.compareDocumentPosition(alerta) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  })
+
+  it('la revisión del cierre no dice que «no se cierra nada»', async () => {
+    revisarCierreCajaFisica.mockResolvedValue({ pedidos_abiertos: [], cobro_en_curso: false, turnos_abiertos: [], puede_contar: true })
+    render(<CerrarCajaFisica caja={{ ...CAJA, abierta: true }} onClose={() => {}} />)
+    expect(await screen.findByText('Revisa lo pendiente antes de contar. La caja se cierra recién al contar el efectivo.')).toBeInTheDocument()
+    expect(screen.queryByText(/no se cierra nada/)).not.toBeInTheDocument()
+  })
+})

@@ -130,3 +130,13 @@ describe('MaquinasNegocioPage · la caja física manda (#140)', () => {
     expect(textoOcupacion({ ocupacion: 3, usuarios: ['Ana', 'Luis', 'Pedro'] })).toBe('Llena: Ana y Luis y Pedro')
   })
 })
+
+describe('MaquinasNegocioPage · nombre de la caja', () => {
+  it('no repite «Caja» si el nombre ya lo dice', async () => {
+    apiRequest.mockImplementation(async () => ({ ...RESPUESTA, registradas: [{ ...RESPUESTA.registradas[1], caja_fisica_nombre: 'Caja principal' }] }))
+    render(<MaquinasNegocioPage />)
+    const region = await screen.findByRole('region', { name: 'Máquinas de Mostrador Express' })
+    expect(region).toHaveTextContent('Caja principal · Mercado Pago')
+    expect(region).not.toHaveTextContent('Caja Caja')
+  })
+})

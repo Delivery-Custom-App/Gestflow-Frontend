@@ -9,6 +9,7 @@ import { listarCajasFisicas } from '../../lib/administrativeApi'
 import { cajasAbiertas, listarCajasFisicasDelLocal } from '../../lib/cajaFisica'
 import { isV2FeatureEnabled } from '../../lib/v2Features'
 import { isAlPasoLocal } from '../../lib/salesModel'
+import { nombreVisible } from '../../lib/altaUsuario'
 import { mensajeTurnoTerminado, turnoTerminado } from '../../lib/turnos'
 import { elegirMaquinaDelTurno, errorAlTomarMaquina, turnoTieneMaquina } from '../../lib/maquinasCobro'
 import ElegirMaquina from './ElegirMaquina'
@@ -225,7 +226,7 @@ export default function InicioDeTurno({ localId, children }) {
     )
   }
 
-  const subtitulo = user?.email || ''
+  const subtitulo = user ? nombreVisible(user) : ''
   const salir = (
     <button type="button" onClick={logout} disabled={abriendo}
       className="text-xs text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] transition-colors disabled:opacity-40">

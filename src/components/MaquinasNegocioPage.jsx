@@ -178,7 +178,7 @@ export default function MaquinasNegocioPage() {
                     <div className="min-w-0 flex-1">
                       <p className="font-semibold text-[hsl(var(--foreground))]">{m.display_name}{m.is_active === false ? ' · desactivada' : ''}</p>
                       <p className="text-xs text-[hsl(var(--muted-foreground))]">
-                        {[m.caja_fisica_nombre && `Caja ${m.caja_fisica_nombre}`, PROVEEDOR_LABEL[m.provider] || m.provider, m.terminal_id].filter(Boolean).join(' · ')}
+                        {[m.caja_fisica_nombre && (/^caja\b/i.test(m.caja_fisica_nombre) ? m.caja_fisica_nombre : `Caja ${m.caja_fisica_nombre}`), PROVEEDOR_LABEL[m.provider] || m.provider, m.terminal_id].filter(Boolean).join(' · ')}
                       </p>
                     </div>
                     <span className="text-xs">{textoOcupacion(m)}</span>

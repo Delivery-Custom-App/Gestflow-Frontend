@@ -38,7 +38,7 @@ export default function MovimientoCajaFisica({ caja, onClose, onRegistrado }) {
 
   return (
     <Dialog open onOpenChange={(abierto) => { if (!abierto && !guardando) onClose() }}>
-      <DialogContent overlayClassName="bg-black/60 backdrop-blur-md" className="w-[calc(100%-2rem)] flex max-h-[90vh] max-w-md flex-col">
+      <DialogContent overlayClassName="bg-black/60 backdrop-blur-md" className="top-[6vh] translate-y-0 w-[calc(100%-2rem)] flex max-h-[88vh] max-w-md flex-col">
         <DialogHeader>
           <DialogTitle>Retiro o ingreso de caja</DialogTitle>
           <DialogDescription>{caja?.name || 'Caja física'}. Los gastos del local salen del fondo de emergencia, no de la caja.</DialogDescription>
@@ -62,11 +62,12 @@ export default function MovimientoCajaFisica({ caja, onClose, onRegistrado }) {
               placeholder={tipo === 'egreso' ? 'Ej: Depósito en el banco' : 'Ej: Sencillo del banco'} className={CAMPO} />
           </div>
           </DialogBody>
-          {error && <p role="alert" className="mx-6 mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{error}</p>}
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onClose} disabled={guardando}>Cancelar</Button>
             <Button type="submit" disabled={guardando}>{guardando ? 'Guardando…' : 'Registrar'}</Button>
           </DialogFooter>
+          {/* Debajo de los botones: a la vista, sin moverlos. */}
+          {error && <p role="alert" className="mx-6 mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{error}</p>}
         </form>
       </DialogContent>
     </Dialog>

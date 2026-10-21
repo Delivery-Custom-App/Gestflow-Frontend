@@ -56,6 +56,7 @@ const fila = (etiqueta, valor, clase = '') => `<tr><td>${esc(etiqueta)}</td><td 
  * @param {Array} [datos.desglose] filas del conteo ({ valor, cantidad, subtotal }), vacío si se escribió el total
  * @param {string} [datos.nota] nota del cierre
  * @param {string} [datos.etiquetaRetiros] «Retiros y gastos» (turno) o «Retiros» (caja física, #133)
+ * @param {Array} [datos.turnos] turnos trabajados en la apertura ({ nombre, desde, hasta, vendido }), caja física (#133)
  */
 export function comprobanteCierreHtml(datos) {
   const { resumen = {}, desglose = [], nota = '' } = datos || {}
@@ -110,6 +111,13 @@ export function comprobanteCierreHtml(datos) {
     <hr/>
     ${arqueo}
     <hr/>
+    ${Array.isArray(datos?.turnos) && datos.turnos.length ? `
+    <p><strong>Turnos trabajados</strong></p>
+    <table><tbody>
+      ${datos.turnos.map((t) => `
+      <tr class="chico"><td>${esc(t.nombre)}<br/>${esc(t.desde)} → ${esc(t.hasta)}</td><td class="der">${esc(money(t.vendido))}</td></tr>`).join('')}
+    </tbody></table>
+    <hr/>` : ''}
   `)
 }
 

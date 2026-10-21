@@ -11,7 +11,7 @@ import { forzarTermino } from '../../lib/supervision'
 import { terminarTurno } from '../../lib/salesApi'
 import { mensajeTerminarTurno } from '../../lib/turnos'
 import { useAuth } from '../../context/AuthContext'
-import { comprobanteCierreHtml, descargarComprobante, nombreDelComprobante } from '../../lib/comprobanteCierre'
+import { comprobanteCierreHtml, descargarComprobante, fechaHoraDelCierre, nombreDelComprobante } from '../../lib/comprobanteCierre'
 import { imprimirEnNavegador } from '../../lib/ticketPrint'
 import {
   cerrarCajaFisica, faltaNota, mensajeCajaFisica, resumenDeApertura, resumenParaPantalla, revisarCierreCajaFisica,
@@ -177,6 +177,12 @@ export default function CerrarCajaFisica({ caja, localNombre = '', cierra = '', 
     nota: cerrada.nota_cierre || '',
     // La caja no tiene gastos (salen del fondo de emergencia): solo retiros.
     etiquetaRetiros: 'Retiros',
+    turnos: (Array.isArray(resumen.turnos) ? resumen.turnos : []).map((t) => ({
+      nombre: persona(t.cashier_user_id),
+      desde: fechaHoraDelCierre(t.opened_at),
+      hasta: t.turno_terminado_at ? fechaHoraDelCierre(t.turno_terminado_at) : 'cerrado con la caja',
+      vendido: Number(t.total_vendido) || 0,
+    })),
   } : null
 
   const pedidos = revision?.pedidos_abiertos || []
@@ -184,7 +190,7 @@ export default function CerrarCajaFisica({ caja, localNombre = '', cierra = '', 
 
   return (
     <Dialog open onOpenChange={(abierto) => { if (!abierto && !guardando) onClose() }}>
-      <DialogContent overlayClassName="bg-black/60 backdrop-blur-md" className="w-[calc(100%-2rem)] flex max-h-[90vh] max-w-lg flex-col">
+      <DialogContent overlayClassName="bg-black/60 backdrop-blur-md" className="top-[6vh] translate-y-0 w-[calc(100%-2rem)] flex max-h-[88vh] max-w-lg flex-col">
         <DialogHeader>
           <DialogTitle>{paso === 'cerrada' ? 'Caja cerrada' : 'Cerrar caja'}</DialogTitle>
           <DialogDescription>{[localNombre, nombreCaja].filter(Boolean).join(' · ')}</DialogDescription>
@@ -193,7 +199,7 @@ export default function CerrarCajaFisica({ caja, localNombre = '', cierra = '', 
         {paso === 'revisar' && (
           <>
           <DialogBody className="min-h-0 flex-1 overflow-y-auto">
-            <p className="text-xs text-[hsl(var(--muted-foreground))]">Antes de contar se revisa lo que está pendiente. Todavía no se cierra nada.</p>
+            <p className="text-xs text-[hsl(var(--muted-foreground))]">Revisa lo pendiente antes de contar. La caja se cierra recién al contar el efectivo.</p>
             {avisoCierre && <p role="alert" className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900">{avisoCierre}</p>}
             {errorRevision && <p role="alert" className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{errorRevision}</p>}
             {!revision && !errorRevision && <p className="text-sm text-[hsl(var(--muted-foreground))]">Revisando la caja…</p>}
@@ -270,11 +276,12 @@ export default function CerrarCajaFisica({ caja, localNombre = '', cierra = '', 
               <textarea id="cierre-nota" rows={2} maxLength={NOTA_MAXIMA} value={nota} onChange={(e) => setNota(e.target.value)} disabled={guardando} className={AREA} />
             </div>
             </DialogBody>
-            {error && <p role="alert" className="mx-6 mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{error}</p>}
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => { setPaso('revisar'); revisarDeNuevo() }} disabled={guardando}>Volver</Button>
               <Button type="submit" disabled={guardando}>{guardando ? 'Cerrando…' : `Cerrar caja con ${formatMoney(total)}`}</Button>
             </DialogFooter>
+            {/* Debajo de los botones: a la vista, sin moverlos. */}
+            {error && <p role="alert" className="mx-6 mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{error}</p>}
           </form>
         )}
 
