@@ -74,7 +74,12 @@ describe('AdminDashboard · flujo', () => {
     render(<AdminDashboard />)
     // Espera dos lecturas (ajustes del negocio y conteo): más margen bajo la carga de la suite completa.
     expect(await screen.findByText('ventas 2 · período 3 h', {}, { timeout: 5000 })).toBeInTheDocument()
-    expect(rutasDeConteo().some((r) => r.includes(encodeURIComponent('2026-10-05T12:00:00.000Z')))).toBe(true)
+    // El período puede verse antes de que salga la consulta de 3 horas: se espera la consulta.
+    // El reloj simulado avanza solo (shouldAdvanceTime), así que se compara al minuto.
+    await waitFor(() => {
+      const desdes = rutasDeConteo().map((r) => paramsDeRuta(r).get('date_from') || '')
+      expect(desdes).toContainEqual(expect.stringMatching(/^2026-10-05T12:00/))
+    }, { timeout: 5000 })
   })
 
   it('se actualiza solo cada minuto, sin recargar la página', async () => {
