@@ -67,6 +67,17 @@ export function mensajeMovimientoStock(error) {
 }
 
 /** «+5» o «-3» sin decimales de más. */
+/**
+ * Lo que faltó en una venta con sobreventa (#132): el sistema tenía menos de
+ * lo que se vendió, el stock quedó en 0 y el movimiento anota cuánto faltó
+ * (lo que bajó + lo que faltó = lo vendido). Sin el campo (backend anterior)
+ * o con un valor inválido, es 0.
+ */
+export function faltanteDe(movimiento) {
+  const n = Number(movimiento?.faltante)
+  return Number.isFinite(n) && n > 0 ? n : 0
+}
+
 export function textoDelta(delta) {
   const n = Number(delta)
   if (!Number.isFinite(n)) return '—'

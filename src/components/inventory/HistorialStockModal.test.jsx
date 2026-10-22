@@ -4,7 +4,7 @@ import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import HistorialStockModal from './HistorialStockModal'
 import { apiRequest } from '../../lib/apiClient'
-import { textoDelta, validarMovimientoStock } from '../../lib/movimientosStock'
+import { faltanteDe, textoDelta, validarMovimientoStock } from '../../lib/movimientosStock'
 
 vi.mock('../../lib/apiClient', () => ({ apiRequest: vi.fn() }))
 
@@ -48,5 +48,47 @@ describe('lib/movimientosStock', () => {
   it('textoDelta con signo', () => {
     expect(textoDelta('5.000')).toBe('+5')
     expect(textoDelta('-3.500')).toBe('-3.5')
+  })
+})
+
+describe('#132 · ventas con faltante', () => {
+  const VENTA_CON_FALTANTE = { id: 'v1', tipo: 'venta', cantidad: '2.000', delta: '-1.000', faltante: '1.000', stock_anterior: '1.000', stock_resultante: '0.000', order_id: 'o-1', created_at: '2026-10-20T12:00:00Z' }
+  const VENTA_NORMAL = { id: 'v2', tipo: 'venta', cantidad: '3.000', delta: '-3.000', faltante: '0.000', stock_anterior: '10.000', stock_resultante: '7.000', created_at: '2026-10-20T11:00:00Z' }
+  const VENTA_SIN_CAMPO = { id: 'v3', tipo: 'venta', cantidad: '1.000', delta: '-1.000', stock_anterior: '7.000', stock_resultante: '6.000', created_at: '2026-10-20T10:00:00Z' }
+
+  it('faltanteDe: 0 si no viene, si es 0 o si no es un número', () => {
+    expect(faltanteDe(VENTA_CON_FALTANTE)).toBe(1)
+    expect(faltanteDe(VENTA_NORMAL)).toBe(0)
+    expect(faltanteDe(VENTA_SIN_CAMPO)).toBe(0)
+    expect(faltanteDe({ faltante: 'x' })).toBe(0)
+  })
+
+  it('una venta muestra lo vendido; si faltó, lo destaca y ofrece corregir el conteo', async () => {
+    const user = userEvent.setup()
+    const onCorregirConteo = vi.fn()
+    const row = { inventory_id: 'inv-1', product_name: 'Café' }
+    apiRequest.mockResolvedValue({ data: [VENTA_CON_FALTANTE, VENTA_NORMAL, VENTA_SIN_CAMPO], total: 3 })
+    render(<HistorialStockModal row={row} onClose={() => {}} onCorregirConteo={onCorregirConteo} />)
+    const [conFaltante, normal, sinCampo] = within(await screen.findByRole('list', { name: 'Movimientos de stock' })).getAllByRole('listitem')
+
+    expect(conFaltante).toHaveTextContent('-1 · de 1 a 0 · vendido: 2')
+    const aviso = within(conFaltante).getByRole('note', { name: 'Faltante en la venta' })
+    expect(aviso).toHaveTextContent('Faltaron 1')
+    expect(aviso).toHaveTextContent('Vuelve a contar el producto')
+
+    expect(normal).toHaveTextContent('-3 · de 10 a 7 · vendido: 3')
+    expect(within(normal).queryByRole('note')).not.toBeInTheDocument()
+    // Con el backend anterior el campo no viene: se trata como 0.
+    expect(within(sinCampo).queryByRole('note')).not.toBeInTheDocument()
+
+    await user.click(within(aviso).getByRole('button', { name: 'Corregir conteo' }))
+    expect(onCorregirConteo).toHaveBeenCalledWith(row)
+  })
+
+  it('sin onCorregirConteo el aviso se muestra sin el botón', async () => {
+    apiRequest.mockResolvedValue({ data: [VENTA_CON_FALTANTE], total: 1 })
+    render(<HistorialStockModal row={{ inventory_id: 'inv-1' }} onClose={() => {}} />)
+    const aviso = await screen.findByRole('note', { name: 'Faltante en la venta' })
+    expect(within(aviso).queryByRole('button')).not.toBeInTheDocument()
   })
 })
