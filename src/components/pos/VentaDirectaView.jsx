@@ -12,13 +12,21 @@ import MercadoPagoModal from './MercadoPagoModal'
 import TicketModal from './TicketModal'
 import MPConfigDrawer from './MPConfigDrawer'
 import { isV2FeatureEnabled } from '../../lib/v2Features'
+import { sePrepara } from '../../lib/tipoProducto'
 
 /**
- * Venta directa "al paso": listado plano de todos los productos sin receta
- * del local (GET /products/catalog, ya filtra stock > 0). Crea la orden sin
- * mesa (source: "mostrador") y cobra vía MercadoPagoModal.
+ * Venta directa "al paso": listado plano de los productos del local. Crea la
+ * orden sin mesa (source: "mostrador") y cobra vía MercadoPagoModal.
+ *
+ * El stock no bloquea la venta (#147): si el sistema tiene menos de lo que hay
+ * en el mostrador, el conteo estaba mal. El backend deja el stock en 0 y anota
+ * el faltante en el historial; acá solo se avisa que habrá que recontar.
  */
 function ProductCard({ product, qty, onAdd, onRemove }) {
+  // Los productos que se preparan no llevan stock por unidades.
+  const llevaStock = !sePrepara(product)
+  const stock = product.stock ?? 0
+  const faltarian = llevaStock ? Math.max(0, qty - stock) : 0
   return (
     <div
       className={cn(
@@ -30,7 +38,14 @@ function ProductCard({ product, qty, onAdd, onRemove }) {
     >
       <div className="min-w-0 flex-1">
         <p className="text-base font-bold leading-tight text-[hsl(var(--foreground))] break-words">{product.name}</p>
-        <p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">Stock: {product.stock ?? 0}</p>
+        {llevaStock && (
+          <p className="mt-1 text-xs text-[hsl(var(--muted-foreground))]">Stock: {stock}</p>
+        )}
+        {faltarian > 0 && (
+          <p className="mt-1 text-xs font-semibold text-amber-600">
+            El sistema tiene {stock}: faltarán {faltarian}. Vuelve a contar el producto.
+          </p>
+        )}
         <p className="mt-2 text-lg font-black text-[hsl(var(--primary))]">${formatCLP(product.price || 0)}</p>
       </div>
       <div className="flex shrink-0 items-center gap-2">
@@ -45,8 +60,7 @@ function ProductCard({ product, qty, onAdd, onRemove }) {
         {qty > 0 && <span className="min-w-8 text-center text-xl font-black text-[hsl(var(--primary))]">{qty}</span>}
         <button type="button" aria-label={`Agregar ${product.name}`}
           onClick={() => onAdd(product.id)}
-          disabled={qty >= (product.stock ?? 0)}
-          className="flex h-12 w-12 touch-manipulation items-center justify-center rounded-full bg-[hsl(var(--primary))] text-2xl font-black text-white shadow-md transition-colors hover:bg-[hsl(var(--primary))]/90 disabled:opacity-40"
+          className="flex h-12 w-12 touch-manipulation items-center justify-center rounded-full bg-[hsl(var(--primary))] text-2xl font-black text-white shadow-md transition-colors hover:bg-[hsl(var(--primary))]/90"
         >
           +
         </button>
@@ -202,7 +216,7 @@ export default function VentaDirectaView() {
             <p className="text-xs">Cargando productos...</p>
           </div>
         ) : products.length === 0 ? (
-          <p className="py-8 text-center text-sm text-[hsl(var(--muted-foreground))]">No hay productos con stock disponible en este local.</p>
+          <p className="py-8 text-center text-sm text-[hsl(var(--muted-foreground))]">No hay productos disponibles en este local.</p>
         ) : (
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
             {products.map((p) => (
