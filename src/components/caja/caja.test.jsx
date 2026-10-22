@@ -203,19 +203,49 @@ describe('AperturaCierreCajas', () => {
     { id: 'cf-3', name: 'Archivada', is_active: false, abierta: false },
   ]
 
-  it('muestra el estado de cada caja activa y lo que se puede hacer', () => {
+  it('muestra el estado de cada caja activa y lo que se puede hacer', async () => {
+    const user = userEvent.setup()
     render(<AperturaCierreCajas cajasFisicas={CAJAS} puedeGestionar />)
     const items = within(screen.getByRole('list', { name: 'Cajas del local' })).getAllByRole('listitem')
     expect(items).toHaveLength(2)
     expect(items[0]).toHaveTextContent('Abierta')
-    expect(items[0]).toHaveTextContent('por encargado@demo · fondo $50.000')
+    expect(items[0]).toHaveTextContent('Abrióencargado@demo')
+    expect(items[0]).toHaveTextContent('Fondo$50.000')
     expect(within(items[0]).getByRole('button', { name: 'Cerrar Caja principal' })).toBeInTheDocument()
-    expect(within(items[0]).getByRole('button', { name: 'Retiro o ingreso en Caja principal' })).toBeInTheDocument()
+    // Retiro o ingreso e historial van en «⋯».
+    expect(within(items[0]).queryByRole('menuitem', { name: 'Retiro o ingreso en Caja principal' })).not.toBeInTheDocument()
+    await user.click(within(items[0]).getByRole('button', { name: 'Más acciones de Caja principal' }))
+    expect(within(items[0]).getByRole('menuitem', { name: 'Retiro o ingreso en Caja principal' })).toBeInTheDocument()
+    expect(within(items[0]).getByRole('menuitem', { name: 'Historial de Caja principal' })).toBeInTheDocument()
     expect(items[1]).toHaveTextContent('Último cierre: $50.000')
     // Abierta en verde y cerrada en rojo.
     expect(within(items[0]).getByText('Abierta')).toHaveClass('text-[hsl(149,60%,28%)]')
     expect(within(items[1]).getByText('Cerrada')).toHaveClass('text-[hsl(354,70%,36%)]')
     expect(within(items[1]).getByRole('button', { name: 'Abrir Caja terraza' })).toBeInTheDocument()
+  })
+
+  it('las abiertas van primero y, con más de 3 cajas, se pueden filtrar', async () => {
+    const user = userEvent.setup()
+    const muchas = [
+      { id: 'c-1', name: 'Patio', is_active: true, abierta: false },
+      { id: 'c-2', name: 'Barra', is_active: true, abierta: true, apertura_actual: { abierta_at: '2026-10-21T12:00:00Z', abierta_por_email: 'a@demo', monto_apertura: '10000.00' } },
+      { id: 'c-3', name: 'Terraza', is_active: true, abierta: false },
+      { id: 'c-4', name: 'Delivery', is_active: true, abierta: true, apertura_actual: { abierta_at: '2026-10-21T13:00:00Z', abierta_por_email: 'b@demo', monto_apertura: '5000.00' } },
+    ]
+    render(<AperturaCierreCajas cajasFisicas={muchas} puedeGestionar turnosPorCaja={new Map([['c-2', 2]])} />)
+    const nombres = () => within(screen.getByRole('list', { name: 'Cajas del local' })).getAllByRole('listitem')
+      .map((li) => li.textContent.split(/Abierta|Cerrada/)[0])
+    expect(nombres()).toEqual(['Barra', 'Delivery', 'Patio', 'Terraza'])
+    expect(screen.getAllByRole('listitem')[0]).toHaveTextContent('En turno2 personas')
+    await user.click(screen.getByRole('button', { name: 'Cerradas (2)' }))
+    expect(nombres()).toEqual(['Patio', 'Terraza'])
+    await user.click(screen.getByRole('button', { name: 'Abiertas (2)' }))
+    expect(nombres()).toEqual(['Barra', 'Delivery'])
+  })
+
+  it('con pocas cajas no hay filtros', () => {
+    render(<AperturaCierreCajas cajasFisicas={CAJAS} puedeGestionar />)
+    expect(screen.queryByRole('group', { name: 'Filtrar cajas' })).not.toBeInTheDocument()
   })
 
   it('sin permiso solo muestra el estado', () => {

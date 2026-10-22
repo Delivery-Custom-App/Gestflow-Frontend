@@ -152,10 +152,16 @@ describe('AdministrativeModule', () => {
     },
   )
 
-  it('Ventas incluye la tendencia y el top de productos que antes estaban en Reportes', async () => {
+  it('Ventas incluye la tendencia y el top de productos, en «Últimos 7 días»', async () => {
+    const user = userEvent.setup()
     renderAdmin('ventas')
 
+    // «Hoy» es lo primero que se ve; la semana está en su propio botón.
+    expect(await screen.findByRole('tab', { name: /Hoy/, selected: true })).toBeInTheDocument()
+    expect(screen.queryByText('Tendencia: 7 días')).not.toBeInTheDocument()
+    await user.click(screen.getByRole('tab', { name: 'Últimos 7 días' }))
     expect(await screen.findByText('Tendencia: 7 días')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Cargar detalle de órdenes' })).not.toBeInTheDocument()
     const topPanel = screen.getByRole('heading', { name: 'Top Productos' }).closest('article')
     expect(within(topPanel).getByText('Café Americano')).toBeInTheDocument()
     expect(within(topPanel).getByText('Sandwich Ave Palta')).toBeInTheDocument()
@@ -234,8 +240,14 @@ describe('AdministrativeModule', () => {
     expect(within(panelTurnos).queryByText('Vincular MP')).not.toBeInTheDocument()
   })
 
-  it('el resumen del día muestra el detalle por caja física, no un mensaje de "sin cajas"', async () => {
+  it('el resumen del día está en Ventas, no en Caja y turnos', async () => {
     renderAdmin('flujo-caja')
+    await screen.findByRole('heading', { name: 'Turnos de caja' })
+    expect(screen.queryByRole('heading', { name: 'Resumen del día' })).not.toBeInTheDocument()
+  })
+
+  it('el resumen del día muestra el detalle por caja física, no un mensaje de "sin cajas"', async () => {
+    renderAdmin('ventas')
 
     const resumen = (await screen.findByRole('heading', { name: 'Resumen del día' })).closest('article')
     expect(within(resumen).queryByText(/Todavía no se abrió ninguna caja/)).not.toBeInTheDocument()
@@ -258,7 +270,7 @@ describe('AdministrativeModule', () => {
         ],
       }],
     })
-    renderAdmin('flujo-caja')
+    renderAdmin('ventas')
 
     const resumen = (await screen.findByRole('heading', { name: 'Resumen del día' })).closest('article')
     expect(within(resumen).getByTestId('egresos-dia')).toHaveTextContent('$1.000')
@@ -274,7 +286,7 @@ describe('AdministrativeModule', () => {
   })
 
   it('sin arqueos del día, la diferencia dice «Sin arqueo»', async () => {
-    renderAdmin('flujo-caja')
+    renderAdmin('ventas')
     const resumen = (await screen.findByRole('heading', { name: 'Resumen del día' })).closest('article')
     expect(within(resumen).getByTestId('diferencia-dia')).toHaveTextContent('Sin arqueo')
   })
@@ -287,7 +299,7 @@ describe('AdministrativeModule', () => {
       total_esperado: '0.00',
       por_caja_fisica: [],
     })
-    renderAdmin('flujo-caja')
+    renderAdmin('ventas')
 
     const resumen = (await screen.findByRole('heading', { name: 'Resumen del día' })).closest('article')
     expect(within(resumen).getByText('Todavía no se abrió ningún turno de caja hoy en este local.')).toBeInTheDocument()
@@ -782,21 +794,48 @@ describe('AdministrativeModule · la caja física manda (#133)', () => {
   afterEach(() => { V2_FEATURES.cajaFisicaManda = false })
 
   it('el encargado ve «La caja del día» y las máquinas; ya no abre un turno con plata ni ve el tipo digital', async () => {
+    const user = userEvent.setup()
     renderAdmin('flujo-caja', 'Admin')
     const panel = (await screen.findByRole('heading', { name: 'La caja del día' })).closest('article')
     const [principal, terraza] = within(within(panel).getByRole('list', { name: 'Cajas del local' })).getAllByRole('listitem')
     expect(principal).toHaveTextContent('Abierta')
     expect(within(principal).getByRole('button', { name: 'Cerrar Caja principal' })).toBeInTheDocument()
     expect(within(terraza).getByRole('button', { name: 'Abrir Caja terraza' })).toBeInTheDocument()
-    expect(screen.getByRole('heading', { name: 'Máquinas POS' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '+ Abrir turno de caja' })).not.toBeInTheDocument()
+    await user.click(screen.getByRole('tab', { name: 'Cajas y máquinas' }))
+    expect(await screen.findByRole('heading', { name: 'Máquinas POS' })).toBeInTheDocument()
     const fisicas = screen.getByRole('heading', { name: 'Cajas físicas' }).closest('article')
     expect(within(fisicas).queryByText('Digital')).not.toBeInTheDocument()
+  })
+
+  it('Caja y turnos va en partes: Hoy, Historial y Cajas y máquinas', async () => {
+    const user = userEvent.setup()
+    renderAdmin('flujo-caja', 'Admin')
+    // Hoy: las cajas, quién está trabajando y cuántas cajas hay abiertas.
+    expect(await screen.findByRole('tab', { name: /Hoy.*1 abierta/, selected: true })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'La caja del día' })).toBeInTheDocument()
+    const trabajando = screen.getByRole('heading', { name: 'Quién está trabajando' }).closest('article')
+    expect(within(trabajando).getByRole('table')).toBeInTheDocument()
+    expect(within((await screen.findByText('Cajas abiertas')).closest('article')).getByText('1 de 2')).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Turnos de caja' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Cajas físicas' })).not.toBeInTheDocument()
+    // Historial: las aperturas y los turnos.
+    await user.click(screen.getByRole('tab', { name: 'Historial' }))
+    expect(await screen.findByRole('heading', { name: 'Apertura de caja' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Turnos de caja' })).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'La caja del día' })).not.toBeInTheDocument()
+  })
+
+  it('con la caja física mandando, el resumen del día se ve en Ventas', async () => {
+    renderAdmin('ventas', 'Admin')
+    expect(await screen.findByRole('heading', { name: 'Resumen del día' })).toBeInTheDocument()
+    expect(getResumenDiario).not.toHaveBeenCalled()
   })
 
   it('el turno ya no se cuenta ni registra movimientos: se cierra con su caja', async () => {
     const user = userEvent.setup()
     renderAdmin('flujo-caja', 'Admin')
+    await user.click(await screen.findByRole('tab', { name: 'Historial' }))
     const panel = (await screen.findByRole('heading', { name: 'Turnos de caja' })).closest('article')
     const filaAna = (await within(within(panel).getByRole('table')).findByText('Ana Rojas')).closest('tr')
     await user.click(within(filaAna).getByRole('button', { name: 'Ver resumen' }))
