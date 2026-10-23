@@ -76,7 +76,7 @@ describe('AppShell — fondo de emergencia', () => {
     session.role = rol
     renderShell('loc-mesas', 'administrativo/fondo-emergencia')
     const item = screen.getByRole('button', { name: 'Fondo de emergencia' })
-    expect(item).toHaveClass('bg-[hsl(var(--accent))]')
+    expect(item).toHaveAttribute('aria-current', 'page')
   })
 
   it('el vendedor no lo ve aunque la bandera esté encendida', () => {
@@ -185,7 +185,7 @@ describe('AppShell — menú del vendedor', () => {
       renderShell(local, ruta)
 
       await userEvent.setup().click(screen.getByRole('button', { name: 'Mis turnos' }))
-      expect(screen.getByRole('button', { name: 'Mis turnos' })).toHaveClass('bg-[hsl(var(--accent))]')
+      expect(screen.getByRole('button', { name: 'Mis turnos' })).toHaveAttribute('aria-current', 'page')
     },
   )
 
@@ -586,5 +586,45 @@ describe('AppShell — menú en el teléfono', () => {
     await user.click(within(screen.getByRole('navigation')).getByRole('button', { name: /Dashboard/ }))
 
     expect(abierto()).toBe(false)
+  })
+})
+
+/**
+ * Menú lateral ordenado por secciones (opción A): cada sección del local es una
+ * tarjeta con borde, sus pantallas cuelgan de una línea guía, y la sección y la
+ * pantalla activas se marcan en ámbar.
+ */
+describe('AppShell — secciones del menú en tarjeta', () => {
+  it('agrupa las secciones del local bajo «Gestión del local», cada una en su tarjeta con borde', () => {
+    renderShell('loc-mesas')
+    const nav = screen.getByRole('navigation')
+
+    expect(within(nav).getByText('Gestión del local')).toBeInTheDocument()
+    const inventario = within(nav).getByRole('region', { name: 'Inventario' })
+    expect(inventario).toHaveClass('rounded-xl', 'border')
+    expect(within(nav).getByRole('region', { name: 'Administración' })).toHaveClass('rounded-xl', 'border')
+  })
+
+  it('la sección activa y su línea guía se marcan en ámbar; las otras no', () => {
+    renderShell('loc-mesas', 'inventario')
+    const nav = screen.getByRole('navigation')
+
+    const activa = within(nav).getByRole('region', { name: 'Inventario' })
+    expect(activa).toHaveClass('border-[hsl(var(--primary)/0.45)]')
+    expect(activa.querySelector('[data-guia]')).toHaveClass('border-l-2', 'border-[hsl(var(--primary))]')
+    expect(within(nav).getByRole('region', { name: 'Administración' })).toHaveClass('border-[hsl(var(--border))]')
+  })
+
+  it('fuera de un local no aparece «Gestión del local»', () => {
+    render(
+      <MemoryRouter initialEntries={['/admin']}>
+        <Routes>
+          <Route path="/*" element={<AppShell />}>
+            <Route path="*" element={<p>contenido</p>} />
+          </Route>
+        </Routes>
+      </MemoryRouter>,
+    )
+    expect(screen.queryByText('Gestión del local')).not.toBeInTheDocument()
   })
 })

@@ -111,6 +111,9 @@ const ACCORDIONS = [
 ]
 
 /* ── Sidebar ────────────────────────────────────────────────────── */
+/** Título de grupo del menú lateral (Descubrir, Gestión del local). */
+const SECTION_CAPTION = 'px-2 pt-1 pb-1.5 text-[11px] font-semibold uppercase tracking-wider text-[hsl(var(--muted-foreground))]'
+
 function Sidebar({ collapsed, onToggle, onClose, mobile = false }) {
   const { user, userRole, logout, assignedLocalId } = useAuth()
   const { business } = useCurrentBusiness()
@@ -264,13 +267,14 @@ function Sidebar({ collapsed, onToggle, onClose, mobile = false }) {
         onClick={() => !isDisabled && goItem(item)}
         title={collapsed ? item.label : undefined}
         disabled={isDisabled}
+        aria-current={isActive ? 'page' : undefined}
         className={cn(
           'w-full flex items-center gap-2.5 px-3 rounded-lg font-medium transition-colors text-left',
           small ? 'py-1.5 text-sm' : 'py-2.5 text-sm',
           isDisabled
             ? 'text-[hsl(var(--muted-foreground))] cursor-not-allowed opacity-50'
             : isActive
-              ? 'bg-[hsl(var(--accent))] text-[hsl(var(--foreground))]'
+              ? 'bg-[hsl(var(--primary)/0.12)] text-[hsl(38,92%,25%)] dark:text-[hsl(38,90%,70%)]'
               : 'text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--accent))] hover:text-[hsl(var(--foreground))]',
           collapsed && 'justify-center px-0',
         )}
@@ -350,7 +354,7 @@ function Sidebar({ collapsed, onToggle, onClose, mobile = false }) {
             {discoverItems.length > 0 && !collapsed && (
               <m.p
                 initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                className="px-3 pb-1.5 text-xs text-[hsl(var(--muted-foreground))]"
+                className={SECTION_CAPTION}
               >
                 Descubrir
               </m.p>
@@ -365,13 +369,25 @@ function Sidebar({ collapsed, onToggle, onClose, mobile = false }) {
           )}
         </div>
 
-        {/* Accordions: menú + submenú expansible */}
+        {/* Gestión del local: cada sección es una tarjeta con borde, y sus pantallas
+            cuelgan de una línea guía que se pinta ámbar en la sección activa. */}
+        {localId && visibleAccordions.length > 0 && !collapsed && (
+          <p className={SECTION_CAPTION}>Gestión del local</p>
+        )}
         {localId && visibleAccordions.map((section) => {
           const open = isOpen(section.key)
           const hasActive = activeKey === section.key || section.items.some((i) => activeKey === i.key)
           const Icon = section.icon
           return (
-            <div key={section.key} className="mb-1">
+            <section
+              key={section.key}
+              aria-label={section.label}
+              className={cn(
+                'mb-2 rounded-xl border transition-colors',
+                collapsed ? 'p-1' : 'p-1.5',
+                hasActive ? 'border-[hsl(var(--primary)/0.45)]' : 'border-[hsl(var(--border))]',
+              )}
+            >
               <div className="flex items-center gap-0">
                 <button
                   data-onboarding={`nav-${section.key}`}
@@ -430,13 +446,19 @@ function Sidebar({ collapsed, onToggle, onClose, mobile = false }) {
                     transition={{ duration: 0.22, ease: 'easeInOut' }}
                     className="overflow-hidden"
                   >
-                    <div className="pl-3 py-1 flex flex-col gap-0.5">
+                    <div
+                      data-guia
+                      className={cn(
+                        'ml-4 mt-1 mb-0.5 pl-2 border-l-2 flex flex-col gap-0.5',
+                        hasActive ? 'border-[hsl(var(--primary))]' : 'border-[hsl(var(--border))]',
+                      )}
+                    >
                       {section.items.map((item) => navBtn(item, true))}
                     </div>
                   </m.div>
                 )}
               </AnimatePresence>
-            </div>
+            </section>
           )
         })}
       </nav>
