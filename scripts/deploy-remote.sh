@@ -21,7 +21,9 @@ echo "Commit actual: $(git rev-parse --short HEAD) -> nuevo: ${SHA:0:7}"
 git reset --hard "$SHA"
 
 docker image tag aunaro-frontend:latest aunaro-frontend:previous
-$COMPOSE up -d --no-deps --build frontend
+# --pull: sin esto la base nginx queda en caché y no recibe parches.
+$COMPOSE build --pull frontend
+$COMPOSE up -d --no-deps --no-build frontend
 
 for i in $(seq 1 12); do
   if curl -sf -o /dev/null http://127.0.0.1:8080/; then
