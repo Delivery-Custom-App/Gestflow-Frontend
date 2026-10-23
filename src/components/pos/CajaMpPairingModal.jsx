@@ -7,6 +7,8 @@ import {
   assignExistingMpPos,
 } from '../../lib/administrativeApi'
 import MPConfigDrawer from './MPConfigDrawer'
+import { useAuth } from '../../context/AuthContext'
+import { MENSAJE_SOLO_DUENO_CONECTA_MP, puedeConectarMercadoPago } from '../../lib/rolesCaja'
 
 /** El backend responde 400 «Conectá la cuenta MercadoPago del local antes de…». */
 const faltaCuentaMp = (msg) => /conect\S*\s+la\s+cuenta\s+mercado\s?pago/i.test(msg || '')
@@ -14,6 +16,8 @@ const faltaCuentaMp = (msg) => /conect\S*\s+la\s+cuenta\s+mercado\s?pago/i.test(
 // step machine: 'choose_method' | 'loading_available' | 'choose_existing' | 'provisioning'
 //             | 'needs_account' | 'needs_location' | 'awaiting_pairing' | 'verifying' | 'paired' | 'error'
 export default function CajaMpPairingModal({ caja, localId, onClose, onUpdated }) {
+  const { userRole } = useAuth()
+  const puedeConectar = puedeConectarMercadoPago(userRole)
   const [step, setStep]           = useState('choose_method')
   const [error, setError]         = useState(null)
   const [info, setInfo]           = useState(null)
@@ -226,12 +230,20 @@ export default function CajaMpPairingModal({ caja, localId, onClose, onUpdated }
 
           {step === 'needs_account' && (
             <div className="space-y-3">
-              <p className="text-xs text-[hsl(var(--muted-foreground))]">
-                Este local todavía no tiene una cuenta de MercadoPago conectada. Conéctala y vuelve a intentar.
-              </p>
-              <button type="button" onClick={() => setConectandoCuenta(true)} className="w-full py-2.5 rounded-xl bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))] text-sm font-semibold hover:opacity-90 transition-opacity">
-                Conectar cuenta de MercadoPago
-              </button>
+              {puedeConectar ? (
+                <>
+                  <p className="text-xs text-[hsl(var(--muted-foreground))]">
+                    Este local todavía no tiene una cuenta de MercadoPago conectada. Conéctala y vuelve a intentar.
+                  </p>
+                  <button type="button" onClick={() => setConectandoCuenta(true)} className="w-full py-2.5 rounded-xl bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))] text-sm font-semibold hover:opacity-90 transition-opacity">
+                    Conectar cuenta de MercadoPago
+                  </button>
+                </>
+              ) : (
+                <p className="text-xs text-[hsl(var(--muted-foreground))]">
+                  Este local todavía no tiene una cuenta de MercadoPago conectada. {MENSAJE_SOLO_DUENO_CONECTA_MP}
+                </p>
+              )}
               <button type="button" onClick={() => setStep('choose_method')} className="w-full py-2 rounded-lg border border-[hsl(var(--border))] text-sm text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))] transition-colors">
                 Volver
               </button>

@@ -5,7 +5,9 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import MPConfigDrawer from './MPConfigDrawer'
+import { AuthProvider } from '../../context/AuthContext'
 import { apiRequest } from '../../lib/apiClient'
 import { listarLectores } from '../../lib/lectoresApi'
 
@@ -23,6 +25,12 @@ const LECTORES = [
   { id: 'pm-2', display_name: 'Lector terraza', operating_mode: 'idle', is_active: false, name: 'Lector terraza', modo: 'En espera', activo: false },
 ]
 
+const montar = (userRole = 'Admin Negocio') => render(
+  <AuthProvider user={{ id: 'u1' }} userRole={userRole} logout={() => {}}>
+    <MPConfigDrawer localId="loc-1" onClose={() => {}} />
+  </AuthProvider>,
+)
+
 describe('MPConfigDrawer — lectores del local', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -35,7 +43,7 @@ describe('MPConfigDrawer — lectores del local', () => {
   })
 
   it('lista los lectores reales del local con su modo', async () => {
-    render(<MPConfigDrawer localId="loc-1" onClose={() => {}} />)
+    montar()
 
     expect(await screen.findByText('Lector barra')).toBeInTheDocument()
     expect(screen.getByText('Lector terraza')).toBeInTheDocument()
@@ -45,14 +53,14 @@ describe('MPConfigDrawer — lectores del local', () => {
   })
 
   it('distingue el lector activo del que no lo está', async () => {
-    render(<MPConfigDrawer localId="loc-1" onClose={() => {}} />)
+    montar()
 
     expect(await screen.findByText('Activo')).toBeInTheDocument()
     expect(screen.getByText('Inactivo')).toBeInTheDocument()
   })
 
   it('no pide la ruta de dispositivos que no existe', async () => {
-    render(<MPConfigDrawer localId="loc-1" onClose={() => {}} />)
+    montar()
 
     await screen.findByText('Lector barra')
     const rutas = apiRequest.mock.calls.map((c) => String(c[0]))
@@ -61,9 +69,54 @@ describe('MPConfigDrawer — lectores del local', () => {
 
   it('un local sin lectores no muestra la sección vacía', async () => {
     listarLectores.mockResolvedValue([])
-    render(<MPConfigDrawer localId="loc-1" onClose={() => {}} />)
+    montar()
 
     await vi.waitFor(() => expect(listarLectores).toHaveBeenCalled())
     expect(screen.queryByText('Lectores del local')).not.toBeInTheDocument()
+  })
+})
+
+describe('MPConfigDrawer — quién conecta la cuenta (#151)', () => {
+  const conCuenta = (configured) => apiRequest.mockImplementation((ruta) => {
+    if (String(ruta).includes('mp-settings')) return Promise.resolve({ configured, oauth_available: true })
+    return Promise.resolve([])
+  })
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    listarLectores.mockResolvedValue([])
+  })
+
+  it('el dueño ve «Conectar con MercadoPago» y, en avanzadas, «Conectar con un token»', async () => {
+    conCuenta(false)
+    const user = userEvent.setup()
+    montar('Admin Negocio')
+    expect(await screen.findByRole('button', { name: /Conectar con MercadoPago/ })).toBeEnabled()
+    await user.click(screen.getByRole('button', { name: /Opciones avanzadas/ }))
+    expect(screen.getByText('Conectar con un token')).toBeInTheDocument()
+  })
+
+  it('el encargado no ve cómo conectar la cuenta: ve que la conecta el dueño', async () => {
+    conCuenta(false)
+    const user = userEvent.setup()
+    montar('Admin')
+    expect(await screen.findByText(/la conecta el dueño del negocio/)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Conectar con MercadoPago/ })).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: /Opciones avanzadas/ }))
+    expect(screen.queryByText('Conectar con un token')).not.toBeInTheDocument()
+  })
+
+  it('con la cuenta conectada, el encargado no puede desconectarla pero sí ve los lectores', async () => {
+    conCuenta(true)
+    montar('Admin')
+    expect(await screen.findByText('Cuenta conectada')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Desconectar/ })).not.toBeInTheDocument()
+    expect(screen.getByText('Lectores de tarjeta')).toBeInTheDocument()
+  })
+
+  it('con la cuenta conectada, el dueño puede desconectarla', async () => {
+    conCuenta(true)
+    montar('Admin Negocio')
+    expect(await screen.findByRole('button', { name: /Desconectar/ })).toBeInTheDocument()
   })
 })
