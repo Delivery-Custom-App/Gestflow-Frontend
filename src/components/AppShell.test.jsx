@@ -516,3 +516,75 @@ describe('AppShell — Usuarios por rol', () => {
     expect(menu().queryByRole('button', { name: 'Usuarios' })).not.toBeInTheDocument()
   })
 })
+
+/**
+ * En el teléfono el menú lateral queda fuera de la pantalla: la hamburguesa de
+ * la barra superior lo abre encima del contenido, y se cierra con la X, con
+ * Escape, tocando el fondo o al ir a otra pantalla.
+ */
+describe('AppShell — menú en el teléfono', () => {
+  const menuLateral = () => document.getElementById('menu-lateral')
+  const abierto = () => menuLateral().className.includes(' translate-x-0')
+
+  it('la hamburguesa está en la barra superior, solo en pantallas chicas, y abre el menú', async () => {
+    const user = userEvent.setup()
+    renderShell('loc-mesas')
+
+    const hamburguesa = screen.getByRole('button', { name: 'Abrir menú' })
+    expect(hamburguesa).toHaveClass('md:hidden')
+    expect(hamburguesa).toHaveAttribute('aria-controls', 'menu-lateral')
+    expect(hamburguesa).toHaveAttribute('aria-expanded', 'false')
+    expect(abierto()).toBe(false)
+
+    await user.click(hamburguesa)
+
+    expect(hamburguesa).toHaveAttribute('aria-expanded', 'true')
+    expect(abierto()).toBe(true)
+    expect(screen.getByRole('button', { name: 'Cerrar menú' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Contraer menú' })).not.toBeInTheDocument()
+  })
+
+  it('abierto, se ve completo aunque en el escritorio esté colapsado', async () => {
+    window.localStorage.setItem('appSidebarCollapsed', '1')
+    const user = userEvent.setup()
+    renderShell('loc-mesas')
+    expect(screen.getByRole('button', { name: 'Expandir menú' })).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Abrir menú' }))
+
+    expect(within(menuLateral()).getAllByText('AUNARO').length).toBeGreaterThan(0)
+    expect(screen.queryByRole('button', { name: 'Expandir menú' })).not.toBeInTheDocument()
+    window.localStorage.removeItem('appSidebarCollapsed')
+  })
+
+  it('se cierra con la X', async () => {
+    const user = userEvent.setup()
+    renderShell('loc-mesas')
+    await user.click(screen.getByRole('button', { name: 'Abrir menú' }))
+
+    await user.click(screen.getByRole('button', { name: 'Cerrar menú' }))
+
+    expect(abierto()).toBe(false)
+    expect(screen.getByRole('button', { name: 'Abrir menú' })).toHaveAttribute('aria-expanded', 'false')
+  })
+
+  it('se cierra con Escape', async () => {
+    const user = userEvent.setup()
+    renderShell('loc-mesas')
+    await user.click(screen.getByRole('button', { name: 'Abrir menú' }))
+
+    await user.keyboard('{Escape}')
+
+    expect(abierto()).toBe(false)
+  })
+
+  it('se cierra al ir a otra pantalla desde el menú', async () => {
+    const user = userEvent.setup()
+    renderShell('loc-mesas')
+    await user.click(screen.getByRole('button', { name: 'Abrir menú' }))
+
+    await user.click(within(screen.getByRole('navigation')).getByRole('button', { name: /Dashboard/ }))
+
+    expect(abierto()).toBe(false)
+  })
+})

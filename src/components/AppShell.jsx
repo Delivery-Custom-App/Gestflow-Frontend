@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { Outlet, useNavigate, useLocation } from 'react-router'
 import { useAuth } from '../context/AuthContext'
 import { useLocals } from '../hooks/useLocals'
@@ -11,7 +11,7 @@ import { CreditCard, ReceiptText,
   DollarSign, FileText, BarChart3, Wallet,
   Table2, ChefHat, Moon, Sun, LifeBuoy,
   Package, Truck, ShoppingCart, BookMarked, PackageOpen, UtensilsCrossed,
-  LogOut, Users, RotateCcw, MapPin, Building2, Settings, History,
+  LogOut, Users, RotateCcw, MapPin, Building2, Settings, History, Menu, X,
 } from 'lucide-react'
 import AunaroSymbol from '@/assets/brand/AunaroSymbol'
 import { nombreVisible } from '@/lib/altaUsuario'
@@ -111,7 +111,7 @@ const ACCORDIONS = [
 ]
 
 /* ── Sidebar ────────────────────────────────────────────────────── */
-function Sidebar({ collapsed, onToggle, onClose }) {
+function Sidebar({ collapsed, onToggle, onClose, mobile = false }) {
   const { user, userRole, logout, assignedLocalId } = useAuth()
   const { business } = useCurrentBusiness()
   const isSuperAdmin = isSuperAdminRole(userRole)
@@ -308,12 +308,14 @@ function Sidebar({ collapsed, onToggle, onClose }) {
             <span className="font-marca text-sm tracking-[0.1em] text-[hsl(var(--foreground))]">AUNARO</span>
           </div>
         )}
+        {/* En el teléfono el menú se abre encima del contenido: este botón lo cierra en vez de contraerlo. */}
         <button
-          onClick={onToggle}
+          type="button"
+          onClick={mobile ? onClose : onToggle}
           className="w-8 h-8 flex items-center justify-center rounded-md text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--accent))] hover:text-[hsl(var(--foreground))] transition-colors shrink-0"
-          aria-label={collapsed ? 'Expandir menú' : 'Contraer menú'}
+          aria-label={mobile ? 'Cerrar menú' : collapsed ? 'Expandir menú' : 'Contraer menú'}
         >
-          {collapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
+          {mobile ? <X size={18} /> : collapsed ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
         </button>
       </div>
 
@@ -476,7 +478,7 @@ function Sidebar({ collapsed, onToggle, onClose }) {
 }
 
 /* ── TopBar ─────────────────────────────────────────────────────── */
-function TopBar({ localId }) {
+function TopBar({ localId, menuOpen, onOpenMenu }) {
   const { locales } = useLocals()
   const { business } = useCurrentBusiness()
   const { darkMode, setDarkMode } = useTheme()
@@ -501,8 +503,19 @@ function TopBar({ localId }) {
 
   return (
     <div className="shrink-0 flex items-center justify-between px-4 sm:px-6 h-14 border-b border-[hsl(var(--border))] bg-[hsl(var(--card))] shadow-sm z-10">
-      {/* Left: local name + address */}
-      <div className="min-w-0">
+      {/* Left: menú (solo en el teléfono) + local name + address */}
+      <div className="min-w-0 flex items-center gap-2">
+        <button
+          type="button"
+          onClick={onOpenMenu}
+          aria-label="Abrir menú"
+          aria-expanded={menuOpen}
+          aria-controls="menu-lateral"
+          className="md:hidden -ml-1 w-9 h-9 shrink-0 flex items-center justify-center rounded-lg text-[hsl(var(--foreground))] hover:bg-[hsl(var(--accent))] transition-colors"
+        >
+          <Menu size={20} />
+        </button>
+        <div className="min-w-0">
         {selectedLocal ? (
           <>
             <h1 className="text-sm font-bold text-[hsl(var(--foreground))] leading-tight truncate">
@@ -520,6 +533,7 @@ function TopBar({ localId }) {
         ) : (
           <span className="font-marca text-sm tracking-[0.1em] text-[hsl(var(--foreground))]">AUNARO</span>
         )}
+        </div>
       </div>
 
       {/* Right: el turno del vendedor (solo en su vista) y los ajustes personales */}
@@ -569,6 +583,13 @@ function AppShell() {
   const [mobileOpenPath, setMobileOpenPath] = useState(null)
   const mobileOpen = mobileOpenPath === pathname
   const closeMobile = () => setMobileOpenPath(null)
+
+  useEffect(() => {
+    if (!mobileOpen) return undefined
+    const onKeyDown = (e) => { if (e.key === 'Escape') setMobileOpenPath(null) }
+    document.addEventListener('keydown', onKeyDown)
+    return () => document.removeEventListener('keydown', onKeyDown)
+  }, [mobileOpen])
   const handleToggle = () => {
     const next = !collapsed
     setCollapsed(next)
@@ -595,6 +616,7 @@ function AppShell() {
 
       {/* Sidebar — overlay en móvil, sticky en desktop */}
       <div
+        id="menu-lateral"
         className={cn(
           'fixed inset-y-0 left-0 z-40 transition-transform duration-300 ease-in-out',
           'md:relative md:z-auto md:translate-x-0',
@@ -605,12 +627,13 @@ function AppShell() {
           collapsed={mobileOpen ? false : collapsed}
           onToggle={handleToggle}
           onClose={() => closeMobile()}
+          mobile={mobileOpen}
         />
       </div>
 
       {/* Contenido principal */}
       <div className="flex-1 min-w-0 flex flex-col overflow-hidden bg-[hsl(var(--background))]">
-        <TopBar localId={localId} />
+        <TopBar localId={localId} menuOpen={mobileOpen} onOpenMenu={() => setMobileOpenPath(pathname)} />
         <Outlet />
       </div>
 
