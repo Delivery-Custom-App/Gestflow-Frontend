@@ -8,6 +8,8 @@ import {
 import { apiRequest } from '../../lib/apiClient'
 import { ayudaDelModo, cambiarModoLector, listarLectores } from '../../lib/lectoresApi'
 import { isV2FeatureEnabled } from '../../lib/v2Features'
+import { useAuth } from '../../context/AuthContext'
+import { MENSAJE_SOLO_DUENO_CONECTA_MP, puedeConectarMercadoPago } from '../../lib/rolesCaja'
 import { toast } from 'sonner'
 
 const EMPTY_MANUAL = { mp_pos_id: '', name: '' }
@@ -26,6 +28,9 @@ function displayMachineId(device) {
 }
 
 export default function MPConfigDrawer({ localId, onClose, open = true }) {
+  const { userRole } = useAuth()
+  const puedeConectar = puedeConectarMercadoPago(userRole)
+
   // ── Credentials ──────────────────────────────────────────────────────────
   const [mpStatus, setMpStatus]           = useState(undefined) // undefined = cargando
   const [tokenInput, setTokenInput]       = useState('')
@@ -361,13 +366,19 @@ export default function MPConfigDrawer({ localId, onClose, open = true }) {
                   <CheckCircle2 className="h-5 w-5 text-emerald-600 shrink-0" />
                   <p className="text-sm font-semibold text-emerald-800 dark:text-emerald-300">Cuenta conectada</p>
                 </div>
-                <button
+                {puedeConectar && <button
                   onClick={handleRemoveToken}
                   className="flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-lg hover:bg-emerald-100 dark:hover:bg-emerald-900/40 text-emerald-700 dark:text-emerald-400 transition-colors"
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                   Desconectar
-                </button>
+                </button>}
+              </div>
+            ) : !puedeConectar ? (
+              /* ── Sin cuenta, y quien mira no la puede conectar ── */
+              <div className="text-center py-2">
+                <p className="text-sm text-[hsl(var(--foreground))] font-medium">Este local no tiene una cuenta de MercadoPago</p>
+                <p className="text-xs text-[hsl(var(--muted-foreground))] mt-1">{MENSAJE_SOLO_DUENO_CONECTA_MP}</p>
               </div>
             ) : (
               /* ── Sin cuenta ── */
@@ -570,7 +581,7 @@ export default function MPConfigDrawer({ localId, onClose, open = true }) {
 
             {showManual && (
               <div className="mt-3 space-y-4 bg-[hsl(var(--muted)/0.3)] rounded-xl p-4 border border-[hsl(var(--border))]">
-                {!connected && (
+                {!connected && puedeConectar && (
                   <form onSubmit={handleSaveToken} className="space-y-2">
                     <p className="text-xs font-medium text-[hsl(var(--foreground))]">Conectar con un token</p>
                     <label htmlFor="mp-config-token" className="sr-only">Token de acceso de MercadoPago</label>

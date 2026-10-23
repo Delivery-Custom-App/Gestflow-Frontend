@@ -1,9 +1,18 @@
 /** Quién cierra la caja y quién vende (A-03). */
 import { describe, it, expect } from 'vitest'
-import { esAdminDeRestaurante, puedeCerrarCaja, puedeVender } from './rolesCaja'
+import { esAdminDeRestaurante, puedeCerrarCaja, puedeConectarMercadoPago, puedeVender } from './rolesCaja'
 import { mensajeCierreTurno } from './turnos'
 
 describe('rolesCaja', () => {
+  it('conectan la cuenta de MercadoPago el dueño y el superadmin; el encargado y el vendedor no (#151)', () => {
+    expect(puedeConectarMercadoPago('Admin Negocio')).toBe(true)
+    expect(puedeConectarMercadoPago('ADMIN_NEGOCIO')).toBe(true)
+    expect(puedeConectarMercadoPago('Superadmin')).toBe(true)
+    expect(puedeConectarMercadoPago('Admin')).toBe(false)
+    expect(puedeConectarMercadoPago('Empleado')).toBe(false)
+    expect(puedeConectarMercadoPago(null)).toBe(false)
+  })
+
   it('cierran la caja el administrador, el dueño y el superadmin; el vendedor no', () => {
     expect(puedeCerrarCaja('Admin')).toBe(true)
     expect(puedeCerrarCaja('Admin Negocio')).toBe(true)
