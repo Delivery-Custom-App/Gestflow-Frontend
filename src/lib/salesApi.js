@@ -5,6 +5,7 @@
 import { apiRequest, getOptionalAuthContext } from './apiClient'
 import { fetchProductsMap, productoDeFila } from './v2CatalogApi'
 import { traducirErrorCobro } from './supervision'
+import { isV2FeatureEnabled } from './v2Features'
 
 /**
  * Ítems del pedido con el shape que esperan las pantallas
@@ -141,8 +142,9 @@ export function todayIso() {
 export async function getActiveCaja(localId) {
   const rows = await apiRequest(`/cajas?local_id=${encodeURIComponent(String(localId))}`)
   const today = todayIso()
+  // Un turno terminado (T-41) sigue «open» hasta que se cierra con su caja, pero ya no vende.
   const open = (Array.isArray(rows) ? rows : []).filter(
-    (c) => String(c.status) === 'open' && c.business_date === today,
+    (c) => String(c.status) === 'open' && c.business_date === today && !c.turno_terminado_at,
   )
   if (!open.length) return null
   const { user } = await getOptionalAuthContext()
@@ -150,7 +152,9 @@ export async function getActiveCaja(localId) {
   const mine = uid ? open.find((c) => String(c.cashier_user_id) === uid) : null
   // El vendedor vende solo en su propio turno, nunca en el de otra persona: sin
   // el suyo, no hay caja activa (el backend además solo le muestra los suyos).
-  if (String(user?.role || '').toUpperCase() === 'EMPLEADO') return mine ? mapCajaOut(mine) : null
+  // #141: con la caja física mandando, el dueño o el encargado tampoco vende en
+  // el turno de otra persona: sin el suyo, inicia uno («Iniciar mi turno»).
+  if (String(user?.role || '').toUpperCase() === 'EMPLEADO' || isV2FeatureEnabled('cajaFisicaManda')) return mine ? mapCajaOut(mine) : null
   return mapCajaOut(mine || open[0])
 }
 

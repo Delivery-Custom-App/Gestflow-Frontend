@@ -20,7 +20,7 @@ function Linea({ id, etiqueta, valor, destacada = false, clase = '' }) {
  * montos son los de `GET /cajas/{id}/resumen`; las ventas por medio salen de los
  * movimientos. `resumen` es lo de `armarResumenCierre`.
  */
-export default function ResumenCierre({ resumen, digital = false }) {
+export default function ResumenCierre({ resumen, digital = false, etiquetaRetiros = 'Retiros y gastos' }) {
   if (!resumen) return <p className="text-sm text-[hsl(var(--muted-foreground))]">Cargando el resumen del cierre…</p>
   const { fondo, ventas, ingresosCaja, retiros, esperado, contado, diferencia } = resumen
   const claseDiferencia = diferencia === null ? '' : diferencia < 0 ? 'text-red-600' : diferencia > 0 ? 'text-amber-700' : 'text-emerald-700'
@@ -35,7 +35,7 @@ export default function ResumenCierre({ resumen, digital = false }) {
         <Linea id="ventas-transferencia" etiqueta="Ventas por transferencia" valor={dinero(ventas?.transferencia)} />
         {ventas?.otros > 0 && <Linea id="ventas-otros" etiqueta="Ventas con otros medios" valor={dinero(ventas.otros)} />}
         <Linea id="ingresos" etiqueta="Ingresos de caja" valor={dinero(ingresosCaja)} />
-        <Linea id="retiros" etiqueta="Retiros y gastos" valor={dinero(retiros)} />
+        <Linea id="retiros" etiqueta={etiquetaRetiros} valor={dinero(retiros)} />
         <Linea id="esperado" etiqueta="Efectivo esperado" valor={dinero(esperado)} destacada />
         {!digital && <Linea id="contado" etiqueta="Efectivo contado" valor={dinero(contado)} />}
         {!digital && <Linea id="diferencia" etiqueta="Diferencia" valor={textoDiferencia(diferencia) ?? '—'} clase={claseDiferencia} />}

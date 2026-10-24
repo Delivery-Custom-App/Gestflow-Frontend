@@ -137,3 +137,13 @@ describe('ElegirMaquina', () => {
     expect(onSinMaquina).toHaveBeenCalled()
   })
 })
+
+describe('ElegirMaquina · máquina bloqueada por su caja (#142)', () => {
+  it('dice «No disponible», no «Libre», junto al motivo', async () => {
+    render(<ElegirMaquina localId="loc-1" onConfirmar={vi.fn()} motivoNoElegible={(m) => (m.id === 'm-1' ? 'Su caja no está abierta' : null)} />)
+    const radio = await screen.findByRole('radio', { name: 'Point barra · No disponible' })
+    expect(radio).toBeDisabled()
+    expect(screen.getByText('Su caja no está abierta')).toBeInTheDocument()
+    expect(screen.queryByRole('radio', { name: 'Point barra · Libre' })).not.toBeInTheDocument()
+  })
+})

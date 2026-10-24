@@ -50,6 +50,31 @@ describe('getActiveCaja — cierre de caja diario', () => {
     expect(todayIso()).toBe('2026-09-01')
   })
 
+  it('#141: un turno terminado no sirve para vender', async () => {
+    getOptionalAuthContext.mockResolvedValue({ user: { id: 'u2', role: 'ADMIN_NEGOCIO' } })
+    apiRequest.mockResolvedValue([
+      { id: 'caja-mia', status: 'open', business_date: '2026-09-01', cashier_user_id: 'u2', turno_terminado_at: '2026-09-01T14:00:00Z' },
+    ])
+    expect(await getActiveCaja('local-1')).toBeNull()
+  })
+
+  it('#141: con la caja física mandando, el dueño sin turno propio no vende en el de otra persona', async () => {
+    const { V2_FEATURES } = await import('./v2Features')
+    V2_FEATURES.cajaFisicaManda = true
+    try {
+      getOptionalAuthContext.mockResolvedValue({ user: { id: 'u2', role: 'ADMIN_NEGOCIO' } })
+      apiRequest.mockResolvedValue([{ id: 'caja-otro', status: 'open', business_date: '2026-09-01', cashier_user_id: 'u1' }])
+      expect(await getActiveCaja('local-1')).toBeNull()
+      apiRequest.mockResolvedValue([
+        { id: 'caja-otro', status: 'open', business_date: '2026-09-01', cashier_user_id: 'u1' },
+        { id: 'caja-mia', status: 'open', business_date: '2026-09-01', cashier_user_id: 'u2' },
+      ])
+      expect((await getActiveCaja('local-1'))?.id).toBe('caja-mia')
+    } finally {
+      V2_FEATURES.cajaFisicaManda = false
+    }
+  })
+
   it('el vendedor sin turno propio no recibe el turno de otra persona', async () => {
     getOptionalAuthContext.mockResolvedValue({ user: { id: 'u2', role: 'EMPLEADO' } })
     apiRequest.mockResolvedValue([

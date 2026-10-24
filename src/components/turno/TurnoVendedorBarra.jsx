@@ -166,8 +166,9 @@ export default function TurnoVendedorBarra() {
       <span className="hidden sm:inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
         <Clock3 size={13} /> Turno abierto{desde ? ` desde las ${desde}` : ''}
       </span>
-      <span className="hidden lg:inline text-[11px] text-[hsl(var(--muted-foreground))]" data-testid="recordatorio-terminar">
-        Al terminar tu jornada, termina tu turno
+      {/* Solo en pantallas muy anchas: en una notebook empujaba «Terminar mi turno» fuera de la barra. */}
+      <span className="hidden 2xl:inline text-[11px] text-[hsl(var(--muted-foreground))]" data-testid="recordatorio-terminar">
+        {isV2FeatureEnabled('cajaFisicaManda') ? 'Al irte, termina tu turno' : 'Al terminar tu jornada, termina tu turno'}
       </span>
       <MaquinaDelTurno key={turno.id} turnoInicial={turno} alPaso={isAlPasoLocal(user?.local_sales_model)} onTerminado={avisarTerminado} />
       <button type="button" onClick={() => { setConfirmando(true); setError('') }} className={BOTON}

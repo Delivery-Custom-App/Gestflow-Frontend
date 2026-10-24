@@ -1,10 +1,11 @@
 /** Máquinas POS del negocio para el dueño (T-44). */
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, within, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import MaquinasNegocioPage from './MaquinasNegocioPage'
 import { apiRequest } from '../lib/apiClient'
 import { agruparPorLocal, textoOcupacion } from '../lib/maquinasNegocio'
+import { V2_FEATURES } from '../lib/v2Features'
 
 vi.mock('../lib/apiClient', () => ({ apiRequest: vi.fn() }))
 vi.mock('../hooks/useLocals', () => ({ useLocals: () => ({ locales: LOCALES }) }))
@@ -105,5 +106,37 @@ describe('MaquinasNegocioPage', () => {
     render(<MaquinasNegocioPage />)
     expect(await screen.findByRole('note')).toHaveTextContent('Mercado Pago no respondió')
     expect(screen.getByText('Point barra')).toBeInTheDocument()
+  })
+})
+
+describe('MaquinasNegocioPage · la caja física manda (#140)', () => {
+  beforeEach(() => { V2_FEATURES.cajaFisicaManda = true })
+  afterEach(() => { V2_FEATURES.cajaFisicaManda = false })
+
+  it('mover a un restaurante ofrece la caja, pero no es obligatoria', async () => {
+    const user = userEvent.setup()
+    render(<MaquinasNegocioPage />)
+    await user.click(await screen.findByRole('button', { name: 'Mover Point caja a otro local' }))
+    // Antes de elegir el local no hay caja que elegir.
+    expect(screen.queryByLabelText('Caja física')).not.toBeInTheDocument()
+    await user.selectOptions(screen.getByLabelText('Local'), 'l1')
+    expect(await screen.findByRole('option', { name: 'Sin caja por ahora (se asigna después)' })).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Confirmar' }))
+    expect(apiRequest).toHaveBeenCalledWith('/pos-machines/m2/mover', { method: 'POST', body: { local_id: 'l1' } })
+  })
+
+  it('con 3 personas la máquina está llena; con 2, en uso', () => {
+    expect(textoOcupacion({ ocupacion: 2, usuarios: ['Ana', 'Luis'] })).toBe('En uso: Ana y Luis')
+    expect(textoOcupacion({ ocupacion: 3, usuarios: ['Ana', 'Luis', 'Pedro'] })).toBe('Llena: Ana y Luis y Pedro')
+  })
+})
+
+describe('MaquinasNegocioPage · nombre de la caja', () => {
+  it('no repite «Caja» si el nombre ya lo dice', async () => {
+    apiRequest.mockImplementation(async () => ({ ...RESPUESTA, registradas: [{ ...RESPUESTA.registradas[1], caja_fisica_nombre: 'Caja principal' }] }))
+    render(<MaquinasNegocioPage />)
+    const region = await screen.findByRole('region', { name: 'Máquinas de Mostrador Express' })
+    expect(region).toHaveTextContent('Caja principal · Mercado Pago')
+    expect(region).not.toHaveTextContent('Caja Caja')
   })
 })

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { formatCLPCurrency as formatMoney } from '../../lib/formatCLP'
+import { Badge } from '@/components/ui/badge'
 import { TURNOS_POR_PAGINA, horaDe, totalVendidoDe } from '../../lib/registroTurnos'
 
 /** "YYYY-MM-DD" → "dd/mm/yyyy" sin pasar por Date: es un día calendario, no un instante. */
@@ -66,7 +67,9 @@ export default function TablaTurnos({ turnos, vendedorDe, cajaFisicaDe, onVer, t
                   <td className="px-4 py-3 whitespace-nowrap">{horaDe(t.opened_at) || '—'}</td>
                   <td className="px-4 py-3 whitespace-nowrap">{abierto ? '—' : (horaDe(t.closed_at) || '—')}</td>
                   <td className="px-4 py-3 whitespace-nowrap font-semibold"><TotalVendido valor={totalVendidoDe(t)} /></td>
-                  <td className="px-4 py-3">{abierto ? 'Abierto' : 'Cerrado'}</td>
+                  <td className="px-4 py-3">
+                    <Badge variant={abierto ? 'success' : 'destructive'} data-estado={abierto ? 'abierto' : 'cerrado'}>{abierto ? 'Abierto' : 'Cerrado'}</Badge>
+                  </td>
                   {onVer && (
                     <td className="px-4 py-3">
                       <Button size="sm" variant="outline" onClick={() => onVer(t)}>{textoVer}</Button>

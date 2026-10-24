@@ -60,6 +60,9 @@ export function formatApiErrorDetail(detail) {
       .join('\n')
   }
   if (typeof detail === 'object') {
+    // Errores con estructura (por ejemplo, el 409 del cierre de caja: { motivo, mensaje, turnos }): su texto.
+    const texto = detail.mensaje || detail.message
+    if (typeof texto === 'string' && texto) return texto
     try {
       return JSON.stringify(detail)
     } catch {

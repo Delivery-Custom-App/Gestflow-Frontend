@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, waitFor, within } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router'
 import AdministrativeModule from './AdministrativeModule'
@@ -780,3 +780,62 @@ describe('AdministrativeModule · desactivar y eliminar cajas físicas (T-75)', 
   })
 })
 
+describe('AdministrativeModule · la caja física manda (#133)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    V2_FEATURES.cajaFisicaManda = true
+    getCajasFisicasByLocal.mockResolvedValue([
+      { ...mockCajasFisicas[0], tipo: 'digital', abierta: true, apertura_actual: { abierta_at: '2026-10-21T12:00:00Z', abierta_por_email: 'encargado@demo', monto_apertura: '50000.00' } },
+      { ...mockCajasFisicas[1], tipo: 'fisica', abierta: false, ultimo_cierre: null },
+    ])
+  })
+  afterEach(() => { V2_FEATURES.cajaFisicaManda = false })
+
+  it('el encargado ve «La caja del día» y las máquinas; ya no abre un turno con plata ni ve el tipo digital', async () => {
+    renderAdmin('flujo-caja', 'Admin')
+    const panel = (await screen.findByRole('heading', { name: 'La caja del día' })).closest('article')
+    const [principal, terraza] = within(within(panel).getByRole('list', { name: 'Cajas del local' })).getAllByRole('listitem')
+    expect(principal).toHaveTextContent('Abierta')
+    expect(within(principal).getByRole('button', { name: 'Cerrar Caja principal' })).toBeInTheDocument()
+    expect(within(terraza).getByRole('button', { name: 'Abrir Caja terraza' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Máquinas POS' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '+ Abrir turno de caja' })).not.toBeInTheDocument()
+    const fisicas = screen.getByRole('heading', { name: 'Cajas físicas' }).closest('article')
+    expect(within(fisicas).queryByText('Digital')).not.toBeInTheDocument()
+  })
+
+  it('el turno ya no se cuenta ni registra movimientos: se cierra con su caja', async () => {
+    const user = userEvent.setup()
+    renderAdmin('flujo-caja', 'Admin')
+    const panel = (await screen.findByRole('heading', { name: 'Turnos de caja' })).closest('article')
+    const filaAna = (await within(within(panel).getByRole('table')).findByText('Ana Rojas')).closest('tr')
+    await user.click(within(filaAna).getByRole('button', { name: 'Ver resumen' }))
+    const lateral = (await screen.findByRole('heading', { name: 'Resumen del turno' })).closest('.fixed')
+    expect(within(lateral).queryByRole('button', { name: /Cerrar turno/ })).not.toBeInTheDocument()
+    expect(within(lateral).queryByRole('button', { name: 'Registrar movimiento' })).not.toBeInTheDocument()
+    expect(within(lateral).getByText(/se cierra con su caja física/)).toBeInTheDocument()
+  })
+
+  it('#142: al abrir una caja el mensaje verde sigue visible aunque la sección se recargue', async () => {
+    apiRequest.mockImplementation(async (ruta) => (String(ruta).includes('/abrir') ? { id: 'ap-1', monto_apertura: '10000.00' } : []))
+    const user = userEvent.setup()
+    renderAdmin('flujo-caja', 'Admin')
+    const panel = (await screen.findByRole('heading', { name: 'La caja del día' })).closest('article')
+    const llamadasAntes = getCajasFisicasByLocal.mock.calls.length
+    await user.click(within(panel).getByRole('button', { name: 'Abrir Caja terraza' }))
+    await user.type(await screen.findByLabelText('Cantidad de billetes de $10.000'), '1')
+    await user.click(screen.getByRole('button', { name: 'Abrir caja' }))
+    // La sección se vuelve a pedir…
+    await waitFor(() => expect(getCajasFisicasByLocal.mock.calls.length).toBeGreaterThan(llamadasAntes))
+    // …y el mensaje no se pierde.
+    expect(await screen.findByText('Caja terraza quedó abierta con $10.000.')).toBeInTheDocument()
+    await new Promise((r) => setTimeout(r, 50))
+    expect(screen.getByText('Caja terraza quedó abierta con $10.000.')).toBeInTheDocument()
+  })
+
+  it('el trabajador no ve la caja del día', async () => {
+    renderAdmin('flujo-caja', 'Empleado')
+    await screen.findByRole('heading', { name: 'Turnos de caja' })
+    expect(screen.queryByRole('heading', { name: 'La caja del día' })).not.toBeInTheDocument()
+  })
+})

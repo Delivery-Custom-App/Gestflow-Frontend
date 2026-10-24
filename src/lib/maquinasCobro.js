@@ -1,4 +1,5 @@
 import { apiRequest } from './apiClient'
+import { isV2FeatureEnabled } from './v2Features'
 
 /**
  * Máquinas de cobro con tarjeta (POS) del turno del vendedor (sección 5b del
@@ -14,14 +15,21 @@ import { apiRequest } from './apiClient'
  * - Comida al paso: la máquina está anclada a la caja física y el turno cobra
  *   con ella; el empleado no elige nada.
  *
- * Cada máquina trae del backend `ocupacion` (0, 1 o 2), `usuarios` (los nombres
- * de quienes la usan hoy), `disponible` (admite a alguien más) y `provider`.
+ * Cada máquina trae del backend `ocupacion` (cuántas personas la usan hoy),
+ * `usuarios` (sus nombres), `disponible` (admite a alguien más) y `provider`.
+ * Con la caja física mandando (#133), una máquina se comparte entre hasta 3
+ * personas y siempre pertenece a una caja física (`caja_fisica_id`).
  */
 
 export const PROVEEDOR_LABEL = { mercadopago: 'Mercado Pago', haulmer: 'Haulmer' }
 
-/** Cuántas personas pueden usar una misma máquina a la vez. */
+/** Cuántas personas podían usar una misma máquina a la vez antes del #133. */
 export const MAX_POR_MAQUINA = 2
+
+/** Cuántas personas pueden usar una misma máquina: 3 con la caja física mandando (#133), 2 antes. */
+export function maxPorMaquina() {
+  return isV2FeatureEnabled('cajaFisicaManda') ? 3 : MAX_POR_MAQUINA
+}
 
 /** La web cobra con tarjeta solo por MercadoPago Point (`/payments/point/…`). */
 export function webCobraCon(proveedor) {
@@ -30,11 +38,11 @@ export function webCobraCon(proveedor) {
 
 /**
  * Estado de una máquina para quien elige: 'libre', 'compartible' (la usa una
- * persona), 'llena' (ya son dos) o 'desactivada'.
+ * persona o más), 'llena' (ya no admite a nadie) o 'desactivada'.
  */
 export function estadoDeMaquina(maquina) {
   if (!maquina.activa) return 'desactivada'
-  if (maquina.ocupacion >= MAX_POR_MAQUINA) return 'llena'
+  if (maquina.ocupacion >= maxPorMaquina()) return 'llena'
   if (maquina.ocupacion > 0) return 'compartible'
   return 'libre'
 }

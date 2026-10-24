@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { getActiveCaja } from '../lib/salesApi'
 
 /**
@@ -7,6 +7,7 @@ import { getActiveCaja } from '../lib/salesApi'
 export function useCajaActiva(localId) {
   const [caja, setCaja] = useState(null)
   const [resolvedFor, setResolvedFor] = useState(null) // localId ya consultado
+  const [version, setVersion] = useState(0)
 
   useEffect(() => {
     if (!localId) return
@@ -20,7 +21,10 @@ export function useCajaActiva(localId) {
         setResolvedFor(localId)
       })
     return () => { cancelled = true }
-  }, [localId])
+  }, [localId, version])
 
-  return { cajaId: caja?.id ?? null, caja, loading: Boolean(localId) && resolvedFor !== localId }
+  // Volver a buscar el turno (por ejemplo, después de iniciarlo).
+  const recargar = useCallback(() => setVersion((v) => v + 1), [])
+
+  return { cajaId: caja?.id ?? null, caja, loading: Boolean(localId) && resolvedFor !== localId, recargar }
 }

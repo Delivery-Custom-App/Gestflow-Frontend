@@ -13,6 +13,7 @@
  *   `mp_pos_id`, `local_id` y `name`.
  */
 import { apiRequest } from './apiClient'
+import { maxPorMaquina } from './maquinasCobro'
 
 export function listarMaquinasDelNegocio() {
   return apiRequest('/pos-machines/negocio')
@@ -47,7 +48,7 @@ export function agruparPorLocal(registradas = []) {
 export function textoOcupacion(m) {
   const usuarios = Array.isArray(m?.usuarios) ? m.usuarios : []
   if (!m?.ocupacion) return 'Libre'
-  return `${m.ocupacion >= 2 ? 'Llena' : 'En uso'}: ${usuarios.join(' y ') || `${m.ocupacion} persona(s)`}`
+  return `${m.ocupacion >= maxPorMaquina() ? 'Llena' : 'En uso'}: ${usuarios.join(' y ') || `${m.ocupacion} persona(s)`}`
 }
 
 export function mensajeMaquinas(err) {

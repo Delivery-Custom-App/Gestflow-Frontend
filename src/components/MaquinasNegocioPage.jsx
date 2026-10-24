@@ -6,11 +6,11 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { useLocals } from '../hooks/useLocals'
 import { listarCajasFisicas } from '../lib/administrativeApi'
 import { isAlPasoLocal } from '../lib/salesModel'
+import { isV2FeatureEnabled } from '../lib/v2Features'
 import {
   agruparPorLocal, listarMaquinasDelNegocio, mensajeMaquinas, moverMaquina, registrarTerminal, textoOcupacion,
 } from '../lib/maquinasNegocio'
 import { PROVEEDOR_LABEL } from '../lib/maquinasCobro'
-import { isV2FeatureEnabled } from '../lib/v2Features'
 import MPConfigDrawer from './pos/MPConfigDrawer'
 
 const CAMPO = 'w-full rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--card))] px-3 py-2 text-sm'
@@ -26,22 +26,28 @@ function ElegirDestino({ titulo, descripcion, conNombre = false, onConfirmar, on
   const [ocupado, setOcupado] = useState(false)
   const local = locales.find((l) => String(l.id) === String(localId))
   const alPaso = isAlPasoLocal(local)
+  // #133 y #140: toda máquina va en una caja física, también en un restaurante, pero
+  // la caja no es obligatoria al moverla: si el local tiene una sola la pone el
+  // backend; si tiene varias, se elige aquí o después en Caja y turnos.
+  const cajaFisicaManda = isV2FeatureEnabled('cajaFisicaManda')
+  const ofreceCaja = !conNombre && Boolean(localId) && (cajaFisicaManda || alPaso)
+  const exigeCaja = alPaso && !conNombre && !cajaFisicaManda
 
   useEffect(() => {
-    if (!localId || !alPaso) return undefined
+    if (!localId || !ofreceCaja) return undefined
     let ignore = false
     listarCajasFisicas(localId).then((f) => { if (!ignore) setCajas(f) }).catch(() => { if (!ignore) setCajas([]) })
     return () => { ignore = true }
-  }, [localId, alPaso])
+  }, [localId, ofreceCaja])
 
   const confirmar = async (e) => {
     e.preventDefault()
     if (!localId) { setError('Elige el local.'); return }
-    if (alPaso && !conNombre && !cajaId) { setError('En un local al paso, elige la caja física.'); return }
+    if (exigeCaja && !cajaId) { setError('En un local al paso, elige la caja física.'); return }
     setOcupado(true)
     setError('')
     try {
-      await onConfirmar({ localId, cajaFisicaId: alPaso ? cajaId : null, nombre })
+      await onConfirmar({ localId, cajaFisicaId: ofreceCaja ? (cajaId || null) : null, nombre })
     } catch (err) {
       setError(mensajeMaquinas(err))
       setOcupado(false)
@@ -63,11 +69,11 @@ function ElegirDestino({ titulo, descripcion, conNombre = false, onConfirmar, on
               {locales.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
             </select>
           </div>
-          {alPaso && !conNombre && (
+          {ofreceCaja && (
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="destino-caja">Caja física</Label>
               <select id="destino-caja" value={cajaId} onChange={(e) => setCajaId(e.target.value)} className={CAMPO} disabled={ocupado}>
-                <option value="">Elige la caja física</option>
+                <option value="">{exigeCaja ? 'Elige la caja física' : 'Sin caja por ahora (se asigna después)'}</option>
                 {cajas.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
             </div>
@@ -172,7 +178,7 @@ export default function MaquinasNegocioPage() {
                     <div className="min-w-0 flex-1">
                       <p className="font-semibold text-[hsl(var(--foreground))]">{m.display_name}{m.is_active === false ? ' · desactivada' : ''}</p>
                       <p className="text-xs text-[hsl(var(--muted-foreground))]">
-                        {[m.caja_fisica_nombre && `Caja ${m.caja_fisica_nombre}`, PROVEEDOR_LABEL[m.provider] || m.provider, m.terminal_id].filter(Boolean).join(' · ')}
+                        {[m.caja_fisica_nombre && (/^caja\b/i.test(m.caja_fisica_nombre) ? m.caja_fisica_nombre : `Caja ${m.caja_fisica_nombre}`), PROVEEDOR_LABEL[m.provider] || m.provider, m.terminal_id].filter(Boolean).join(' · ')}
                       </p>
                     </div>
                     <span className="text-xs">{textoOcupacion(m)}</span>
