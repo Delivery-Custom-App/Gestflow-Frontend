@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import MercadoPagoModal from './MercadoPagoModal'
-import { createPointCharge, MENSAJE_HAULMER } from '../../lib/cobroTarjeta'
+import { cancelarCobroEnTerminal, createPointCharge, getPointOrderStatus, MENSAJE_HAULMER } from '../../lib/cobroTarjeta'
 import { completeOrderCash, updateOrderFields } from '../../lib/salesApi'
 
 vi.mock('../../lib/cobroTarjeta', async (importOriginal) => ({
@@ -11,6 +11,7 @@ vi.mock('../../lib/cobroTarjeta', async (importOriginal) => ({
   createPointCharge: vi.fn(),
   getPointOrderStatus: vi.fn(() => Promise.resolve({ order_status: 'OPEN' })),
   cancelPointCharge: vi.fn(),
+  cancelarCobroEnTerminal: vi.fn(),
 }))
 vi.mock('../../lib/salesApi', async (importOriginal) => ({
   ...(await importOriginal()),
@@ -88,5 +89,51 @@ describe('MercadoPagoModal · seguir el charge_id (T-65)', () => {
     await user.click(screen.getByRole('button', { name: 'Reintentar' }))
     expect(createPointCharge).toHaveBeenCalledTimes(2)
     expect(await screen.findByText(/Esperando que el cliente pase la tarjeta/)).toBeInTheDocument()
+  })
+
+  describe('#131 · cancelar un cobro que ya está en la terminal', () => {
+    const AVISO = 'El cobro ya está en la terminal y Mercado Pago no deja cancelarlo desde aquí. Cancélalo en el lector (o espera a que venza): si el cliente paga, la venta se registra.'
+
+    beforeEach(() => { getPointOrderStatus.mockResolvedValue({ order_status: 'OPEN' }) })
+
+    async function enviarYCancelar(user) {
+      createPointCharge.mockResolvedValue({ charge_id: 'c-1', message: 'Esperando que el cliente pase la tarjeta...' })
+      montar()
+      await user.click(screen.getByRole('button', { name: /MercadoPago Point/ }))
+      const boton = await screen.findByRole('button', { name: 'Cancelar pago en terminal' })
+      const consultasAntes = getPointOrderStatus.mock.calls.length
+      await user.click(boton)
+      return consultasAntes
+    }
+
+    it('con el 409 muestra el aviso, se queda en la pantalla de cobro y sigue consultando', async () => {
+      cancelarCobroEnTerminal.mockResolvedValue({ cancelado: false, mensaje: AVISO })
+      const user = userEvent.setup()
+      const consultasAntes = await enviarYCancelar(user)
+
+      expect(cancelarCobroEnTerminal).toHaveBeenCalledWith('o-1')
+      expect(await screen.findByRole('alert')).toHaveTextContent(AVISO)
+      // Sigue en la espera: no vuelve a «elegir pago» (no se ofrece cobrar de nuevo).
+      expect(screen.getByText('Terminal activa')).toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: /Efectivo/ })).not.toBeInTheDocument()
+      // Vuelve a consultar el estado del cobro después de intentar cancelar.
+      await vi.waitFor(() => expect(getPointOrderStatus.mock.calls.length).toBeGreaterThan(consultasAntes))
+    })
+
+    it('si después el cliente paga, la venta se registra como aprobada', async () => {
+      cancelarCobroEnTerminal.mockResolvedValue({ cancelado: false, mensaje: AVISO })
+      const user = userEvent.setup()
+      await enviarYCancelar(user)
+      getPointOrderStatus.mockResolvedValue({ order_status: 'COMPLETED' })
+      expect(await screen.findByText('Pago detectado', {}, { timeout: 5000 })).toBeInTheDocument()
+    })
+
+    it('si se canceló (200), vuelve a elegir el método como siempre', async () => {
+      cancelarCobroEnTerminal.mockResolvedValue({ cancelado: true })
+      const user = userEvent.setup()
+      await enviarYCancelar(user)
+      expect(await screen.findByRole('button', { name: /Efectivo/ })).toBeInTheDocument()
+      expect(screen.queryByText('Terminal activa')).not.toBeInTheDocument()
+    })
   })
 })

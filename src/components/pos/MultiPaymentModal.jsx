@@ -6,7 +6,7 @@ import {
   getSplitPaymentSummary,
   updateSplitPayment,
 } from '../../lib/apiClient'
-import { createPointCharge, getPointOrderStatus, cancelPointCharge } from '../../lib/cobroTarjeta'
+import { createPointCharge, getPointOrderStatus, cancelarCobroEnTerminal } from '../../lib/cobroTarjeta'
 import TicketModal from './TicketModal'
 
 const PAYMENT_METHODS = [
@@ -212,10 +212,11 @@ export default function MultiPaymentModal({ order, orderTotal, onClose, onFullyP
   const handlePointCancel = async () => {
     if (!pointIntent) return
     stopPolling()
-    try {
-      await cancelPointCharge(order.id)
-    } catch {
-      // ignorar — la orden puede ya estar cancelada
+    const { cancelado, mensaje } = await cancelarCobroEnTerminal(order.id)
+    if (!cancelado) {
+      // #131: el cobro sigue vivo en la terminal; se sigue esperando su resultado.
+      setPointIntent((actual) => ({ ...actual, aviso: mensaje }))
+      return
     }
     setPointIntent(null)
   }
@@ -275,6 +276,9 @@ export default function MultiPaymentModal({ order, orderTotal, onClose, onFullyP
                 <p className="text-xs text-blue-600">
                   {POINT_STATE_LABEL[pointIntent.terminalState] || 'Conectando...'}
                 </p>
+                {pointIntent.aviso && (
+                  <p role="alert" className="mt-1 text-xs text-amber-800">{pointIntent.aviso}</p>
+                )}
               </div>
             </div>
             <button

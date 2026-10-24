@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { createPointCharge, getPointOrderStatus, cancelPointCharge } from '../../lib/cobroTarjeta'
+import { createPointCharge, getPointOrderStatus, cancelarCobroEnTerminal } from '../../lib/cobroTarjeta'
 import { completeOrderCash, updateOrderFields } from '../../lib/salesApi'
 import { isV2FeatureEnabled } from '../../lib/v2Features'
 
@@ -24,6 +24,8 @@ export default function MercadoPagoModal({ open, orderId, createdAt, total, desc
   const [terminalMsg, setTerminalMsg] = useState('Conectando con la terminal...')
   const [paymentDetail, setPaymentDetail] = useState(null)
   const [chargeInfo, setChargeInfo] = useState(null)
+  // #131: el cobro no se pudo cancelar desde aquí y sigue vivo en la terminal.
+  const [avisoCancelacion, setAvisoCancelacion] = useState('')
   // T-65: si la terminal está cobrando otra venta, se ofrece reintentar.
   const [reintentable, setReintentable] = useState(false)
   const [cashAmount, setCashAmount] = useState('')
@@ -127,6 +129,7 @@ export default function MercadoPagoModal({ open, orderId, createdAt, total, desc
 
         if (s.order_status === 'COMPLETED') {
           stopPolling()
+          setAvisoCancelacion('')
           setPaymentDetail(s.payment_detail || null)
           setStep('point_success')
           return
@@ -134,6 +137,7 @@ export default function MercadoPagoModal({ open, orderId, createdAt, total, desc
 
         if (s.point_charge_expired) {
           stopPolling()
+          setAvisoCancelacion('')
           setError(
             `No detectamos el pago en la terminal. Verificá que cobraste exactamente ${fmt(paymentTotal)} y volvé a enviar el cobro.`
           )
@@ -143,6 +147,7 @@ export default function MercadoPagoModal({ open, orderId, createdAt, total, desc
 
         if (s.payment_status === 'REJECTED') {
           stopPolling()
+          setAvisoCancelacion('')
           setError('Pago rechazado por la terminal. Podés intentar de nuevo.')
           setStep('select')
           return
@@ -150,6 +155,7 @@ export default function MercadoPagoModal({ open, orderId, createdAt, total, desc
 
         if (s.order_status === 'CANCELLED') {
           stopPolling()
+          setAvisoCancelacion('')
           setError('La orden fue cancelada durante el cobro.')
           setStep('select')
           return
@@ -170,15 +176,18 @@ export default function MercadoPagoModal({ open, orderId, createdAt, total, desc
   const handleCancelPoint = async () => {
     stopPolling()
     setLoading(true)
-    try {
-      await cancelPointCharge(orderId)
-    } catch {
-      // ignorar — la orden puede ya haber expirado (TTL)
-    } finally {
-      setLoading(false)
-      setStep('select')
-      setError(null)
+    const { cancelado, mensaje } = await cancelarCobroEnTerminal(orderId)
+    setLoading(false)
+    if (!cancelado) {
+      // #131: el cobro sigue vivo en la terminal. Se queda esperando: si el
+      // cliente paga, la venta se registra; no se ofrece cobrar de nuevo.
+      setAvisoCancelacion(mensaje)
+      startPolling()
+      return
     }
+    setAvisoCancelacion('')
+    setStep('select')
+    setError(null)
   }
 
   return (
@@ -322,6 +331,11 @@ export default function MercadoPagoModal({ open, orderId, createdAt, total, desc
                   El cliente puede pagar con débito o crédito.
                 </p>
               </div>
+              {avisoCancelacion && (
+                <p role="alert" className="rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                  {avisoCancelacion}
+                </p>
+              )}
               <button
                 disabled={loading}
                 onClick={handleCancelPoint}
