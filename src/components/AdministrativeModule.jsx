@@ -62,8 +62,8 @@ const ROLES_CAJAS_FISICAS = new Set(['ADMIN', 'ADMINNEGOCIO', 'SUPERADMIN'])
 
 /** Secciones visibles: se calculan al renderizar porque dependen de las banderas. */
 const getSections = (alPaso = false) => [
-  { id: 'ventas',        label: 'Ventas',        subtitle: 'Totales de hoy, tendencia, productos más vendidos e histórico' },
-  { id: 'flujo-caja',    label: 'Caja y turnos', subtitle: 'Turnos de caja, movimientos y arqueo del día' },
+  { id: 'ventas',        label: 'Ventas',        subtitle: 'Lo vendido hoy, el cuadre de las cajas, las órdenes y cómo va la semana' },
+  { id: 'flujo-caja',    label: 'Caja y turnos', subtitle: isV2FeatureEnabled('cajaFisicaManda') ? 'Abrir y cerrar las cajas contando el efectivo, y quién está vendiendo' : 'Turnos de caja, movimientos y arqueo del día' },
   // T-46: lo que quedó sin cobrar al cerrar la caja y los pedidos vencidos.
   { id: 'no-cobradas',   label: textosNoCobradas(alPaso).titulo, subtitle: textosNoCobradas(alPaso).subtitulo },
   // T-26: fondo de emergencia (backend B-09). Con la bandera apagada la sección no existe y su dirección lleva a Ventas.
@@ -309,8 +309,150 @@ function SectionState({ loading, error, isEmpty, emptyMessage }) {
 
 // ── Section content components ─────────────────────────────────
 
+/**
+ * Resumen del día por turnos (sin la caja física mandando): el consolidado
+ * del local, el detalle por caja física y por turno. Vive en Ventas.
+ */
+function ResumenDiarioTurnos({ resumenDiario, usuarios }) {
+  const usuariosPorId = useMemo(() => new Map(safeArray(usuarios).map((u) => [String(u.id), u])), [usuarios])
+  const porCajaFisica = safeArray(resumenDiario?.por_caja_fisica)
+  const turnosDelDia = porCajaFisica.reduce((n, cf) => n + safeArray(cf.cajas).length, 0)
+  return (
+    <Panel title="Resumen del día" sub={`Consolidado de todos los turnos del local · ${formatBusinessDate(resumenDiario.business_date)}`}>
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
+        <div className="rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--muted))] p-3">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-[hsl(var(--muted-foreground))]">Apertura total</p>
+          <p className="mt-1 text-sm font-bold text-[hsl(var(--foreground))]">{formatMoney(Number(resumenDiario.monto_apertura_total))}</p>
+        </div>
+        <div className="rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--muted))] p-3">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-[hsl(var(--muted-foreground))]">Ingresos de hoy</p>
+          <p className="mt-1 text-sm font-bold text-[hsl(var(--foreground))]">{formatMoney(Number(resumenDiario.total_ingresos))}</p>
+        </div>
+        <div className="rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--muted))] p-3">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-[hsl(var(--muted-foreground))]">Total esperado hoy</p>
+          <p className="mt-1 text-sm font-bold text-[hsl(var(--foreground))]">{formatMoney(Number(resumenDiario.total_esperado))}</p>
+        </div>
+        {/* T-63: retiros, efectivo esperado y diferencias del día (B-18). */}
+        <div className="rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--muted))] p-3">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-[hsl(var(--muted-foreground))]">Egresos de hoy</p>
+          <p className="mt-1 text-sm font-bold text-[hsl(var(--foreground))]" data-testid="egresos-dia">{formatMoney(monto(resumenDiario.total_egresos) ?? 0)}</p>
+        </div>
+        <div className="rounded-lg border border-[hsl(var(--primary)/0.3)] bg-[hsl(var(--primary)/0.08)] p-3">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-[hsl(var(--muted-foreground))]">Efectivo esperado</p>
+          <p className="mt-1 text-sm font-bold text-[hsl(var(--foreground))]" data-testid="efectivo-esperado-dia">{monto(resumenDiario.efectivo_esperado) === null ? '—' : formatMoney(monto(resumenDiario.efectivo_esperado))}</p>
+        </div>
+        <div className={cn('rounded-lg border p-3', (monto(resumenDiario.diferencia_total) ?? 0) < 0 ? 'border-red-200 bg-red-50 dark:border-red-800/50 dark:bg-red-950/30' : 'border-[hsl(var(--border))] bg-[hsl(var(--muted))]')}>
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-[hsl(var(--muted-foreground))]">Diferencia del día</p>
+          <p className="mt-1 text-sm font-bold text-[hsl(var(--foreground))]" data-testid="diferencia-dia">{textoDiferencia(resumenDiario.diferencia_total) ?? 'Sin arqueo'}</p>
+        </div>
+      </div>
+      {turnosDelDia === 0 ? (
+        <p className="mt-3 text-xs text-[hsl(var(--muted-foreground))]">Todavía no se abrió ningún turno de caja hoy en este local.</p>
+      ) : (
+        <div className="mt-4">
+          <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-[hsl(var(--muted-foreground))]">
+            Detalle por caja física
+          </p>
+          <AmTable
+            headers={['Caja física', 'Turnos', 'Apertura', 'Ingresos', 'Egresos', 'Efectivo esperado', 'Diferencia']}
+            rowKeys={porCajaFisica.map((cf) => cf.caja_fisica_id)}
+            rows={porCajaFisica.map((cf) => {
+              const turnos = safeArray(cf.cajas)
+              const abiertos = turnos.filter((t) => t.status === 'open').length
+              return [
+                cf.nombre || 'Caja física sin nombre',
+                `${turnos.length}${abiertos ? ` · ${abiertos} abierto${abiertos !== 1 ? 's' : ''}` : ''}`,
+                formatMoney(Number(cf.monto_apertura_total)),
+                formatMoney(Number(cf.total_ingresos)),
+                formatMoney(monto(cf.total_egresos) ?? 0),
+                monto(cf.efectivo_esperado) === null ? '—' : formatMoney(monto(cf.efectivo_esperado)),
+                textoDiferencia(cf.diferencia_total) ?? 'Sin arqueo',
+              ]
+            })}
+            emptyMessage="Sin cajas físicas con movimiento hoy."
+          />
+          <p className="mb-2 mt-4 text-[10px] font-semibold uppercase tracking-wide text-[hsl(var(--muted-foreground))]">
+            Detalle por turno
+          </p>
+          <ul aria-label="Turnos del día" className="flex flex-col gap-1.5">
+            {porCajaFisica.flatMap((cf) => safeArray(cf.cajas).map((t) => {
+              const dif = monto(t.diferencia)
+              const conDiferencia = dif !== null && dif !== 0
+              return (
+                <li key={t.caja_id} data-diferencia={conDiferencia ? 'si' : 'no'}
+                  className={cn('grid grid-cols-2 gap-x-3 gap-y-0.5 rounded-lg border px-3 py-2 text-xs sm:grid-cols-6',
+                    conDiferencia ? 'border-red-300 bg-red-50 dark:border-red-800/60 dark:bg-red-950/30' : 'border-[hsl(var(--border))]')}>
+                  <span className="font-semibold text-[hsl(var(--foreground))] sm:col-span-2">
+                    {cf.nombre || 'Caja física'} · {nombreDeVendedor(usuariosPorId, t.cashier_user_id)}
+                  </span>
+                  <span>{t.status === 'open' ? 'Abierto' : 'Cerrado'}</span>
+                  <span>Egresos {formatMoney(monto(t.total_egresos) ?? 0)}</span>
+                  <span>Esperado {monto(t.efectivo_esperado) === null ? '—' : formatMoney(monto(t.efectivo_esperado))}</span>
+                  <span className={conDiferencia && dif < 0 ? 'font-semibold text-red-600' : ''}>
+                    {t.status === 'open' ? 'Sin cerrar'
+                      : monto(t.monto_cierre_declarado) === null ? 'Sin arqueo'
+                        : `Contado ${formatMoney(monto(t.monto_cierre_declarado))} · ${textoDiferencia(t.diferencia)}`}
+                  </span>
+                </li>
+              )
+            }))}
+          </ul>
+        </div>
+      )}
+    </Panel>
+  )
+}
+
+/**
+ * Las partes de una sección (Hoy, Historial…): en vez de apilar todos los
+ * paneles, se elige uno de estos botones y se ve solo lo suyo.
+ */
+function PartesDeSeccion({ etiqueta, partes, activa, onCambiar }) {
+  return (
+    <div role="tablist" aria-label={etiqueta} className="flex flex-wrap gap-2">
+      {partes.map((p) => {
+        const on = p.id === activa
+        return (
+          <button key={p.id} type="button" role="tab" aria-selected={on} onClick={() => onCambiar(p.id)}
+            className={cn('inline-flex min-h-10 items-center gap-2 rounded-full border px-4 text-sm transition-colors',
+              on
+                ? 'border-[hsl(var(--foreground))] bg-[hsl(var(--foreground))] font-bold text-[hsl(var(--background))] shadow-md'
+                : 'border-[hsl(var(--border))] bg-[hsl(var(--card))] font-medium text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]')}>
+            {p.label}
+            {p.extra && (
+              <span className={cn('rounded-full px-2 py-0.5 text-[11px] font-bold',
+                on ? 'bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))]' : 'bg-[hsl(var(--primary)/0.12)] text-[hsl(var(--foreground))]')}>
+                {p.extra}
+              </span>
+            )}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
+const PARTES_VENTAS = [
+  { id: 'hoy', label: 'Hoy' },
+  { id: 'semana', label: 'Últimos 7 días' },
+]
+
+/** El cuadre de las cajas de hoy, en Ventas: con la caja física mandando, por aperturas; si no, por turnos. */
+function ResumenDelDiaVentas({ cajasFisicas, resumenDiario, usuarios, puedeGestionarCaja, version }) {
+  if (isV2FeatureEnabled('cajaFisicaManda')) {
+    if (!puedeGestionarCaja) return null
+    return (
+      <Panel title="Resumen del día" sub="Todas las cajas que se abrieron hoy en este local: fondo, ventas, retiros, lo esperado y lo contado">
+        <ResumenDelDiaCajas cajasFisicas={safeArray(cajasFisicas)} version={version} />
+      </Panel>
+    )
+  }
+  return resumenDiario ? <ResumenDiarioTurnos resumenDiario={resumenDiario} usuarios={usuarios} /> : null
+}
+
 const DETALLE_ORDENES_POR_PAGINA = 50
-function VentasContent({ indicadores, orders, ordersTotal, ordersOffset = 0, ordersLimit = 50, loading, error, onCargarDetalle, detalleLoading, onVerBoleta }) {
+function VentasContent({ indicadores, orders, ordersTotal, ordersOffset = 0, ordersLimit = 50, loading, error, onCargarDetalle, detalleLoading, onVerBoleta, cajasFisicas, resumenDiario, usuarios, puedeGestionarCaja = false, version = 0 }) {
+  const [parte, setParte] = useState('hoy')
   const pageOrders = safeArray(orders)
   const detalleCargado = orders !== null && orders !== undefined
   const total = Number.isFinite(ordersTotal) ? ordersTotal : 0
@@ -325,27 +467,39 @@ function VentasContent({ indicadores, orders, ordersTotal, ordersOffset = 0, ord
 
   return (
     <div className="space-y-5">
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <KpiCard label="Total Hoy" value={formatMoney(hoy.total)} sub={`${hoy.ordenes} venta${hoy.ordenes !== 1 ? 's' : ''}`} accent="amber" />
-        <KpiCard label="Efectivo" value={formatMoney(porMetodo.efectivo)} accent="green" />
-        <KpiCard label="Tarjetas" value={formatMoney(porMetodo.tarjetas)} accent="blue" />
-        <KpiCard label="Otros" value={formatMoney(porMetodo.otros)} accent="violet" />
-      </div>
-      <div className="grid gap-5 lg:grid-cols-2">
-        <Panel title="Tendencia de Ventas" sub="Ingresos diarios de los últimos 7 días">
-          <IncomeChart data={incomeTrend} />
-        </Panel>
-        <Panel title="Top Productos" sub="Por ingresos, últimos 7 días">
-          <AmTable
-            headers={['Producto', 'Unidades', 'Ingresos']}
-            rowKeys={topProducts.slice(0, 8).map((p) => p.product_id ?? p.product_name)}
-            rows={topProducts.slice(0, 8).map((p) => [p.product_name || 'Producto sin nombre', toNumber(p.units_sold), formatMoney(p.revenue)])}
-            emptyMessage="No hay productos para mostrar."
-          />
-        </Panel>
-      </div>
+      <PartesDeSeccion etiqueta="Partes de Ventas" activa={parte} onCambiar={setParte}
+        partes={PARTES_VENTAS.map((p) => (p.id === 'hoy' ? { ...p, extra: formatMoney(hoy.total) } : p))} />
 
-      {!detalleCargado && (
+      {parte === 'semana' && (
+        <div className="grid gap-5 lg:grid-cols-2">
+          <Panel title="Tendencia de Ventas" sub="Ingresos diarios de los últimos 7 días">
+            <IncomeChart data={incomeTrend} />
+          </Panel>
+          <Panel title="Top Productos" sub="Por ingresos, últimos 7 días">
+            <AmTable
+              headers={['Producto', 'Unidades', 'Ingresos']}
+              rowKeys={topProducts.slice(0, 8).map((p) => p.product_id ?? p.product_name)}
+              rows={topProducts.slice(0, 8).map((p) => [p.product_name || 'Producto sin nombre', toNumber(p.units_sold), formatMoney(p.revenue)])}
+              emptyMessage="No hay productos para mostrar."
+            />
+          </Panel>
+        </div>
+      )}
+
+      {parte === 'hoy' && (
+        <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+          <KpiCard label="Total Hoy" value={formatMoney(hoy.total)} sub={`${hoy.ordenes} venta${hoy.ordenes !== 1 ? 's' : ''}`} accent="amber" />
+          <KpiCard label="Efectivo" value={formatMoney(porMetodo.efectivo)} accent="green" />
+          <KpiCard label="Tarjetas" value={formatMoney(porMetodo.tarjetas)} accent="blue" />
+          <KpiCard label="Otros" value={formatMoney(porMetodo.otros)} accent="violet" />
+        </div>
+      )}
+
+      {parte === 'hoy' && (
+        <ResumenDelDiaVentas cajasFisicas={cajasFisicas} resumenDiario={resumenDiario} usuarios={usuarios} puedeGestionarCaja={puedeGestionarCaja} version={version} />
+      )}
+
+      {parte === 'hoy' && !detalleCargado && (
         <Panel title="Detalle de órdenes" sub="Consulta paginada de órdenes del local">
           <p className="text-sm text-[hsl(var(--muted-foreground))]">
             El detalle se carga por páginas y muestra el total informado por el servidor.
@@ -356,7 +510,7 @@ function VentasContent({ indicadores, orders, ordersTotal, ordersOffset = 0, ord
         </Panel>
       )}
 
-      {detalleCargado && (
+      {parte === 'hoy' && detalleCargado && (
         <Panel title="Detalle de órdenes" sub="Órdenes filtradas y paginadas por el servidor">
           <p className="mb-3 text-sm text-[hsl(var(--muted-foreground))]">
             Mostrando {firstOrder}–{lastOrder} de {total} órdenes.
@@ -411,21 +565,27 @@ const MP_PAIRING_ACTION = {
   paired:           'Ver vinculación',
 }
 
-function FlujoCajaContent({ localId, localNombre = '', cierra = '', usuarioActual = null, puedeGestionarCaja = false, onRefresh, version = 0, dashboard, cajas, cajasFisicas, usuarios, resumenDiario, loading, error, onManagePairing, onViewMovimientos, onGestionarCajaFisica }) {
+const PARTES_CAJA = [
+  { id: 'hoy', label: 'Hoy' },
+  { id: 'historial', label: 'Historial' },
+  { id: 'cajas', label: 'Cajas y máquinas' },
+]
+
+function FlujoCajaContent({ localId, localNombre = '', cierra = '', usuarioActual = null, puedeGestionarCaja = false, onRefresh, version = 0, dashboard, cajas, cajasFisicas, usuarios, loading, error, onManagePairing, onViewMovimientos, onGestionarCajaFisica }) {
   const cajaFisicaManda = isV2FeatureEnabled('cajaFisicaManda')
   // Quién abrió o cerró una caja: su nombre, no su correo.
   const nombreDe = useMemo(() => crearNombreDe(usuarios, usuarioActual), [usuarios, usuarioActual])
   const [filtroVendedor, setFiltroVendedor] = useState('')
   const [filtroFecha, setFiltroFecha] = useState('')
+  // Con la caja física mandando, quien la gestiona ve la sección en partes: Hoy, Historial, Cajas y máquinas.
+  const [parte, setParte] = useState('hoy')
+  const conPartes = cajaFisicaManda && puedeGestionarCaja
+  const ver = (id) => !conPartes || parte === id
   const cajasList = safeArray(cajas)
   const usuariosPorId = useMemo(() => new Map(safeArray(usuarios).map((u) => [String(u.id), u])), [usuarios])
   const cajasFisicasList = safeArray(cajasFisicas)
-  // El backend entrega los turnos del día anidados dentro de cada caja física
-  // (`por_caja_fisica[].cajas`), no en un arreglo de primer nivel.
   // Si la consulta del estado MP falló, las filas lo traen marcado.
   const estadoMpDisponible = cajasFisicasList.every((cf) => cf.mpDisponible !== false)
-  const porCajaFisica = safeArray(resumenDiario?.por_caja_fisica)
-  const turnosDelDia = porCajaFisica.reduce((n, cf) => n + safeArray(cf.cajas).length, 0)
   // Para decir en la tabla sobre qué caja física se abrió cada turno.
   const nombrePorCajaFisica = new Map(cajasFisicasList.map((cf) => [String(cf.id), cf.name]))
   const showMpPairing = typeof onManagePairing === 'function'
@@ -436,12 +596,31 @@ function FlujoCajaContent({ localId, localNombre = '', cierra = '', usuarioActua
   // Una recarga (al abrir o cerrar una caja) no desmonta los paneles: si no, se pierden sus mensajes.
   if (error || !dashboard) return stateNode
 
-  const openCajasCount = cajasList.filter((c) => c.is_active).length
+  const turnosAbiertos = cajasList.filter((c) => c.is_active)
+  const openCajasCount = turnosAbiertos.length
+  const cajasActivas = cajasFisicasList.filter((cf) => cf.is_active !== false)
+  const cajasAbiertasCount = cajasActivas.filter((cf) => cf.abierta).length
+  // Cuántos turnos abiertos hay en cada caja física, para las tarjetas de «Hoy».
+  const turnosPorCaja = turnosAbiertos.reduce((m, t) => m.set(String(t.caja_fisica_id), (m.get(String(t.caja_fisica_id)) || 0) + 1), new Map())
+  const verTurno = showMovimientos ? (c) => onViewMovimientos({
+    ...c,
+    vendedor: nombreDeVendedor(usuariosPorId, c.cashier_user_id),
+    cerradoPor: c.closed_by_user_id ? nombreDeVendedor(usuariosPorId, c.closed_by_user_id) : null,
+    nombreDeUsuario: (id) => nombreDeVendedor(usuariosPorId, id),
+    usuarios: safeArray(usuarios),
+    // Si el rol no lista las cajas físicas, igual viaja el id: el cierre sabe de cuál es el turno.
+    cajaFisica: cajasFisicasList.find((cf) => String(cf.id) === String(c.caja_fisica_id)) ?? { id: c.caja_fisica_id },
+  }) : undefined
 
   return (
     <div className="space-y-5">
+      {conPartes && (
+        <PartesDeSeccion etiqueta="Partes de Caja y turnos" activa={parte} onCambiar={setParte}
+          partes={PARTES_CAJA.map((p) => (p.id === 'hoy' && cajasActivas.length > 0
+            ? { ...p, extra: `${cajasAbiertasCount} abierta${cajasAbiertasCount !== 1 ? 's' : ''}` } : p))} />
+      )}
       {/* «Caja» significaba dos cosas en esta pantalla: se aclara en una línea. */}
-      {cajaFisicaManda ? (
+      {ver('hoy') && (cajaFisicaManda ? (
         <p className="text-xs text-[hsl(var(--muted-foreground))]">
           <span className="font-semibold text-[hsl(var(--foreground))]">Caja física:</span> el encargado o el dueño la abre y la cierra, contando el efectivo.{' '}
           <span className="font-semibold text-[hsl(var(--foreground))]">Turno:</span> el de cada empleado sobre una caja abierta; no lleva plata y se cierra con la caja.
@@ -451,113 +630,40 @@ function FlujoCajaContent({ localId, localNombre = '', cierra = '', usuarioActua
           <span className="font-semibold text-[hsl(var(--foreground))]">Turno de caja:</span> se abre y se cierra cada día, con su arqueo.{' '}
           <span className="font-semibold text-[hsl(var(--foreground))]">Caja física:</span> el puesto donde está la terminal; es permanente.
         </p>
+      ))}
+      {ver('hoy') && (
+        <div className={cn('grid grid-cols-2 gap-4', conPartes && 'lg:grid-cols-3')}>
+          {conPartes && (
+            <KpiCard label="Cajas abiertas" value={`${cajasAbiertasCount} de ${cajasActivas.length}`}
+              sub={cajasActivas.length - cajasAbiertasCount > 0 ? `${cajasActivas.length - cajasAbiertasCount} por abrir` : 'Todas abiertas'} accent="green" />
+          )}
+          <KpiCard label="Turnos Abiertos"  value={String(openCajasCount)} sub={`De ${cajasList.length} registrado${cajasList.length !== 1 ? 's' : ''}`} accent="blue" />
+          <KpiCard label="Ingresos del Mes" value={formatMoney(dashboard?.monthly_sales)} sub="Mes actual" accent="amber" />
+        </div>
       )}
-      {cajaFisicaManda && puedeGestionarCaja && (
+      {conPartes && parte === 'hoy' && (
         <Panel title="La caja del día" sub="Abrir y cerrar cada caja física, con su conteo; retiros e ingresos del cajón">
           <AperturaCierreCajas cajasFisicas={cajasFisicasList} localNombre={localNombre} cierra={cierra} puedeGestionar={puedeGestionarCaja} onCambio={onRefresh}
-            nombreDe={nombreDe} />
+            nombreDe={nombreDe} turnosPorCaja={turnosPorCaja} />
         </Panel>
       )}
-      <div className="grid grid-cols-2 gap-4">
-        <KpiCard label="Ingresos del Mes" value={formatMoney(dashboard?.monthly_sales)} sub="Mes actual" accent="amber" />
-        <KpiCard label="Turnos Abiertos"  value={String(openCajasCount)} sub={`De ${cajasList.length} registrado${cajasList.length !== 1 ? 's' : ''}`} accent="blue" />
-      </div>
-      {/* #133: con la caja física mandando, el día se arma con las aperturas de hoy (el resumen por turnos ya no aplica). */}
-      {cajaFisicaManda && puedeGestionarCaja && (
-        <Panel title="Resumen del día" sub="Todas las cajas que se abrieron hoy en este local: fondo, ventas, retiros, lo esperado y lo contado">
-          <ResumenDelDiaCajas cajasFisicas={cajasFisicasList} version={version} />
+      {conPartes && parte === 'hoy' && (
+        <Panel title="Quién está trabajando" sub="Los turnos abiertos ahora: cada uno se cierra junto con su caja">
+          <TablaTurnos
+            turnos={turnosAbiertos}
+            cajaFisicaDe={(c) => nombrePorCajaFisica.get(String(c.caja_fisica_id))}
+            vendedorDe={(c) => nombreDeVendedor(usuariosPorId, c.cashier_user_id)}
+            onVer={verTurno}
+            vacio="Nadie está en turno ahora."
+          />
         </Panel>
       )}
-      {!cajaFisicaManda && resumenDiario && (
-        <Panel title="Resumen del día" sub={`Consolidado de todos los turnos del local · ${formatBusinessDate(resumenDiario.business_date)}`}>
-          <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
-            <div className="rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--muted))] p-3">
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-[hsl(var(--muted-foreground))]">Apertura total</p>
-              <p className="mt-1 text-sm font-bold text-[hsl(var(--foreground))]">{formatMoney(Number(resumenDiario.monto_apertura_total))}</p>
-            </div>
-            <div className="rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--muted))] p-3">
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-[hsl(var(--muted-foreground))]">Ingresos de hoy</p>
-              <p className="mt-1 text-sm font-bold text-[hsl(var(--foreground))]">{formatMoney(Number(resumenDiario.total_ingresos))}</p>
-            </div>
-            <div className="rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--muted))] p-3">
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-[hsl(var(--muted-foreground))]">Total esperado hoy</p>
-              <p className="mt-1 text-sm font-bold text-[hsl(var(--foreground))]">{formatMoney(Number(resumenDiario.total_esperado))}</p>
-            </div>
-            {/* T-63: retiros, efectivo esperado y diferencias del día (B-18). */}
-            <div className="rounded-lg border border-[hsl(var(--border))] bg-[hsl(var(--muted))] p-3">
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-[hsl(var(--muted-foreground))]">Egresos de hoy</p>
-              <p className="mt-1 text-sm font-bold text-[hsl(var(--foreground))]" data-testid="egresos-dia">{formatMoney(monto(resumenDiario.total_egresos) ?? 0)}</p>
-            </div>
-            <div className="rounded-lg border border-[hsl(var(--primary)/0.3)] bg-[hsl(var(--primary)/0.08)] p-3">
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-[hsl(var(--muted-foreground))]">Efectivo esperado</p>
-              <p className="mt-1 text-sm font-bold text-[hsl(var(--foreground))]" data-testid="efectivo-esperado-dia">{monto(resumenDiario.efectivo_esperado) === null ? '—' : formatMoney(monto(resumenDiario.efectivo_esperado))}</p>
-            </div>
-            <div className={cn('rounded-lg border p-3', (monto(resumenDiario.diferencia_total) ?? 0) < 0 ? 'border-red-200 bg-red-50 dark:border-red-800/50 dark:bg-red-950/30' : 'border-[hsl(var(--border))] bg-[hsl(var(--muted))]')}>
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-[hsl(var(--muted-foreground))]">Diferencia del día</p>
-              <p className="mt-1 text-sm font-bold text-[hsl(var(--foreground))]" data-testid="diferencia-dia">{textoDiferencia(resumenDiario.diferencia_total) ?? 'Sin arqueo'}</p>
-            </div>
-          </div>
-          {turnosDelDia === 0 ? (
-            <p className="mt-3 text-xs text-[hsl(var(--muted-foreground))]">Todavía no se abrió ningún turno de caja hoy en este local.</p>
-          ) : (
-            <div className="mt-4">
-              <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-[hsl(var(--muted-foreground))]">
-                Detalle por caja física
-              </p>
-              <AmTable
-                headers={['Caja física', 'Turnos', 'Apertura', 'Ingresos', 'Egresos', 'Efectivo esperado', 'Diferencia']}
-                rowKeys={porCajaFisica.map((cf) => cf.caja_fisica_id)}
-                rows={porCajaFisica.map((cf) => {
-                  const turnos = safeArray(cf.cajas)
-                  const abiertos = turnos.filter((t) => t.status === 'open').length
-                  return [
-                    cf.nombre || 'Caja física sin nombre',
-                    `${turnos.length}${abiertos ? ` · ${abiertos} abierto${abiertos !== 1 ? 's' : ''}` : ''}`,
-                    formatMoney(Number(cf.monto_apertura_total)),
-                    formatMoney(Number(cf.total_ingresos)),
-                    formatMoney(monto(cf.total_egresos) ?? 0),
-                    monto(cf.efectivo_esperado) === null ? '—' : formatMoney(monto(cf.efectivo_esperado)),
-                    textoDiferencia(cf.diferencia_total) ?? 'Sin arqueo',
-                  ]
-                })}
-                emptyMessage="Sin cajas físicas con movimiento hoy."
-              />
-              <p className="mb-2 mt-4 text-[10px] font-semibold uppercase tracking-wide text-[hsl(var(--muted-foreground))]">
-                Detalle por turno
-              </p>
-              <ul aria-label="Turnos del día" className="flex flex-col gap-1.5">
-                {porCajaFisica.flatMap((cf) => safeArray(cf.cajas).map((t) => {
-                  const dif = monto(t.diferencia)
-                  const conDiferencia = dif !== null && dif !== 0
-                  return (
-                    <li key={t.caja_id} data-diferencia={conDiferencia ? 'si' : 'no'}
-                      className={cn('grid grid-cols-2 gap-x-3 gap-y-0.5 rounded-lg border px-3 py-2 text-xs sm:grid-cols-6',
-                        conDiferencia ? 'border-red-300 bg-red-50 dark:border-red-800/60 dark:bg-red-950/30' : 'border-[hsl(var(--border))]')}>
-                      <span className="font-semibold text-[hsl(var(--foreground))] sm:col-span-2">
-                        {cf.nombre || 'Caja física'} · {nombreDeVendedor(usuariosPorId, t.cashier_user_id)}
-                      </span>
-                      <span>{t.status === 'open' ? 'Abierto' : 'Cerrado'}</span>
-                      <span>Egresos {formatMoney(monto(t.total_egresos) ?? 0)}</span>
-                      <span>Esperado {monto(t.efectivo_esperado) === null ? '—' : formatMoney(monto(t.efectivo_esperado))}</span>
-                      <span className={conDiferencia && dif < 0 ? 'font-semibold text-red-600' : ''}>
-                        {t.status === 'open' ? 'Sin cerrar'
-                          : monto(t.monto_cierre_declarado) === null ? 'Sin arqueo'
-                            : `Contado ${formatMoney(monto(t.monto_cierre_declarado))} · ${textoDiferencia(t.diferencia)}`}
-                      </span>
-                    </li>
-                  )
-                }))}
-              </ul>
-            </div>
-          )}
-        </Panel>
-      )}
-      {cajaFisicaManda && puedeGestionarCaja && (
+      {conPartes && parte === 'historial' && (
         <Panel title="Apertura de caja" sub="Cada vez que se abrió y se cerró una caja: el fondo, quién la abrió y la cerró, lo contado y los turnos que se trabajaron">
           <RegistroAperturas cajasFisicas={cajasFisicasList} version={version} nombreDe={nombreDe} />
         </Panel>
       )}
-      <Panel title="Turnos de caja" sub={cajaFisicaManda
+      {ver('historial') && <Panel title="Turnos de caja" sub={cajaFisicaManda
         ? 'Los turnos de cada empleado sobre una caja abierta: cuándo empezaron y terminaron y cuánto vendieron. Abrir una caja no crea un turno'
         : 'Los turnos de cada vendedor: cuándo abrieron y cerraron y cuánto vendieron'}>
         <div className="flex flex-col gap-4">
@@ -574,20 +680,12 @@ function FlujoCajaContent({ localId, localNombre = '', cierra = '', usuarioActua
             turnos={filtrados.turnos}
             cajaFisicaDe={(c) => nombrePorCajaFisica.get(String(c.caja_fisica_id))}
             vendedorDe={(c) => nombreDeVendedor(usuariosPorId, c.cashier_user_id)}
-            onVer={showMovimientos ? (c) => onViewMovimientos({
-              ...c,
-              vendedor: nombreDeVendedor(usuariosPorId, c.cashier_user_id),
-              cerradoPor: c.closed_by_user_id ? nombreDeVendedor(usuariosPorId, c.closed_by_user_id) : null,
-              nombreDeUsuario: (id) => nombreDeVendedor(usuariosPorId, id),
-              usuarios: safeArray(usuarios),
-              // Si el rol no lista las cajas físicas, igual viaja el id: el cierre sabe de cuál es el turno.
-              cajaFisica: cajasFisicasList.find((cf) => String(cf.id) === String(c.caja_fisica_id)) ?? { id: c.caja_fisica_id },
-            }) : undefined}
+            onVer={verTurno}
             vacio={filtrados.cargando ? 'Buscando turnos…' : filtroVendedor || filtroFecha ? 'No hay turnos con esos filtros.' : 'Este local todavía no tiene turnos de caja.'}
           />
         </div>
-      </Panel>
-      {showMpPairing && (
+      </Panel>}
+      {showMpPairing && ver('cajas') && (
         <Panel
           title="Cajas físicas"
           action={onGestionarCajaFisica && (
@@ -653,7 +751,7 @@ function FlujoCajaContent({ localId, localNombre = '', cierra = '', usuarioActua
           />
         </Panel>
       )}
-      {cajaFisicaManda && puedeGestionarCaja && (
+      {conPartes && parte === 'cajas' && (
         <Panel title="Máquinas POS" sub="Toda máquina pertenece a una caja física: quien la usa queda en esa caja y ahí busca el vuelto">
           <MaquinasDeLasCajas localId={localId} cajasFisicas={cajasFisicasList} puedeGestionar={puedeGestionarCaja} />
         </Panel>
@@ -1131,7 +1229,7 @@ function CajaMovimientosModal({ caja, onClose, onClosed, puedeRegistrarMovimient
 function renderSectionContent(activeSection, payload) {
   switch (activeSection) {
     case 'flujo-caja':
-      return <FlujoCajaContent localId={payload.localId} version={payload.version} usuarioActual={payload.usuarioActual} localNombre={payload.localNombre} cierra={payload.cierra} puedeGestionarCaja={payload.puedeGestionarCaja} onRefresh={payload.onRefresh} dashboard={payload.dashboard} cajas={payload.cajas} cajasFisicas={payload.cajasFisicas} usuarios={payload.usuarios} resumenDiario={payload.resumenDiario} loading={payload.loading} error={payload.error} onManagePairing={payload.onManagePairing} onViewMovimientos={payload.onViewMovimientos} onGestionarCajaFisica={payload.onGestionarCajaFisica} />
+      return <FlujoCajaContent localId={payload.localId} version={payload.version} usuarioActual={payload.usuarioActual} localNombre={payload.localNombre} cierra={payload.cierra} puedeGestionarCaja={payload.puedeGestionarCaja} onRefresh={payload.onRefresh} dashboard={payload.dashboard} cajas={payload.cajas} cajasFisicas={payload.cajasFisicas} usuarios={payload.usuarios} loading={payload.loading} error={payload.error} onManagePairing={payload.onManagePairing} onViewMovimientos={payload.onViewMovimientos} onGestionarCajaFisica={payload.onGestionarCajaFisica} />
     case 'fondo-emergencia':
       return <FondoEmergencia localId={payload.localId} />
     case 'no-cobradas':
@@ -1140,7 +1238,8 @@ function renderSectionContent(activeSection, payload) {
       return <ConfiguracionContent localId={payload.localId} />
     case 'ventas':
     default:
-      return <VentasContent indicadores={payload.indicadores} orders={payload.orders} ordersTotal={payload.ordersTotal} ordersOffset={payload.ordersOffset} ordersLimit={payload.ordersLimit} loading={payload.loading} error={payload.error} onCargarDetalle={payload.onCargarDetalle} detalleLoading={payload.detalleLoading} onVerBoleta={payload.onVerBoleta} />
+      return <VentasContent indicadores={payload.indicadores} orders={payload.orders} ordersTotal={payload.ordersTotal} ordersOffset={payload.ordersOffset} ordersLimit={payload.ordersLimit} loading={payload.loading} error={payload.error} onCargarDetalle={payload.onCargarDetalle} detalleLoading={payload.detalleLoading} onVerBoleta={payload.onVerBoleta}
+        cajasFisicas={payload.cajasFisicas} resumenDiario={payload.resumenDiario} usuarios={payload.usuarios} puedeGestionarCaja={payload.puedeGestionarCaja} version={payload.version} />
   }
 }
 
@@ -1207,24 +1306,33 @@ function AdministrativeModule() {
         if (activeSection === 'ventas') {
           // Indicadores agregados por el backend. El detalle orden por orden se
           // pide aparte, solo si el usuario lo abre.
-          updates.indicadores = await getVentasIndicadores(localId)
+          // El resumen del día también vive aquí: con la caja física mandando se
+          // arma con las cajas físicas; si no, con el resumen por turnos.
+          const cajaFisicaManda = isV2FeatureEnabled('cajaFisicaManda')
+          const [indicadores, cajasFisicasData, resumenDiarioData, usuariosData] = await Promise.all([
+            getVentasIndicadores(localId),
+            cajaFisicaManda && puedeGestionarCajasFisicas ? getCajasFisicasByLocal(localId).catch(() => []) : [],
+            // 403 para EMPLEADO (el arqueo consolidado es supervisorio): no tumba la sección.
+            cajaFisicaManda ? null : getResumenDiario(localId).catch(() => null),
+            cajaFisicaManda ? [] : listUsers().catch(() => []),
+          ])
+          updates.indicadores = indicadores
+          updates.cajasFisicas = cajasFisicasData
+          updates.resumenDiario = resumenDiarioData
+          updates.usuarios = usuariosData
         }
         if (activeSection === 'flujo-caja') {
-          const [cajasData, cajasFisicasData, resumenDiarioData, usuariosData] = await Promise.all([
+          const [cajasData, cajasFisicasData, usuariosData] = await Promise.all([
             getCajasByLocal(localId, token),
             // Solo ADMIN y superiores gestionan cajas físicas: para el resto no
             // se pide nada, porque el panel no se muestra.
             puedeGestionarCajasFisicas ? getCajasFisicasByLocal(localId).catch(() => []) : [],
-            // 403 para EMPLEADO (arqueo consolidado es supervisorio) -- no
-            // debe tumbar el resto de la sección si ocurre.
-            getResumenDiario(localId).catch(() => null),
             // Nombres para la columna y el filtro "Vendedor". Sin ellos, la
             // tabla igual distingue a cada uno por un id corto.
             listUsers().catch(() => []),
           ])
           updates.cajas = cajasData
           updates.cajasFisicas = cajasFisicasData
-          updates.resumenDiario = resumenDiarioData
           updates.usuarios = usuariosData
         }
         if (!ignore) setSectionData((prev) => ({ ...prev, ...updates }))
@@ -1318,8 +1426,8 @@ function AdministrativeModule() {
               </div>
               <div className="px-5 py-4 space-y-3">
                 {[
-                  { icon: ShoppingCart, color: 'text-emerald-600', title: 'Ventas', desc: 'Ventas de las últimas 24 horas por método de pago, tendencia de los últimos 7 días, productos más vendidos e histórico consolidado por semana, mes o año.' },
-                  { icon: CreditCard, color: 'text-amber-600', title: 'Caja y turnos', desc: 'Turnos de caja: resumen del día, movimientos de cada turno y cierre del arqueo diario. Y las cajas físicas del local, el puesto permanente al que se vincula la terminal MercadoPago.' },
+                  { icon: ShoppingCart, color: 'text-emerald-600', title: 'Ventas', desc: 'En «Hoy»: ventas de las últimas 24 horas por método de pago, el resumen del día de las cajas y el detalle de órdenes con su boleta. En «Últimos 7 días»: la tendencia y los productos más vendidos.' },
+                  { icon: CreditCard, color: 'text-amber-600', title: 'Caja y turnos', desc: isV2FeatureEnabled('cajaFisicaManda') ? 'En «Hoy»: abrir y cerrar cada caja contando el efectivo, retiros e ingresos, y quién está en turno. En «Historial»: cada apertura y cierre, y los turnos. En «Cajas y máquinas»: las cajas físicas, su Mercado Pago y en qué caja va cada máquina.' : 'Turnos de caja: movimientos de cada turno y cierre del arqueo diario. Y las cajas físicas del local, el puesto permanente al que se vincula la terminal MercadoPago. El resumen del día está en Ventas.' },
                   ...(isV2FeatureEnabled('fondoEmergencia') ? [{ icon: LifeBuoy, color: 'text-rose-600', title: 'Fondo de emergencia', desc: 'Plata apartada para imprevistos del local: un monto fijo, su saldo, cada gasto con su motivo y las reposiciones, semana a semana. Un gasto mal anotado se corrige, no se borra. No forma parte del arqueo de los turnos de caja.' }] : []),
                 ].map(({ icon: Icon, color, title, desc, highlight }) => (
                   <div key={title} className={`flex gap-3 rounded-xl p-3 ${highlight ? 'bg-[hsl(var(--primary)/0.08)] border border-[hsl(var(--primary)/0.2)]' : 'bg-[hsl(var(--muted)/0.4)]'}`}>
@@ -1336,22 +1444,25 @@ function AdministrativeModule() {
         )}
       </AnimatePresence>
       <main className="flex-1 overflow-y-auto no-scrollbar px-5 py-6">
-        <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        {/* Encabezado de la sección: oscuro en los dos temas, con el ámbar de la marca. */}
+        <div className="mb-6 flex flex-col gap-4 rounded-2xl bg-gradient-to-br from-[#0D0D1F] via-[#22223B] to-[#4A3410] px-5 py-5 text-white shadow-lg sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h2 className="text-base font-bold text-[hsl(var(--primary))] tracking-tight">
+            <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-[hsl(var(--primary))]">Administración</p>
+            <h2 className="font-marca text-2xl font-bold tracking-tight">
               {activeSectionMeta.label}
             </h2>
-            <p className="mt-0.5 text-sm text-[hsl(var(--muted-foreground))]">{activeSectionMeta.subtitle}</p>
+            <p className="mt-0.5 text-sm text-white/75">{activeSectionMeta.subtitle}</p>
           </div>
-          <div className="flex flex-col items-end gap-1.5">
+          <div className="flex flex-col items-start gap-2 sm:items-end">
             <SectionActions
               activeSection={activeSection}
               onNuevaCaja={() => setShowNuevaCaja(true)}
               puedeAbrirTurno={puedeAbrirTurno}
             />
             <button
+              type="button"
               onClick={() => setGuideOpen(true)}
-              className="flex items-center gap-1.5 text-xs text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--primary))] transition-colors"
+              className="flex min-h-9 items-center gap-1.5 rounded-lg border border-white/25 bg-white/10 px-3 text-xs font-semibold text-white transition-colors hover:bg-white/20"
             >
               <HelpCircle size={13} />
               <span>¿Cómo funciona este módulo?</span>
