@@ -129,14 +129,6 @@ function getOrderAmount(order) {
 // ── Shared UI atoms ────────────────────────────────────────────
 
 const KPI_ACCENT = {
-  // El color de la marca: para el número principal de la pantalla.
-  amber: {
-    bar:   'border-l-[hsl(var(--primary))]',
-    bg:    'bg-[hsl(var(--primary)/0.1)] dark:bg-[hsl(var(--primary)/0.14)]',
-    ring:  'ring-1 ring-[hsl(var(--primary)/0.3)]',
-    value: 'text-[hsl(38,100%,27%)] dark:text-[hsl(38,90%,70%)]',
-    dot:   'bg-[hsl(var(--primary))]',
-  },
   warning: {
     bar:   'border-l-[hsl(var(--warning))]',
     bg:    'bg-[hsl(var(--warning)/0.1)] dark:bg-[hsl(var(--warning)/0.15)]',
@@ -151,20 +143,35 @@ const KPI_ACCENT = {
     value: 'text-[hsl(354,70%,36%)] dark:text-[hsl(354,75%,72%)]',
     dot:   'bg-[hsl(var(--destructive))]',
   },
-  // Sin color de marca propio — tratado como neutro/informativo, no como alerta ni dato positivo.
-  blue: {
-    bar:   'border-l-[hsl(var(--info-foreground))]',
-    bg:    'bg-[hsl(var(--info))]',
-    ring:  'ring-1 ring-[hsl(var(--info-foreground)/0.2)]',
-    value: 'text-[hsl(var(--info-foreground))]',
-    dot:   'bg-[hsl(var(--info-foreground))]',
+  // Un color por medio de pago (#ventas): el total va en el ámbar de la marca, el efectivo
+  // en el esmeralda, las tarjetas en azul y los otros medios en violeta. Ninguno queda gris.
+  amber: {
+    bar:   'border-l-[hsl(var(--primary))]',
+    bg:    'bg-[hsl(var(--primary)/0.12)] dark:bg-[hsl(var(--primary)/0.15)]',
+    ring:  'ring-1 ring-[hsl(var(--primary)/0.3)]',
+    value: 'text-[hsl(38,92%,25%)] dark:text-[hsl(38,90%,70%)]',
+    dot:   'bg-[hsl(var(--primary))]',
   },
-  purple: {
+  green: {
     bar:   'border-l-[hsl(var(--success))]',
     bg:    'bg-[hsl(var(--success)/0.1)] dark:bg-[hsl(var(--success)/0.15)]',
     ring:  'ring-1 ring-[hsl(var(--success)/0.3)]',
     value: 'text-[hsl(149,60%,28%)] dark:text-[hsl(149,50%,68%)]',
     dot:   'bg-[hsl(var(--success))]',
+  },
+  blue: {
+    bar:   'border-l-[hsl(211,70%,54%)]',
+    bg:    'bg-[hsla(211,70%,54%,0.1)] dark:bg-[hsla(211,70%,54%,0.18)]',
+    ring:  'ring-1 ring-[hsla(211,70%,54%,0.3)]',
+    value: 'text-[hsl(211,82%,27%)] dark:text-[hsl(211,80%,75%)]',
+    dot:   'bg-[hsl(211,70%,54%)]',
+  },
+  violet: {
+    bar:   'border-l-[hsl(245,58%,67%)]',
+    bg:    'bg-[hsla(245,58%,67%,0.12)] dark:bg-[hsla(245,58%,67%,0.2)]',
+    ring:  'ring-1 ring-[hsla(245,58%,67%,0.3)]',
+    value: 'text-[hsl(245,45%,37%)] dark:text-[hsl(245,70%,80%)]',
+    dot:   'bg-[hsl(245,58%,67%)]',
   },
 }
 
@@ -180,7 +187,7 @@ const KPI_DEFAULT = {
 function KpiCard({ label, value, sub, accent }) {
   const a = KPI_ACCENT[accent] || KPI_DEFAULT
   return (
-    <article className={cn('rounded-xl border-l-[5px] p-4 shadow-md', a.bar, a.bg, a.ring)}>
+    <article data-accent={KPI_ACCENT[accent] ? accent : 'neutro'} className={cn('rounded-xl border-l-[5px] p-4 shadow-md', a.bar, a.bg, a.ring)}>
       <div className="flex items-center gap-1.5 mb-1">
         <span className={cn('h-1.5 w-1.5 rounded-full shrink-0', a.dot)} />
         <p className="text-[10px] font-bold uppercase tracking-widest text-[hsl(var(--muted-foreground))]">{label}</p>
@@ -482,9 +489,9 @@ function VentasContent({ indicadores, orders, ordersTotal, ordersOffset = 0, ord
       {parte === 'hoy' && (
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
           <KpiCard label="Total Hoy" value={formatMoney(hoy.total)} sub={`${hoy.ordenes} venta${hoy.ordenes !== 1 ? 's' : ''}`} accent="amber" />
-          <KpiCard label="Efectivo" value={formatMoney(porMetodo.efectivo)} accent="purple" />
+          <KpiCard label="Efectivo" value={formatMoney(porMetodo.efectivo)} accent="green" />
           <KpiCard label="Tarjetas" value={formatMoney(porMetodo.tarjetas)} accent="blue" />
-          <KpiCard label="Otros" value={formatMoney(porMetodo.otros)} />
+          <KpiCard label="Otros" value={formatMoney(porMetodo.otros)} accent="violet" />
         </div>
       )}
 
@@ -628,7 +635,7 @@ function FlujoCajaContent({ localId, localNombre = '', cierra = '', usuarioActua
         <div className={cn('grid grid-cols-2 gap-4', conPartes && 'lg:grid-cols-3')}>
           {conPartes && (
             <KpiCard label="Cajas abiertas" value={`${cajasAbiertasCount} de ${cajasActivas.length}`}
-              sub={cajasActivas.length - cajasAbiertasCount > 0 ? `${cajasActivas.length - cajasAbiertasCount} por abrir` : 'Todas abiertas'} accent="purple" />
+              sub={cajasActivas.length - cajasAbiertasCount > 0 ? `${cajasActivas.length - cajasAbiertasCount} por abrir` : 'Todas abiertas'} accent="green" />
           )}
           <KpiCard label="Turnos Abiertos"  value={String(openCajasCount)} sub={`De ${cajasList.length} registrado${cajasList.length !== 1 ? 's' : ''}`} accent="blue" />
           <KpiCard label="Ingresos del Mes" value={formatMoney(dashboard?.monthly_sales)} sub="Mes actual" accent="amber" />

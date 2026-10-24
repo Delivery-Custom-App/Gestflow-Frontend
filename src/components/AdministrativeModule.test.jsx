@@ -179,6 +179,16 @@ describe('AdministrativeModule', () => {
     expect(within(kpi).getByText('2 ventas')).toBeInTheDocument()
   })
 
+  it('cada tarjeta de ventas tiene su color: total en ámbar, efectivo en verde, tarjetas en azul y otros en violeta', async () => {
+    renderAdmin('ventas')
+
+    const color = async (label) => (await screen.findByText(label)).closest('article').dataset.accent
+    expect(await color('Total Hoy')).toBe('amber')
+    expect(await color('Efectivo')).toBe('green')
+    expect(await color('Tarjetas')).toBe('blue')
+    expect(await color('Otros')).toBe('violet')
+  })
+
   it('el detalle orden por orden se descarga solo si el usuario lo pide', async () => {
     const user = userEvent.setup()
     renderAdmin('ventas')

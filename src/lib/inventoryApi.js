@@ -253,12 +253,15 @@ export async function resolveCategoryNameForLocal(localId, rawName) {
     throw new Error('Indica una categoría.')
   }
 
-  let rows = getCachedCategories(localId)
-  if (!rows) {
-    rows = await getCategoriesForLocal(localId)
-  }
+  const findIn = (rows) => rows.find((r) => String(r.name || '').toLowerCase() === trimmed.toLowerCase())
 
-  const hit = rows.find((r) => String(r.name || '').toLowerCase() === trimmed.toLowerCase())
+  const cached = getCachedCategories(localId)
+  let hit = cached ? findIn(cached) : null
+  // Si la caché no la tiene, puede estar vieja (p. ej. el modal ya la creó al confirmarla):
+  // se vuelve a pedir la lista antes de crearla, o el backend rechaza el nombre duplicado.
+  if (!hit) {
+    hit = findIn(await getCategoriesForLocal(localId))
+  }
   if (hit) {
     return String(hit.name).trim()
   }
