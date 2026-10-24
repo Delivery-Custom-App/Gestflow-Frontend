@@ -11,6 +11,7 @@ import { normalizeRoleKey } from '../auth/roleLabel'
 import { SALES_MODEL, normalizeSalesModel } from './salesModel'
 
 const CIERRAN = new Set(['ADMIN', 'ADMINNEGOCIO', 'SUPERADMIN'])
+const CONECTAN_MP = new Set(['ADMINNEGOCIO', 'SUPERADMIN'])
 
 /** ¿Puede cerrar o modificar un turno de caja? */
 export function puedeCerrarCaja(userRole) {
@@ -26,6 +27,18 @@ export function esAdminDeRestaurante(userRole, salesModel) {
 export function puedeVender(userRole, salesModel) {
   return !esAdminDeRestaurante(userRole, salesModel)
 }
+
+/**
+ * ¿Puede conectar o desconectar la cuenta de MercadoPago? Solo el dueño y el superadmin:
+ * la cuenta cobra para todo el negocio, y el backend responde 403 al resto (#151).
+ * El encargado sí administra los lectores de su local.
+ */
+export function puedeConectarMercadoPago(userRole) {
+  return CONECTAN_MP.has(normalizeRoleKey(userRole))
+}
+
+/** Aviso para quien no puede conectar la cuenta de MercadoPago. */
+export const MENSAJE_SOLO_DUENO_CONECTA_MP = 'La cuenta de MercadoPago la conecta el dueño del negocio.'
 
 /** Texto para un 403 al cerrar la caja. */
 export const MENSAJE_SOLO_ADMIN_CIERRA = 'Solo el administrador del local o el dueño cierran la caja. Termina tu turno y avísales.'

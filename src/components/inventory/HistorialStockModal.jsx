@@ -3,7 +3,7 @@ import { X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { fechaHora } from '../../lib/sesiones'
 import {
-  ETIQUETA_MOVIMIENTO_STOCK, MOVIMIENTOS_STOCK_POR_PAGINA, listarMovimientosStock, textoDelta,
+  ETIQUETA_MOVIMIENTO_STOCK, MOVIMIENTOS_STOCK_POR_PAGINA, faltanteDe, listarMovimientosStock, textoDelta,
 } from '../../lib/movimientosStock'
 
 const formatoCantidad = (v) => {
@@ -15,8 +15,12 @@ const formatoCantidad = (v) => {
  * Historial del stock de un producto en el local (T-58): tipo, cantidad, el
  * cambio con signo, el stock antes y después, el motivo, quién y cuándo.
  * Paginado según `X-Total-Count`.
+ *
+ * En una venta también dice cuánto se vendió y, si hubo sobreventa (#132),
+ * cuánto faltó: es el aviso de que hay que volver a contar el producto.
+ * `onCorregirConteo`, si viene, ofrece ir directo a «Corregir conteo».
  */
-export default function HistorialStockModal({ row, onClose }) {
+export default function HistorialStockModal({ row, onClose, onCorregirConteo }) {
   const [pagina, setPagina] = useState(0)
   const [estado, setEstado] = useState({ clave: '', movimientos: [], total: 0, error: '' })
   const clave = `${row.inventory_id}|${pagina}`
@@ -63,7 +67,19 @@ export default function HistorialStockModal({ row, onClose }) {
                     <span className={Number(m.delta) < 0 ? 'font-semibold text-red-600' : 'font-semibold text-emerald-700'}>{textoDelta(m.delta)}</span>
                     {' · '}de {formatoCantidad(m.stock_anterior)} a {formatoCantidad(m.stock_resultante)}
                     {m.tipo === 'ajuste' ? ` (contado: ${formatoCantidad(m.cantidad)})` : ''}
+                    {m.tipo === 'venta' ? ` · vendido: ${formatoCantidad(m.cantidad)}` : ''}
                   </p>
+                  {m.tipo === 'venta' && faltanteDe(m) > 0 && (
+                    <div role="note" aria-label="Faltante en la venta" className="mt-1 rounded-md border border-amber-300 bg-amber-50 px-2 py-1.5 text-amber-900 dark:border-amber-700/50 dark:bg-amber-950/30 dark:text-amber-200">
+                      <p className="font-semibold">Faltaron {formatoCantidad(m.faltante)}</p>
+                      <p>Se vendió más de lo que había en el sistema: el stock quedó en 0. Vuelve a contar el producto.</p>
+                      {onCorregirConteo && (
+                        <button type="button" onClick={() => onCorregirConteo(row)} className="mt-1 font-semibold underline">
+                          Corregir conteo
+                        </button>
+                      )}
+                    </div>
+                  )}
                   {m.motivo && <p className="mt-0.5">Motivo: {m.motivo}</p>}
                   {m.actor_email && <p className="mt-0.5 text-[hsl(var(--muted-foreground))]">{m.actor_email}</p>}
                 </li>

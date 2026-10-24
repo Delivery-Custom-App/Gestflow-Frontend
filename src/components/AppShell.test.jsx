@@ -76,7 +76,7 @@ describe('AppShell — fondo de emergencia', () => {
     session.role = rol
     renderShell('loc-mesas', 'administrativo/fondo-emergencia')
     const item = screen.getByRole('button', { name: 'Fondo de emergencia' })
-    expect(item).toHaveClass('bg-[hsl(var(--accent))]')
+    expect(item).toHaveAttribute('aria-current', 'page')
   })
 
   it('el vendedor no lo ve aunque la bandera esté encendida', () => {
@@ -185,7 +185,7 @@ describe('AppShell — menú del vendedor', () => {
       renderShell(local, ruta)
 
       await userEvent.setup().click(screen.getByRole('button', { name: 'Mis turnos' }))
-      expect(screen.getByRole('button', { name: 'Mis turnos' })).toHaveClass('bg-[hsl(var(--accent))]')
+      expect(screen.getByRole('button', { name: 'Mis turnos' })).toHaveAttribute('aria-current', 'page')
     },
   )
 
@@ -514,5 +514,117 @@ describe('AppShell — Usuarios por rol', () => {
     renderConUsuarios('/local/loc-mesas/pos')
 
     expect(menu().queryByRole('button', { name: 'Usuarios' })).not.toBeInTheDocument()
+  })
+})
+
+/**
+ * En el teléfono el menú lateral queda fuera de la pantalla: la hamburguesa de
+ * la barra superior lo abre encima del contenido, y se cierra con la X, con
+ * Escape, tocando el fondo o al ir a otra pantalla.
+ */
+describe('AppShell — menú en el teléfono', () => {
+  const menuLateral = () => document.getElementById('menu-lateral')
+  const abierto = () => menuLateral().className.includes(' translate-x-0')
+
+  it('la hamburguesa está en la barra superior, solo en pantallas chicas, y abre el menú', async () => {
+    const user = userEvent.setup()
+    renderShell('loc-mesas')
+
+    const hamburguesa = screen.getByRole('button', { name: 'Abrir menú' })
+    expect(hamburguesa).toHaveClass('md:hidden')
+    expect(hamburguesa).toHaveAttribute('aria-controls', 'menu-lateral')
+    expect(hamburguesa).toHaveAttribute('aria-expanded', 'false')
+    expect(abierto()).toBe(false)
+
+    await user.click(hamburguesa)
+
+    expect(hamburguesa).toHaveAttribute('aria-expanded', 'true')
+    expect(abierto()).toBe(true)
+    expect(screen.getByRole('button', { name: 'Cerrar menú' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Contraer menú' })).not.toBeInTheDocument()
+  })
+
+  it('abierto, se ve completo aunque en el escritorio esté colapsado', async () => {
+    window.localStorage.setItem('appSidebarCollapsed', '1')
+    const user = userEvent.setup()
+    renderShell('loc-mesas')
+    expect(screen.getByRole('button', { name: 'Expandir menú' })).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Abrir menú' }))
+
+    expect(within(menuLateral()).getAllByText('AUNARO').length).toBeGreaterThan(0)
+    expect(screen.queryByRole('button', { name: 'Expandir menú' })).not.toBeInTheDocument()
+    window.localStorage.removeItem('appSidebarCollapsed')
+  })
+
+  it('se cierra con la X', async () => {
+    const user = userEvent.setup()
+    renderShell('loc-mesas')
+    await user.click(screen.getByRole('button', { name: 'Abrir menú' }))
+
+    await user.click(screen.getByRole('button', { name: 'Cerrar menú' }))
+
+    expect(abierto()).toBe(false)
+    expect(screen.getByRole('button', { name: 'Abrir menú' })).toHaveAttribute('aria-expanded', 'false')
+  })
+
+  it('se cierra con Escape', async () => {
+    const user = userEvent.setup()
+    renderShell('loc-mesas')
+    await user.click(screen.getByRole('button', { name: 'Abrir menú' }))
+
+    await user.keyboard('{Escape}')
+
+    expect(abierto()).toBe(false)
+  })
+
+  it('se cierra al ir a otra pantalla desde el menú', async () => {
+    const user = userEvent.setup()
+    renderShell('loc-mesas')
+    await user.click(screen.getByRole('button', { name: 'Abrir menú' }))
+
+    await user.click(within(screen.getByRole('navigation')).getByRole('button', { name: /Dashboard/ }))
+
+    expect(abierto()).toBe(false)
+  })
+})
+
+/**
+ * Menú lateral ordenado por secciones (opción A): cada sección del local es una
+ * tarjeta con borde, sus pantallas cuelgan de una línea guía, y la sección y la
+ * pantalla activas se marcan en ámbar.
+ */
+describe('AppShell — secciones del menú en tarjeta', () => {
+  it('agrupa las secciones del local bajo «Gestión del local», cada una en su tarjeta con borde', () => {
+    renderShell('loc-mesas')
+    const nav = screen.getByRole('navigation')
+
+    expect(within(nav).getByText('Gestión del local')).toBeInTheDocument()
+    const inventario = within(nav).getByRole('region', { name: 'Inventario' })
+    expect(inventario).toHaveClass('rounded-xl', 'border')
+    expect(within(nav).getByRole('region', { name: 'Administración' })).toHaveClass('rounded-xl', 'border')
+  })
+
+  it('la sección activa y su línea guía se marcan en ámbar; las otras no', () => {
+    renderShell('loc-mesas', 'inventario')
+    const nav = screen.getByRole('navigation')
+
+    const activa = within(nav).getByRole('region', { name: 'Inventario' })
+    expect(activa).toHaveClass('border-[hsl(var(--primary)/0.45)]')
+    expect(activa.querySelector('[data-guia]')).toHaveClass('border-l-2', 'border-[hsl(var(--primary))]')
+    expect(within(nav).getByRole('region', { name: 'Administración' })).toHaveClass('border-[hsl(var(--border))]')
+  })
+
+  it('fuera de un local no aparece «Gestión del local»', () => {
+    render(
+      <MemoryRouter initialEntries={['/admin']}>
+        <Routes>
+          <Route path="/*" element={<AppShell />}>
+            <Route path="*" element={<p>contenido</p>} />
+          </Route>
+        </Routes>
+      </MemoryRouter>,
+    )
+    expect(screen.queryByText('Gestión del local')).not.toBeInTheDocument()
   })
 })

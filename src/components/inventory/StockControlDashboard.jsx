@@ -518,7 +518,13 @@ function StockControlDashboard() {
         </Card>
         </m.div>
 
-        {historialDe && <HistorialStockModal row={historialDe} onClose={() => setHistorialDe(null)} />}
+        {historialDe && (
+          <HistorialStockModal
+            row={historialDe}
+            onClose={() => setHistorialDe(null)}
+            onCorregirConteo={(row) => { setHistorialDe(null); setRegistrando({ row, modo: 'corregir' }) }}
+          />
+        )}
         {registrando && (
           <RegistrarStockModal
             modo={registrando.modo}
