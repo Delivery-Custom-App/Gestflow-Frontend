@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ArrowLeft, DollarSign, Menu as MenuIcon, Minus, Plus, Printer, Receipt, Split, Trash2, X } from 'lucide-react'
 import { useMenuPOS } from '../../hooks/useMenuPOS'
 import { useMesaDetail } from '../../hooks/useMesaDetail'
-import { useOrderTotals } from '../../hooks/useOrderTotals'
+import { desgloseIva, totalDeOrden, useOrderTotals } from '../../hooks/useOrderTotals'
 import { useOrderManagement } from '../../hooks/useOrderManagement'
 import { addOrderItem, createOrder, removeOrderItem, setMesaLibre, updateOrderItem } from '../../lib/salesApi'
 import { obtenerClaveIdempotencia } from '../../lib/idempotency'
@@ -43,6 +43,11 @@ export default function MesaWorkspace({ mesa, atencion = null, localId, cajaId, 
   const { updateOrderStatus } = useOrderManagement()
   const { data: menuData, loading: menuLoading, fetch: fetchMenu } = useMenuPOS(localId)
   const { allItems, subtotal, iva, total, firstOrder } = useOrderTotals(detail)
+  // #156: si dos equipos abrieron la mesa a la vez, quedan dos pedidos activos. Se cobran
+  // de a uno (primero `firstOrder`) y la mesa se libera recién con el último.
+  const pedidosActivos = detail?.active_orders?.length ?? 0
+  const variosPedidos = pedidosActivos > 1
+  const totalACobrar = variosPedidos ? totalDeOrden(firstOrder) : total
 
   const [selectedQtys, setSelectedQtys] = useState({})
   const [guests, setGuests] = useState('1')
@@ -59,6 +64,7 @@ export default function MesaWorkspace({ mesa, atencion = null, localId, cajaId, 
   const [showMPModal, setShowMPModal] = useState(false)
   const [showLiberarModal, setShowLiberarModal] = useState(false)
   const [offerLiberar, setOfferLiberar] = useState(false)
+  const [avisoCobro, setAvisoCobro] = useState('')
   const [mobileTab, setMobileTab] = useState('menu') // 'menu' | 'pedido'
 
   const submittingRef = useRef(false)
@@ -222,12 +228,23 @@ export default function MesaWorkspace({ mesa, atencion = null, localId, cajaId, 
       return
     }
     setErrorMsg('')
+    setAvisoCobro('')
     setShowMPModal(true)
   }, [detail, hasSplits, splitFullyPaid])
 
   const handlePaymentSuccess = useCallback(async (_paymentMethod, tipAmount = 0) => {
     setShowMPModal(false)
     setCobrarLoading(true)
+    if (variosPedidos) {
+      // Quedan otros pedidos: se imprime la boleta de este y la mesa sigue ocupada.
+      openPrintWindow({ mesa, firstOrder, allItems: firstOrder.items || [], ...desgloseIva(totalACobrar), tipAmount, totalWithTip: totalACobrar + Number(tipAmount || 0) })
+      const faltan = pedidosActivos - 1
+      setAvisoCobro(`Pedido cobrado. Falta${faltan !== 1 ? 'n' : ''} ${faltan} pedido${faltan !== 1 ? 's' : ''} de esta mesa por $${formatCLP(total - totalACobrar)}: pulsa «Cobrar» de nuevo.`)
+      setCobrarLoading(false)
+      onTableUpdated?.()
+      await refresh()
+      return
+    }
     try {
       await setMesaLibre(mesa.id)
       // Mesas juntadas: las demás del grupo que quedaron ocupadas sin pedido se sueltan y el grupo se separa (también si cobra
@@ -239,10 +256,14 @@ export default function MesaWorkspace({ mesa, atencion = null, localId, cajaId, 
       onBack()
     } catch (err) {
       setErrorMsg(err.message || 'Error al finalizar el cobro')
-      if (Number(err?.status) === 409 && puedeLiberarMesa) setOfferLiberar(true)
+      if (Number(err?.status) === 409) {
+        // Puede haber aparecido otro pedido en la mesa: se recarga para mostrarlo y cobrarlo.
+        refresh()
+        if (puedeLiberarMesa) setOfferLiberar(true)
+      }
       setCobrarLoading(false)
     }
-  }, [mesa, localId, firstOrder, allItems, subtotal, iva, total, onTableUpdated, onGrupoActualizado, onBack, puedeLiberarMesa])
+  }, [mesa, localId, firstOrder, allItems, subtotal, iva, total, variosPedidos, totalACobrar, pedidosActivos, refresh, onTableUpdated, onGrupoActualizado, onBack, puedeLiberarMesa])
 
   const handleMesaLiberada = useCallback(() => {
     setShowLiberarModal(false)
@@ -629,8 +650,8 @@ export default function MesaWorkspace({ mesa, atencion = null, localId, cajaId, 
           open={showMPModal}
           orderId={firstOrder.id}
           createdAt={firstOrder.created_at}
-          total={total}
-          description={`Mesa ${mesa.name || mesa.numero || ''}`.trim()}
+          total={totalACobrar}
+          description={`Mesa ${mesa.name || mesa.numero || ''}${variosPedidos ? ` · pedido 1 de ${pedidosActivos}` : ''}`.trim()}
           onSuccess={handlePaymentSuccess}
           onClose={() => setShowMPModal(false)}
         />
@@ -678,13 +699,32 @@ export default function MesaWorkspace({ mesa, atencion = null, localId, cajaId, 
 
         {visibleError && (
           <div role="alert" className="mx-4 lg:mx-6 mt-3 px-3 py-2 rounded-lg bg-red-50 border border-red-200 text-sm text-red-600 shrink-0">
-            {visibleError}
+            <span>{visibleError}</span>
             {offerLiberar && puedeLiberarMesa && (
-              <Button type="button" variant="outline" size="sm" className="ml-3" onClick={() => setShowLiberarModal(true)}>
-                Liberar mesa
-              </Button>
+              <span className="mt-2 flex flex-wrap items-center gap-2 text-red-700">
+                {variosPedidos
+                  ? 'Esta mesa todavía tiene pedidos sin cobrar: cóbralos con «Cobrar».'
+                  : 'Si hay que dejarla disponible igual:'}
+                <Button type="button" variant="outline" size="sm" onClick={() => setShowLiberarModal(true)}>
+                  Liberar mesa
+                </Button>
+                <span className="text-xs">Ojo: liberar la mesa cancela sin cobrar lo que quede pendiente.</span>
+              </span>
             )}
           </div>
+        )}
+
+        {variosPedidos && (
+          <div role="note" className="mx-4 lg:mx-6 mt-3 px-3 py-2 rounded-lg bg-amber-50 border border-amber-300 text-sm text-amber-900 shrink-0">
+            Esta mesa tiene <strong>{pedidosActivos} pedidos abiertos</strong> (se abrieron a la vez desde dos equipos) por ${formatCLP(total)} en total.
+            «Cobrar» los cobra de a uno: ahora el pedido 1 de {pedidosActivos}, por ${formatCLP(totalACobrar)}.
+          </div>
+        )}
+
+        {avisoCobro && (
+          <p role="status" className="mx-4 lg:mx-6 mt-3 px-3 py-2 rounded-lg bg-green-50 border border-green-200 text-sm text-green-800 shrink-0">
+            {avisoCobro}
+          </p>
         )}
 
         {loading ? (
