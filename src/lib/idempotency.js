@@ -14,3 +14,16 @@ export function obtenerClaveIdempotencia(ref) {
   if (!ref.current) ref.current = nuevaClaveIdempotencia()
   return ref.current
 }
+
+/**
+ * #159: el 409 «Esa Idempotency-Key ya se usó con otra operación u otros datos»
+ * en palabras de quien vende. Marca `claveUsada` para que se use una clave nueva.
+ * Otros errores pasan sin cambios.
+ */
+export function traducirErrorIdempotencia(err) {
+  if (Number(err?.status) !== 409 || !/idempotency/i.test(String(err?.detail || err?.message || ''))) return err
+  const e = new Error('Esta venta ya se había enviado con otros productos. Vuelve a intentarlo: se enviará como una nueva.')
+  e.status = 409
+  e.claveUsada = true
+  return e
+}

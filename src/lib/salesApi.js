@@ -332,6 +332,12 @@ export async function listOrdenesDelTurno(cajaId) {
   return rows.map(mapOrderOut)
 }
 
+/** #159: los pedidos de venta directa (sin mesa) de un turno que siguen sin cobrar. */
+export async function listPedidosSinCobrarDelTurno(cajaId) {
+  const rows = await fetchAllMatchingOrders({ cajaId, status: ACTIVE_ORDER_STATUS_FILTERS })
+  return rows.filter((o) => !o.mesa_id).map(mapOrderOut)
+}
+
 export const ZONA_MAX = 50
 
 /** Mesas del local; con `incluirInactivas` también las dadas de baja (A-05). */
@@ -594,22 +600,31 @@ export async function createOrder(orderData = {}) {
   const items = Array.isArray(orderData.items) ? orderData.items : []
   const createdItems = []
 
-  for (const [index, raw] of items.entries()) {
-    const productId = raw.product_id || raw.recipe_id
-    if (!productId) continue
-    // Secuencial a propósito: conserva el orden de los ítems/comanda y evita escrituras concurrentes sobre la misma orden/mesa.
-    // oxlint-disable-next-line react-doctor/async-await-in-loop
-    const item = await addOrderItem(
-      order.id,
-      {
-        product_id: productId,
-        quantity: raw.quantity,
-        notes: raw.notes,
-      },
-      order.created_at,
-      idempotencyKey ? `${idempotencyKey}:item:${index}` : undefined,
-    )
-    createdItems.push(item)
+  try {
+    for (const [index, raw] of items.entries()) {
+      const productId = raw.product_id || raw.recipe_id
+      if (!productId) continue
+      // Secuencial a propósito: conserva el orden de los ítems/comanda y evita escrituras concurrentes sobre la misma orden/mesa.
+      // oxlint-disable-next-line react-doctor/async-await-in-loop
+      const item = await addOrderItem(
+        order.id,
+        {
+          product_id: productId,
+          quantity: raw.quantity,
+          notes: raw.notes,
+        },
+        order.created_at,
+        idempotencyKey ? `${idempotencyKey}:item:${index}` : undefined,
+      )
+      createdItems.push(item)
+    }
+  } catch (err) {
+    // #159: si un producto falla, el pedido recién creado queda a medias y abierto para
+    // siempre (y no deja terminar el turno): se cancela. `pedidoCancelado` le dice a la
+    // pantalla que el reintento tiene que ir con una clave nueva.
+    const cancelado = await updateOrderStatus(order.id, 'cancelled', order.created_at).then(() => true, () => false)
+    if (err && typeof err === 'object') err.pedidoCancelado = cancelado
+    throw err
   }
 
   // Si hay mesa, marcar ocupada (best-effort).

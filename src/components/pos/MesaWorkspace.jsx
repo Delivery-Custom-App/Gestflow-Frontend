@@ -5,7 +5,7 @@ import { useMesaDetail } from '../../hooks/useMesaDetail'
 import { desgloseIva, totalDeOrden, useOrderTotals } from '../../hooks/useOrderTotals'
 import { useOrderManagement } from '../../hooks/useOrderManagement'
 import { addOrderItem, createOrder, removeOrderItem, setMesaLibre, updateOrderItem } from '../../lib/salesApi'
-import { obtenerClaveIdempotencia } from '../../lib/idempotency'
+import { obtenerClaveIdempotencia, traducirErrorIdempotencia } from '../../lib/idempotency'
 import { liberarGrupoAlCobrar } from '../../lib/liberarGrupo'
 import { getSplitPaymentSummary } from '../../lib/apiClient'
 import { isV2FeatureEnabled } from '../../lib/v2Features'
@@ -130,7 +130,9 @@ export default function MesaWorkspace({ mesa, atencion = null, localId, cajaId, 
     })
   }, [])
 
+  // #159: con otro carrito es otra acción: la clave del intento anterior ya no sirve.
   const handleAddItem = useCallback((key) => {
+    idempotencyKeyRef.current = null
     if (!(selectedQtys[key] || 0)) {
       const it = allMenuItems.find(i => i.key === key)
       if (it?.type === 'recipe') {
@@ -142,6 +144,7 @@ export default function MesaWorkspace({ mesa, atencion = null, localId, cajaId, 
   }, [allMenuItems, selectedQtys])
 
   const handleRemoveItem = useCallback((key) => {
+    idempotencyKeyRef.current = null
     if ((selectedQtys[key] || 0) <= 1) collapseKey(key)
     setSelectedQtys(prev => {
       const next = { ...prev }
@@ -194,7 +197,10 @@ export default function MesaWorkspace({ mesa, atencion = null, localId, cajaId, 
       await refresh()
       onTableUpdated?.()
     } catch (err) {
-      setErrorMsg(err?.message || 'Error al agregar productos al pedido')
+      const traducido = traducirErrorIdempotencia(err)
+      if (traducido?.claveUsada || err?.pedidoCancelado) idempotencyKeyRef.current = null
+      const mensaje = traducido?.message || 'Error al agregar productos al pedido'
+      setErrorMsg(err?.pedidoCancelado ? `${mensaje} El pedido no quedó guardado: revisa los productos y vuelve a agregarlos.` : mensaje)
     } finally {
       submittingRef.current = false
       setSubmitting(false)
