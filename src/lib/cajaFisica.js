@@ -71,6 +71,27 @@ export function cajasAbiertas(cajas) {
   return lista(cajas).filter((c) => c.is_active !== false && c.abierta === true)
 }
 
+/**
+ * #162: separa los turnos abiertos en los de ahora y los viejos que quedaron abiertos.
+ * Un turno es de ahora si es de la apertura actual de su caja física; si el turno no
+ * trae `apertura_id` (o no se conocen las cajas), si es de hoy. Un turno abierto sobre
+ * una caja ya cerrada es viejo. Devuelve { actuales, viejos }.
+ */
+export function separarTurnosAbiertos(turnos, cajasFisicas, hoy) {
+  const aperturaDe = new Map(lista(cajasFisicas).map((c) => [String(c.id), c.abierta ? c.apertura_actual?.id ?? null : false]))
+  const actuales = []
+  const viejos = []
+  for (const t of lista(turnos)) {
+    if (!t.is_active) continue
+    const apertura = aperturaDe.get(String(t.caja_fisica_id))
+    const esDeAhora = apertura === false ? false
+      : apertura && t.apertura_id ? String(t.apertura_id) === String(apertura)
+        : t.business_date === hoy
+    ;(esDeAhora ? actuales : viejos).push(t)
+  }
+  return { actuales, viejos }
+}
+
 /** Lo que dejó el último cierre de la caja, para comparar al abrir: { contado, cerradaAt, cerro } o null. */
 export function ultimoCierreDe(caja) {
   const u = caja?.ultimo_cierre

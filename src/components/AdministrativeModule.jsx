@@ -35,10 +35,10 @@ import AperturaCierreCajas from './caja/AperturaCierreCajas'
 import MaquinasDeLasCajas from './caja/MaquinasDeLasCajas'
 import RegistroAperturas from './caja/RegistroAperturas'
 import ResumenDelDiaCajas from './caja/ResumenDelDiaCajas'
-import { crearNombreDe } from '../lib/cajaFisica'
+import { crearNombreDe, separarTurnosAbiertos } from '../lib/cajaFisica'
 import SupervisionTurno from './turno/SupervisionTurno'
 import HistorialTurno from './turno/HistorialTurno'
-import { montoDesdeTexto } from '../lib/fondoEmergencia'
+import { hoyEnChile, montoDesdeTexto } from '../lib/fondoEmergencia'
 import TablaTurnos from './turno/TablaTurnos'
 import FondoEmergencia from './FondoEmergencia'
 import NoCobradas from './NoCobradas'
@@ -598,11 +598,13 @@ function FlujoCajaContent({ localId, localNombre = '', cierra = '', usuarioActua
   if (error || !dashboard) return stateNode
 
   const turnosAbiertos = cajasList.filter((c) => c.is_active)
-  const openCajasCount = turnosAbiertos.length
+  // #162: «Hoy» cuenta solo los turnos de la apertura actual; los viejos que quedaron abiertos van aparte.
+  const { actuales: turnosDeAhora, viejos: turnosViejos } = separarTurnosAbiertos(turnosAbiertos, cajasFisicasList, hoyEnChile())
+  const openCajasCount = conPartes ? turnosDeAhora.length : turnosAbiertos.length
   const cajasActivas = cajasFisicasList.filter((cf) => cf.is_active !== false)
   const cajasAbiertasCount = cajasActivas.filter((cf) => cf.abierta).length
   // Cuántos turnos abiertos hay en cada caja física, para las tarjetas de «Hoy».
-  const turnosPorCaja = turnosAbiertos.reduce((m, t) => m.set(String(t.caja_fisica_id), (m.get(String(t.caja_fisica_id)) || 0) + 1), new Map())
+  const turnosPorCaja = turnosDeAhora.reduce((m, t) => m.set(String(t.caja_fisica_id), (m.get(String(t.caja_fisica_id)) || 0) + 1), new Map())
   const verTurno = showMovimientos ? (c) => onViewMovimientos({
     ...c,
     vendedor: nombreDeVendedor(usuariosPorId, c.cashier_user_id),
@@ -638,7 +640,10 @@ function FlujoCajaContent({ localId, localNombre = '', cierra = '', usuarioActua
             <KpiCard label="Cajas abiertas" value={`${cajasAbiertasCount} de ${cajasActivas.length}`}
               sub={cajasActivas.length - cajasAbiertasCount > 0 ? `${cajasActivas.length - cajasAbiertasCount} por abrir` : 'Todas abiertas'} accent="green" />
           )}
-          <KpiCard label="Turnos Abiertos"  value={String(openCajasCount)} sub={`De ${cajasList.length} registrado${cajasList.length !== 1 ? 's' : ''}`} accent="blue" />
+          <KpiCard label="Turnos Abiertos"  value={String(openCajasCount)}
+            sub={conPartes && turnosViejos.length > 0
+              ? `Y ${turnosViejos.length} de días anteriores sin cerrar`
+              : `De ${cajasList.length} registrado${cajasList.length !== 1 ? 's' : ''}`} accent="blue" />
           <KpiCard label="Ingresos del Mes" value={formatMoney(dashboard?.monthly_sales)} sub="Mes actual" accent="amber" />
         </div>
       )}
@@ -651,11 +656,22 @@ function FlujoCajaContent({ localId, localNombre = '', cierra = '', usuarioActua
       {conPartes && parte === 'hoy' && (
         <Panel title="Quién está trabajando" sub="Los turnos abiertos ahora: cada uno se cierra junto con su caja">
           <TablaTurnos
-            turnos={turnosAbiertos}
+            turnos={turnosDeAhora}
             cajaFisicaDe={(c) => nombrePorCajaFisica.get(String(c.caja_fisica_id))}
             vendedorDe={(c) => nombreDeVendedor(usuariosPorId, c.cashier_user_id)}
             onVer={verTurno}
             vacio="Nadie está en turno ahora."
+          />
+        </Panel>
+      )}
+      {conPartes && parte === 'hoy' && turnosViejos.length > 0 && (
+        <Panel title="Turnos viejos sin cerrar"
+          sub={`${turnosViejos.length} turno${turnosViejos.length !== 1 ? 's' : ''} de una apertura anterior que no se cerr${turnosViejos.length !== 1 ? 'aron' : 'ó'}: no cuentan como «en turno». Revísalos y ciérralos`}>
+          <TablaTurnos
+            turnos={turnosViejos}
+            cajaFisicaDe={(c) => nombrePorCajaFisica.get(String(c.caja_fisica_id))}
+            vendedorDe={(c) => nombreDeVendedor(usuariosPorId, c.cashier_user_id)}
+            onVer={verTurno}
           />
         </Panel>
       )}

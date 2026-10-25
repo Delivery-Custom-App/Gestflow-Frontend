@@ -802,11 +802,36 @@ describe('AdministrativeModule · la caja física manda (#133)', () => {
     vi.clearAllMocks()
     V2_FEATURES.cajaFisicaManda = true
     getCajasFisicasByLocal.mockResolvedValue([
-      { ...mockCajasFisicas[0], tipo: 'digital', abierta: true, apertura_actual: { abierta_at: '2026-10-21T12:00:00Z', abierta_por_email: 'encargado@demo', monto_apertura: '50000.00' } },
+      { ...mockCajasFisicas[0], tipo: 'digital', abierta: true, apertura_actual: { id: 'ap-hoy', abierta_at: '2026-10-21T12:00:00Z', abierta_por_email: 'encargado@demo', monto_apertura: '50000.00' } },
       { ...mockCajasFisicas[1], tipo: 'fisica', abierta: false, ultimo_cierre: null },
     ])
+    getCajasByLocal.mockResolvedValue([{ ...mockCajas[0], apertura_id: 'ap-hoy' }, mockCajas[1]])
   })
-  afterEach(() => { V2_FEATURES.cajaFisicaManda = false })
+  afterEach(() => { V2_FEATURES.cajaFisicaManda = false; getCajasByLocal.mockImplementation(() => Promise.resolve(mockCajas)) })
+
+  it('#162: «Hoy» cuenta solo los turnos de la apertura actual y muestra aparte los viejos sin cerrar', async () => {
+    getCajasByLocal.mockResolvedValue([
+      { ...mockCajas[0], apertura_id: 'ap-hoy' },
+      { id: 'viejo-1', caja_fisica_id: 'cf-1', cashier_user_id: 'u-beto', business_date: '2026-10-14', is_active: true, apertura_id: 'ap-14oct' },
+      { id: 'viejo-2', caja_fisica_id: 'cf-2', cashier_user_id: 'u-beto', business_date: '2026-10-15', is_active: true, apertura_id: 'ap-15oct' },
+    ])
+    renderAdmin('flujo-caja', 'Admin')
+    const kpi = (await screen.findByText('Turnos Abiertos')).closest('article')
+    expect(within(kpi).getByText('1')).toBeInTheDocument()
+    expect(within(kpi).getByText('Y 2 de días anteriores sin cerrar')).toBeInTheDocument()
+    const caja = within(screen.getByRole('list', { name: 'Cajas del local' })).getAllByRole('listitem')[0]
+    expect(caja).toHaveTextContent('1 persona')
+    const trabajando = screen.getByRole('heading', { name: 'Quién está trabajando' }).closest('article')
+    expect(within(trabajando).getAllByRole('row')).toHaveLength(2)
+    const viejos = screen.getByRole('heading', { name: 'Turnos viejos sin cerrar' }).closest('article')
+    expect(within(viejos).getAllByRole('row')).toHaveLength(3)
+  })
+
+  it('#162: sin turnos viejos abiertos no aparece el aviso', async () => {
+    renderAdmin('flujo-caja', 'Admin')
+    expect(await screen.findByRole('heading', { name: 'Quién está trabajando' })).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Turnos viejos sin cerrar' })).not.toBeInTheDocument()
+  })
 
   it('el encargado ve «La caja del día» y las máquinas; ya no abre un turno con plata ni ve el tipo digital', async () => {
     const user = userEvent.setup()
