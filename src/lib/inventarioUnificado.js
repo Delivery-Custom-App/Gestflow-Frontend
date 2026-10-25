@@ -4,6 +4,8 @@
  * Estado Inventario y Control de stock contaban distinto).
  */
 import { stockStatus } from './v2CatalogApi'
+import { fetchLocalMenuCatalog } from './salesApi'
+import { sePrepara } from './tipoProducto'
 
 export const ESTADOS_STOCK = [
   { id: 'TODOS', label: 'Todos' },
@@ -63,4 +65,16 @@ export function filtrarFilas(filas = [], { estado = 'TODOS', busqueda = '', cate
 export function margenDe({ price, cost } = {}) {
   if (price == null || cost == null) return null
   return (Number(price) || 0) - (Number(cost) || 0)
+}
+
+/**
+ * Los platos que se preparan en el menú del local, también los ocultos, con su
+ * categoría. «En venta» es el del local (lo que mira la carta de Mesas).
+ */
+export async function listarPlatosPreparados(localId) {
+  const menu = await fetchLocalMenuCatalog(localId, { includeInactive: true })
+  return (menu.categories || []).flatMap((c) => (c.products || [])
+    .filter(sePrepara)
+    .map((p) => ({ ...p, category_id: String(c.id), category_name: c.name, en_venta: p.local_product_is_active !== false })))
+    .sort((a, b) => String(a.name).localeCompare(String(b.name), 'es'))
 }
