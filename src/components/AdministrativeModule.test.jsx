@@ -199,7 +199,12 @@ describe('AdministrativeModule', () => {
 
     await user.click(boton)
 
-    await waitFor(() => expect(getOrdersByLocal).toHaveBeenCalledWith('loc-1', 'test-token', { limit: 50, offset: 0 }))
+    await waitFor(() => expect(getOrdersByLocal).toHaveBeenCalledWith('loc-1', 'test-token', expect.objectContaining({ limit: 50, offset: 0 })))
+    // #161: el detalle está en «Hoy»: pide solo las órdenes de hoy.
+    const filtros = getOrdersByLocal.mock.calls[0][2]
+    expect(filtros.dateFrom).toMatch(/^\d{4}-\d{2}-\d{2}T00:00:00$/)
+    expect(filtros.dateTo).toMatch(/^\d{4}-\d{2}-\d{2}T00:00:00$/)
+    expect(filtros.dateTo > filtros.dateFrom).toBe(true)
     expect(await screen.findByRole('heading', { name: 'Detalle de órdenes' })).toBeInTheDocument()
     expect(screen.getByText('Mostrando 1–2 de 53 órdenes.')).toBeInTheDocument()
   })
@@ -228,7 +233,7 @@ describe('AdministrativeModule', () => {
     expect(await screen.findByText('Mostrando 1–2 de 53 órdenes.')).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Siguiente' }))
 
-    await waitFor(() => expect(getOrdersByLocal).toHaveBeenLastCalledWith('loc-1', 'test-token', { limit: 50, offset: 50 }))
+    await waitFor(() => expect(getOrdersByLocal).toHaveBeenLastCalledWith('loc-1', 'test-token', expect.objectContaining({ limit: 50, offset: 50 })))
     expect(await screen.findByText('Mostrando 51–51 de 53 órdenes.')).toBeInTheDocument()
     expect(screen.getByText('Página 2')).toBeInTheDocument()
   })

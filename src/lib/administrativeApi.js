@@ -210,6 +210,15 @@ export async function getDashboardSalesReport(localId, now = new Date()) {
   return mapDashboardSalesReport(report)
 }
 
+/**
+ * El día de hoy en Chile como rango para `GET /orders` (#161): desde las 00:00
+ * de hoy hasta las 00:00 de mañana. Sin zona, el backend lo lee como hora de Chile.
+ */
+export function rangoDeHoyEnChile(now = new Date()) {
+  const hoy = todayInChileIso(now)
+  return { dateFrom: `${hoy}T00:00:00`, dateTo: `${shiftIsoDate(hoy, 1)}T00:00:00` }
+}
+
 export function getOrdersByLocal(localId, token, filters = {}) {
   void token
   const requested = filters.status ?? ['open', 'preparing', 'ready', 'completed']

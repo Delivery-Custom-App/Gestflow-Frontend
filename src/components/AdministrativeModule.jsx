@@ -17,6 +17,7 @@ import {
   getOrdersByLocal,
   createCaja,
   getResumenDiario,
+  rangoDeHoyEnChile,
 } from '../lib/administrativeApi'
 import { getAuthContext, apiRequest, listUsers } from '../lib/apiClient'
 import { textosNoCobradas } from '../lib/noCobradas'
@@ -500,7 +501,7 @@ function VentasContent({ indicadores, orders, ordersTotal, ordersOffset = 0, ord
       )}
 
       {parte === 'hoy' && !detalleCargado && (
-        <Panel title="Detalle de órdenes" sub="Consulta paginada de órdenes del local">
+        <Panel title="Detalle de órdenes" sub="Las órdenes de hoy en este local, por páginas">
           <p className="text-sm text-[hsl(var(--muted-foreground))]">
             El detalle se carga por páginas y muestra el total informado por el servidor.
           </p>
@@ -511,7 +512,7 @@ function VentasContent({ indicadores, orders, ordersTotal, ordersOffset = 0, ord
       )}
 
       {parte === 'hoy' && detalleCargado && (
-        <Panel title="Detalle de órdenes" sub="Órdenes filtradas y paginadas por el servidor">
+        <Panel title="Detalle de órdenes" sub="Las órdenes de hoy en este local, por páginas.">
           <p className="mb-3 text-sm text-[hsl(var(--muted-foreground))]">
             Mostrando {firstOrder}–{lastOrder} de {total} órdenes.
           </p>
@@ -1256,12 +1257,15 @@ function AdministrativeModule() {
   const [cajaFisicaModal, setCajaFisicaModal] = useState(null)
   const [boletaOrden, setBoletaOrden] = useState(null)
 
-  /** Carga una página del detalle y conserva el total que informa X-Total-Count. */
+  /**
+   * Carga una página del detalle y conserva el total que informa X-Total-Count.
+   * El detalle vive en «Hoy»: solo las órdenes de hoy (#161).
+   */
   const cargarDetalleOrdenes = async (offset = 0) => {
     setDetalleLoading(true)
     try {
       const { token } = await getAuthContext()
-      const page = await getOrdersByLocal(localId, token, { limit: DETALLE_ORDENES_POR_PAGINA, offset })
+      const page = await getOrdersByLocal(localId, token, { limit: DETALLE_ORDENES_POR_PAGINA, offset, ...rangoDeHoyEnChile() })
       setSectionData((prev) => ({
         ...prev,
         orders: page.orders,
