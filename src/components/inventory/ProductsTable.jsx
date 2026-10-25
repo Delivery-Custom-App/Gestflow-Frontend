@@ -43,6 +43,7 @@ function ProductsTable({
   onEmptyAction,
   onPatchStock,
   onPatchUnitCost,
+  onPatchPrice,
   onPatchProductName,
   onPatchCategory,
   onDeleteItem,
@@ -56,6 +57,7 @@ function ProductsTable({
   const [minStockDraft, setMinStockDraft] = useState('')
   const [criticalStockDraft, setCriticalStockDraft] = useState('')
   const [costDraft, setCostDraft] = useState('')
+  const [priceDraft, setPriceDraft] = useState('')
   const [categoryDraft, setCategoryDraft] = useState(NO_CATEGORY_VALUE)
   const [formError, setFormError] = useState('')
   const [saving, setSaving] = useState(false)
@@ -72,6 +74,7 @@ function ProductsTable({
     setMinStockDraft('')
     setCriticalStockDraft('')
     setCostDraft('')
+    setPriceDraft('')
     setCategoryDraft(NO_CATEGORY_VALUE)
     setFormError('')
     setConfirmDelete(false)
@@ -84,6 +87,7 @@ function ProductsTable({
     setMinStockDraft(String(row.stock_min ?? 0))
     setCriticalStockDraft(row.stock_critical != null ? String(row.stock_critical) : '')
     setCostDraft(String(Math.round(Number(row.unit_cost_clp ?? 0))))
+    setPriceDraft(String(Math.round(Number(row.price ?? 0))))
     setCategoryDraft(row.category_id ? String(row.category_id) : NO_CATEGORY_VALUE)
     setFormError('')
   }
@@ -96,6 +100,7 @@ function ProductsTable({
     const minStockValue = Number(minStockDraft)
     const criticalStockValue = criticalStockDraft.trim() === '' ? null : Number(criticalStockDraft)
     const unitCostValue = Number(costDraft)
+    const priceValue = Number(priceDraft)
 
     if (!newName) { setFormError('El nombre no puede estar vacío.'); return }
     if (maxStockValue !== null && (!Number.isFinite(maxStockValue) || maxStockValue < 0)) {
@@ -116,6 +121,9 @@ function ProductsTable({
     }
     if (!Number.isFinite(unitCostValue) || unitCostValue <= 0) {
       setFormError('El costo unitario debe ser un número válido mayor a 0.'); return
+    }
+    if (onPatchPrice && (!Number.isFinite(priceValue) || priceValue <= 0)) {
+      setFormError('El precio de venta debe ser un número válido mayor a 0.'); return
     }
 
     const nextMaxStock   = maxStockValue !== null ? Math.floor(maxStockValue) : null
@@ -146,6 +154,11 @@ function ProductsTable({
 
       if (onPatchUnitCost && nextUnitCost !== currentUnitCost) {
         await onPatchUnitCost(editingRow, nextUnitCost)
+      }
+
+      // #158: el precio de venta se cambia aquí (antes no había dónde).
+      if (onPatchPrice && Math.round(priceValue) !== Math.round(Number(editingRow.price ?? 0))) {
+        await onPatchPrice(editingRow, Math.round(priceValue))
       }
 
       const currentCategoryId = editingRow.category_id ? String(editingRow.category_id) : NO_CATEGORY_VALUE
@@ -468,19 +481,39 @@ function ProductsTable({
             </p>
           </div>
 
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="edit-cost" className="text-sm font-semibold">Costo Unitario (CLP)</Label>
-            <Input
-              id="edit-cost"
-              type="number"
-              min={1}
-              step={1}
-              value={costDraft}
-              onChange={(e) => setCostDraft(e.target.value)}
-              disabled={saving}
-              className="h-10"
-            />
+          <div className="grid grid-cols-2 gap-4">
+            {onPatchPrice && (
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="edit-price" className="text-sm font-semibold">Precio de venta (CLP)</Label>
+                <Input
+                  id="edit-price"
+                  type="number"
+                  min={1}
+                  step={1}
+                  value={priceDraft}
+                  onChange={(e) => setPriceDraft(e.target.value)}
+                  disabled={saving}
+                  className="h-10"
+                />
+              </div>
+            )}
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="edit-cost" className="text-sm font-semibold">Costo Unitario (CLP)</Label>
+              <Input
+                id="edit-cost"
+                type="number"
+                min={1}
+                step={1}
+                value={costDraft}
+                onChange={(e) => setCostDraft(e.target.value)}
+                disabled={saving}
+                className="h-10"
+              />
+            </div>
           </div>
+          <p className="-mt-2 text-xs text-[hsl(var(--muted-foreground))]">
+            El nombre, el precio, el costo y la categoría cambian en todos los locales del negocio. El stock actual cambia solo con Sumar, Corregir o Merma.
+          </p>
         </div>
 
         {/* Footer */}

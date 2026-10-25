@@ -187,6 +187,20 @@ function StockControlDashboard() {
     [localId, loadItems, currentFilters, currentPage],
   )
 
+  const handlePatchPrice = useCallback(
+    async (row, price) => {
+      setActionError('')
+      try {
+        await patchProduct(row.product_id, { price })
+        await loadItems(currentFilters, currentPage)
+      } catch (e) {
+        setActionError(e?.message || 'No se pudo actualizar el precio.')
+        throw e
+      }
+    },
+    [loadItems, currentFilters, currentPage],
+  )
+
   const handlePatchProductName = useCallback(
     async (row, newName) => {
       setActionError('')
@@ -507,6 +521,7 @@ function StockControlDashboard() {
               onEmptyAction={() => setModalOpen(true)}
               onPatchStock={handlePatchStock}
               onPatchUnitCost={handlePatchUnitCost}
+              onPatchPrice={handlePatchPrice}
               onPatchProductName={handlePatchProductName}
               onPatchCategory={handlePatchCategory}
               onDeleteItem={handleDeleteItem}

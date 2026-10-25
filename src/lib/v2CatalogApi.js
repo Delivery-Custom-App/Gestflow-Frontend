@@ -237,12 +237,13 @@ export async function createProductWithInventory(localId, body) {
     },
   })
 
+  // «En venta en este local» (#177): apagado, el producto queda en el menú pero oculto.
   await apiRequest('/local-products', {
     method: 'POST',
     body: {
       local_id: localId,
       product_id: product.id,
-      is_active: true,
+      is_active: body.en_venta !== false,
     },
   })
 
@@ -257,6 +258,7 @@ export async function createProductWithInventory(localId, body) {
       stock_actual: stockActual,
       stock_min: stockMin,
       stock_max: body.stock_max ?? null,
+      ...(body.stock_critical != null && body.stock_critical !== '' ? { stock_critical: Number(body.stock_critical) } : {}),
     },
   })
 

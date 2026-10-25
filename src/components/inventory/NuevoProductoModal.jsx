@@ -17,7 +17,11 @@ const numInputCls =
   'focus:outline-none focus:ring-2 focus:ring-[hsl(var(--primary)/0.3)] ' +
   '[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none'
 
-function NuevoProductoModal({ open, localId, onClose, onSuccess }) {
+/**
+ * Nuevo producto (#177). Con `platoPreparado` abre como «Nuevo plato preparado»:
+ * se prepara y no pide stock.
+ */
+function NuevoProductoModal({ open, localId, onClose, onSuccess, platoPreparado = false }) {
   const [submitting,       setSubmitting]       = useState(false)
   const [error,            setError]            = useState('')
   const [productName,      setProductName]      = useState('')
@@ -25,8 +29,11 @@ function NuevoProductoModal({ open, localId, onClose, onSuccess }) {
   const [currentStock,     setCurrentStock]     = useState('0')
   const [minStock,         setMinStock]         = useState('0')
   const [maxStock,         setMaxStock]         = useState('0')
+  const [criticalStock,    setCriticalStock]    = useState('')
   const [unitCost,         setUnitCost]         = useState('')
-  const [prepara,          setPrepara]          = useState(false)
+  const [price,            setPrice]            = useState('')
+  const [enVenta,          setEnVenta]          = useState(true)
+  const [prepara,          setPrepara]          = useState(platoPreparado)
   const [categories,       setCategories]       = useState([])
   const [catsLoading,      setCatsLoading]      = useState(false)
 
@@ -47,9 +54,16 @@ function NuevoProductoModal({ open, localId, onClose, onSuccess }) {
     setError('')
 
     const cost = Number(unitCost)
+    const precio = Number(price)
     if (!productName.trim())                    { setError('Ingresa el nombre del producto.'); return }
     if (!categoryName.trim())                   { setError('Escribe la categoría y pulsa Enter para confirmarla.'); return }
+    if (!Number.isFinite(precio) || precio <= 0) { setError('El precio de venta debe ser mayor que 0.'); return }
     if (!Number.isFinite(cost) || cost <= 0)    { setError('El costo unitario debe ser mayor que 0.'); return }
+    // El backend exige crítico ≤ mínimo.
+    if (!prepara && criticalStock !== '' && Number(criticalStock) > (Number(minStock) || 0)) {
+      setError('El nivel crítico no puede ser mayor que el mínimo.')
+      return
+    }
     // Máximo en 0 = sin máximo. Uno menor que el mínimo lo rechaza la base (antes salía como "Sin conexión").
     const maximo = Number(maxStock) || 0
     if (!prepara && maximo > 0 && maximo < (Number(minStock) || 0)) {
@@ -67,8 +81,11 @@ function NuevoProductoModal({ open, localId, onClose, onSuccess }) {
           currentStock: Number(currentStock) || 0,
           minStock:     Number(minStock)     || 0,
           maxStock:     Number(maxStock)     || null,
+          ...(criticalStock !== '' ? { criticalStock: Number(criticalStock) } : {}),
         }),
+        price:        Math.round(precio),
         unitCost:     Math.round(cost),
+        enVenta,
         stock_deduction_mode: modoDeStock(prepara),
       })
       onSuccess?.()
@@ -86,11 +103,14 @@ function NuevoProductoModal({ open, localId, onClose, onSuccess }) {
     setError('')
     setProductName('')
     setCategoryName('')
-    setPrepara(false)
+    setPrepara(platoPreparado)
     setCurrentStock('0')
     setMinStock('0')
     setMaxStock('0')
+    setCriticalStock('')
     setUnitCost('')
+    setPrice('')
+    setEnVenta(true)
   }
 
   const handleClose = () => {
@@ -124,7 +144,7 @@ function NuevoProductoModal({ open, localId, onClose, onSuccess }) {
               <Package className="h-4 w-4 text-[hsl(var(--primary))]" />
             </div>
             <div>
-              <h2 className="text-base font-bold text-[hsl(var(--foreground))]">Nuevo producto</h2>
+              <h2 className="text-base font-bold text-[hsl(var(--foreground))]">{platoPreparado ? 'Nuevo plato preparado' : 'Nuevo producto'}</h2>
               <p className="text-xs text-[hsl(var(--muted-foreground))]">Ingrese los datos del producto</p>
             </div>
           </div>
@@ -189,13 +209,27 @@ function NuevoProductoModal({ open, localId, onClose, onSuccess }) {
 
           <InterruptorSePrepara id="np-se-prepara" checked={prepara} onChange={setPrepara} disabled={submitting} />
 
-          {/* Formato + Costo unitario. El stock se lleva solo por unidades (sin kg, g, L ni ml). */}
-          <div className="grid grid-cols-2 gap-4">
+          {/* Formato, precio de venta y costo unitario. El stock se lleva solo por unidades (sin kg, g, L ni ml). */}
+          <div className="grid grid-cols-3 gap-4">
             <div className="flex flex-col gap-1.5">
               <span className="text-sm font-medium text-[hsl(var(--foreground))]">Formato</span>
               <p className="flex h-9 items-center rounded-md border border-[hsl(var(--border))] bg-[hsl(var(--muted)/0.4)] px-3 text-sm text-[hsl(var(--foreground))]">
                 Unidad
               </p>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="np-price">Precio de venta (CLP) <span className="text-red-500">*</span></Label>
+              <input
+                id="np-price"
+                type="text"
+                inputMode="numeric"
+                value={price}
+                onChange={(ev) => setPrice(onlyDigits(ev.target.value))}
+                placeholder="0"
+                required
+                disabled={submitting}
+                className={numInputCls}
+              />
             </div>
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="np-unit-cost">Costo unitario (CLP) <span className="text-red-500">*</span></Label>
@@ -217,9 +251,9 @@ function NuevoProductoModal({ open, localId, onClose, onSuccess }) {
           {!prepara && (
           <fieldset className="border border-[hsl(var(--border))] rounded-lg px-4 pb-4 pt-2">
             <legend className="text-xs font-semibold text-[hsl(var(--muted-foreground))] uppercase tracking-wide px-1">
-              Niveles de stock actuales
+              Stock en este local
             </legend>
-            <div className="grid grid-cols-3 gap-4 mt-3">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-3">
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="np-stock-current">Actual</Label>
                 <input
@@ -256,9 +290,36 @@ function NuevoProductoModal({ open, localId, onClose, onSuccess }) {
                   className={numInputCls}
                 />
               </div>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="np-stock-critical">Nivel crítico</Label>
+                <input
+                  id="np-stock-critical"
+                  type="text"
+                  inputMode="numeric"
+                  value={criticalStock}
+                  onChange={(ev) => setCriticalStock(onlyDigits(ev.target.value))}
+                  placeholder="Sin definir"
+                  disabled={submitting}
+                  className={numInputCls}
+                />
+              </div>
             </div>
+            <p className="mt-2 text-xs text-[hsl(var(--muted-foreground))]">
+              En el mínimo el producto queda en estado bajo; en el nivel crítico, en crítico. Máximo en 0: sin máximo.
+            </p>
           </fieldset>
           )}
+
+          <label htmlFor="np-en-venta" className="flex items-start gap-3 rounded-lg border border-[hsl(var(--border))] px-4 py-3">
+            <input id="np-en-venta" type="checkbox" checked={enVenta} onChange={(ev) => setEnVenta(ev.target.checked)}
+              disabled={submitting} className="mt-0.5 h-4 w-4 accent-[hsl(var(--primary))]" />
+            <span>
+              <span className="block text-sm font-semibold text-[hsl(var(--foreground))]">En venta en este local</span>
+              <span className="block text-xs text-[hsl(var(--muted-foreground))]">
+                Aparece en la carta de Mesas y Venta directa. Apagado, queda guardado pero oculto.
+              </span>
+            </span>
+          </label>
 
         </form>
 

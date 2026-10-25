@@ -597,12 +597,20 @@ function MenuBuilderPage() {
         <EditarProductoModal
           localId={localId}
           producto={editando}
+          categorias={categories}
           onClose={() => setEditando(null)}
           onSaved={(actualizado) => {
             setEditando(null)
             setProducts((prev) => prev.map((p) =>
               String(p.product_id || p.id) === String(actualizado.product_id || actualizado.id)
-                ? { ...p, stock_deduction_mode: actualizado.stock_deduction_mode }
+                ? {
+                    ...p,
+                    stock_deduction_mode: actualizado.stock_deduction_mode,
+                    ...(actualizado.name ? { name: actualizado.name, product_name: actualizado.name } : {}),
+                    ...(actualizado.price != null ? { price: actualizado.price } : {}),
+                    ...(actualizado.cost != null ? { cost: actualizado.cost } : {}),
+                    ...(actualizado.category_id ? { category_id: String(actualizado.category_id) } : {}),
+                  }
                 : p))
             toast.success('Producto actualizado')
           }}

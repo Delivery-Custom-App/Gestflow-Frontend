@@ -308,11 +308,15 @@ export async function postInventoryNewProduct(localId, body) {
   const result = await createProductWithInventory(localId, {
     name: body.productName || body.name || body.product_name,
     category_id: categoryId,
-    price: body.price ?? body.unitCost ?? body.unit_cost ?? 0,
+    // #158: el precio de venta es su propio campo. Antes, sin precio se guardaba el costo
+    // como precio y el producto se vendía a precio de costo.
+    price: body.price ?? 0,
     cost: body.unitCost ?? body.unit_cost ?? body.cost ?? 0,
     stock_actual: body.currentStock ?? body.stock_actual ?? body.stock ?? 0,
     stock_min: body.minStock ?? body.stock_min ?? 0,
     stock_max: body.maxStock ?? body.stock_max ?? null,
+    stock_critical: body.criticalStock ?? body.stock_critical ?? null,
+    en_venta: body.enVenta ?? body.en_venta ?? true,
     stock_deduction_mode: body.stock_deduction_mode || 'DIRECT_STOCK',
   })
   return result.inventory

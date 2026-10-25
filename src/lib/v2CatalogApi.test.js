@@ -311,3 +311,16 @@ describe('createProductWithInventory', () => {
     expect(apiRequest).not.toHaveBeenCalledWith('/inventory', expect.anything())
   })
 })
+
+describe('createProductWithInventory · «en venta» y nivel crítico (#177)', () => {
+  it('con en_venta en false el producto entra al menú del local oculto, con su nivel crítico', async () => {
+    apiRequest.mockImplementation((path) => {
+      if (path === '/locals/l1') return Promise.resolve({ id: 'l1', business_id: 'b1' })
+      if (path === '/products') return Promise.resolve({ id: 'p1' })
+      return Promise.resolve({ id: 'x' })
+    })
+    await createProductWithInventory('l1', { name: 'Bebida', price: 1500, cost: 800, stock_min: 5, stock_critical: 2, en_venta: false })
+    expect(apiRequest).toHaveBeenCalledWith('/local-products', expect.objectContaining({ body: expect.objectContaining({ is_active: false }) }))
+    expect(apiRequest).toHaveBeenCalledWith('/inventory', expect.objectContaining({ body: expect.objectContaining({ stock_min: 5, stock_critical: 2 }) }))
+  })
+})
