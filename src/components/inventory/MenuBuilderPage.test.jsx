@@ -19,6 +19,7 @@ vi.mock('../../lib/inventoryApi', () => ({
   getInventarioDelProducto: vi.fn(() => Promise.resolve(null)),
   cambiarSiSePrepara: vi.fn(() => Promise.resolve(null)),
   removeFromLocalMenu: vi.fn(() => Promise.resolve(null)),
+  cambiarEnVentaEnLocal: vi.fn(() => Promise.resolve({})),
 }))
 vi.mock('../../lib/salesApi', () => ({
   fetchLocalMenuCatalog: vi.fn(() => Promise.resolve({

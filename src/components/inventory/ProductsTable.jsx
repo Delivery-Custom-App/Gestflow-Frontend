@@ -27,6 +27,40 @@ import {
 } from '@/components/ui/select'
 import { formatCLPOrDash as formatClp } from '../../lib/formatCLP'
 import { getCategoryTone } from '../../lib/categoryColor'
+import { cn } from '@/lib/utils'
+
+const COLUMNAS = 11
+
+/**
+ * «En venta» de un producto en este local (#176): la etiqueta al lado dice
+ * «En venta» u «Oculto». Cambia solo el local (`/local-products/{id}`).
+ */
+export function InterruptorEnVenta({ nombre, enVenta, disabled = false, onCambiar }) {
+  return (
+    <span className="inline-flex items-center gap-2">
+      <button
+        type="button"
+        role="switch"
+        aria-checked={enVenta}
+        aria-label={`En venta ${nombre}`}
+        disabled={disabled}
+        onClick={onCambiar}
+        className={cn(
+          'relative isolate h-5 w-9 shrink-0 overflow-hidden rounded-full transition-colors disabled:opacity-50',
+          enVenta ? 'bg-sky-500' : 'bg-[hsl(var(--muted))]',
+        )}
+      >
+        <span className={cn(
+          'pointer-events-none absolute top-0.5 left-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform duration-200',
+          enVenta ? 'translate-x-4' : 'translate-x-0',
+        )} />
+      </button>
+      <span className={cn('text-[11px] font-semibold', enVenta ? 'text-sky-700 dark:text-sky-300' : 'text-[hsl(var(--muted-foreground))]')}>
+        {enVenta ? 'En venta' : 'Oculto'}
+      </span>
+    </span>
+  )
+}
 
 const STATUS_LABEL = { OPTIMO: 'óptimo', BAJO: 'bajo', CRITICO: 'crítico' }
 const NO_CATEGORY_VALUE = '__NONE__'
@@ -48,6 +82,10 @@ function ProductsTable({
   onPatchCategory,
   onDeleteItem,
   onRegistrar,
+  onToggleEnVenta,
+  onPasarAPlato,
+  onQuitarDelMenu,
+  togglingId = '',
   statusFilters = [],
   categoriesCatalog = [],
 }) {
@@ -63,6 +101,22 @@ function ProductsTable({
   const [saving, setSaving] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [otraAccion, setOtraAccion] = useState(false)
+
+  // «Es un plato preparado» y «Quitar del menú» (#177): con confirmación, cierran el editor.
+  const accionDelEditor = async (accion, pregunta) => {
+    if (!editingRow || !accion || !window.confirm(pregunta)) return
+    setOtraAccion(true)
+    setFormError('')
+    try {
+      await accion(editingRow)
+      closeEditModal()
+    } catch (e) {
+      setFormError(e?.message || 'No se pudo completar la acción.')
+    } finally {
+      setOtraAccion(false)
+    }
+  }
 
   const showPagination = !error && !loading && totalPages > 1
   const showCount = !error && !loading && totalCount > 0
@@ -191,21 +245,22 @@ function ProductsTable({
           <TableHeader>
             <TableRow className="bg-[hsl(var(--muted)/0.4)]">
               <TableHead className="w-[15%] font-semibold">Producto</TableHead>
-              <TableHead className="w-[11%] font-semibold">Categoría</TableHead>
-              <TableHead className="w-[7%] font-semibold text-right text-emerald-700">Actual</TableHead>
-              <TableHead className="w-[6%] font-semibold text-right text-amber-600">Mín.</TableHead>
-              <TableHead className="w-[6%] font-semibold text-right text-red-600">Crítico</TableHead>
-              <TableHead className="w-[6%] font-semibold text-right text-sky-600">Máx.</TableHead>
-              <TableHead className="w-[8%] font-semibold text-right">Costo (CLP)</TableHead>
-              <TableHead className="w-[8%] font-semibold text-right">Val. total</TableHead>
-              <TableHead className="w-[9%] font-semibold">Estado</TableHead>
-              <TableHead className="w-[24%] font-semibold">Gestionar</TableHead>
+              <TableHead className="w-[7%] font-semibold text-right">Precio</TableHead>
+              <TableHead className="w-[7%] font-semibold text-right">Costo</TableHead>
+              <TableHead className="w-[5%] font-semibold text-right text-emerald-700">Actual</TableHead>
+              <TableHead className="w-[5%] font-semibold text-right text-amber-600">Mín.</TableHead>
+              <TableHead className="w-[5%] font-semibold text-right text-sky-600">Máx.</TableHead>
+              <TableHead className="w-[5%] font-semibold text-right text-red-600">Crítico</TableHead>
+              <TableHead className="w-[7%] font-semibold text-right">Val. total</TableHead>
+              <TableHead className="w-[8%] font-semibold">Estado</TableHead>
+              <TableHead className="w-[10%] font-semibold">En venta</TableHead>
+              <TableHead className="w-[26%] font-semibold">Gestionar</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {error ? (
               <TableRow>
-                <TableCell colSpan={10} className="text-center text-[hsl(var(--destructive))] py-8">
+                <TableCell colSpan={COLUMNAS} className="text-center text-[hsl(var(--destructive))] py-8">
                   {error}
                 </TableCell>
               </TableRow>
@@ -213,7 +268,7 @@ function ProductsTable({
             {!error && loading
               ? Array.from({ length: 5 }).map((_, i) => (
                   <TableRow key={`skel-${i}`}>
-                    {Array.from({ length: 10 }).map((_, j) => (
+                    {Array.from({ length: COLUMNAS }).map((_, j) => (
                       <TableCell key={j}>
                         <Skeleton className="h-4 w-full" />
                       </TableCell>
@@ -223,7 +278,7 @@ function ProductsTable({
               : null}
             {!error && !loading && items.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={10} className="py-12">
+                <TableCell colSpan={COLUMNAS} className="py-12">
                   {statusFilters.length > 0 ? (
                     <div className="flex flex-col items-center gap-1 text-center">
                       <p className="font-semibold text-[hsl(var(--foreground))]">
@@ -280,27 +335,34 @@ function ProductsTable({
                     >
                       <TableCell>
                         <div className="font-bold truncate">{display || '—'}</div>
-                      </TableCell>
-                      <TableCell className="truncate">
                         {row.category_name ? (
                           <span
-                            className="inline-flex max-w-full items-center rounded-full border px-2 py-1 text-[11px] font-semibold leading-none"
+                            className="mt-1 inline-flex max-w-full items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold leading-none"
                             style={{ backgroundColor: categoryTone.bg, borderColor: categoryTone.border, color: categoryTone.text }}
                           >
                             <span className="truncate">{row.category_name}</span>
                           </span>
-                        ) : '—'}
+                        ) : null}
                       </TableCell>
+                      <TableCell className="text-right tabular-nums font-semibold">{row.price != null ? formatClp(Number(row.price)) : '—'}</TableCell>
+                      <TableCell className="text-right tabular-nums">{formatClp(unitCost)}</TableCell>
                       <TableCell className={`text-right tabular-nums ${sinRegistro ? 'text-[hsl(var(--muted-foreground))]' : actualCls}`}>{sinRegistro ? '—' : stockCurrent}</TableCell>
                       <TableCell className="text-right tabular-nums text-amber-600 font-medium">{stockMin}</TableCell>
-                      <TableCell className="text-right tabular-nums text-red-600 font-medium">{stockCritical}</TableCell>
                       <TableCell className="text-right tabular-nums text-sky-600 font-medium">{stockMax}</TableCell>
-                      <TableCell className="text-right tabular-nums">{formatClp(unitCost)}</TableCell>
+                      <TableCell className="text-right tabular-nums text-red-600 font-medium">{stockCritical}</TableCell>
                       <TableCell className="text-right tabular-nums">{sinRegistro ? '—' : formatClp(total)}</TableCell>
                       <TableCell>
                         {sinRegistro
                           ? <span className="text-[11px] font-medium text-[hsl(var(--muted-foreground))]">Sin stock registrado</span>
                           : <StockStatusBadge row={row} />}
+                      </TableCell>
+                      <TableCell>
+                        {onToggleEnVenta && row.local_product_id ? (
+                          <InterruptorEnVenta nombre={display} enVenta={row.en_venta !== false}
+                            disabled={togglingId === String(row.local_product_id)} onCambiar={() => onToggleEnVenta(row)} />
+                        ) : (
+                          <span className="text-[11px] text-[hsl(var(--muted-foreground))]" title="No está en el menú de este local">—</span>
+                        )}
                       </TableCell>
                       <TableCell>
                         {sinRegistro ? (
@@ -518,6 +580,23 @@ function ProductsTable({
 
         {/* Footer */}
         <div className="shrink-0 border-t border-[hsl(var(--border))] px-6 py-4 flex flex-col gap-3">
+          {(onPasarAPlato || (onQuitarDelMenu && editingRow?.local_product_id)) && !confirmDelete && (
+            <div className="flex flex-wrap gap-2">
+              {onPasarAPlato && (
+                <Button type="button" variant="outline" size="sm" disabled={saving || deleting || otraAccion}
+                  onClick={() => accionDelEditor(onPasarAPlato, '¿Pasarlo a Platos preparados? Deja de llevar stock por unidades (vale para todos los locales).')}>
+                  Es un plato preparado
+                </Button>
+              )}
+              {onQuitarDelMenu && editingRow?.local_product_id && (
+                <Button type="button" variant="outline" size="sm" disabled={saving || deleting || otraAccion}
+                  className="border-red-200 text-red-600 hover:bg-red-50"
+                  onClick={() => accionDelEditor(onQuitarDelMenu, '¿Quitarlo del menú de este local? El producto sigue existiendo en el negocio y en los otros locales.')}>
+                  Quitar del menú
+                </Button>
+              )}
+            </div>
+          )}
           {confirmDelete && (
             <div className="rounded-lg bg-red-50 border border-red-200 px-4 py-3 flex items-center justify-between gap-3">
               <span className="text-sm text-red-700 font-medium">
@@ -546,9 +625,9 @@ function ProductsTable({
             </Button>
             <div className="flex gap-2">
               {!confirmDelete && (
-                <Button type="button" variant="destructive" disabled={saving || deleting}
+                <Button type="button" variant="destructive" disabled={saving || deleting || otraAccion}
                   onClick={() => setConfirmDelete(true)}>
-                  Eliminar
+                  Eliminar del stock del local
                 </Button>
               )}
               <Button type="button" onClick={submitRowUpdate} disabled={saving || deleting || confirmDelete}>

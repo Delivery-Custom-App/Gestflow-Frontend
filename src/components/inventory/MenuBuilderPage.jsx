@@ -2,15 +2,14 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useParams } from 'react-router'
 import { useSelectedLocal } from '../../hooks/useSelectedLocal'
 import {
+  cambiarEnVentaEnLocal,
   getCategoriesForLocal,
   patchCategory,
-  patchProduct,
   postCategory,
   removeFromLocalMenu,
 } from '../../lib/inventoryApi'
 import { fetchLocalMenuCatalog } from '../../lib/salesApi'
 import { cambiarColorCategoria, esColorValido, guardarOrden, moverCategoria, ordenarCategorias } from '../../lib/categoriasOrden'
-import { apiRequest } from '../../lib/apiClient'
 import { formatCLPCurrency as formatMoney } from '../../lib/formatCLP'
 import InventoryShell from './InventoryShell'
 import NuevoProductoModal from './NuevoProductoModal'
@@ -211,15 +210,11 @@ function MenuBuilderPage() {
     const productId = product.product_id || product.id
     if (!productId) return
     const next = !product.is_active
+    if (!product.local_product_id) return
     setTogglingId(String(productId))
     try {
-      await patchProduct(productId, { is_active: next })
-      if (product.local_product_id) {
-        await apiRequest(`/local-products/${encodeURIComponent(String(product.local_product_id))}`, {
-          method: 'PATCH',
-          body: { is_active: next },
-        })
-      }
+      // #176: solo este local. Antes también se apagaba el producto en todo el negocio.
+      await cambiarEnVentaEnLocal(product.local_product_id, next)
       setProducts((prev) =>
         prev.map((row) =>
           String(row.product_id || row.id) === String(productId)

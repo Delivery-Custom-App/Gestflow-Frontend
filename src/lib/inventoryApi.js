@@ -241,6 +241,14 @@ export function patchCategory(categoryId, body) {
   })
 }
 
+/**
+ * Texto del error al eliminar una categoría, sin el código. Con productos el
+ * backend responde 400 «No se puede eliminar la categoría porque hay productos…».
+ */
+export function mensajeEliminarCategoria(err) {
+  return String(err?.detail || err?.message || 'No se pudo eliminar la categoría.').replace(/^\d{3}:\s*/, '')
+}
+
 export function deleteCategory(categoryId) {
   return apiRequest(`/categories/${encodeURIComponent(String(categoryId))}`, {
     method: 'DELETE',
@@ -443,6 +451,18 @@ export async function deleteInventoryItem(_localId, inventoryId) {
   await apiRequest(`/inventory/${encodeURIComponent(String(inventoryId))}`, { method: 'DELETE' })
     .catch((e) => conPermiso(e, 'quitar productos del stock'))
   return null
+}
+
+/**
+ * «En venta» en este local (#176): `PATCH /local-products/{id}` con `is_active`.
+ * No toca el producto del negocio, así los otros locales no cambian (antes se
+ * apagaba el producto en todo el negocio y los otros locales veían un estado falso).
+ */
+export async function cambiarEnVentaEnLocal(localProductId, enVenta) {
+  return apiRequest(`/local-products/${encodeURIComponent(String(localProductId))}`, {
+    method: 'PATCH',
+    body: { is_active: Boolean(enVenta) },
+  }).catch((e) => conPermiso(e, 'cambiar lo que está en venta'))
 }
 
 /** Saca el producto del menú de ese local (`DELETE /local-products/{id}`, T-29). */

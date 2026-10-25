@@ -324,3 +324,23 @@ describe('createProductWithInventory · «en venta» y nivel crítico (#177)', (
     expect(apiRequest).toHaveBeenCalledWith('/inventory', expect.objectContaining({ body: expect.objectContaining({ stock_min: 5, stock_critical: 2 }) }))
   })
 })
+
+describe('fetchEnrichedInventoryForLocal · «En venta» por local (#176)', () => {
+  it('cada fila trae su local_product_id y si está en venta en este local; los ocultos sin stock también se listan', async () => {
+    apiRequest.mockImplementation((path) => {
+      if (path.startsWith('/inventory')) return Promise.resolve([
+        { id: 'inv-1', local_id: 'l1', product_id: 'p1', product_name: 'Bebida', price: '1500', cost: '800', stock_deduction_mode: 'DIRECT_STOCK', stock_actual: '10', stock_min: '2' },
+      ])
+      if (path === '/locals/l1') return Promise.resolve({ id: 'l1', business_id: 'b1' })
+      if (path === '/categories') return Promise.resolve([])
+      if (path.startsWith('/local-products')) return Promise.resolve([
+        { id: 'lp-1', local_id: 'l1', product_id: 'p1', product_name: 'Bebida', price: '1500', cost: '800', stock_deduction_mode: 'DIRECT_STOCK', is_active: false },
+        { id: 'lp-2', local_id: 'l1', product_id: 'p2', product_name: 'Jugo', stock_deduction_mode: 'DIRECT_STOCK', is_active: false },
+      ])
+      return Promise.resolve([])
+    })
+    const { rows } = await fetchEnrichedInventoryForLocal('l1', { incluirSinRegistro: true })
+    expect(rows.find((r) => r.product_id === 'p1')).toMatchObject({ local_product_id: 'lp-1', en_venta: false, price: 1500 })
+    expect(rows.find((r) => r.product_id === 'p2')).toMatchObject({ sin_registro: true, local_product_id: 'lp-2', en_venta: false })
+  })
+})

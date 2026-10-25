@@ -100,6 +100,16 @@ export async function fetchEnrichedInventoryForLocal(localId, filters = {}) {
   for (const c of Array.isArray(categories) ? categories : []) {
     categoryMap.set(String(c.id), c.name)
   }
+  // #176: la fila del menú del local de cada producto, para «En venta» (solo este local).
+  const menuDelLocal = new Map(
+    (Array.isArray(localProducts) ? localProducts : [])
+      .filter((lp) => String(lp.local_id) === String(localId))
+      .map((lp) => [String(lp.product_id), lp]),
+  )
+  const enMenu = (productId) => {
+    const lp = menuDelLocal.get(String(productId))
+    return lp ? { local_product_id: lp.id, en_venta: lp.is_active !== false } : { local_product_id: null, en_venta: null }
+  }
   const rows = (Array.isArray(inventory) ? inventory : [])
     .filter((row) => String(row.local_id) === String(localId))
     // Un producto que pasó a "se prepara" conserva su fila (V2 no borra
@@ -139,6 +149,7 @@ export async function fetchEnrichedInventoryForLocal(localId, filters = {}) {
         status,
         stock_status: status,
         is_active: product.is_active !== false,
+        ...enMenu(row.product_id),
         updated_at: row.updated_at,
         business_id: local?.business_id || product.business_id || null,
       }
@@ -146,8 +157,9 @@ export async function fetchEnrichedInventoryForLocal(localId, filters = {}) {
 
   // Productos por unidades del local que todavía no tienen stock registrado.
   const conFila = new Set(rows.map((r) => String(r.product_id)))
+  // También los ocultos («En venta» apagado), para poder volver a ponerlos en venta.
   const sinRegistro = (Array.isArray(localProducts) ? localProducts : [])
-    .filter((lp) => String(lp.local_id) === String(localId) && lp.is_active !== false)
+    .filter((lp) => String(lp.local_id) === String(localId))
     .map((lp) => productsMap.get(String(lp.product_id)))
     .filter((p) => p && !p.deleted_at && p.is_active !== false
       && p.stock_deduction_mode !== 'RECIPE_BASED' && !conFila.has(String(p.id)))
@@ -179,6 +191,7 @@ export async function fetchEnrichedInventoryForLocal(localId, filters = {}) {
         status: null,
         stock_status: null,
         is_active: true,
+        ...enMenu(product.id),
         business_id: local?.business_id || product.business_id || null,
       }
     })
