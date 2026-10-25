@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import MesaWorkspace from './MesaWorkspace'
@@ -7,6 +7,7 @@ import { useMenuPOS } from '../../hooks/useMenuPOS'
 import { useOrderManagement } from '../../hooks/useOrderManagement'
 import { createOrder, addOrderItem, updateOrderItem, removeOrderItem, liberarMesa, listMesasConTotales, setMesaLibre } from '../../lib/salesApi'
 import { deshacerGrupoDeMesas, obtenerGrupoDeMesas } from '../../lib/mesaGroupsApi'
+import { getPointOrderStatus } from '../../lib/cobroTarjeta'
 
 vi.mock('../../hooks/useMesaDetail', () => ({ useMesaDetail: vi.fn() }))
 vi.mock('../../hooks/useMenuPOS', () => ({ useMenuPOS: vi.fn() }))
@@ -27,7 +28,9 @@ vi.mock('../../lib/apiClient', () => ({
   getSplitPaymentSummary: vi.fn().mockResolvedValue({ splits: [], is_fully_paid: false }),
 }))
 // Como en la app: la comanda encendida, el pago dividido apagado.
-vi.mock('../../lib/v2Features', () => ({ isV2FeatureEnabled: (k) => k === 'comandas' }))
+const banderas = { mercadopagoPoint: false }
+vi.mock('../../lib/v2Features', () => ({ isV2FeatureEnabled: (k) => k === 'comandas' || Boolean(banderas[k]) }))
+vi.mock('../../lib/cobroTarjeta', () => ({ getPointOrderStatus: vi.fn() }))
 vi.mock('./MercadoPagoModal', () => ({
   default: ({ open, onSuccess, total, description }) => open ? (
     <div><p>{`Cobro de ${description}: ${total}`}</p><button type="button" onClick={onSuccess}>Simular pago aprobado</button></div>
@@ -470,5 +473,34 @@ describe('MesaWorkspace · una mesa con dos pedidos (#156)', () => {
     expect(screen.queryByRole('note')).not.toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: /cobrar/i }))
     expect(screen.getByText('Cobro de Mesa Mesa 1: 2200')).toBeInTheDocument()
+  })
+})
+
+describe('MesaWorkspace · cobro con tarjeta vivo en la máquina (#160)', () => {
+  beforeEach(() => { banderas.mercadopagoPoint = true })
+  afterEach(() => { banderas.mercadopagoPoint = false })
+
+  const montar = () => {
+    setup({ activeOrders: [{ id: 'order-1', items: [] }] })
+    render(<MesaWorkspace mesa={{ ...mesa, state: 'ocupada' }} localId="local1" cajaId="caja1" puedeLiberarMesa onBack={vi.fn()} onTableUpdated={vi.fn()} />)
+  }
+
+  it('con el cobro vivo, «Cancelar orden» y «Liberar mesa» se bloquean y se dice por qué', async () => {
+    getPointOrderStatus.mockResolvedValue({ order_status: 'OPEN', point_charge_active: true })
+    montar()
+    expect(await screen.findByText(/Hay un cobro con tarjeta en la máquina/)).toBeInTheDocument()
+    expect(getPointOrderStatus).toHaveBeenCalledWith('order-1')
+    expect(screen.getByRole('button', { name: /Cancelar orden/ })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Liberar mesa' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: /cobrar/i })).toBeEnabled()
+  })
+
+  it('sin cobro vivo, todo sigue disponible', async () => {
+    getPointOrderStatus.mockResolvedValue({ order_status: 'OPEN', point_charge_active: false })
+    montar()
+    await waitFor(() => expect(getPointOrderStatus).toHaveBeenCalled())
+    expect(screen.queryByText(/Hay un cobro con tarjeta en la máquina/)).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Cancelar orden/ })).toBeEnabled()
+    expect(screen.getByRole('button', { name: 'Liberar mesa' })).toBeEnabled()
   })
 })

@@ -8,6 +8,7 @@ import { addOrderItem, createOrder, removeOrderItem, setMesaLibre, updateOrderIt
 import { obtenerClaveIdempotencia, traducirErrorIdempotencia } from '../../lib/idempotency'
 import { liberarGrupoAlCobrar } from '../../lib/liberarGrupo'
 import { getSplitPaymentSummary } from '../../lib/apiClient'
+import { getPointOrderStatus } from '../../lib/cobroTarjeta'
 import { isV2FeatureEnabled } from '../../lib/v2Features'
 import { formatCLP } from '../../lib/formatCLP'
 import { Button } from '@/components/ui/button'
@@ -65,12 +66,26 @@ export default function MesaWorkspace({ mesa, atencion = null, localId, cajaId, 
   const [showLiberarModal, setShowLiberarModal] = useState(false)
   const [offerLiberar, setOfferLiberar] = useState(false)
   const [avisoCobro, setAvisoCobro] = useState('')
+  // #160: con el cobro con tarjeta vivo en la máquina no se cancela ni se libera la mesa.
+  const [cobroVivo, setCobroVivo] = useState(false)
   const [mobileTab, setMobileTab] = useState('menu') // 'menu' | 'pedido'
 
   const submittingRef = useRef(false)
   const idempotencyKeyRef = useRef(null)
 
   useEffect(() => { fetchMenu() }, [fetchMenu])
+
+  // Se consulta al entrar a la mesa y cada vez que se cierra la ventana de cobro.
+  const pedidoId = firstOrder?.id
+  useEffect(() => {
+    if (showMPModal || !pedidoId || !isV2FeatureEnabled('mercadopagoPoint')) return undefined
+    let vigente = true
+    getPointOrderStatus(pedidoId)
+      .then((s) => { if (vigente) setCobroVivo(s?.point_charge_active === true) })
+      .catch(() => {})
+    return () => { vigente = false }
+  }, [pedidoId, showMPModal])
+  const hayCobroVivo = cobroVivo && Boolean(pedidoId)
 
   useEffect(() => {
     if (!isV2FeatureEnabled('splitPayments')) return
@@ -449,7 +464,7 @@ export default function MesaWorkspace({ mesa, atencion = null, localId, cajaId, 
               type="button"
               variant="outline"
               onClick={() => { setErrorMsg(''); setOfferLiberar(false); setShowLiberarModal(true) }}
-              disabled={cobrarLoading || cancelLoading}
+              disabled={cobrarLoading || cancelLoading || hayCobroVivo}
               className={BOTON_ACCION}
             >
               Liberar mesa
@@ -498,7 +513,7 @@ export default function MesaWorkspace({ mesa, atencion = null, localId, cajaId, 
           )}
           <Button
             onClick={handleCancelOrder}
-            disabled={cancelLoading || cobrarLoading || !detail?.active_orders?.length}
+            disabled={cancelLoading || cobrarLoading || hayCobroVivo || !detail?.active_orders?.length}
             variant="outline"
             className={cn(BOTON_ACCION, 'border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300')}
             title="Cancelar orden"
@@ -507,6 +522,12 @@ export default function MesaWorkspace({ mesa, atencion = null, localId, cajaId, 
             Cancelar orden
           </Button>
         </div>
+        {hayCobroVivo && (
+          <p className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+            Hay un cobro con tarjeta en la máquina: «Cancelar orden» y «Liberar mesa» quedan bloqueados hasta que el cliente pague,
+            se cancele en el lector o venza. {puedeCobrar ? 'Pulsa «Cobrar» para seguirlo.' : ''}
+          </p>
+        )}
         {!puedeCobrar && (
           <p className="text-xs text-[hsl(var(--muted-foreground))]">
             En restaurante el administrador no cobra: cobra quien abrió la mesa. Puedes cancelar la orden o traspasar la mesa.
@@ -711,7 +732,7 @@ export default function MesaWorkspace({ mesa, atencion = null, localId, cajaId, 
                 {variosPedidos
                   ? 'Esta mesa todavía tiene pedidos sin cobrar: cóbralos con «Cobrar».'
                   : 'Si hay que dejarla disponible igual:'}
-                <Button type="button" variant="outline" size="sm" onClick={() => setShowLiberarModal(true)}>
+                <Button type="button" variant="outline" size="sm" disabled={hayCobroVivo} onClick={() => setShowLiberarModal(true)}>
                   Liberar mesa
                 </Button>
                 <span className="text-xs">Ojo: liberar la mesa cancela sin cobrar lo que quede pendiente.</span>

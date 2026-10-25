@@ -137,3 +137,57 @@ describe('MercadoPagoModal · seguir el charge_id (T-65)', () => {
     })
   })
 })
+
+describe('MercadoPagoModal · el cobro sigue vivo en la máquina (#160)', () => {
+  it('al abrir, si la máquina ya tiene el cobro, vuelve a la espera y no ofrece Efectivo', async () => {
+    getPointOrderStatus.mockResolvedValue({ order_status: 'OPEN', point_charge_active: true })
+    montar()
+    expect(await screen.findByText('Ya hay un cobro con tarjeta en la máquina para este pedido. Esperando que el cliente pague.')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Efectivo/ })).not.toBeInTheDocument()
+  })
+
+  it('al abrir, si el pedido ya se pagó con tarjeta, muestra el pago detectado', async () => {
+    getPointOrderStatus.mockResolvedValue({ order_status: 'COMPLETED', point_charge_active: false })
+    montar()
+    expect(await screen.findByText('Pago detectado')).toBeInTheDocument()
+  })
+
+  it('mientras espera la tarjeta, avisa antes de recargar o cerrar la página', async () => {
+    getPointOrderStatus.mockResolvedValue({ order_status: 'OPEN', point_charge_active: true })
+    montar()
+    await screen.findByText('Terminal activa')
+    const evento = new Event('beforeunload', { cancelable: true })
+    window.dispatchEvent(evento)
+    expect(evento.defaultPrevented).toBe(true)
+  })
+
+  it('si el cobro se cancela en la máquina, vuelve a elegir pago y lo dice', async () => {
+    getPointOrderStatus.mockResolvedValueOnce({ order_status: 'OPEN', point_charge_active: true })
+      .mockResolvedValue({ order_status: 'OPEN', point_charge_active: false, payment_status: 'CANCELLED' })
+    montar()
+    expect(await screen.findByRole('status', {}, { timeout: 5000 })).toHaveTextContent('El cobro ya no está en la máquina (se canceló)')
+    expect(screen.getByRole('button', { name: /Efectivo/ })).toBeInTheDocument()
+  })
+
+  it('«Ya lo cancelé en la máquina» vuelve a consultar y habilita el Efectivo', async () => {
+    const AVISO = 'El cobro ya está en la terminal y Mercado Pago no deja cancelarlo desde aquí.'
+    createPointCharge.mockResolvedValue({ charge_id: 'c-1', message: 'Esperando que el cliente pase la tarjeta...' })
+    cancelarCobroEnTerminal.mockResolvedValue({ cancelado: false, mensaje: AVISO })
+    getPointOrderStatus.mockResolvedValue({ order_status: 'OPEN', point_charge_active: true })
+    const user = userEvent.setup()
+    montar()
+    await user.click(screen.getByRole('button', { name: /MercadoPago Point/ }))
+    await user.click(await screen.findByRole('button', { name: 'Cancelar pago en terminal' }))
+    const yaCancele = await screen.findByRole('button', { name: 'Ya lo cancelé en la máquina' })
+
+    // Todavía vivo: lo dice y sigue esperando.
+    await user.click(yaCancele)
+    expect(await screen.findByRole('alert')).toHaveTextContent('La máquina todavía tiene el cobro activo')
+    expect(screen.getByText('Terminal activa')).toBeInTheDocument()
+
+    getPointOrderStatus.mockResolvedValue({ order_status: 'OPEN', point_charge_active: false })
+    await user.click(screen.getByRole('button', { name: 'Ya lo cancelé en la máquina' }))
+    expect(await screen.findByRole('button', { name: /Efectivo/ })).toBeInTheDocument()
+    expect(screen.getByRole('status')).toHaveTextContent('Listo: la máquina ya no tiene el cobro')
+  })
+})
