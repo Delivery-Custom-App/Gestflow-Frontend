@@ -40,8 +40,8 @@ export default function POSModule() {
   const { pathname } = useLocation()
   const { localId } = useParams()
   const { cajaId } = useCajaActiva(localId)
-  const { mesas, loading: mesasLoading, error: mesasError, createMesa, updateMesa, deleteMesa, refresh: refreshMesas } = useMesasConEstado(localId)
   const activeView = pathname.endsWith('/cocina') ? 'cocina' : 'mesas'
+  const { mesas, loading: mesasLoading, error: mesasError, createMesa, updateMesa, deleteMesa, refresh: refreshMesas } = useMesasConEstado(localId, { poll: activeView === 'mesas' })
   const { kpis, loading: kpisLoading, error: kpisError, refresh: refreshKpis } = useMesasKPIs(activeView === 'mesas' ? localId : null)
   const [showModal, setShowModal] = useState(false)
   const [mesaFilters, setMesaFilters] = useState(EMPTY_MESA_FILTERS)

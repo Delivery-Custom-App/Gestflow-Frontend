@@ -241,6 +241,14 @@ export function patchCategory(categoryId, body) {
   })
 }
 
+/**
+ * Texto del error al eliminar una categoría, sin el código. Con productos el
+ * backend responde 400 «No se puede eliminar la categoría porque hay productos…».
+ */
+export function mensajeEliminarCategoria(err) {
+  return String(err?.detail || err?.message || 'No se pudo eliminar la categoría.').replace(/^\d{3}:\s*/, '')
+}
+
 export function deleteCategory(categoryId) {
   return apiRequest(`/categories/${encodeURIComponent(String(categoryId))}`, {
     method: 'DELETE',
@@ -308,11 +316,15 @@ export async function postInventoryNewProduct(localId, body) {
   const result = await createProductWithInventory(localId, {
     name: body.productName || body.name || body.product_name,
     category_id: categoryId,
-    price: body.price ?? body.unitCost ?? body.unit_cost ?? 0,
+    // #158: el precio de venta es su propio campo. Antes, sin precio se guardaba el costo
+    // como precio y el producto se vendía a precio de costo.
+    price: body.price ?? 0,
     cost: body.unitCost ?? body.unit_cost ?? body.cost ?? 0,
     stock_actual: body.currentStock ?? body.stock_actual ?? body.stock ?? 0,
     stock_min: body.minStock ?? body.stock_min ?? 0,
     stock_max: body.maxStock ?? body.stock_max ?? null,
+    stock_critical: body.criticalStock ?? body.stock_critical ?? null,
+    en_venta: body.enVenta ?? body.en_venta ?? true,
     stock_deduction_mode: body.stock_deduction_mode || 'DIRECT_STOCK',
   })
   return result.inventory
@@ -439,6 +451,18 @@ export async function deleteInventoryItem(_localId, inventoryId) {
   await apiRequest(`/inventory/${encodeURIComponent(String(inventoryId))}`, { method: 'DELETE' })
     .catch((e) => conPermiso(e, 'quitar productos del stock'))
   return null
+}
+
+/**
+ * «En venta» en este local (#176): `PATCH /local-products/{id}` con `is_active`.
+ * No toca el producto del negocio, así los otros locales no cambian (antes se
+ * apagaba el producto en todo el negocio y los otros locales veían un estado falso).
+ */
+export async function cambiarEnVentaEnLocal(localProductId, enVenta) {
+  return apiRequest(`/local-products/${encodeURIComponent(String(localProductId))}`, {
+    method: 'PATCH',
+    body: { is_active: Boolean(enVenta) },
+  }).catch((e) => conPermiso(e, 'cambiar lo que está en venta'))
 }
 
 /** Saca el producto del menú de ese local (`DELETE /local-products/{id}`, T-29). */

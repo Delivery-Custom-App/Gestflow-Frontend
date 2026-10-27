@@ -1,13 +1,11 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { computeMesasKpis } from '../lib/salesApi'
-
-const POLL_INTERVAL_MS = 30_000
+import { refrescarDeFondo } from './useMesasConEstado'
 
 export function useMesasKPIs(localId) {
   const [kpis, setKpis] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
-  const intervalRef = useRef(null)
 
   const fetchKpis = useCallback(async () => {
     if (!localId) return
@@ -25,8 +23,8 @@ export function useMesasKPIs(localId) {
     if (!localId) return
     setLoading(true)
     fetchKpis()
-    intervalRef.current = setInterval(fetchKpis, POLL_INTERVAL_MS)
-    return () => clearInterval(intervalRef.current)
+    // #157: al mismo ritmo que la grilla, y al volver a la pestaña.
+    return refrescarDeFondo(fetchKpis)
   }, [localId, fetchKpis])
 
   return { kpis, loading, error, refresh: fetchKpis }

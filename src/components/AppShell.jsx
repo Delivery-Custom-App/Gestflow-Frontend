@@ -10,7 +10,7 @@ import { CreditCard, ReceiptText,
   LayoutDashboard, House, ChevronDown, ChevronLeft, ChevronRight,
   DollarSign, FileText, BarChart3, Wallet,
   Table2, ChefHat, Moon, Sun, LifeBuoy,
-  Package, Truck, ShoppingCart, BookMarked, PackageOpen, UtensilsCrossed,
+  Truck, ShoppingCart, BookMarked, PackageOpen,
   LogOut, Users, RotateCcw, MapPin, Building2, Settings, History, Menu, X,
 } from 'lucide-react'
 import AunaroSymbol from '@/assets/brand/AunaroSymbol'
@@ -39,13 +39,11 @@ import { textosNoCobradas } from '../lib/noCobradas'
 /* ── key sets for accordion auto-open ──────────────────────────── */
 const ADMIN_KEYS = new Set(['administracion', 'ventas', 'flujo-caja', 'no-cobradas', 'fondo-emergencia'])
 const POS_KEYS   = new Set(['pos', 'pos-mesas', 'pos-kitchen', 'pos-venta-directa', 'pos-mis-turnos'])
-const INV_KEYS   = new Set(['inv-hub', 'inv-prov', 'inv-stock', 'inv-stock-ctrl', 'inv-compras', 'inv-recetas'])
+const INV_KEYS   = new Set(['inv-hub', 'inv-prov', 'inv-compras', 'inv-recetas'])
 
 /* ── active-key derived from pathname ──────────────────────────── */
 function deriveActiveKey(pathname) {
   if (pathname.includes('/inventario/proveedores'))       return 'inv-prov'
-  if (pathname.includes('/inventario/stock-control'))     return 'inv-stock-ctrl'
-  if (pathname.includes('/inventario/stock'))             return 'inv-stock'
   if (pathname.includes('/inventario/compras-semanales')) return 'inv-compras'
   if (pathname.includes('/inventario/recipes'))           return 'inv-recetas'
   if (pathname.includes('/inventario'))                   return 'inv-hub'
@@ -100,10 +98,9 @@ const ACCORDIONS = [
     label: 'Inventario',
     icon: PackageOpen,
     items: [
-      { key: 'inv-hub',        label: 'Estado Inventario', icon: PackageOpen  },
+      // #174: una sola entrada; adentro, Resumen · Productos · Platos preparados.
+      { key: 'inv-hub',        label: 'Inventario',        icon: PackageOpen  },
       { key: 'inv-prov',       label: 'Proveedores',       icon: Truck,        feature: 'suppliers' },
-      { key: 'inv-stock',      label: 'Menú',              icon: UtensilsCrossed },
-      { key: 'inv-stock-ctrl', label: 'Control de stock',  icon: Package      },
       { key: 'inv-compras',    label: 'Pedidos',           icon: ShoppingCart, feature: 'weeklyPurchases' },
       { key: 'inv-recetas',    label: 'Recetas',           icon: BookMarked,   feature: 'recipes' },
     ],
@@ -190,8 +187,6 @@ function Sidebar({ collapsed, onToggle, onClose, mobile = false }) {
       case 'pos-mis-turnos':    if (localId) navigate(`/local/${localId}/pos/mis-turnos`, { state: navState }); break
       case 'inv-hub':       if (localId) navigate(`/local/${localId}/inventario`, { state: navState }); break
       case 'inv-prov':      if (localId) navigate(`/local/${localId}/inventario/proveedores`, { state: navState }); break
-      case 'inv-stock':     if (localId) navigate(`/local/${localId}/inventario/stock`, { state: navState }); break
-      case 'inv-stock-ctrl': if (localId) navigate(`/local/${localId}/inventario/stock-control`, { state: navState }); break
       case 'inv-compras':   if (localId) navigate(`/local/${localId}/inventario/compras-semanales`, { state: navState }); break
       case 'inv-recetas':   if (localId) navigate(`/local/${localId}/inventario/recipes`, { state: navState }); break
       default:
@@ -249,7 +244,7 @@ function Sidebar({ collapsed, onToggle, onClose, mobile = false }) {
           if (s.key === 'inventario') {
             return {
               ...s,
-              items: s.items.filter((i) => i.key === 'inv-stock' || i.key === 'inv-hub' || i.key === 'inv-stock-ctrl'),
+              items: s.items.filter((i) => i.key === 'inv-hub'),
             }
           }
           return s

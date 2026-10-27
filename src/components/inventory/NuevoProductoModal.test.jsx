@@ -17,6 +17,7 @@ vi.mock('./CategoryTypeaheadField', () => ({
 async function completarLoBasico(user) {
   await user.type(screen.getByLabelText(/Nombre/), 'Lomo a lo pobre')
   await user.type(await screen.findByLabelText('Categoría'), 'Fondos')
+  await user.type(screen.getByLabelText(/Precio de venta/), '9900')
   await user.type(screen.getByLabelText(/Costo unitario/), '4500')
 }
 
@@ -96,5 +97,56 @@ describe('NuevoProductoModal · "Este producto se prepara"', () => {
 
     expect(await screen.findByRole('alert')).toHaveTextContent('no puede ser menor que el mínimo')
     expect(postInventoryNewProduct).not.toHaveBeenCalled()
+  })
+})
+
+describe('NuevoProductoModal · precio de venta y nivel crítico (#158, #177)', () => {
+  it('manda el precio de venta aparte del costo, con el nivel crítico y «en venta»', async () => {
+    const user = userEvent.setup()
+    render(<NuevoProductoModal open localId="l1" onSuccess={vi.fn()} onClose={vi.fn()} />)
+
+    await completarLoBasico(user)
+    await user.clear(screen.getByLabelText('Mínimo'))
+    await user.type(screen.getByLabelText('Mínimo'), '5')
+    await user.type(screen.getByLabelText('Nivel crítico'), '2')
+    await user.click(screen.getByRole('checkbox', { name: /En venta en este local/ }))
+    await user.click(screen.getByRole('button', { name: 'Guardar' }))
+
+    await waitFor(() => expect(postInventoryNewProduct).toHaveBeenCalledWith('l1', expect.objectContaining({
+      price: 9900, unitCost: 4500, minStock: 5, criticalStock: 2, enVenta: false,
+    })))
+  })
+
+  it('sin precio de venta no guarda (antes el precio quedaba igual al costo)', async () => {
+    const user = userEvent.setup()
+    render(<NuevoProductoModal open localId="l1" />)
+
+    await user.type(screen.getByLabelText(/Nombre/), 'Bebida')
+    await user.type(await screen.findByLabelText('Categoría'), 'Fondos')
+    await user.type(screen.getByLabelText(/Costo unitario/), '800')
+    expect(screen.getByLabelText(/Precio de venta/)).toBeRequired()
+    await user.click(screen.getByRole('button', { name: 'Guardar' }))
+    expect(postInventoryNewProduct).not.toHaveBeenCalled()
+  })
+
+  it('un nivel crítico mayor que el mínimo se explica antes de enviar', async () => {
+    const user = userEvent.setup()
+    render(<NuevoProductoModal open localId="l1" />)
+
+    await completarLoBasico(user)
+    await user.clear(screen.getByLabelText('Mínimo'))
+    await user.type(screen.getByLabelText('Mínimo'), '3')
+    await user.type(screen.getByLabelText('Nivel crítico'), '5')
+    await user.click(screen.getByRole('button', { name: 'Guardar' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('El nivel crítico no puede ser mayor que el mínimo.')
+    expect(postInventoryNewProduct).not.toHaveBeenCalled()
+  })
+
+  it('como «Nuevo plato preparado» viene encendido y sin stock', () => {
+    render(<NuevoProductoModal open localId="l1" platoPreparado />)
+    expect(screen.getByText('Nuevo plato preparado')).toBeInTheDocument()
+    expect(screen.getByRole('switch', { name: 'Este producto se prepara' })).toHaveAttribute('aria-checked', 'true')
+    expect(screen.queryByLabelText('Actual')).not.toBeInTheDocument()
   })
 })

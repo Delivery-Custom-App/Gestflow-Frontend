@@ -2,9 +2,9 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import EditarProductoModal from './EditarProductoModal'
-import { cambiarSiSePrepara, getInventarioDelProducto } from '../../lib/inventoryApi'
+import { cambiarSiSePrepara, getInventarioDelProducto, patchProduct } from '../../lib/inventoryApi'
 
-vi.mock('../../lib/inventoryApi', () => ({ cambiarSiSePrepara: vi.fn(), getInventarioDelProducto: vi.fn() }))
+vi.mock('../../lib/inventoryApi', () => ({ cambiarSiSePrepara: vi.fn(), getInventarioDelProducto: vi.fn(), patchProduct: vi.fn(() => Promise.resolve({})) }))
 
 const POR_UNIDADES = { id: 'p1', product_id: 'p1', name: 'Bebida lata', stock_deduction_mode: 'DIRECT_STOCK' }
 const PREPARADO = { id: 'p2', product_id: 'p2', name: 'Lomo a lo pobre', stock_deduction_mode: 'RECIPE_BASED' }
@@ -65,5 +65,44 @@ describe('EditarProductoModal', () => {
     await user.click(screen.getByRole('button', { name: 'Guardar' }))
     expect(await screen.findByRole('alert')).toHaveTextContent('No autorizado')
     expect(onSaved).not.toHaveBeenCalled()
+  })
+})
+
+describe('EditarProductoModal · nombre, categoría, precio y costo (#177)', () => {
+  const PLATO = { ...PREPARADO, price: 9900, cost: 4500, category_id: 'c1' }
+  const CATEGORIAS = [{ id: 'c1', name: 'Fondos' }, { id: 'c2', name: 'Postres' }]
+
+  it('cambia el precio de venta y la categoría con PATCH /products, solo lo que cambió', async () => {
+    const onSaved = vi.fn()
+    const user = userEvent.setup()
+    render(<EditarProductoModal localId="l1" producto={PLATO} categorias={CATEGORIAS} onSaved={onSaved} />)
+
+    expect(screen.getByLabelText('Precio de venta (CLP)')).toHaveValue('9900')
+    expect(screen.getByLabelText('Costo unitario (CLP)')).toHaveValue('4500')
+    await user.clear(screen.getByLabelText('Precio de venta (CLP)'))
+    await user.type(screen.getByLabelText('Precio de venta (CLP)'), '10500')
+    await user.selectOptions(screen.getByLabelText('Categoría'), 'c2')
+    await user.click(screen.getByRole('button', { name: 'Guardar' }))
+
+    await waitFor(() => expect(patchProduct).toHaveBeenCalledWith('p2', { price: 10500, category_id: 'c2' }))
+    expect(onSaved).toHaveBeenCalledWith(expect.objectContaining({ price: 10500, category_id: 'c2' }))
+  })
+
+  it('sin cambios en los datos no llama a PATCH /products', async () => {
+    const user = userEvent.setup()
+    render(<EditarProductoModal localId="l1" producto={PLATO} categorias={CATEGORIAS} onSaved={vi.fn()} />)
+    await user.click(screen.getByRole('button', { name: 'Guardar' }))
+    await waitFor(() => expect(cambiarSiSePrepara).toHaveBeenCalled())
+    expect(patchProduct).not.toHaveBeenCalled()
+  })
+
+  it('un precio en 0 no se guarda', async () => {
+    const user = userEvent.setup()
+    render(<EditarProductoModal localId="l1" producto={PLATO} onSaved={vi.fn()} />)
+    await user.clear(screen.getByLabelText('Precio de venta (CLP)'))
+    await user.type(screen.getByLabelText('Precio de venta (CLP)'), '0')
+    await user.click(screen.getByRole('button', { name: 'Guardar' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('El precio de venta debe ser mayor que 0.')
+    expect(patchProduct).not.toHaveBeenCalled()
   })
 })

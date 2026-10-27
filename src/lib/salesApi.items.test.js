@@ -1,7 +1,8 @@
 /** Ítems del pedido: editar la cantidad y quitar sin mandar el precio (T-30). */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { apiRequest, getOptionalAuthContext } from './apiClient'
-import { addOrderItem, createOrder, listOrderItems, removeOrderItem, updateOrderItem } from './salesApi'
+import { addOrderItem, createOrder, listOrderItems, listPedidosSinCobrarDelTurno, removeOrderItem, updateOrderItem } from './salesApi'
+import { traducirErrorIdempotencia } from './idempotency'
 
 vi.mock('./apiClient', () => ({ apiRequest: vi.fn(), getOptionalAuthContext: vi.fn() }))
 vi.mock('./v2CatalogApi', () => ({ fetchProductsMap: vi.fn(() => Promise.resolve(new Map([['p-viejo', { name: 'Nombre del catálogo' }]]))) }))
@@ -100,5 +101,46 @@ describe('A-06 · notas y datos de la respuesta', () => {
     const orden = await createOrder({ local_id: 'loc-1', caja_id: 'c1', items: [{ product_id: 'p1', quantity: 1, notes: 'sin hielo' }, { product_id: 'p2', quantity: 1 }] })
     expect(orden.total).toBe(3500)
     expect(apiRequest.mock.calls[1][1].body).toMatchObject({ notes: 'sin hielo' })
+  })
+})
+
+describe('una venta que falla a medias (#159)', () => {
+  const falla = Object.assign(new Error('400: El producto no está activo en este local'), { status: 400 })
+
+  it('si un producto falla, el pedido recién creado se cancela y el error lo dice', async () => {
+    apiRequest
+      .mockResolvedValueOnce({ id: 'ord-9', created_at: CREADO, total: '0' })
+      .mockResolvedValueOnce({ id: 'i1', order_total: '1800.00' })
+      .mockRejectedValueOnce(falla)
+      .mockResolvedValueOnce({ id: 'ord-9', status: 'cancelled' })
+    const error = await createOrder({ local_id: 'loc-1', caja_id: 'c1', items: [{ product_id: 'p1', quantity: 1 }, { product_id: 'p2', quantity: 1 }] }).catch((e) => e)
+    expect(error.message).toBe('400: El producto no está activo en este local')
+    expect(error.pedidoCancelado).toBe(true)
+    expect(apiRequest).toHaveBeenLastCalledWith(`/orders/ord-9${qs}`, { method: 'PATCH', body: { status: 'cancelled' } })
+  })
+
+  it('si tampoco se puede cancelar, el error lo avisa con pedidoCancelado en false', async () => {
+    apiRequest
+      .mockResolvedValueOnce({ id: 'ord-9', created_at: CREADO, total: '0' })
+      .mockRejectedValueOnce(falla)
+      .mockRejectedValueOnce(new Error('sin conexión'))
+    const error = await createOrder({ local_id: 'loc-1', caja_id: 'c1', items: [{ product_id: 'p1', quantity: 1 }] }).catch((e) => e)
+    expect(error.pedidoCancelado).toBe(false)
+  })
+
+  it('el 409 de la clave de idempotencia se explica y pide una clave nueva', () => {
+    const e = traducirErrorIdempotencia(Object.assign(new Error('409: Esa Idempotency-Key ya se usó con otra operación u otros datos'), { status: 409 }))
+    expect(e.message).toBe('Esta venta ya se había enviado con otros productos. Vuelve a intentarlo: se enviará como una nueva.')
+    expect(e.claveUsada).toBe(true)
+    const otro = Object.assign(new Error('409: La mesa tiene un pedido en curso'), { status: 409 })
+    expect(traducirErrorIdempotencia(otro)).toBe(otro)
+  })
+
+  it('los pedidos sin cobrar del turno son los abiertos sin mesa', async () => {
+    apiRequest.mockResolvedValueOnce({ data: [{ id: 'o1', status: 'open', mesa_id: null }, { id: 'o2', status: 'open', mesa_id: 'm1' }], total: 2 })
+    const pedidos = await listPedidosSinCobrarDelTurno('caja-1')
+    expect(pedidos.map((p) => p.id)).toEqual(['o1'])
+    expect(apiRequest.mock.calls[0][0]).toContain('caja_id=caja-1')
+    expect(apiRequest.mock.calls[0][0]).toContain('status=open&status=preparing&status=ready')
   })
 })

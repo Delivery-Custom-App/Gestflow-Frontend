@@ -1,294 +1,122 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useNavigate, useParams } from 'react-router'
+import { useState } from 'react'
+import { useLocation, useNavigate, useParams } from 'react-router'
+import { HelpCircle, LayoutDashboard, Package, UtensilsCrossed, X } from 'lucide-react'
 import { useSelectedLocal } from '../../hooks/useSelectedLocal'
-// recharts ya se carga bajo demanda: este modulo solo se importa desde paginas con React.lazy
-// (AuthenticatedRoutes) y el build lo deja en un chunk aparte, fuera del bundle inicial.
-// oxlint-disable-next-line react-doctor/prefer-dynamic-import
-import {
-  Cell, BarChart, Bar, XAxis, YAxis, Tooltip,
-  ResponsiveContainer, CartesianGrid,
-} from 'recharts'
-import { getInventoryKpisByLocal, getInventoryStockList } from '../../lib/inventoryApi'
-import { isV2FeatureEnabled } from '../../lib/v2Features'
+import { useInventarioDelLocal } from '../../hooks/useInventarioDelLocal'
+import { cn } from '@/lib/utils'
 import InventoryShell from './InventoryShell'
-import LoadingSpinner from '../LoadingSpinner'
-import ChartSkeleton from '../ui/ChartSkeleton'
-import { getStockAlertLevel } from './stockAlertUtils'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
-import { m, AnimatePresence } from 'framer-motion'
-import { formatCLPDisplay as formatMoney } from '../../lib/formatCLP'
-import {
-  Package, CheckCircle, TrendingDown, AlertTriangle, DollarSign,
-  ArrowRight, ShoppingCart, HelpCircle, X,
-} from 'lucide-react'
+import ResumenInventario from './unificado/ResumenInventario'
+import ProductosInventario from './unificado/ProductosInventario'
+import PlatosPreparados from './unificado/PlatosPreparados'
 
-const STAGGER = {
-  hidden: {},
-  visible: { transition: { staggerChildren: 0.07 } },
-}
-const ITEM = {
-  hidden: { opacity: 0, y: 16 },
-  visible: { opacity: 1, y: 0, transition: { duration: 0.28 } },
-}
+/** Las partes de Inventario y su dirección (`/inventario`, `/inventario/productos`, `/inventario/platos`). */
+const PARTES_INVENTARIO = [
+  { id: 'resumen', label: 'Resumen', icon: LayoutDashboard, ruta: '' },
+  { id: 'productos', label: 'Productos', icon: Package, ruta: 'productos' },
+  { id: 'platos', label: 'Platos preparados', icon: UtensilsCrossed, ruta: 'platos' },
+]
 
+const GUIA = [
+  { titulo: 'Resumen', texto: 'Cómo está el stock: los indicadores, la distribución óptimo, bajo y crítico, lo que hay que reponer (con «Sumar»), los movimientos de hoy y los más vendidos de la semana.' },
+  { titulo: 'Productos', texto: 'Los productos que se cuentan por unidades: precio, costo, stock, estado y «En venta». Desde cada fila se suma lo que llegó, se corrige el conteo, se registra una merma o se ve el historial.' },
+  { titulo: 'Platos preparados', texto: 'Los que se preparan y van a la comanda de cocina: no llevan stock por unidades. Se editan y se ponen o se quitan de la venta.' },
+  { titulo: '«En venta»', texto: 'Encendido, el producto aparece en la carta de Mesas y Venta directa; apagado, se oculta. Vale solo para este local.' },
+  { titulo: 'Para todos los locales', texto: 'El nombre, el precio, el costo y la categoría son del negocio: al cambiarlos cambian en todos los locales. El stock y «En venta» son de cada local.' },
+]
 
+/**
+ * Inventario en una sola sección (#174): Resumen · Productos · Platos
+ * preparados. Reemplaza a Estado Inventario, Menú y Control de stock sin
+ * perder sus campos ni acciones.
+ */
 function InventoryHub() {
-  const navigate  = useNavigate()
   const { localId } = useParams()
+  const { pathname } = useLocation()
+  const navigate = useNavigate()
   const selectedLocal = useSelectedLocal(localId)
+  const inventario = useInventarioDelLocal(localId)
+  const [guiaAbierta, setGuiaAbierta] = useState(false)
+  const parte = PARTES_INVENTARIO.find((p) => p.ruta && pathname.replace(/\/+$/, '').endsWith(`/inventario/${p.ruta}`))?.id || 'resumen'
 
-  const nav = (path) => navigate(`/local/${localId}/${path}`, { state: { local: selectedLocal } })
-  // Sin backend de proveedores / compras semanales no se ofrecen esos accesos.
-  const suppliersEnabled = isV2FeatureEnabled('suppliers')
-  const purchasesEnabled = isV2FeatureEnabled('weeklyPurchases')
-  const guideSections = [
-    'Menú (los productos del local)',
-    'Control de stock (gestión detallada)',
-    ...(suppliersEnabled ? ['Proveedores (gestión de proveedores)'] : []),
-    ...(isV2FeatureEnabled('recipes') ? ['Recetas (fórmulas y costos)'] : []),
-    ...(purchasesEnabled ? ['Compras Semanales (órdenes de compra)'] : []),
-  ]
-  const guideSectionsText = guideSections.length > 1
-    ? `${guideSections.slice(0, -1).join(', ')} y ${guideSections[guideSections.length - 1]}`
-    : guideSections[0]
-
-  const [kpis, setKpis]           = useState(null)
-  const [kpisLoading, setKL]      = useState(true)
-  const [items, setItems]         = useState([])
-  const [itemsLoading, setIL]     = useState(true)
-  const [guideOpen, setGuideOpen] = useState(false)
-
-  const loadKpis = useCallback(async () => {
-    if (!localId) { setKL(false); return }
-    setKL(true)
-    try { setKpis(await getInventoryKpisByLocal(localId)) } catch { setKpis(null) } finally { setKL(false) }
-  }, [localId])
-
-  const loadItems = useCallback(async () => {
-    if (!localId) { setIL(false); return }
-    setIL(true)
-    try {
-      const rows = await getInventoryStockList(localId)
-      setItems(Array.isArray(rows) ? rows : [])
-    } catch { setItems([]) } finally { setIL(false) }
-  }, [localId])
-
-  useEffect(() => { loadKpis(); loadItems() }, [loadKpis, loadItems])
-
-  /* ── bar chart data: distribución de stock por nivel ─────── */
-  const stockDistData = useMemo(() => {
-    if (!kpis) return []
-    return [
-      { name: 'Óptimo',     cantidad: kpis.optimal_stock_count  ?? 0, fill: 'hsl(var(--success))' },
-      { name: 'Stock bajo', cantidad: kpis.low_stock_count      ?? 0, fill: 'hsl(var(--warning))' },
-      { name: 'Crítico',    cantidad: kpis.critical_stock_count ?? 0, fill: 'hsl(var(--destructive))' },
-    ].filter((d) => d.cantidad > 0)
-  }, [kpis])
-
-  /* ── top 5 productos con menos stock (críticos primero) ──── */
-  const top5Critical = useMemo(() =>
-    [...items]
-      .filter((r) => getStockAlertLevel(r))
-      .sort((a, b) => Number(a.stock_current ?? 0) - Number(b.stock_current ?? 0))
-      .slice(0, 5)
-      .map((r) => ({
-        name:   (r.product_name || r.name || 'Producto').length > 14
-                  ? (r.product_name || r.name).slice(0, 13) + '…'
-                  : (r.product_name || r.name || 'Producto'),
-        Stock:  Number(r.stock_current ?? 0),
-        Mínimo: Number(r.stock_min ?? 0),
-      }))
-  , [items])
-
-  /* ── KPI cards ─────────────────────────────────────────────── */
-  const KPI_CARDS = [
-    { icon: Package,       label: 'Total productos',  value: kpis?.total_products ?? '—',       iconColor: 'text-[hsl(var(--primary))]', bg: 'bg-emerald-50', accent: 'border-l-emerald-700' },
-    { icon: CheckCircle,   label: 'Stock óptimo',     value: kpis?.optimal_stock_count ?? '—',  iconColor: 'text-emerald-600',            bg: 'bg-emerald-50', accent: 'border-l-emerald-500' },
-    { icon: TrendingDown,  label: 'Stock bajo',       value: kpis?.low_stock_count ?? '—',      iconColor: 'text-amber-600',              bg: 'bg-amber-50',   accent: 'border-l-amber-500'   },
-    { icon: AlertTriangle, label: 'Stock crítico',    value: kpis?.critical_stock_count ?? '—', iconColor: 'text-red-600',                bg: 'bg-red-50',     accent: 'border-l-red-500'     },
-    { icon: DollarSign,    label: 'Valor total',      value: formatMoney(kpis?.total_value),    iconColor: 'text-[hsl(var(--primary))]', bg: 'bg-emerald-50', accent: 'border-l-emerald-700' },
-  ]
-
-  const loading = kpisLoading || itemsLoading
+  const irA = (p) => navigate(`/local/${localId}/inventario${p.ruta ? `/${p.ruta}` : ''}`, { state: { local: selectedLocal } })
+  const conConteo = (p) => (p.id === 'productos' && inventario.filas.length ? String(inventario.filas.length) : null)
 
   return (
-    <>
-      <AnimatePresence>
-        {guideOpen && (
-          <m.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4"
-            onClick={() => setGuideOpen(false)}>
-            <m.div initial={{ opacity: 0, scale: 0.95, y: 12 }} animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.96, y: 8 }} transition={{ duration: 0.2 }}
-              onClick={(e) => e.stopPropagation()}
-              className="bg-[hsl(var(--card))] border border-[hsl(var(--border))] rounded-2xl shadow-2xl w-full max-w-lg max-h-[88vh] overflow-y-auto no-scrollbar">
-              <div className="flex items-center justify-between px-5 py-4 border-b border-[hsl(var(--border))]">
-                <div className="flex items-center gap-2">
-                  <HelpCircle size={16} className="text-[hsl(var(--primary))]" />
-                  <h3 className="text-sm font-bold text-[hsl(var(--foreground))]">Guía — Inventario</h3>
-                </div>
-                <button type="button" aria-label="Cerrar guía" onClick={() => setGuideOpen(false)}
-                  className="flex items-center justify-center w-7 h-7 rounded-lg text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))] transition-colors">
-                  <X size={14} />
-                </button>
-              </div>
-              <div className="px-5 py-4 space-y-3">
-                {[
-                  { icon: Package, color: 'text-[hsl(var(--primary))]', title: 'Resumen de inventario', desc: 'Los indicadores superiores muestran la cantidad total de productos, cuántos tienen stock óptimo, cuántos están bajos, cuántos en estado crítico y el valor total del inventario.' },
-                  { icon: TrendingDown, color: 'text-amber-600', title: 'Distribución de stock', desc: 'Gráfico de barras que muestra cuántos productos están en cada nivel de stock (Óptimo, Bajo, Crítico) para ver de un vistazo la situación general.' },
-                  { icon: AlertTriangle, color: 'text-red-600', title: 'Productos críticos', desc: 'Lista los 5 productos con menor stock comparando su cantidad actual contra el mínimo definido. Los más urgentes aparecen primero.' },
-                  ...(purchasesEnabled ? [{ icon: ShoppingCart, color: 'text-blue-600', title: 'Pedidos', desc: 'Haz clic en "Ir a Pedidos" para crear una orden de compra.' }] : []),
-                  { icon: ArrowRight, color: 'text-[hsl(var(--primary))]', title: 'Secciones del inventario', highlight: true, desc: `Desde el menú lateral accedes a: ${guideSectionsText}.` },
-                ].map(({ icon: Icon, color, title, desc, highlight }) => (
-                  <div key={title} className={`flex gap-3 rounded-xl p-3 ${highlight ? 'bg-[hsl(var(--primary)/0.08)] border border-[hsl(var(--primary)/0.2)]' : 'bg-[hsl(var(--muted)/0.4)]'}`}>
-                    <div className={`mt-0.5 shrink-0 ${color}`}><Icon size={15} /></div>
-                    <div>
-                      <p className="text-xs font-semibold text-[hsl(var(--foreground))] mb-0.5">{title}</p>
-                      <p className="text-xs text-[hsl(var(--muted-foreground))] leading-relaxed">{desc}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </m.div>
-          </m.div>
-        )}
-      </AnimatePresence>
-      <InventoryShell>
-      <div className="px-6 py-6 flex flex-col gap-6 pb-10">
-        {/* Header */}
-        <div className="flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <span className="flex items-center justify-center w-10 h-10 rounded-full bg-[hsl(var(--primary)/0.1)] text-[hsl(var(--primary))]">
-              <Package size={22} />
-            </span>
-            <div>
-              <h1 className="text-xl font-bold text-[hsl(var(--foreground))]">Inventario</h1>
-              <p className="text-sm text-[hsl(var(--muted-foreground))]">Vista general del stock, alertas y gráficos de inventario</p>
-            </div>
+    <InventoryShell>
+      <div className="flex flex-col gap-5 px-5 py-6 pb-10">
+        {/* Encabezado de la sección: oscuro en los dos temas, con el ámbar de la marca (como Administración). */}
+        <div className="flex flex-col gap-4 rounded-2xl bg-gradient-to-br from-[#0D0D1F] via-[#22223B] to-[#4A3410] px-5 py-5 text-white shadow-lg sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-[hsl(var(--primary))]">Inventario</p>
+            <h1 className="font-marca text-2xl font-bold tracking-tight">{PARTES_INVENTARIO.find((p) => p.id === parte).label}</h1>
+            <p className="mt-0.5 text-sm text-white/75">{selectedLocal?.name ? `${selectedLocal.name} · ` : ''}stock, precios y lo que está en venta</p>
           </div>
-          <button
-            onClick={() => setGuideOpen(true)}
-            className="flex items-center gap-1.5 text-xs text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--primary))] transition-colors"
-          >
+          <button type="button" onClick={() => setGuiaAbierta(true)}
+            className="flex min-h-9 items-center gap-1.5 self-start rounded-lg border border-white/25 bg-white/10 px-3 text-xs font-semibold text-white transition-colors hover:bg-white/20 sm:self-auto">
             <HelpCircle size={13} />
             <span>¿Cómo funciona esta pantalla?</span>
           </button>
         </div>
-        {loading && !kpis && !items.length ? (
-          <LoadingSpinner message="Cargando inventario..." />
-        ) : (
-          <>
-            {/* KPI cards */}
-            <m.div
-              className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3"
-              variants={STAGGER} initial="hidden" animate="visible"
-            >
-              {KPI_CARDS.map((k) => (
-                <m.div key={k.label} variants={ITEM}>
-                  <Card className={`border-l-4 ${k.accent} h-full`}>
-                    <CardContent className="flex items-center gap-4 p-5">
-                      <span className={`flex items-center justify-center w-12 h-12 rounded-full shrink-0 ${k.bg} ${k.iconColor}`}>
-                        <k.icon size={22} />
-                      </span>
-                      <div className="min-w-0">
-                        <p className="text-sm text-[hsl(var(--muted-foreground))] leading-tight">{k.label}</p>
-                        {kpisLoading
-                          ? <div className="h-8 w-14 bg-[hsl(var(--muted))] rounded animate-pulse mt-1" />
-                          : <p className={`text-2xl font-bold mt-0.5 ${k.iconColor}`}>{k.value}</p>
-                        }
-                      </div>
-                    </CardContent>
-                  </Card>
-                </m.div>
-              ))}
-            </m.div>
 
-            {/* Charts row */}
-            <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
-              {/* Bar chart — distribución de stock por nivel con cantidades */}
-              <Card className="lg:col-span-2">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-base">Distribución de Stock</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  {kpisLoading ? (
-                    <ChartSkeleton className="h-[220px]" />
-                  ) : stockDistData.length === 0 ? (
-                    <p className="text-sm text-[hsl(var(--muted-foreground))] py-8 text-center">Sin datos</p>
-                  ) : (
-                    <ResponsiveContainer width="100%" height={220}>
-                      <BarChart data={stockDistData} margin={{ top: 28, right: 16, left: -16, bottom: 4 }}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
-                        <XAxis dataKey="name" tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} tickLine={false} axisLine={false} />
-                        <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} tickLine={false} axisLine={false} />
-                        <Tooltip
-                          formatter={(v) => [`${v} productos`]}
-                          cursor={{ fill: 'hsl(var(--accent))' }}
-                          contentStyle={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: 8, fontSize: 12 }}
-                        />
-                        <Bar dataKey="cantidad" radius={[4, 4, 0, 0]} maxBarSize={56} label={{ position: 'top', fontSize: 12, fontWeight: 700, fill: 'hsl(var(--foreground))' }}>
-                          {stockDistData.map((entry) => (
-                            <Cell key={entry.name} fill={entry.fill} />
-                          ))}
-                        </Bar>
-                      </BarChart>
-                    </ResponsiveContainer>
-                  )}
-                </CardContent>
-              </Card>
+        <div role="tablist" aria-label="Partes de Inventario" className="flex flex-wrap gap-2">
+          {PARTES_INVENTARIO.map((p) => {
+            const on = p.id === parte
+            const extra = conConteo(p)
+            return (
+              <button key={p.id} type="button" role="tab" aria-selected={on} onClick={() => irA(p)}
+                className={cn('inline-flex min-h-10 items-center gap-2 rounded-full border px-4 text-sm transition-colors',
+                  on
+                    ? 'border-[hsl(var(--foreground))] bg-[hsl(var(--foreground))] font-bold text-[hsl(var(--background))] shadow-md'
+                    : 'border-[hsl(var(--border))] bg-[hsl(var(--card))] font-medium text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))]')}>
+                <p.icon size={15} aria-hidden="true" />
+                {p.label}
+                {extra && (
+                  <span className={cn('rounded-full px-2 py-0.5 text-[11px] font-bold',
+                    on ? 'bg-[hsl(var(--primary))] text-[hsl(var(--primary-foreground))]' : 'bg-[hsl(var(--primary)/0.12)] text-[hsl(var(--foreground))]')}>
+                    {extra}
+                  </span>
+                )}
+              </button>
+            )
+          })}
+        </div>
 
-              {/* Bar chart — top 5 productos críticos por menor stock */}
-              <Card className="lg:col-span-3">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-base">Productos Críticos</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  {itemsLoading ? (
-                    <ChartSkeleton className="h-[280px]" />
-                  ) : top5Critical.length === 0 ? (
-                    <p className="text-sm text-[hsl(var(--muted-foreground))] py-8 text-center">
-                      No hay productos críticos. Todo en orden.
-                    </p>
-                  ) : (
-                    <ResponsiveContainer width="100%" height={280}>
-                      <BarChart data={top5Critical} layout="vertical" barCategoryGap="55%" margin={{ left: 4, right: 44, top: 4, bottom: 4 }}>
-                        <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="hsl(var(--border))" />
-                        <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} tickLine={false} axisLine={false} />
-                        <YAxis type="category" dataKey="name" width={95} tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} tickLine={false} axisLine={false} />
-                        <Tooltip
-                          cursor={{ fill: 'hsl(var(--accent))' }}
-                          contentStyle={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: 8, fontSize: 12 }}
-                        />
-                        <Bar dataKey="Stock" fill="hsl(var(--destructive))" radius={[0, 3, 3, 0]} barSize={18} minPointSize={0}
-                          label={({ x, y, width, height, value }) => (
-                            <text x={x + width + 6} y={y + height / 2} dominantBaseline="middle" fontSize={11} fontWeight={700} fill="hsl(var(--destructive))">
-                              {value}
-                            </text>
-                          )}
-                        />
-                        <Bar dataKey="Mínimo" fill="var(--chart-secondary)" radius={[0, 3, 3, 0]} barSize={18} minPointSize={0} />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  )}
-                </CardContent>
-              </Card>
-            </div>
-
-            {/* T-39: el motor de alertas (/alerts) no existe en V2; queda solo el acceso a Pedidos. */}
-            {purchasesEnabled && (
-              <div className="flex justify-end">
-                <Button type="button" variant="ghost" size="sm" onClick={() => nav('inventario/compras-semanales')} className="gap-1 text-sm">
-                  Ir a Pedidos <ArrowRight size={14} />
-                </Button>
-              </div>
-            )}
-          </>
+        {parte === 'resumen' && (
+          <ResumenInventario localId={localId} filas={inventario.filas} loading={inventario.loading} recargar={inventario.recargar} />
+        )}
+        {parte === 'productos' && (
+          <ProductosInventario localId={localId} salesModel={selectedLocal?.sales_model} {...inventario} />
+        )}
+        {parte === 'platos' && (
+          <PlatosPreparados localId={localId} categorias={inventario.categorias} onCambio={inventario.recargar} />
         )}
       </div>
+
+      {guiaAbierta && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="presentation" onClick={() => setGuiaAbierta(false)}>
+          <div role="dialog" aria-modal="true" aria-labelledby="guia-inventario" onClick={(e) => e.stopPropagation()}
+            className="max-h-[88vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-[hsl(var(--border))] bg-[hsl(var(--card))] shadow-2xl">
+            <div className="flex items-center justify-between border-b border-[hsl(var(--border))] px-5 py-4">
+              <h2 id="guia-inventario" className="flex items-center gap-2 text-sm font-bold text-[hsl(var(--foreground))]">
+                <HelpCircle size={16} className="text-[hsl(var(--primary))]" /> Guía — Inventario
+              </h2>
+              <button type="button" aria-label="Cerrar guía" onClick={() => setGuiaAbierta(false)}
+                className="flex h-7 w-7 items-center justify-center rounded-lg text-[hsl(var(--muted-foreground))] hover:bg-[hsl(var(--muted))]">
+                <X size={14} />
+              </button>
+            </div>
+            <div className="space-y-3 px-5 py-4">
+              {GUIA.map((g) => (
+                <div key={g.titulo} className="rounded-xl bg-[hsl(var(--muted)/0.4)] p-3">
+                  <p className="mb-0.5 text-xs font-semibold text-[hsl(var(--foreground))]">{g.titulo}</p>
+                  <p className="text-xs leading-relaxed text-[hsl(var(--muted-foreground))]">{g.texto}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </InventoryShell>
-    </>
   )
 }
 

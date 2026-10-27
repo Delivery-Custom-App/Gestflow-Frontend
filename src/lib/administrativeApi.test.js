@@ -21,6 +21,7 @@ import {
   estadoDeOrden,
   origenDeOrden,
   mapDashboardSalesReport,
+  rangoDeHoyEnChile,
   provisionCajaFisicaMp,
   verifyCajaFisicaMpPairing,
 } from './administrativeApi'
@@ -303,6 +304,19 @@ describe('cajas físicas: desactivar, reactivar y eliminar (T-75)', () => {
   })
 })
 
+describe('rangoDeHoyEnChile (#161)', () => {
+  it('va desde las 00:00 de hoy hasta las 00:00 de mañana, en hora de Chile', () => {
+    expect(rangoDeHoyEnChile(new Date('2026-10-24T15:00:00Z'))).toEqual({ dateFrom: '2026-10-24T00:00:00', dateTo: '2026-10-25T00:00:00' })
+  })
+
+  it('a las 23:30 en Chile (ya es mañana en UTC) sigue siendo hoy', () => {
+    expect(rangoDeHoyEnChile(new Date('2026-10-25T02:30:00Z'))).toEqual({ dateFrom: '2026-10-24T00:00:00', dateTo: '2026-10-25T00:00:00' })
+  })
+
+  it('cruza el fin de mes', () => {
+    expect(rangoDeHoyEnChile(new Date('2026-10-31T15:00:00Z'))).toEqual({ dateFrom: '2026-10-31T00:00:00', dateTo: '2026-11-01T00:00:00' })
+  })
+})
 
 describe('Ventas · detalle de órdenes (#168)', () => {
   it('por defecto pide solo las cobradas: los pedidos sin cobrar no se mezclan con las ventas', async () => {

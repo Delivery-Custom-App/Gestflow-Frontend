@@ -210,6 +210,15 @@ export async function getDashboardSalesReport(localId, now = new Date()) {
   return mapDashboardSalesReport(report)
 }
 
+/**
+ * El día de hoy en Chile como rango para `GET /orders` (#161): desde las 00:00
+ * de hoy hasta las 00:00 de mañana. Sin zona, el backend lo lee como hora de Chile.
+ */
+export function rangoDeHoyEnChile(now = new Date()) {
+  const hoy = todayInChileIso(now)
+  return { dateFrom: `${hoy}T00:00:00`, dateTo: `${shiftIsoDate(hoy, 1)}T00:00:00` }
+}
+
 /** El estado y el origen de una orden en castellano (#168). */
 const ESTADO_ORDEN = { PENDING: 'Sin cobrar', PREPARING: 'En preparación', READY: 'Lista', COMPLETED: 'Cobrada', CANCELLED: 'Cancelada' }
 const ORIGEN_ORDEN = { dine_in: 'Mesa', mostrador: 'Mostrador', takeout: 'Para llevar', delivery: 'Delivery' }

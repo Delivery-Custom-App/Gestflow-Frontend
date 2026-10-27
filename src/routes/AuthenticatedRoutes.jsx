@@ -15,8 +15,6 @@ const LocalDashboard = lazy(() => import('../components/LocalDashboard'))
 const AdministrativeModule = lazy(() => import('../components/AdministrativeModule'))
 const MisTurnos = lazy(() => import('../components/turno/MisTurnos'))
 const InventoryHub = lazy(() => import('../components/inventory/InventoryHub'))
-const StockControlDashboard = lazy(() => import('../components/inventory/StockControlDashboard'))
-const MenuBuilderPage = lazy(() => import('../components/inventory/MenuBuilderPage'))
 const SuppliersKpisDashboard = lazy(() => import('../components/inventory/SuppliersKpisDashboard'))
 const WeeklyPurchasesPage = lazy(() => import('../components/inventory/weeklyPurchases/WeeklyPurchasesPage'))
 const WeeklyPurchaseDetailPage = lazy(() => import('../components/inventory/weeklyPurchases/WeeklyPurchaseDetailPage'))
@@ -96,6 +94,13 @@ function LegacyComprasRedirect() {
   return <Navigate to={`/local/${localId}/inventario/compras-semanales`} replace />
 }
 
+/** Las direcciones de Menú y Control de stock (#174) llevan a Inventario · Productos. */
+function InventarioProductosRedirect() {
+  const { localId } = useParams()
+  const { state } = useLocation()
+  return <Navigate to={`/local/${localId}/inventario/productos`} replace state={state ?? {}} />
+}
+
 function LegacyComprasDetailRedirect() {
   const { localId, orderId } = useParams()
   return <Navigate to={`/local/${localId}/inventario/compras-semanales/${orderId}`} replace />
@@ -124,8 +129,11 @@ function localRoutes(assignedLocalId, guarded = false) {
 
   return (
     <>
-      <Route path="/local/:localId/inventario/stock" element={wrap(<MenuBuilderPage />)} />
-      <Route path="/local/:localId/inventario/stock-control" element={wrap(<StockControlDashboard />)} />
+      {/* #174: Inventario es una sola sección (Resumen · Productos · Platos preparados). Menú y Control de stock llevan a Productos. */}
+      <Route path="/local/:localId/inventario/productos" element={wrap(<InventoryHub />)} />
+      <Route path="/local/:localId/inventario/platos" element={wrap(<InventoryHub />)} />
+      <Route path="/local/:localId/inventario/stock" element={wrap(<InventarioProductosRedirect />)} />
+      <Route path="/local/:localId/inventario/stock-control" element={wrap(<InventarioProductosRedirect />)} />
       {/* Recetas y Cocina apagadas (`recipes`, `kitchenView`): sin la ruta, la dirección cae en el `*` de cada rol. */}
       {isV2FeatureEnabled('recipes') && <Route path="/local/:localId/inventario/recipes" element={wrap(<RecipesPage />)} />}
       {/* #165: Compras semanales apagadas (`weeklyPurchases`): sus rutas /weekly-purchase-orders no existen en Backend V2.

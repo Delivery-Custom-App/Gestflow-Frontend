@@ -2,15 +2,17 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useParams } from 'react-router'
 import { CreditCard } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
-import { cancelOrder, createOrder, fetchProductsCatalog } from '../../lib/salesApi'
+import { cancelOrder, createOrder, fetchProductsCatalog, listPedidosSinCobrarDelTurno } from '../../lib/salesApi'
 import { formatCLP } from '../../lib/formatCLP'
-import { obtenerClaveIdempotencia } from '../../lib/idempotency'
+import { obtenerClaveIdempotencia, traducirErrorIdempotencia } from '../../lib/idempotency'
+import { getPointOrderStatus } from '../../lib/cobroTarjeta'
 import { useCajaActiva } from '../../hooks/useCajaActiva'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import MercadoPagoModal from './MercadoPagoModal'
 import TicketModal from './TicketModal'
 import MPConfigDrawer from './MPConfigDrawer'
+import PedidosSinCobrar from './PedidosSinCobrar'
 import { isV2FeatureEnabled } from '../../lib/v2Features'
 import IniciarMiTurno from '../caja/IniciarMiTurno'
 import MiTurnoDeVenta from '../caja/MiTurnoDeVenta'
@@ -71,6 +73,23 @@ function ProductCard({ product, qty, onAdd, onRemove }) {
   )
 }
 
+/**
+ * #160: lanza si la máquina tiene el cobro con tarjeta del pedido (o no se pudo comprobar):
+ * mejor no cancelar que perder un pago. Sin Mercado Pago Point no hay nada que comprobar.
+ */
+async function asegurarSinCobroVivo(orderId) {
+  if (!isV2FeatureEnabled('mercadopagoPoint')) return
+  let estado
+  try {
+    estado = await getPointOrderStatus(orderId)
+  } catch {
+    throw new Error('No se pudo comprobar el cobro en la máquina. Vuelve a intentarlo en unos segundos.')
+  }
+  if (estado?.point_charge_active === true) {
+    throw new Error('Hay un cobro con tarjeta en la máquina: cancélalo en el lector o espera a que venza. Para seguirlo pulsa «Cobrar».')
+  }
+}
+
 export default function VentaDirectaView() {
   const { localId } = useParams()
   const { isWorker } = useAuth()
@@ -85,7 +104,16 @@ export default function VentaDirectaView() {
   const [showMPModal, setShowMPModal] = useState(false)
   const [successMsg, setSuccessMsg] = useState('')
   const [showMPConfig, setShowMPConfig] = useState(false)
+  const [pendientes, setPendientes] = useState([])
   const idempotencyKeyRef = useRef(null)
+
+  // #159: los pedidos del turno que quedaron sin cobrar (traban el «Terminar turno»).
+  const cargarPendientes = useCallback(() => {
+    if (!cajaId) { setPendientes([]); return }
+    listPedidosSinCobrarDelTurno(cajaId).then(setPendientes).catch(() => {})
+  }, [cajaId])
+
+  useEffect(() => { cargarPendientes() }, [cargarPendientes])
 
   const loadCatalog = useCallback(() => {
     if (!localId) return
@@ -101,10 +129,13 @@ export default function VentaDirectaView() {
 
   useEffect(() => { loadCatalog() }, [loadCatalog])
 
+  // #159: con otro carrito es otra venta: la clave del intento anterior ya no sirve.
   const handleAdd = useCallback((id) => {
+    idempotencyKeyRef.current = null
     setSelectedQtys((prev) => ({ ...prev, [id]: (prev[id] || 0) + 1 }))
   }, [])
   const handleRemove = useCallback((id) => {
+    idempotencyKeyRef.current = null
     setSelectedQtys((prev) => {
       const next = { ...prev }
       if ((next[id] || 0) <= 1) delete next[id]
@@ -143,11 +174,29 @@ export default function VentaDirectaView() {
       setActiveOrder({ id: order.id, total: order.total ?? subtotal, created_at: order.created_at })
       setShowMPModal(true)
     } catch (err) {
-      setError(err?.message || 'Error al crear la orden')
+      const traducido = traducirErrorIdempotencia(err)
+      if (traducido?.claveUsada || err?.pedidoCancelado) idempotencyKeyRef.current = null
+      const mensaje = traducido?.message || 'Error al crear la orden'
+      setError(err?.pedidoCancelado ? `${mensaje} La venta no quedó guardada: revisa el carrito y vuelve a cobrar.` : mensaje)
+      cargarPendientes()
     } finally {
       setProcessing(false)
     }
   }
+
+  const cobrarPendiente = useCallback((pedido) => {
+    setError(''); setSuccessMsg('')
+    // `retomado`: si se cierra el cobro, el pedido sigue en la lista (no se cancela solo).
+    setActiveOrder({ id: pedido.id, total: pedido.total ?? 0, created_at: pedido.created_at, retomado: true })
+    setShowMPModal(true)
+  }, [])
+
+  const cancelarPendiente = useCallback(async (pedido) => {
+    // #160: con el cobro vivo en la máquina, cancelar el pedido deja el pago con tarjeta sin registrar.
+    await asegurarSinCobroVivo(pedido.id)
+    await cancelOrder(pedido.id, pedido.created_at)
+    cargarPendientes()
+  }, [cargarPendientes])
 
   /**
    * La boleta la arma el backend (`/orders/{id}/boleta`) y se muestra en
@@ -164,23 +213,29 @@ export default function VentaDirectaView() {
 
   const handlePaymentSuccess = useCallback(() => {
     const orderId = activeOrder?.id
+    const retomado = activeOrder?.retomado
     setShowMPModal(false)
     setActiveOrder(null)
-    setSelectedQtys({})
+    if (!retomado) setSelectedQtys({})
     setSuccessMsg('Venta registrada correctamente.')
     loadCatalog()
+    cargarPendientes()
     if (orderId && isV2FeatureEnabled('receiptPrint')) printReceipt(orderId)
-  }, [loadCatalog, activeOrder, printReceipt])
+  }, [loadCatalog, cargarPendientes, activeOrder, printReceipt])
 
   /** Cierra sin pagar: cancela la orden abandonada para que no quede PENDING para siempre. */
   const handleAbandonCheckout = useCallback(() => {
     const order = activeOrder
     setShowMPModal(false)
     setActiveOrder(null)
-    if (order?.id) {
-      cancelOrder(order.id, order.created_at).catch(() => {})
+    if (order?.id && !order.retomado) {
+      // Si el cobro sigue en la máquina el pedido no se cancela: queda en «Pedidos sin cobrar».
+      asegurarSinCobroVivo(order.id)
+        .then(() => cancelOrder(order.id, order.created_at))
+        .catch(() => {})
+        .finally(cargarPendientes)
     }
-  }, [activeOrder])
+  }, [activeOrder, cargarPendientes])
 
   return (
     <div className="flex h-full flex-col">
@@ -220,6 +275,8 @@ export default function VentaDirectaView() {
             {successMsg}<button type="button" aria-label="Cerrar mensaje" className="ml-2 underline text-xs" onClick={() => setSuccessMsg('')}>✕</button>
           </div>
         )}
+
+        <PedidosSinCobrar pedidos={pendientes} onCobrar={cobrarPendiente} onCancelar={cancelarPendiente} />
 
         {loading ? (
           <div className="flex flex-col items-center gap-2 py-8 text-[hsl(var(--muted-foreground))]">
