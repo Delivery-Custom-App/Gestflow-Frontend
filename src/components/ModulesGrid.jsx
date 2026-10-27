@@ -27,7 +27,7 @@ const modules = [
     title: 'Inventario',
     subtitle: 'Stock de productos',
     Icon: Package,
-    features: ['Menú', 'Control de stock'],
+    features: ['Resumen', 'Productos', 'Platos preparados'],
     disabled: false,
   },
   {

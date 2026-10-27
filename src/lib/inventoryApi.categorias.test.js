@@ -6,9 +6,9 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { apiRequest } from './apiClient'
-import { fetchCategoriesForBusiness, fetchLocal } from './v2CatalogApi'
+import { createProductWithInventory, fetchCategoriesForBusiness, fetchLocal } from './v2CatalogApi'
 import { setCachedCategories } from './categoryCatalogCache'
-import { resolveCategoryNameForLocal } from './inventoryApi'
+import { postInventoryNewProduct, resolveCategoryNameForLocal } from './inventoryApi'
 
 vi.mock('./apiClient', () => ({ apiRequest: vi.fn() }))
 vi.mock('./v2CatalogApi', () => ({
@@ -54,5 +54,16 @@ describe('resolveCategoryNameForLocal', () => {
     await expect(resolveCategoryNameForLocal(LOCAL, 'Boyeria')).resolves.toBe('Boyeria')
     expect(posteosDeCategoria()).toHaveLength(1)
     expect(posteosDeCategoria()[0][1].body).toEqual({ name: 'Boyeria', business_id: 'biz-1' })
+  })
+})
+
+describe('postInventoryNewProduct · el precio no es el costo (#158)', () => {
+  it('manda el precio de venta aparte; sin precio no copia el costo', async () => {
+    createProductWithInventory.mockResolvedValue({ inventory: { id: 'inv-1' } })
+    await postInventoryNewProduct(LOCAL, { productName: 'Bebida', category_id: 'c-cafe', price: 1500, unitCost: 800, criticalStock: 2, enVenta: false })
+    expect(createProductWithInventory).toHaveBeenLastCalledWith(LOCAL, expect.objectContaining({ price: 1500, cost: 800, stock_critical: 2, en_venta: false }))
+
+    await postInventoryNewProduct(LOCAL, { productName: 'Agua', category_id: 'c-cafe', unitCost: 800 })
+    expect(createProductWithInventory).toHaveBeenLastCalledWith(LOCAL, expect.objectContaining({ price: 0, cost: 800 }))
   })
 })

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { X, Pencil } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
-import { cambiarSiSePrepara, getInventarioDelProducto } from '../../lib/inventoryApi'
+import { cambiarSiSePrepara, getInventarioDelProducto, patchProduct } from '../../lib/inventoryApi'
 import { sePrepara } from '../../lib/tipoProducto'
 import InterruptorSePrepara from './InterruptorSePrepara'
 
@@ -12,13 +12,24 @@ const numInputCls =
 
 const soloDigitos = (val) => val.replace(/\D/g, '')
 
+const redondo = (v) => (v == null || v === '' ? '' : String(Math.round(Number(v) || 0)))
+
 /**
- * Editar un producto: si se prepara o se cuenta por unidades. Al apagarlo se
- * piden el stock actual y el mínimo en este local (si ya tenía, vienen
- * cargados). El tipo es del producto, así que vale para todos los locales.
+ * Editar un producto: nombre, categoría, precio de venta y costo (#177), y si
+ * se prepara o se cuenta por unidades. Al apagar «se prepara» se piden el
+ * stock actual y el mínimo en este local (si ya tenía, vienen cargados). El
+ * nombre, los precios, la categoría y el tipo son del producto: valen para
+ * todos los locales.
  */
-export default function EditarProductoModal({ localId, producto, onClose, onSaved }) {
+export default function EditarProductoModal({ localId, producto, categorias = [], onClose, onSaved }) {
   const productId = producto.product_id || producto.id
+  const nombreInicial = producto.product_name || producto.name || ''
+  const [nombre, setNombre] = useState(nombreInicial)
+  const [categoriaId, setCategoriaId] = useState(producto.category_id ? String(producto.category_id) : '')
+  const [precio, setPrecio] = useState(redondo(producto.price))
+  // El empleado recibe el costo en null: no se muestra ni se cambia.
+  const conCosto = producto.cost != null
+  const [costo, setCosto] = useState(redondo(producto.cost))
   const [prepara, setPrepara] = useState(() => sePrepara(producto))
   const [stockActual, setStockActual] = useState('0')
   const [stockMin, setStockMin] = useState('0')
@@ -40,11 +51,20 @@ export default function EditarProductoModal({ localId, producto, onClose, onSave
 
   const guardar = async (e) => {
     e.preventDefault()
+    const cambios = {}
+    if (nombre.trim() && nombre.trim() !== nombreInicial.trim()) cambios.name = nombre.trim()
+    if (categoriaId && categoriaId !== String(producto.category_id || '')) cambios.category_id = categoriaId
+    if (precio !== '' && precio !== redondo(producto.price)) cambios.price = Number(precio)
+    if (conCosto && costo !== '' && costo !== redondo(producto.cost)) cambios.cost = Number(costo)
+    if (!nombre.trim()) { setError('El nombre no puede estar vacío.'); return }
+    if ('price' in cambios && !(cambios.price > 0)) { setError('El precio de venta debe ser mayor que 0.'); return }
+    if ('cost' in cambios && !(cambios.cost > 0)) { setError('El costo unitario debe ser mayor que 0.'); return }
     setGuardando(true)
     setError('')
     try {
+      if (Object.keys(cambios).length) await patchProduct(productId, cambios)
       await cambiarSiSePrepara(localId, productId, { prepara, stockActual, stockMin })
-      onSaved?.({ ...producto, stock_deduction_mode: prepara ? 'RECIPE_BASED' : 'DIRECT_STOCK' })
+      onSaved?.({ ...producto, ...cambios, stock_deduction_mode: prepara ? 'RECIPE_BASED' : 'DIRECT_STOCK' })
     } catch (err) {
       setError(err?.message || 'No se pudo guardar el producto.')
       setGuardando(false)
@@ -79,6 +99,36 @@ export default function EditarProductoModal({ localId, producto, onClose, onSave
             <p className="rounded-md bg-red-50 border border-red-200 text-red-700 text-sm px-3 py-2" role="alert">{error}</p>
           )}
 
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="ep-nombre">Nombre</Label>
+            <input id="ep-nombre" type="text" value={nombre} onChange={(ev) => setNombre(ev.target.value)}
+              disabled={guardando} className={numInputCls} />
+          </div>
+          {categorias.length > 0 && (
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="ep-categoria">Categoría</Label>
+              <select id="ep-categoria" value={categoriaId} onChange={(ev) => setCategoriaId(ev.target.value)}
+                disabled={guardando} className={numInputCls}>
+                {!categoriaId && <option value="">Sin categoría</option>}
+                {categorias.map((c) => <option key={c.id} value={String(c.id)}>{c.name}</option>)}
+              </select>
+            </div>
+          )}
+          <div className="grid grid-cols-2 gap-4">
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="ep-precio">Precio de venta (CLP)</Label>
+              <input id="ep-precio" type="text" inputMode="numeric" value={precio}
+                onChange={(ev) => setPrecio(soloDigitos(ev.target.value))} disabled={guardando} className={numInputCls} />
+            </div>
+            {conCosto && (
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="ep-costo">Costo unitario (CLP)</Label>
+                <input id="ep-costo" type="text" inputMode="numeric" value={costo}
+                  onChange={(ev) => setCosto(soloDigitos(ev.target.value))} disabled={guardando} className={numInputCls} />
+              </div>
+            )}
+          </div>
+
           <InterruptorSePrepara id="ep-se-prepara" checked={prepara} onChange={setPrepara} disabled={guardando} />
 
           {!prepara && (
@@ -102,7 +152,7 @@ export default function EditarProductoModal({ localId, producto, onClose, onSave
           )}
 
           <p className="text-xs text-[hsl(var(--muted-foreground))]">
-            Este cambio vale para el producto en todos los locales del negocio.
+            El nombre, el precio, el costo, la categoría y si se prepara cambian en todos los locales del negocio.
           </p>
         </form>
 

@@ -8,8 +8,8 @@ describe('ProductsTable', () => {
       <ProductsTable items={[]} loading error="" currentPage={1} totalPages={1} onPageChange={vi.fn()} />,
     )
 
-    // 5 filas de 10 columnas (con Crítico, sin Proveedor).
-    expect(container.querySelectorAll('[data-slot="skeleton"]')).toHaveLength(50)
+    // 5 filas de 11 columnas (con Precio, Crítico y En venta; sin Proveedor).
+    expect(container.querySelectorAll('[data-slot="skeleton"]')).toHaveLength(55)
   })
 
   const base = { loading: false, error: '', currentPage: 1, totalPages: 1, onPageChange: vi.fn() }
@@ -24,7 +24,8 @@ describe('ProductsTable', () => {
     expect(screen.getByRole('columnheader', { name: 'Crítico' })).toBeInTheDocument()
     const fila = screen.getAllByRole('row')[1]
     const celdas = within(fila).getAllByRole('cell').map((c) => c.textContent)
-    expect(celdas.slice(2, 5)).toEqual(['3', '10', '4'])
+    // Producto · Precio · Costo · Actual · Mín. · Máx. · Crítico
+    expect(celdas.slice(3, 7)).toEqual(['3', '10', '—', '4'])
   })
 
   it('sumar y corregir piden registrar sobre ese producto', () => {
@@ -125,5 +126,54 @@ describe('ProductsTable', () => {
 
     expect(screen.getByText('Tomate')).toBeInTheDocument()
     expect(screen.getByText('Verduras')).toBeInTheDocument()
+  })
+})
+
+describe('ProductsTable · precio y «En venta» por local (#176)', () => {
+  const base = { loading: false, error: '', currentPage: 1, totalPages: 1, onPageChange: vi.fn() }
+  const FILA = {
+    inventory_id: 'inv-1', product_id: 'p1', product_name: 'Bebida lata', category_name: 'Bebidas', stock_current: 20, stock_min: 5,
+    unit_cost_clp: 800, price: 1500, local_product_id: 'lp-1', en_venta: true,
+  }
+
+  it('muestra el precio y la categoría bajo el nombre', () => {
+    render(<ProductsTable {...base} items={[FILA]} />)
+    expect(screen.getByRole('columnheader', { name: 'Precio' })).toBeInTheDocument()
+    const celdas = within(screen.getAllByRole('row')[1]).getAllByRole('cell')
+    expect(celdas[0]).toHaveTextContent('Bebida lataBebidas')
+    expect(celdas[1]).toHaveTextContent('1.500')
+  })
+
+  it('el interruptor «En venta» dice su estado y pide cambiarlo', () => {
+    const onToggleEnVenta = vi.fn()
+    render(<ProductsTable {...base} items={[FILA, { ...FILA, inventory_id: 'inv-2', product_id: 'p2', product_name: 'Jugo', local_product_id: 'lp-2', en_venta: false }]} onToggleEnVenta={onToggleEnVenta} />)
+    const sw = screen.getByRole('switch', { name: 'En venta Bebida lata' })
+    expect(sw).toHaveAttribute('aria-checked', 'true')
+    expect(within(screen.getAllByRole('row')[1]).getByText('En venta')).toBeInTheDocument()
+    expect(screen.getByText('Oculto')).toBeInTheDocument()
+    fireEvent.click(sw)
+    expect(onToggleEnVenta).toHaveBeenCalledWith(FILA)
+  })
+
+  it('al editar ofrece «Es un plato preparado», «Quitar del menú» y «Eliminar del stock del local»', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    const onQuitarDelMenu = vi.fn(() => Promise.resolve())
+    const onPasarAPlato = vi.fn(() => Promise.resolve())
+    render(<ProductsTable {...base} items={[FILA]} onQuitarDelMenu={onQuitarDelMenu} onPasarAPlato={onPasarAPlato} onPatchPrice={vi.fn()} />)
+
+    fireEvent.click(screen.getByRole('button', { name: /Editar/ }))
+    expect(screen.getByLabelText('Precio de venta (CLP)')).toHaveValue(1500)
+    expect(screen.getByRole('button', { name: 'Eliminar del stock del local' })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Quitar del menú' }))
+    await waitFor(() => expect(onQuitarDelMenu).toHaveBeenCalledWith(FILA))
+  })
+
+  it('al editar, cambia el precio de venta', async () => {
+    const onPatchPrice = vi.fn(() => Promise.resolve())
+    render(<ProductsTable {...base} items={[FILA]} onPatchPrice={onPatchPrice} />)
+    fireEvent.click(screen.getByRole('button', { name: /Editar/ }))
+    fireEvent.change(screen.getByLabelText('Precio de venta (CLP)'), { target: { value: '1800' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Guardar cambios' }))
+    await waitFor(() => expect(onPatchPrice).toHaveBeenCalledWith(FILA, 1800))
   })
 })

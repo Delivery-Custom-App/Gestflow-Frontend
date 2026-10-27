@@ -110,29 +110,37 @@ describe('AppShell — «no cobradas» según el local', () => {
   })
 })
 
+/** El acordeón Inventario tiene una sola entrada, «Inventario», y ya no Estado Inventario, Menú ni Control de stock. */
+function soloLaEntradaInventario() {
+  const region = screen.getByRole('region', { name: 'Inventario' })
+  const entradas = within(region).getAllByRole('button').map((b) => b.textContent.trim()).filter((t) => t === 'Inventario')
+  for (const name of ['Estado Inventario', 'Menú', 'Control de stock']) {
+    if (screen.queryByRole('button', { name })) return false
+  }
+  return entradas.length >= 1
+}
+
 describe('AppShell — menú de Inventario', () => {
   it('las banderas de proveedores y compras semanales están apagadas', () => {
     expect(V2_FEATURES.suppliers).toBe(false)
     expect(V2_FEATURES.weeklyPurchases).toBe(false)
   })
 
-  it('en un local con mesas ofrece tres entradas y no Proveedores, Pedidos ni Recetas', () => {
+  it('en un local con mesas ofrece una sola entrada y no Proveedores, Pedidos ni Recetas', () => {
     renderShell('loc-mesas')
 
-    for (const name of ['Estado Inventario', 'Menú', 'Control de stock']) {
-      expect(screen.getByRole('button', { name })).toBeInTheDocument()
-    }
+    // #174: una sola entrada «Inventario»; Menú y Control de stock quedan adentro.
+    expect(soloLaEntradaInventario()).toBe(true)
     expect(screen.queryByRole('button', { name: 'Recetas' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Proveedores' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Pedidos' })).not.toBeInTheDocument()
   })
 
-  it('en un local al paso conserva su recorte de tres entradas', () => {
+  it('en un local al paso también ofrece una sola entrada', () => {
     renderShell('loc-paso')
 
-    for (const name of ['Estado Inventario', 'Menú', 'Control de stock']) {
-      expect(screen.getByRole('button', { name })).toBeInTheDocument()
-    }
+    // #174: una sola entrada «Inventario»; Menú y Control de stock quedan adentro.
+    expect(soloLaEntradaInventario()).toBe(true)
     expect(screen.queryByRole('button', { name: 'Recetas' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Proveedores' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Pedidos' })).not.toBeInTheDocument()
@@ -248,7 +256,7 @@ describe('AppShell — Cocina y Recetas apagadas', () => {
       cleanup()
 
       renderShell('loc-mesas', 'inventario')
-      expect(screen.getByRole('button', { name: 'Control de stock' })).toBeInTheDocument()
+      expect(soloLaEntradaInventario()).toBe(true)
       expect(screen.queryByRole('button', { name: 'Recetas' })).not.toBeInTheDocument()
     },
   )
