@@ -11,6 +11,7 @@ import { isV2FeatureEnabled } from '../../lib/v2Features'
 import { useAuth } from '../../context/AuthContext'
 import { MENSAJE_SOLO_DUENO_CONECTA_MP, puedeConectarMercadoPago } from '../../lib/rolesCaja'
 import { toast } from 'sonner'
+import { avisoDeMercadoPago, origenesConfiables } from '../../lib/avisoMercadoPago'
 
 const EMPTY_MANUAL = { mp_pos_id: '', name: '' }
 const MP_POS_WEBHOOKS = isV2FeatureEnabled('mpPosWebhooks')
@@ -133,13 +134,12 @@ export default function MPConfigDrawer({ localId, onClose, open = true }) {
     oauthPopupRef.current = popup
     setOauthConnecting(true)
 
+    // #171: solo el aviso de esta ventana y de la API o el front.
+    const origenes = origenesConfiables()
     function onMessage(e) {
-      if (!e.data || typeof e.data !== 'object') return
-      if (e.data.type === 'mp_oauth_success') {
-        finish(true)
-      } else if (e.data.type === 'mp_oauth_error') {
-        finish(false)
-      }
+      const tipo = avisoDeMercadoPago(e, popup, origenes)
+      if (tipo === 'mp_oauth_success') finish(true)
+      else if (tipo === 'mp_oauth_error') finish(false)
     }
 
     function finish(success) {

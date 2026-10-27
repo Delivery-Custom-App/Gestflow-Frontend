@@ -27,6 +27,24 @@ function buildUrl(path) {
   return `${apiBaseUrl}/api${normalizedPath}`
 }
 
+/** Lo que ve la persona cuando el servidor no responde (sin red, API caída). */
+export const MENSAJE_SIN_CONEXION = 'No hay conexión con el servidor. Revisa tu internet e inténtalo de nuevo.'
+
+/**
+ * `fetch` que, si no llega respuesta, lanza un error en castellano en vez del
+ * «Failed to fetch» del navegador. El error original queda en `originalError`.
+ */
+async function pedir(path, init) {
+  try {
+    return await fetch(buildUrl(path), init)
+  } catch (networkErr) {
+    const err = new Error(MENSAJE_SIN_CONEXION)
+    err.isNetworkError = true
+    err.originalError = networkErr
+    throw err
+  }
+}
+
 function readJson(key) {
   if (typeof window === 'undefined') return null
 
@@ -104,7 +122,7 @@ async function parseAuthResponse(response) {
  * anterior en vez de sumar otra.
  */
 export async function loginWithPassword({ email, password }) {
-  const response = await fetch(buildUrl('/auth/login'), {
+  const response = await pedir('/auth/login', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email, password, device_id: obtenerDeviceId(), device_name: nombreDelEquipo() }),
@@ -181,7 +199,7 @@ export async function cambiarLocalActivo(localId) {
   const current = getStoredSession()
   if (!current?.access_token) throw new Error('No hay una sesión abierta')
   if (!localId) throw new Error('Elige el local al que te cambias')
-  const response = await fetch(buildUrl('/auth/switch-local'), {
+  const response = await pedir('/auth/switch-local', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${current.access_token}` },
     body: JSON.stringify({ local_id: String(localId) }),

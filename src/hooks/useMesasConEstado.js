@@ -42,13 +42,8 @@ export function useMesasConEstado(localId, { poll = false } = {}) {
       // Un refresco de fondo que falla deja la grilla como estaba.
       if (silencioso || consulta !== ultimaConsulta.current) return
       console.error('Error al cargar mesas:', err)
-      let errorMessage = err.message || 'Error al cargar mesas'
-      // Extraer el mensaje de error limpio sin el código HTTP
-      if (errorMessage.includes(':')) {
-        const parts = errorMessage.split(':')
-        errorMessage = parts.slice(1).join(':').trim()
-      }
-      setError(errorMessage)
+      // Sin el código HTTP delante; antes se cortaba en el primer «:» aunque fuera parte del texto.
+      setError(String(err?.message || 'Error al cargar mesas').replace(/^\d{3}:\s*/, ''))
     } finally {
       if (consulta === ultimaConsulta.current) setLoading(false)
     }

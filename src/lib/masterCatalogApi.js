@@ -57,7 +57,7 @@ export async function importarItemAlLocal(itemId, { businessId, localId } = {}) 
       })
     } catch (error) {
       // 409: ya tenía su registro de stock, que es lo que se buscaba.
-      if (!/^409\b/.test(String(error?.message || ''))) {
+      if (Number(error?.status) !== 409 && !/^409\b/.test(String(error?.message || ''))) {
         return { ...producto, avisoStock: limpiar(error, 'error desconocido') }
       }
     }

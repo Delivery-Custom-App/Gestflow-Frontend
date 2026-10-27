@@ -136,10 +136,16 @@ function localRoutes(assignedLocalId, guarded = false) {
       <Route path="/local/:localId/inventario/stock-control" element={wrap(<InventarioProductosRedirect />)} />
       {/* Recetas y Cocina apagadas (`recipes`, `kitchenView`): sin la ruta, la dirección cae en el `*` de cada rol. */}
       {isV2FeatureEnabled('recipes') && <Route path="/local/:localId/inventario/recipes" element={wrap(<RecipesPage />)} />}
-      <Route path="/local/:localId/inventario/compras-semanales/:orderId" element={wrap(<WeeklyPurchaseDetailPage />)} />
-      <Route path="/local/:localId/inventario/compras-semanales" element={wrap(<WeeklyPurchasesPage />)} />
-      <Route path="/local/:localId/inventario/proveedores/compras-semanales/:orderId" element={wrap(<LegacyComprasDetailRedirect />)} />
-      <Route path="/local/:localId/inventario/proveedores/compras-semanales" element={wrap(<LegacyComprasRedirect />)} />
+      {/* #165: Compras semanales apagadas (`weeklyPurchases`): sus rutas /weekly-purchase-orders no existen en Backend V2.
+          Sin la ruta, la dirección cae en el `*` de cada rol en vez de abrir una pantalla que da 404. */}
+      {isV2FeatureEnabled('weeklyPurchases') && (
+        <>
+          <Route path="/local/:localId/inventario/compras-semanales/:orderId" element={wrap(<WeeklyPurchaseDetailPage />)} />
+          <Route path="/local/:localId/inventario/compras-semanales" element={wrap(<WeeklyPurchasesPage />)} />
+          <Route path="/local/:localId/inventario/proveedores/compras-semanales/:orderId" element={wrap(<LegacyComprasDetailRedirect />)} />
+          <Route path="/local/:localId/inventario/proveedores/compras-semanales" element={wrap(<LegacyComprasRedirect />)} />
+        </>
+      )}
       <Route path="/local/:localId/inventario/proveedores" element={wrap(<SuppliersKpisDashboard />)} />
       <Route path="/local/:localId/inventario" element={wrap(<InventoryHub />)} />
       <Route path="/local/:localId/administrativo/:sectionId?" element={wrap(<AdministrativeModule />)} />

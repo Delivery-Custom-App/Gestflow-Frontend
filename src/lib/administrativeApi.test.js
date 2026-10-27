@@ -17,6 +17,9 @@ import {
   getVentasIndicadores,
   getDashboardSalesReport,
   getLocalDashboard,
+  getOrdersByLocal,
+  estadoDeOrden,
+  origenDeOrden,
   mapDashboardSalesReport,
   rangoDeHoyEnChile,
   provisionCajaFisicaMp,
@@ -312,5 +315,24 @@ describe('rangoDeHoyEnChile (#161)', () => {
 
   it('cruza el fin de mes', () => {
     expect(rangoDeHoyEnChile(new Date('2026-10-31T15:00:00Z'))).toEqual({ dateFrom: '2026-10-31T00:00:00', dateTo: '2026-11-01T00:00:00' })
+  })
+})
+
+describe('Ventas · detalle de órdenes (#168)', () => {
+  it('por defecto pide solo las cobradas: los pedidos sin cobrar no se mezclan con las ventas', async () => {
+    apiRequest.mockResolvedValue({ data: [], total: 0 })
+    await getOrdersByLocal(LOCAL, null, { limit: 10 })
+    const ruta = rutasPedidas().find((r) => r.startsWith('/orders?'))
+    expect(new URLSearchParams(ruta.split('?')[1]).getAll('status')).toEqual(['completed'])
+  })
+
+  it('el estado y el origen se dicen en castellano', () => {
+    expect(estadoDeOrden('COMPLETED')).toBe('Cobrada')
+    expect(estadoDeOrden('PENDING')).toBe('Sin cobrar')
+    expect(estadoDeOrden('open')).toBe('Sin cobrar')
+    expect(estadoDeOrden('CANCELLED')).toBe('Cancelada')
+    expect(origenDeOrden('dine_in')).toBe('Mesa')
+    expect(origenDeOrden('mostrador')).toBe('Mostrador')
+    expect(origenDeOrden(null)).toBe('—')
   })
 })

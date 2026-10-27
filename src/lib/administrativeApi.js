@@ -219,9 +219,24 @@ export function rangoDeHoyEnChile(now = new Date()) {
   return { dateFrom: `${hoy}T00:00:00`, dateTo: `${shiftIsoDate(hoy, 1)}T00:00:00` }
 }
 
+/** El estado y el origen de una orden en castellano (#168). */
+const ESTADO_ORDEN = { PENDING: 'Sin cobrar', PREPARING: 'En preparación', READY: 'Lista', COMPLETED: 'Cobrada', CANCELLED: 'Cancelada' }
+const ORIGEN_ORDEN = { dine_in: 'Mesa', mostrador: 'Mostrador', takeout: 'Para llevar', delivery: 'Delivery' }
+export function estadoDeOrden(status) {
+  const clave = String(status || '').toUpperCase()
+  return ESTADO_ORDEN[clave === 'OPEN' ? 'PENDING' : clave] || status || '—'
+}
+export function origenDeOrden(source) {
+  return ORIGEN_ORDEN[String(source || '').toLowerCase()] || source || '—'
+}
+
+/**
+ * Las órdenes del local por páginas. Por defecto solo las cobradas (#168): en
+ * Ventas los pedidos sin cobrar salían mezclados con las ventas («PENDING / Otro»).
+ */
 export function getOrdersByLocal(localId, token, filters = {}) {
   void token
-  const requested = filters.status ?? ['open', 'preparing', 'ready', 'completed']
+  const requested = filters.status ?? ['completed']
   const status = Array.isArray(requested)
     ? requested.map(toV2OrderStatus)
     : toV2OrderStatus(requested)
