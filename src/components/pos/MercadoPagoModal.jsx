@@ -17,6 +17,9 @@ function fmt(n) {
 }
 
 /** #160: lo que se ve al abrir «Cobrar» si la máquina ya tiene el cobro de este pedido. */
+/** Consultas seguidas con «sin cobro en la máquina» antes de volver a ofrecer Efectivo (#160). */
+const CONSULTAS_SIN_COBRO = 2
+
 export const COBRO_EN_CURSO = 'Ya hay un cobro con tarjeta en la máquina para este pedido. Esperando que el cliente pague.'
 
 export default function MercadoPagoModal({ open, orderId, createdAt, total, description, onSuccess, onClose }) {
@@ -65,6 +68,7 @@ export default function MercadoPagoModal({ open, orderId, createdAt, total, desc
   useEffect(() => {
     if (!open || step !== 'point_waiting' || cancelando) return undefined
     let vigente = true
+    let consultasSinCobro = 0
     const volverAElegir = ({ error: e = null, info: i = '' } = {}) => {
       setAvisoCancelacion('')
       setError(e)
@@ -95,7 +99,12 @@ export default function MercadoPagoModal({ open, orderId, createdAt, total, desc
           return
         }
         // #160: se canceló en la máquina (o ya no hay cobro): se puede cobrar de nuevo o en efectivo.
-        if (s.payment_status === 'CANCELLED' || s.point_charge_active === false) {
+        // «Ya no hay cobro» sin cancelación explícita puede ser un pago que el aviso de Mercado Pago
+        // todavía no marcó como completado: se pide dos consultas seguidas antes de ofrecer Efectivo.
+        const sinCobro = s.payment_status === 'CANCELLED'
+        if (s.point_charge_active === false && !sinCobro) consultasSinCobro += 1
+        else if (!sinCobro) consultasSinCobro = 0
+        if (sinCobro || consultasSinCobro >= CONSULTAS_SIN_COBRO) {
           volverAElegir({ info: 'El cobro ya no está en la máquina (se canceló). Puedes cobrar en efectivo o enviarlo de nuevo.' })
           return
         }
