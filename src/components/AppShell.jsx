@@ -184,6 +184,7 @@ function Sidebar({ collapsed, onToggle, onClose, mobile = false }) {
       case 'gestor-observabilidad': navigate('/gestor/observabilidad'); break
       case 'dashboard': navigate(localId ? `/local/${localId}/dashboard` : '/admin', { state: navState }); break
       case 'hr-hub':    if (localId) navigate(`/local/${localId}/rrhh`, { state: navState }); break
+      case 'mi-pos':        if (assignedLocalId) navigate(`/local/${assignedLocalId}/pos`); break
       case 'pos-mesas':     if (localId) navigate(`/local/${localId}/pos`, { state: navState }); break
       case 'pos-kitchen':   if (localId) navigate(`/local/${localId}/pos/cocina`, { state: navState }); break
       case 'pos-venta-directa': if (localId) navigate(`/local/${localId}/pos/venta-directa`, { state: navState }); break
@@ -217,6 +218,10 @@ function Sidebar({ collapsed, onToggle, onClose, mobile = false }) {
     // RRHH está apagado con `hrModule` (src/lib/v2Features.js): ningún rol lo ve.
     ...(isV2FeatureEnabled('hrModule') && localId && !isWorker ? [{ key: 'hr-hub', label: 'RRHH', icon: Users }] : []),
     ...(!isWorker && localId ? [{ key: 'dashboard', label: 'Dashboard', icon: LayoutDashboard }] : []),
+    // Fuera de su local (Configuración) el vendedor no tiene las secciones del local y el
+    // menú le quedaba vacío: se le ofrece la vuelta a su punto de venta. `/pos` ya lleva a
+    // Venta directa si el local es al paso.
+    ...(isWorker && !localId && assignedLocalId ? [{ key: 'mi-pos', label: 'Mi punto de venta', icon: Table2 }] : []),
   ]
 
   // Comida al paso (sales_model AL_PASO) o demo legacy por email:
