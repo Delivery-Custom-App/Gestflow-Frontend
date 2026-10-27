@@ -188,6 +188,8 @@ export default function MesaWorkspace({ mesa, atencion = null, localId, cajaId, 
     submittingRef.current = true
     setSubmitting(true)
     setErrorMsg('')
+    // Claves de los productos que ya entraron al pedido existente, por si falla uno a mitad de camino.
+    const agregados = []
     try {
       const idempotencyKey = obtenerClaveIdempotencia(idempotencyKeyRef)
       const items = Object.entries(selectedQtys).map(([key, quantity]) => {
@@ -197,10 +199,12 @@ export default function MesaWorkspace({ mesa, atencion = null, localId, cajaId, 
         return { product_id: it?.id, quantity, unit_price: unitPrice }
       })
       if (firstOrder) {
+        const claves = Object.keys(selectedQtys)
         for (const [index, item] of items.entries()) {
           // Secuencial a propósito: conserva el orden de los ítems/comanda y evita escrituras concurrentes sobre la misma orden/mesa.
           // oxlint-disable-next-line react-doctor/async-await-in-loop
           await addOrderItem(firstOrder.id, item, firstOrder.created_at, `${idempotencyKey}:item:${index}`)
+          agregados.push(claves[index])
         }
       } else {
         await createOrder({ local_id: localId, mesa_id: mesa.id, caja_id: cajaId || null, source: 'dine_in', guests: Number(guests), items, idempotency_key: idempotencyKey })
@@ -214,7 +218,16 @@ export default function MesaWorkspace({ mesa, atencion = null, localId, cajaId, 
     } catch (err) {
       const traducido = traducirErrorIdempotencia(err)
       if (traducido?.claveUsada || err?.pedidoCancelado) idempotencyKeyRef.current = null
-      const mensaje = traducido?.message || 'Error al agregar productos al pedido'
+      let mensaje = traducido?.message || 'Error al agregar productos al pedido'
+      if (agregados.length > 0) {
+        // Lo que ya entró al pedido sale del carrito: un reintento no lo agrega de nuevo. Con otro carrito va otra clave.
+        idempotencyKeyRef.current = null
+        const quitar = (prev) => Object.fromEntries(Object.entries(prev).filter(([k]) => !agregados.includes(k)))
+        setSelectedQtys(quitar)
+        setCustomizations(quitar)
+        refresh()
+        mensaje = `Se agregaron ${agregados.length} producto${agregados.length !== 1 ? 's' : ''} al pedido, pero falló el resto: ${mensaje} Revisa lo que queda en el carrito y vuelve a agregarlo.`
+      }
       setErrorMsg(err?.pedidoCancelado ? `${mensaje} El pedido no quedó guardado: revisa los productos y vuelve a agregarlos.` : mensaje)
     } finally {
       submittingRef.current = false

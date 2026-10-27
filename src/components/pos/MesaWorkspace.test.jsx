@@ -211,6 +211,32 @@ describe('MesaWorkspace', () => {
   })
 
   // La pantalla de Cocina está apagada: la comanda se ve e imprime desde la mesa.
+  it('#159: si falla un producto a mitad de camino, lo ya agregado sale del carrito y el reintento no lo repite', async () => {
+    const user = userEvent.setup()
+    const { refresh } = setup({ activeOrders: [{ id: 'order-existing', created_at: '2024-01-01T00:00:00Z', items: [] }] })
+    useMenuPOS.mockReturnValue({
+      data: { categories: [{ id: 'cat1', name: 'Bebidas', products: [{ id: 'prod1', name: 'Agua', price: 1000 }, { id: 'prod2', name: 'Jugo', price: 1500 }] }] },
+      loading: false, fetch: vi.fn(),
+    })
+    addOrderItem.mockResolvedValueOnce({}).mockRejectedValueOnce(new Error('400: El producto no está activo en este local')).mockResolvedValue({})
+    render(<MesaWorkspace mesa={mesa} localId="local1" cajaId="caja1" onBack={() => {}} onTableUpdated={() => {}} />)
+
+    const mas = screen.getAllByText('+')
+    await user.click(mas[0])
+    await user.click(mas[1])
+    await user.click(screen.getByRole('button', { name: /agregar al pedido/i }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Se agregaron 1 producto al pedido, pero falló el resto')
+    expect(refresh).toHaveBeenCalled()
+    const primeraClave = addOrderItem.mock.calls[0][3].split(':item:')[0]
+
+    await user.click(screen.getByRole('button', { name: /agregar al pedido/i }))
+    await waitFor(() => expect(addOrderItem).toHaveBeenCalledTimes(3))
+    // El reintento manda solo el producto que faltaba, con una clave nueva.
+    expect(addOrderItem.mock.calls[2][1]).toEqual({ product_id: 'prod2', quantity: 1, unit_price: 1500 })
+    expect(addOrderItem.mock.calls[2][3].split(':item:')[0]).not.toBe(primeraClave)
+  })
+
   it('con una orden activa abre la comanda de esa orden', async () => {
     const user = userEvent.setup()
     setup({ activeOrders: [{ id: 'order-1', created_at: '2024-01-01T00:00:00Z', items: [] }] })
