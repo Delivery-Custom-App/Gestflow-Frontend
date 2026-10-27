@@ -15,6 +15,8 @@ import {
   getVentasIndicadores,
   getLocalDashboard,
   getOrdersByLocal,
+  estadoDeOrden,
+  origenDeOrden,
   createCaja,
   getResumenDiario,
 } from '../lib/administrativeApi'
@@ -524,7 +526,7 @@ function VentasContent({ indicadores, orders, ordersTotal, ordersOffset = 0, ord
                   key={`${order.id}-${order.created_at || ''}`}
                   title={formatMoney(getOrderAmount(order))}
                   sub={`#${String(order.id || '').slice(0, 8)} — ${normalizePaymentMethod(order.payment_method)} — ${formatDateTime(order.created_at)}`}
-                  meta={`Estado: ${order.status || '—'} · Fuente: ${order.source || '—'}`}
+                  meta={`Estado: ${estadoDeOrden(order.status)} · Origen: ${origenDeOrden(order.source)}`}
                   pill={normalizePaymentMethod(order.payment_method)}
                   action={isV2FeatureEnabled('receiptPrint') && (
                     <Button size="sm" variant="outline" onClick={() => onVerBoleta(order)}>
