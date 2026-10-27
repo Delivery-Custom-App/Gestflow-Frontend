@@ -1,4 +1,4 @@
-import { clearStoredSession, getStoredSession, refreshSession } from './authClient'
+import { MENSAJE_SIN_CONEXION, clearStoredSession, getStoredSession, refreshSession } from './authClient'
 import { getBusinessId } from '../utils/jwt'
 import { cachedRequest } from './apiCache'
 
@@ -209,7 +209,7 @@ export async function apiRequest(path, options = {}) {
     response = await makeRequest(token)
   } catch (networkErr) {
     // True network failure (offline, DNS, CORS, timeout) — no HTTP status
-    const err = new Error('Sin conexión. Verificá tu red e intentá de nuevo.')
+    const err = new Error(MENSAJE_SIN_CONEXION)
     err.isNetworkError = true
     err.originalError = networkErr
     window.dispatchEvent(new CustomEvent('api:network-error', {

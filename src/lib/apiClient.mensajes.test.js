@@ -1,6 +1,7 @@
 /** #172: los errores se muestran sin el código HTTP delante y con los mensajes técnicos en palabras simples. */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { apiRequest, mensajeParaPersona } from './apiClient'
+import { MENSAJE_SIN_CONEXION, loginWithPassword } from './authClient'
 
 function respuesta(status, body, statusText = '') {
   return {
@@ -41,5 +42,21 @@ describe('apiRequest · el error que ve la persona (#172)', () => {
   it('sin texto del backend dice que no se pudo, con el código entre paréntesis', () => {
     expect(mensajeParaPersona(500, '', 'Internal Server Error')).toBe('No se pudo completar la operación (error 500 Internal Server Error).')
     expect(mensajeParaPersona(404, '409: ya venía con código')).toBe('ya venía con código')
+  })
+})
+
+describe('sin respuesta del servidor (#172)', () => {
+  it('el login dice que no hay conexión, no «Failed to fetch»', async () => {
+    fetch.mockRejectedValue(new TypeError('Failed to fetch'))
+    const err = await loginWithPassword({ email: 'a@b.cl', password: 'x' }).catch((e) => e)
+    expect(err.message).toBe(MENSAJE_SIN_CONEXION)
+    expect(err.isNetworkError).toBe(true)
+  })
+
+  it('las demás pantallas muestran el mismo mensaje', async () => {
+    fetch.mockRejectedValue(new TypeError('Failed to fetch'))
+    const err = await apiRequest('/tables').catch((e) => e)
+    expect(err.message).toBe(MENSAJE_SIN_CONEXION)
+    expect(err.isNetworkError).toBe(true)
   })
 })
