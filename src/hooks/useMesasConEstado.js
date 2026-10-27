@@ -33,7 +33,11 @@ export function useMesasConEstado(localId, { poll = false } = {}) {
         setError(null)
       }
       const filas = await listMesasConTotales(localId)
-      if (consulta === ultimaConsulta.current) setMesas(filas)
+      if (consulta === ultimaConsulta.current) {
+        setMesas(filas)
+        // Un refresco de fondo que acierta también saca el error de una carga anterior.
+        setError(null)
+      }
     } catch (err) {
       // Un refresco de fondo que falla deja la grilla como estaba.
       if (silencioso || consulta !== ultimaConsulta.current) return

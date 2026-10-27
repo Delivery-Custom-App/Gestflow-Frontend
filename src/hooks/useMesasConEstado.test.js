@@ -98,4 +98,15 @@ describe('useMesasConEstado · se refresca sola (#157)', () => {
     expect(result.current.mesas).toEqual([{ id: 'm1' }])
     expect(result.current.error).toBeNull()
   })
+
+  it('si la primera carga falló, un refresco de fondo que acierta trae las mesas y saca el error', async () => {
+    listMesasConTotales
+      .mockRejectedValueOnce(new Error('500: caído'))
+      .mockResolvedValueOnce([{ id: 'm1' }])
+    const { result } = await montar({ poll: true })
+    expect(result.current.error).toBeTruthy()
+    await act(async () => { vi.advanceTimersByTime(MESAS_REFRESCO_MS) })
+    await waitFor(() => expect(result.current.mesas).toEqual([{ id: 'm1' }]))
+    expect(result.current.error).toBeNull()
+  })
 })
