@@ -103,6 +103,8 @@ export const V2_FEATURES = {
    * split-payments`, su `/summary` y `/split-payments/{id}` devuelven 404, y no
    * existe el modelo en la base. Mientras siga en false, MultiPaymentModal y sus
    * botones no se montan; la UI queda lista para cuando el backend exista.
+   * #173: se conserva (no se borra) hasta que el backend diga si hará los pagos
+   * divididos; si no los hará, se borran MultiPaymentModal y sus llamadas.
    */
   splitPayments: false,
   /**
@@ -126,6 +128,9 @@ export const V2_FEATURES = {
    * inventario. Para volver a encenderla hace falta ese módulo en el backend
    * —que además depende de `/suppliers`, ver `suppliers`— y luego poner esta
    * bandera en true. Las rutas y las pantallas siguen en el código.
+   * #173: se conserva hasta que el backend diga si hará el módulo; si no, se
+   * borran weeklyPurchasesApi.js y sus pantallas. Sus rutas solo se montan con
+   * la bandera encendida (#165).
    */
   weeklyPurchases: false,
   /** Boleta del cliente: `GET /orders/{id}/boleta`, impresa por el navegador. */
