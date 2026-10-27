@@ -263,21 +263,19 @@ export default function POSModule() {
     setShowEditModal(true)
   }, [])
 
+  // Si el backend rechaza el cambio (p. ej. 409 al dar de baja una mesa en uso) el error sube
+  // a EditMesaModal, que lo muestra y se queda abierto: solo se cierra cuando se guardó.
   const handleUpdateMesa = async (formData) => {
-    try {
-      await updateMesa({
-        id: formData.id,
-        name: formData.name,
-        capacidad: formData.capacidad,
-        zona: formData.zona,
-        is_active: formData.is_active,
-      })
-      setShowEditModal(false)
-      setEditingMesa(null)
-      refreshKpis()
-    } catch (error) {
-      console.error('Error updating mesa:', error)
-    }
+    await updateMesa({
+      id: formData.id,
+      name: formData.name,
+      capacidad: formData.capacidad,
+      zona: formData.zona,
+      is_active: formData.is_active,
+    })
+    setShowEditModal(false)
+    setEditingMesa(null)
+    refreshKpis()
   }
 
   const handleDeleteMesa = useCallback((mesa) => {

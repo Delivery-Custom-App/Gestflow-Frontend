@@ -6,6 +6,7 @@ import POSModule from './POSModule'
 
 const sesion = vi.hoisted(() => ({ isWorker: false, user: { id: 'enc' } }))
 const bajaDeMesa = vi.hoisted(() => vi.fn())
+const editarMesa = vi.hoisted(() => vi.fn())
 const crearGrupo = vi.hoisted(() => vi.fn())
 // null = las mesas de siempre (MESAS); un test puede poner otras.
 const tablero = vi.hoisted(() => ({ mesas: null }))
@@ -27,7 +28,7 @@ const SIN_MESAS_EN_CURSO = MESAS.filter((m) => m.ordenes_en_curso.length === 0)
 vi.mock('../../context/AuthContext', () => ({ useAuth: () => sesion }))
 vi.mock('../../hooks/useCajaActiva', () => ({ useCajaActiva: () => ({ cajaId: 'caja-enc' }) }))
 vi.mock('../../hooks/useMesasConEstado', () => ({
-  useMesasConEstado: () => ({ mesas: tablero.mesas ?? MESAS, loading: false, error: null, refresh: refrescarMesas, deleteMesa: bajaDeMesa }),
+  useMesasConEstado: () => ({ mesas: tablero.mesas ?? MESAS, loading: false, error: null, refresh: refrescarMesas, updateMesa: editarMesa, deleteMesa: bajaDeMesa }),
 }))
 vi.mock('../../hooks/useMesasKPIs', () => ({ useMesasKPIs: () => ({ kpis: null, loading: false, error: null, refresh: vi.fn() }) }))
 vi.mock('../../hooks/useGruposDeMesas', () => ({
@@ -72,7 +73,7 @@ function montar() {
 const tarjeta = (nombre) => screen.getByText(nombre).closest('div.group')
 
 beforeEach(() => {
-  sesion.isWorker = false; sesion.user = { id: 'enc' }; bajaDeMesa.mockReset(); crearGrupo.mockReset(); tablero.mesas = null
+  sesion.isWorker = false; sesion.user = { id: 'enc' }; bajaDeMesa.mockReset(); editarMesa.mockReset(); crearGrupo.mockReset(); tablero.mesas = null
   grupos.porMesa = new Map(); grupos.deshacer.mockReset(); grupos.refresh.mockReset()
   refrescarMesas.mockReset(); toastExito.mockReset(); liberarGrupoMock.mockReset(); cobro.resultado = null
 })
@@ -147,6 +148,39 @@ describe('POSModule · dar de baja una mesa (T-70)', () => {
     sesion.user = { id: 'ana' }
     montar()
     expect(screen.queryByRole('button', { name: 'Eliminar mesa' })).not.toBeInTheDocument()
+  })
+})
+
+describe('POSModule · editar una mesa (#163)', () => {
+  const abrirEdicion = async (user, nombre) => {
+    await user.click(within(tarjeta(nombre)).getByRole('button', { name: 'Editar mesa' }))
+    return screen.getByRole('dialog', { name: 'Editar Mesa' })
+  }
+
+  it('si el backend rechaza el cambio (409) el motivo queda en el formulario y la mesa sigue abierta', async () => {
+    const user = userEvent.setup()
+    editarMesa.mockRejectedValue(new Error('409: La mesa Mesa 1 está en uso: cóbrala o libérala antes de darla de baja'))
+    montar()
+
+    const dialogo = await abrirEdicion(user, 'Mesa 1')
+    await user.click(within(dialogo).getByRole('checkbox', { name: /mesa activa/i }))
+    await user.click(within(dialogo).getByRole('button', { name: 'Guardar Cambios' }))
+
+    expect(await within(dialogo).findByRole('alert')).toHaveTextContent('La mesa Mesa 1 está en uso: cóbrala o libérala antes de darla de baja')
+    expect(editarMesa).toHaveBeenCalledWith({ id: 'm1', name: 'Mesa 1', capacidad: 4, zona: '', is_active: false })
+    expect(screen.getByRole('dialog', { name: 'Editar Mesa' })).toBeInTheDocument()
+  })
+
+  it('si se guardó, el formulario se cierra', async () => {
+    const user = userEvent.setup()
+    editarMesa.mockResolvedValue(undefined)
+    montar()
+
+    const dialogo = await abrirEdicion(user, 'Mesa 2')
+    await user.click(within(dialogo).getByRole('button', { name: 'Guardar Cambios' }))
+
+    expect(editarMesa).toHaveBeenCalledWith({ id: 'm2', name: 'Mesa 2', capacidad: 2, zona: '', is_active: true })
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 })
 

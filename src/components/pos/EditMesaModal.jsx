@@ -10,10 +10,15 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 
+// apiClient arma el mensaje como «409: detalle»; a quien edita solo le sirve el detalle.
+const mensajeDelError = (err) => err?.detail || err?.message?.replace(/^\d+:\s*/, '') || 'No se pudo guardar la mesa'
+
 /**
  * Modal para editar una mesa existente
  * Permite cambiar: nombre, capacidad, estado activo/inactivo.
  * Zona (A-05): texto libre de hasta 50 caracteres; vaciarla la quita.
+ * Si el backend rechaza el cambio (p. ej. dar de baja una mesa en uso), el motivo
+ * se muestra aquí y el formulario sigue abierto para corregirlo.
  */
 export default function EditMesaModal({ mesa, onClose, onSubmit }) {
   const [form, setForm] = useState({
@@ -25,6 +30,7 @@ export default function EditMesaModal({ mesa, onClose, onSubmit }) {
 
   const [errors, setErrors] = useState({})
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [serverError, setServerError] = useState('')
 
   const validate = () => {
     const next = {}
@@ -50,6 +56,7 @@ export default function EditMesaModal({ mesa, onClose, onSubmit }) {
     if (errors[name]) {
       setErrors((prev) => ({ ...prev, [name]: '' }))
     }
+    setServerError('')
   }
 
   const handleSubmit = async (e) => {
@@ -62,6 +69,7 @@ export default function EditMesaModal({ mesa, onClose, onSubmit }) {
     }
 
     setIsSubmitting(true)
+    setServerError('')
     try {
       await onSubmit({
         id: mesa.id,
@@ -70,6 +78,8 @@ export default function EditMesaModal({ mesa, onClose, onSubmit }) {
         is_active: form.is_active,
         zona: form.zona.trim(),
       })
+    } catch (err) {
+      setServerError(mensajeDelError(err))
     } finally {
       setIsSubmitting(false)
     }
@@ -144,6 +154,12 @@ export default function EditMesaModal({ mesa, onClose, onSubmit }) {
                 : 'La mesa está inactiva y no aparecerá en el listado'}
             </p>
           </div>
+
+          {serverError && (
+            <div role="alert" className="rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-sm text-[hsl(var(--destructive))]">
+              {serverError}
+            </div>
+          )}
 
           <DialogFooter className="-mx-6">
             <Button type="button" variant="outline" onClick={onClose} disabled={isSubmitting}>
