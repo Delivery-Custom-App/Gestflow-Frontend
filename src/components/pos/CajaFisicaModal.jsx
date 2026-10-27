@@ -42,7 +42,7 @@ export default function CajaFisicaModal({ localId, cajaFisica, onClose, onSaved 
     } catch (err) {
       const mensaje = String(err?.message || err?.detail || '')
       // 409: el backend ya explica el conflicto de nombre; se muestra su texto.
-      setError(mensaje.includes('409') || /ya existe/i.test(mensaje)
+      setError(Number(err?.status) === 409 || /ya existe/i.test(mensaje)
         ? 'Ya existe una caja física con ese nombre en este local. Elige otro.'
         : mensaje || 'No se pudo guardar la caja física.')
       setGuardando(false)

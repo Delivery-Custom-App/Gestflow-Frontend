@@ -72,6 +72,22 @@ export function formatApiErrorDetail(detail) {
   return String(detail)
 }
 
+/**
+ * #172: lo que ve la persona cuando falla una llamada. Es el texto del backend sin el
+ * código HTTP delante («400: …»), con los mensajes técnicos en palabras simples.
+ * El código sigue en `err.status` y el texto original en `err.detail`.
+ */
+const MENSAJES_TECNICOS = [
+  [/idempotency-key ya se us/i, 'Esta operación ya se había enviado con otros datos. Vuelve a intentarlo: se enviará como una nueva.'],
+]
+
+export function mensajeParaPersona(status, detail, statusText = '') {
+  const texto = String(detail || '').replace(/^\d{3}:\s*/, '').trim()
+  if (!texto) return `No se pudo completar la operación (error ${status}${statusText ? ` ${statusText}` : ''}).`
+  const tecnico = MENSAJES_TECNICOS.find(([patron]) => patron.test(texto))
+  return tecnico ? tecnico[1] : texto
+}
+
 async function parseErrorResponse(response) {
   const contentType = response.headers.get('content-type') || ''
 
@@ -231,7 +247,7 @@ export async function apiRequest(path, options = {}) {
       const detail = await parseErrorResponse(response)
       const accountStatus = response.headers.get('X-Account-Status')
       terminarSesion(accountStatus, detail)
-      const err = new Error(`401: ${detail}`)
+      const err = new Error(mensajeParaPersona(401, detail))
       err.status = 401
       err.detail = detail
       if (accountStatus) err.accountStatus = accountStatus
@@ -245,8 +261,7 @@ export async function apiRequest(path, options = {}) {
     // el cuerpo trae `error`, no `detail`).
     if (response.status === 503 && !response.headers.get('X-Account-Status')) detail = MENSAJE_503
     if (response.status === 429) detail = MENSAJE_429
-    const message = detail ? `${response.status}: ${detail}` : `${response.status} ${response.statusText}`
-    const err = new Error(message)
+    const err = new Error(mensajeParaPersona(response.status, detail, response.statusText))
     err.status = response.status
     err.detail = detail
     // Estado de la cuenta que manda el backend (X-Account-Status): con
