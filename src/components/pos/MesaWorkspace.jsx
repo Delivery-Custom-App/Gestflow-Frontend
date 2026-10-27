@@ -228,6 +228,8 @@ export default function MesaWorkspace({ mesa, atencion = null, localId, cajaId, 
         refresh()
         mensaje = `Se agregaron ${agregados.length} producto${agregados.length !== 1 ? 's' : ''} al pedido, pero falló el resto: ${mensaje} Revisa lo que queda en el carrito y vuelve a agregarlo.`
       }
+      // El backend no deja un segundo pedido en la mesa (409): se recarga para mostrar el pedido que ya hay y agregarle ahí.
+      if (Number(err?.status) === 409 && agregados.length === 0) refresh()
       setErrorMsg(err?.pedidoCancelado ? `${mensaje} El pedido no quedó guardado: revisa los productos y vuelve a agregarlos.` : mensaje)
     } finally {
       submittingRef.current = false

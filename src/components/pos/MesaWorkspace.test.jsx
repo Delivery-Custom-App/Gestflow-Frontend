@@ -237,6 +237,32 @@ describe('MesaWorkspace', () => {
     expect(addOrderItem.mock.calls[2][3].split(':item:')[0]).not.toBe(primeraClave)
   })
 
+  it('#156: si la mesa ya tiene un pedido (409), se recarga para mostrarlo y el mensaje se ve', async () => {
+    const user = userEvent.setup()
+    const { refresh } = setup({ activeOrders: [] })
+    createOrder.mockRejectedValueOnce(Object.assign(new Error('409: La mesa Mesa 1 ya tiene un pedido abierto: agrégale los productos a ese pedido'), { status: 409 }))
+    render(<MesaWorkspace mesa={mesa} localId="local1" cajaId="caja1" onBack={() => {}} onTableUpdated={() => {}} />)
+
+    await user.click(screen.getByText('+'))
+    await user.click(screen.getByRole('button', { name: /agregar al pedido/i }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('ya tiene un pedido abierto')
+    expect(refresh).toHaveBeenCalledTimes(1)
+  })
+
+  it('un error que no es 409 no recarga la mesa', async () => {
+    const user = userEvent.setup()
+    const { refresh } = setup({ activeOrders: [] })
+    createOrder.mockRejectedValueOnce(new Error('Sin conexión'))
+    render(<MesaWorkspace mesa={mesa} localId="local1" cajaId="caja1" onBack={() => {}} onTableUpdated={() => {}} />)
+
+    await user.click(screen.getByText('+'))
+    await user.click(screen.getByRole('button', { name: /agregar al pedido/i }))
+
+    expect(await screen.findByText('Sin conexión')).toBeInTheDocument()
+    expect(refresh).not.toHaveBeenCalled()
+  })
+
   it('con una orden activa abre la comanda de esa orden', async () => {
     const user = userEvent.setup()
     setup({ activeOrders: [{ id: 'order-1', created_at: '2024-01-01T00:00:00Z', items: [] }] })
