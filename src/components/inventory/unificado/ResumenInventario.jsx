@@ -6,7 +6,7 @@ import { AlertTriangle, CheckCircle, DollarSign, Package, PackageMinus, PackageP
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { formatCLPDisplay as formatMoney } from '../../../lib/formatCLP'
-import { hayQueReponer, kpisDeInventario } from '../../../lib/inventarioUnificado'
+import { hayQueReponer, kpisDeInventario, listarPlatosPreparados } from '../../../lib/inventarioUnificado'
 import { masVendidosConMargen, mermasDeLaSemana, movimientosDelDia, movimientosDelLocal, restarDias } from '../../../lib/resumenInventario'
 import { ETIQUETA_MOVIMIENTO_STOCK } from '../../../lib/movimientosStock'
 import { hoyEnChile } from '../../../lib/fondoEmergencia'
@@ -50,12 +50,14 @@ const TONO = {
  * movimientos del día y los más vendidos de la semana. Cuenta sobre la misma
  * lista que Productos.
  */
-export default function ResumenInventario({ localId, filas = [], productos = [], loading, recargar }) {
+export default function ResumenInventario({ localId, filas = [], loading, recargar }) {
   const kpis = useMemo(() => kpisDeInventario(filas), [filas])
   const reponer = useMemo(() => hayQueReponer(filas), [filas])
   const [sumando, setSumando] = useState(null)
   const [movs, setMovs] = useState({ movimientos: [], recortado: false, cargando: true })
   const [ranking, setRanking] = useState(null)
+  // Los platos preparados no están en `filas`: se piden para dar su margen en «Más vendidos».
+  const [platos, setPlatos] = useState([])
 
   // Los movimientos se vuelven a pedir solo si cambian los productos con stock o su stock.
   const claveMovs = filas.filter((f) => f.inventory_id).map((f) => `${f.inventory_id}:${f.stock_current}`).join('|')
@@ -63,7 +65,7 @@ export default function ResumenInventario({ localId, filas = [], productos = [],
     let vigente = true
     movimientosDelLocal(filas)
       .then((r) => { if (vigente) setMovs({ ...r, cargando: false }) })
-      .catch(() => { if (vigente) setMovs({ movimientos: [], recortado: false, cargando: false }) })
+      .catch(() => { if (vigente) setMovs({ movimientos: [], recortado: false, incompleto: true, cargando: false }) })
     return () => { vigente = false }
     // `claveMovs` resume `filas`: así no se repite la consulta en cada render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -79,9 +81,18 @@ export default function ResumenInventario({ localId, filas = [], productos = [],
     return () => { vigente = false }
   }, [localId])
 
+  useEffect(() => {
+    if (!localId) return undefined
+    let vigente = true
+    listarPlatosPreparados(localId)
+      .then((r) => { if (vigente) setPlatos(r) })
+      .catch(() => { if (vigente) setPlatos([]) })
+    return () => { vigente = false }
+  }, [localId])
+
   const delDia = movimientosDelDia(movs.movimientos).slice(0, 10)
   const mermas = mermasDeLaSemana(movs.movimientos)
-  const vendidos = masVendidosConMargen(ranking || [], [...filas, ...productos])
+  const vendidos = masVendidosConMargen(ranking || [], [...filas, ...platos])
   const distribucion = DISTRIBUCION.map((d) => ({ ...d, cantidad: kpis[d.id] })).filter((d) => d.cantidad > 0)
   const conStock = kpis.optimo + kpis.bajo + kpis.critico
 
@@ -98,7 +109,8 @@ export default function ResumenInventario({ localId, filas = [], productos = [],
       <h2 id="inventario-resumen" className="sr-only">Resumen</h2>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5" aria-label="Indicadores del stock">
-        <Kpi icon={Package} label="Total productos" value={loading && !filas.length ? '—' : kpis.total} tono={TONO.marca} />
+        <Kpi icon={Package} label="Total productos" value={loading && !filas.length ? '—' : kpis.total} tono={TONO.marca}
+          sub={kpis.sinRegistro > 0 ? `Con stock registrado · ${kpis.sinRegistro} más sin registrar` : undefined} />
         <Kpi icon={CheckCircle} label="Stock óptimo" value={kpis.optimo} tono={TONO.ok} />
         <Kpi icon={TrendingDown} label="Stock bajo" value={kpis.bajo} tono={TONO.bajo} />
         <Kpi icon={AlertTriangle} label="Stock crítico" value={kpis.critico} tono={TONO.critico} />
@@ -106,7 +118,8 @@ export default function ResumenInventario({ localId, filas = [], productos = [],
       </div>
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
         <Kpi icon={ShoppingCart} label="Por reponer" value={kpis.porReponer} sub="Bajo el mínimo o en su nivel crítico" tono={TONO.bajo} />
-        <Kpi icon={PackageMinus} label="Mermas de la semana" value={movs.cargando ? '—' : `${mermas} u.`} sub="Unidades perdidas o vencidas" tono={TONO.critico} />
+        <Kpi icon={PackageMinus} label="Mermas de la semana" value={movs.cargando ? '—' : `${mermas} u.`} tono={TONO.critico}
+          sub={!movs.cargando && (movs.recortado || movs.incompleto) ? 'Puede ser más: no se revisaron todos los movimientos' : 'Unidades perdidas o vencidas'} />
       </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-5">

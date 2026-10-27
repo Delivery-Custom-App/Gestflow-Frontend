@@ -6,6 +6,7 @@ import ResumenInventario from './ResumenInventario'
 import { getProductsReport } from '../../../lib/reportsApi'
 import { listarMovimientosStock } from '../../../lib/movimientosStock'
 import { sumarUnidades } from '../../../lib/inventoryApi'
+import { listarPlatosPreparados } from '../../../lib/inventarioUnificado'
 
 vi.mock('recharts', async (importOriginal) => ({
   ...(await importOriginal()),
@@ -13,6 +14,7 @@ vi.mock('recharts', async (importOriginal) => ({
 }))
 vi.mock('../../../lib/reportsApi', () => ({ getProductsReport: vi.fn() }))
 vi.mock('../../../lib/movimientosStock', async (importOriginal) => ({ ...(await importOriginal()), listarMovimientosStock: vi.fn() }))
+vi.mock('../../../lib/inventarioUnificado', async (importOriginal) => ({ ...(await importOriginal()), listarPlatosPreparados: vi.fn() }))
 vi.mock('../../../lib/inventoryApi', () => ({ sumarUnidades: vi.fn(() => Promise.resolve({})) }))
 
 const FILAS = [
@@ -25,6 +27,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   getProductsReport.mockResolvedValue({ ranking: [{ product_id: 'p1', product_name: 'Bebida', quantity_sold: 12 }] })
   listarMovimientosStock.mockResolvedValue({ movimientos: [] })
+  listarPlatosPreparados.mockResolvedValue([])
 })
 
 describe('ResumenInventario', () => {
@@ -65,5 +68,26 @@ describe('ResumenInventario', () => {
     const fila = (await screen.findByRole('cell', { name: 'Bebida' })).closest('tr')
     expect(fila).toHaveTextContent('12')
     expect(fila).toHaveTextContent('700')
+  })
+  it('«Total productos» dice cuántos más hay sin stock registrado, para no contar distinto que Productos', async () => {
+    render(<ResumenInventario localId="l1" filas={[...FILAS, { inventory_id: null, sin_registro: true, product_id: 'p4', product_name: 'Galletas' }]} recargar={vi.fn()} />)
+    const kpi = screen.getByText('Total productos').closest('div')
+    expect(kpi).toHaveTextContent('3')
+    expect(kpi).toHaveTextContent('1 más sin registrar')
+    await waitFor(() => expect(listarMovimientosStock).toHaveBeenCalled())
+  })
+
+  it('«Mermas de la semana» avisa si no se revisaron todos los movimientos', async () => {
+    listarMovimientosStock.mockRejectedValue(new Error('500'))
+    render(<ResumenInventario localId="l1" filas={FILAS} recargar={vi.fn()} />)
+    expect(await screen.findByText('Puede ser más: no se revisaron todos los movimientos')).toBeInTheDocument()
+  })
+
+  it('un plato preparado entre los más vendidos también trae su margen', async () => {
+    getProductsReport.mockResolvedValue({ ranking: [{ product_id: 'pl1', product_name: 'Lomo', quantity_sold: 30 }] })
+    listarPlatosPreparados.mockResolvedValue([{ id: 'pl1', name: 'Lomo', price: 6000, cost: 2500 }])
+    render(<ResumenInventario localId="l1" filas={FILAS} recargar={vi.fn()} />)
+    const fila = (await screen.findByRole('cell', { name: 'Lomo' })).closest('tr')
+    await waitFor(() => expect(fila).toHaveTextContent('3.500'))
   })
 })

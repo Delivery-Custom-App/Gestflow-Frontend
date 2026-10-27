@@ -17,7 +17,7 @@ beforeEach(() => vi.clearAllMocks())
 
 describe('inventarioUnificado', () => {
   it('los KPI cuentan solo los productos con stock registrado; «Todos» incluye los sin registro', () => {
-    expect(kpisDeInventario(FILAS)).toEqual({ total: 3, optimo: 1, bajo: 1, critico: 1, porReponer: 2, valorTotal: 19200 })
+    expect(kpisDeInventario(FILAS)).toEqual({ total: 3, optimo: 1, bajo: 1, critico: 1, porReponer: 2, valorTotal: 19200, sinRegistro: 1 })
     expect(contarPorEstado(FILAS)).toEqual({ TODOS: 4, OPTIMO: 1, BAJO: 1, CRITICO: 1 })
   })
 
@@ -54,6 +54,14 @@ describe('resumenInventario', () => {
     expect(listarMovimientosStock).toHaveBeenCalledTimes(3)
     expect(movimientos.map((m) => m.product_name)).toEqual(['Jugo', 'Agua', 'Bebida'])
     expect(recortado).toBe(false)
+  })
+
+  it('avisa que quedó incompleto si un producto devolvió el tope o su consulta falló', async () => {
+    listarMovimientosStock.mockResolvedValue({ movimientos: [{ tipo: 'venta', delta: '-1', created_at: '2026-10-25T15:00:00Z' }] })
+    expect((await movimientosDelLocal(FILAS, { porProducto: 1 })).incompleto).toBe(true)
+    expect((await movimientosDelLocal(FILAS, { porProducto: 5 })).incompleto).toBe(false)
+    listarMovimientosStock.mockRejectedValue(new Error('500'))
+    expect((await movimientosDelLocal(FILAS)).incompleto).toBe(true)
   })
 
   it('con más productos que el tope, avisa que se recortó', async () => {

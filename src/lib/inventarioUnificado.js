@@ -42,6 +42,8 @@ export function kpisDeInventario(filas = []) {
     critico: cuenta.CRITICO,
     porReponer: cuenta.BAJO + cuenta.CRITICO,
     valorTotal: valor,
+    // Los productos sin stock registrado no entran en los KPI pero sí en «Todos» de Productos.
+    sinRegistro: filas.length - conStock.length,
   }
 }
 
