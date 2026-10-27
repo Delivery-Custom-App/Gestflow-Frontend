@@ -8,6 +8,7 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router'
 import VentaDirectaView from './VentaDirectaView'
 import { cancelOrder, createOrder, fetchProductsCatalog, listPedidosSinCobrarDelTurno } from '../../lib/salesApi'
+import { getPointOrderStatus } from '../../lib/cobroTarjeta'
 
 const state = { isWorker: false, cajaId: null }
 
@@ -17,6 +18,7 @@ vi.mock('../../lib/salesApi', () => ({
   cancelOrder: vi.fn(() => Promise.resolve({})), createOrder: vi.fn(), fetchProductsCatalog: vi.fn(() => Promise.resolve([])),
   listPedidosSinCobrarDelTurno: vi.fn(() => Promise.resolve([])),
 }))
+vi.mock('../../lib/cobroTarjeta', () => ({ getPointOrderStatus: vi.fn(() => Promise.resolve({ point_charge_active: false })) }))
 vi.mock('./MercadoPagoModal', () => ({
   default: ({ open, total, onClose }) => (open ? <div role="dialog" aria-label="Cobro">Cobro de {total}<button type="button" onClick={onClose}>Cerrar cobro</button></div> : null),
 }))
@@ -150,5 +152,36 @@ describe('VentaDirectaView · una venta que falla a medias (#159)', () => {
     await user.click(within(seccion).getByRole('button', { name: 'Cancelar el pedido #6466b0fb' }))
     await waitFor(() => expect(cancelOrder).toHaveBeenCalledWith('6466b0fb-aaaa', '2026-10-24T15:00:00Z'))
     expect(listPedidosSinCobrarDelTurno).toHaveBeenCalledTimes(2)
+  })
+  describe('cancelar un pedido sin cobrar con el cobro vivo en la máquina (#160)', () => {
+    async function conPedidoPendiente() {
+      const user = userEvent.setup()
+      vi.spyOn(window, 'confirm').mockReturnValue(true)
+      state.cajaId = 'turno-1'
+      listPedidosSinCobrarDelTurno.mockResolvedValue([{ id: '6466b0fb-aaaa', total: 1800, created_at: '2026-10-24T15:00:00Z' }])
+      montar()
+      const seccion = (await screen.findByRole('heading', { name: 'Tienes 1 pedido sin cobrar' })).closest('section')
+      await user.click(within(seccion).getByRole('button', { name: 'Cancelar el pedido #6466b0fb' }))
+      return seccion
+    }
+
+    it('con el cobro vivo no lo cancela y explica por qué', async () => {
+      getPointOrderStatus.mockResolvedValueOnce({ point_charge_active: true })
+      const seccion = await conPedidoPendiente()
+      expect(await within(seccion).findByRole('alert')).toHaveTextContent('Hay un cobro con tarjeta en la máquina')
+      expect(cancelOrder).not.toHaveBeenCalled()
+    })
+
+    it('si no se puede comprobar el cobro, tampoco lo cancela', async () => {
+      getPointOrderStatus.mockRejectedValueOnce(new Error('network'))
+      const seccion = await conPedidoPendiente()
+      expect(await within(seccion).findByRole('alert')).toHaveTextContent('No se pudo comprobar el cobro en la máquina')
+      expect(cancelOrder).not.toHaveBeenCalled()
+    })
+
+    it('sin cobro vivo lo cancela', async () => {
+      await conPedidoPendiente()
+      await waitFor(() => expect(cancelOrder).toHaveBeenCalledWith('6466b0fb-aaaa', '2026-10-24T15:00:00Z'))
+    })
   })
 })

@@ -5,6 +5,7 @@ import { useAuth } from '../../context/AuthContext'
 import { cancelOrder, createOrder, fetchProductsCatalog, listPedidosSinCobrarDelTurno } from '../../lib/salesApi'
 import { formatCLP } from '../../lib/formatCLP'
 import { obtenerClaveIdempotencia, traducirErrorIdempotencia } from '../../lib/idempotency'
+import { getPointOrderStatus } from '../../lib/cobroTarjeta'
 import { useCajaActiva } from '../../hooks/useCajaActiva'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -70,6 +71,23 @@ function ProductCard({ product, qty, onAdd, onRemove }) {
       </div>
     </div>
   )
+}
+
+/**
+ * #160: lanza si la máquina tiene el cobro con tarjeta del pedido (o no se pudo comprobar):
+ * mejor no cancelar que perder un pago. Sin Mercado Pago Point no hay nada que comprobar.
+ */
+async function asegurarSinCobroVivo(orderId) {
+  if (!isV2FeatureEnabled('mercadopagoPoint')) return
+  let estado
+  try {
+    estado = await getPointOrderStatus(orderId)
+  } catch {
+    throw new Error('No se pudo comprobar el cobro en la máquina. Vuelve a intentarlo en unos segundos.')
+  }
+  if (estado?.point_charge_active === true) {
+    throw new Error('Hay un cobro con tarjeta en la máquina: cancélalo en el lector o espera a que venza. Para seguirlo pulsa «Cobrar».')
+  }
 }
 
 export default function VentaDirectaView() {
@@ -174,6 +192,8 @@ export default function VentaDirectaView() {
   }, [])
 
   const cancelarPendiente = useCallback(async (pedido) => {
+    // #160: con el cobro vivo en la máquina, cancelar el pedido deja el pago con tarjeta sin registrar.
+    await asegurarSinCobroVivo(pedido.id)
     await cancelOrder(pedido.id, pedido.created_at)
     cargarPendientes()
   }, [cargarPendientes])
@@ -209,7 +229,11 @@ export default function VentaDirectaView() {
     setShowMPModal(false)
     setActiveOrder(null)
     if (order?.id && !order.retomado) {
-      cancelOrder(order.id, order.created_at).catch(() => {}).finally(cargarPendientes)
+      // Si el cobro sigue en la máquina el pedido no se cancela: queda en «Pedidos sin cobrar».
+      asegurarSinCobroVivo(order.id)
+        .then(() => cancelOrder(order.id, order.created_at))
+        .catch(() => {})
+        .finally(cargarPendientes)
     }
   }, [activeOrder, cargarPendientes])
 
