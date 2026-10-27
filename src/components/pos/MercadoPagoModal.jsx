@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { createPointCharge, getPointOrderStatus, cancelarCobroEnTerminal } from '../../lib/cobroTarjeta'
 import { completeOrderCash, updateOrderFields } from '../../lib/salesApi'
 import { isV2FeatureEnabled } from '../../lib/v2Features'
@@ -16,11 +16,19 @@ function fmt(n) {
   return `$${Number(n || 0).toLocaleString('es-CL')}`
 }
 
+/** #160: lo que se ve al abrir «Cobrar» si la máquina ya tiene el cobro de este pedido. */
+/** Consultas seguidas con «sin cobro en la máquina» antes de volver a ofrecer Efectivo (#160). */
+const CONSULTAS_SIN_COBRO = 2
+
+export const COBRO_EN_CURSO = 'Ya hay un cobro con tarjeta en la máquina para este pedido. Esperando que el cliente pague.'
+
 export default function MercadoPagoModal({ open, orderId, createdAt, total, description, onSuccess, onClose }) {
   const [step, setStep]               = useState('select')
   // steps: 'select' | 'cash_amount' | 'point_waiting' | 'point_success'
   const [loading, setLoading]         = useState(false)
   const [error, setError]             = useState(null)
+  // #160: aviso neutro en «elegir pago» (por ejemplo, el cobro ya no está en la máquina).
+  const [info, setInfo]               = useState('')
   const [terminalMsg, setTerminalMsg] = useState('Conectando con la terminal...')
   const [paymentDetail, setPaymentDetail] = useState(null)
   const [chargeInfo, setChargeInfo] = useState(null)
@@ -28,24 +36,106 @@ export default function MercadoPagoModal({ open, orderId, createdAt, total, desc
   const [avisoCancelacion, setAvisoCancelacion] = useState('')
   // T-65: si la terminal está cobrando otra venta, se ofrece reintentar.
   const [reintentable, setReintentable] = useState(false)
+  // Mientras se intenta cancelar en la terminal no se consulta el estado.
+  const [cancelando, setCancelando] = useState(false)
   const [cashAmount, setCashAmount] = useState('')
   const [tipInput, setTipInput] = useState('0')
-  const pollRef = useRef(null)
 
-  const stopPolling = () => {
-    if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null }
-  }
+  const tipAmount = Math.max(0, Math.round(Number(tipInput) || 0))
+  const paymentTotal = Math.round(Number(total) || 0) + tipAmount
 
-  // Limpia el polling al desmontar o cerrar
-  useEffect(() => () => stopPolling(), [])
+  // #160: al abrir, si la máquina ya tiene el cobro (se recargó la página, se cerró la
+  // pantalla u otra tablet lo envió), se vuelve a la espera en vez de ofrecer Efectivo.
+  useEffect(() => {
+    if (!open || !orderId || !isV2FeatureEnabled('mercadopagoPoint')) return undefined
+    let vigente = true
+    getPointOrderStatus(orderId)
+      .then((s) => {
+        if (!vigente) return
+        if (s?.order_status === 'COMPLETED') {
+          setPaymentDetail(s.payment_detail || null)
+          setStep('point_success')
+        } else if (s?.point_charge_active === true) {
+          setStep((prev) => (prev === 'point_success' ? prev : 'point_waiting'))
+          setTerminalMsg(COBRO_EN_CURSO)
+        }
+      })
+      .catch(() => {})
+    return () => { vigente = false }
+  }, [open, orderId])
+
+  // Mientras se espera la tarjeta se consulta el estado cada 3 segundos.
+  useEffect(() => {
+    if (!open || step !== 'point_waiting' || cancelando) return undefined
+    let vigente = true
+    let consultasSinCobro = 0
+    const volverAElegir = ({ error: e = null, info: i = '' } = {}) => {
+      setAvisoCancelacion('')
+      setError(e)
+      setInfo(i)
+      setStep('select')
+    }
+    const pollOnce = async () => {
+      try {
+        const s = await getPointOrderStatus(orderId)
+        if (!vigente) return
+
+        if (s.order_status === 'COMPLETED') {
+          setAvisoCancelacion('')
+          setPaymentDetail(s.payment_detail || null)
+          setStep('point_success')
+          return
+        }
+        if (s.point_charge_expired) {
+          volverAElegir({ error: `No detectamos el pago en la terminal. Verificá que cobraste exactamente ${fmt(paymentTotal)} y volvé a enviar el cobro.` })
+          return
+        }
+        if (s.payment_status === 'REJECTED') {
+          volverAElegir({ error: 'Pago rechazado por la terminal. Podés intentar de nuevo.' })
+          return
+        }
+        if (s.order_status === 'CANCELLED') {
+          volverAElegir({ error: 'La orden fue cancelada durante el cobro.' })
+          return
+        }
+        // #160: se canceló en la máquina (o ya no hay cobro): se puede cobrar de nuevo o en efectivo.
+        // «Ya no hay cobro» sin cancelación explícita puede ser un pago que el aviso de Mercado Pago
+        // todavía no marcó como completado: se pide dos consultas seguidas antes de ofrecer Efectivo.
+        const sinCobro = s.payment_status === 'CANCELLED'
+        if (s.point_charge_active === false && !sinCobro) consultasSinCobro += 1
+        else if (!sinCobro) consultasSinCobro = 0
+        if (sinCobro || consultasSinCobro >= CONSULTAS_SIN_COBRO) {
+          volverAElegir({ info: 'El cobro ya no está en la máquina (se canceló). Puedes cobrar en efectivo o enviarlo de nuevo.' })
+          return
+        }
+
+        setTerminalMsg(prev =>
+          prev.endsWith('...') ? prev.slice(0, -3) : prev + '.'
+        )
+      } catch {
+        // ignorar errores de red durante polling
+      }
+    }
+    pollOnce()
+    const intervalo = setInterval(pollOnce, 3000)
+    return () => { vigente = false; clearInterval(intervalo) }
+  }, [open, step, cancelando, orderId, paymentTotal])
+
+  // #160: recargar o cerrar la pestaña con el cobro en la máquina deja el pago sin seguir.
+  useEffect(() => {
+    if (!open || step !== 'point_waiting') return undefined
+    const avisar = (event) => { event.preventDefault(); event.returnValue = '' }
+    window.addEventListener('beforeunload', avisar)
+    return () => window.removeEventListener('beforeunload', avisar)
+  }, [open, step])
 
   if (!open) return null
 
   const reset = () => {
-    stopPolling()
     setStep('select')
     setLoading(false)
     setError(null)
+    setInfo('')
     setTerminalMsg('Conectando con la terminal...')
     setPaymentDetail(null)
     setChargeInfo(null)
@@ -56,8 +146,6 @@ export default function MercadoPagoModal({ open, orderId, createdAt, total, desc
   const handleClose = () => { reset(); onClose() }
 
   // ── Efectivo: registra monto recibido y calcula el vuelto ────────────────
-  const tipAmount = Math.max(0, Math.round(Number(tipInput) || 0))
-  const paymentTotal = Math.round(Number(total) || 0) + tipAmount
   const cashReceivedNumber = Number(cashAmount) || 0
   const cashChange = cashReceivedNumber >= paymentTotal ? cashReceivedNumber - paymentTotal : 0
 
@@ -84,6 +172,7 @@ export default function MercadoPagoModal({ open, orderId, createdAt, total, desc
   const handleSendToTerminal = async () => {
     setLoading(true)
     setError(null)
+    setInfo('')
     try {
       await updateOrderFields(orderId, { tip_amount: tipAmount }, createdAt)
       // El monto lo pone el servidor (total + propina): no se manda.
@@ -96,7 +185,6 @@ export default function MercadoPagoModal({ open, orderId, createdAt, total, desc
       setTerminalMsg(mismoCobro || charge?.point_charge_active
         ? 'El cobro ya está en la terminal. Esperando que el cliente pague.'
         : (charge?.message || 'Esperando que el cliente pase la tarjeta...'))
-      startPolling()
     } catch (err) {
       setReintentable(Boolean(err?.reintentable))
       setError(err.message || 'Error al conectar con la terminal')
@@ -117,64 +205,12 @@ export default function MercadoPagoModal({ open, orderId, createdAt, total, desc
     if (method === 'CASH') {
       setStep('cash_amount')
       setError(null)
+      setInfo('')
     }
-  }
-
-  const startPolling = () => {
-    stopPolling()
-
-    const pollOnce = async () => {
-      try {
-        const s = await getPointOrderStatus(orderId)
-
-        if (s.order_status === 'COMPLETED') {
-          stopPolling()
-          setAvisoCancelacion('')
-          setPaymentDetail(s.payment_detail || null)
-          setStep('point_success')
-          return
-        }
-
-        if (s.point_charge_expired) {
-          stopPolling()
-          setAvisoCancelacion('')
-          setError(
-            `No detectamos el pago en la terminal. Verificá que cobraste exactamente ${fmt(paymentTotal)} y volvé a enviar el cobro.`
-          )
-          setStep('select')
-          return
-        }
-
-        if (s.payment_status === 'REJECTED') {
-          stopPolling()
-          setAvisoCancelacion('')
-          setError('Pago rechazado por la terminal. Podés intentar de nuevo.')
-          setStep('select')
-          return
-        }
-
-        if (s.order_status === 'CANCELLED') {
-          stopPolling()
-          setAvisoCancelacion('')
-          setError('La orden fue cancelada durante el cobro.')
-          setStep('select')
-          return
-        }
-
-        setTerminalMsg(prev =>
-          prev.endsWith('...') ? prev.slice(0, -3) : prev + '.'
-        )
-      } catch {
-        // ignorar errores de red durante polling
-      }
-    }
-
-    pollOnce()
-    pollRef.current = setInterval(pollOnce, 3000)
   }
 
   const handleCancelPoint = async () => {
-    stopPolling()
+    setCancelando(true)
     setLoading(true)
     const { cancelado, mensaje } = await cancelarCobroEnTerminal(orderId)
     setLoading(false)
@@ -182,12 +218,37 @@ export default function MercadoPagoModal({ open, orderId, createdAt, total, desc
       // #131: el cobro sigue vivo en la terminal. Se queda esperando: si el
       // cliente paga, la venta se registra; no se ofrece cobrar de nuevo.
       setAvisoCancelacion(mensaje)
-      startPolling()
+      setCancelando(false)
       return
     }
     setAvisoCancelacion('')
     setStep('select')
     setError(null)
+    setCancelando(false)
+  }
+
+  // #160: quien cobra canceló en el lector: se consulta y, si el cobro ya no está, se habilita el efectivo.
+  const handleYaCancelado = async () => {
+    setLoading(true)
+    try {
+      const s = await getPointOrderStatus(orderId)
+      if (s?.order_status === 'COMPLETED') {
+        setAvisoCancelacion('')
+        setPaymentDetail(s.payment_detail || null)
+        setStep('point_success')
+      } else if (s?.point_charge_active === false) {
+        setAvisoCancelacion('')
+        setError(null)
+        setInfo('Listo: la máquina ya no tiene el cobro. Puedes cobrar en efectivo o enviarlo de nuevo.')
+        setStep('select')
+      } else {
+        setAvisoCancelacion('La máquina todavía tiene el cobro activo. Cancélalo en el lector o espera a que venza (16 minutos).')
+      }
+    } catch {
+      setAvisoCancelacion('No se pudo consultar el cobro. Vuelve a intentarlo en unos segundos.')
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (
@@ -257,6 +318,7 @@ export default function MercadoPagoModal({ open, orderId, createdAt, total, desc
                   )}
                 </button>
               ))}
+              {info && <p role="status" className="rounded-lg bg-[hsl(var(--accent))] px-3 py-2 text-xs text-[hsl(var(--foreground))] text-center">{info}</p>}
               {error && <p role="alert" className="text-xs text-red-600 text-center pt-1">{error}</p>}
               {error && reintentable && (
                 <button type="button" onClick={handleSendToTerminal} disabled={loading}
@@ -336,6 +398,15 @@ export default function MercadoPagoModal({ open, orderId, createdAt, total, desc
                   {avisoCancelacion}
                 </p>
               )}
+              <p className="text-xs text-[hsl(var(--muted-foreground))]">
+                Mientras el cobro esté en la máquina no se puede cobrar en efectivo ni cancelar el pedido. No recargues la página.
+              </p>
+              {avisoCancelacion && (
+                <button type="button" disabled={loading} onClick={handleYaCancelado}
+                  className="w-full py-2 rounded-xl border border-amber-300 text-sm font-semibold text-amber-900 hover:bg-amber-50 transition-colors disabled:opacity-50">
+                  Ya lo cancelé en la máquina
+                </button>
+              )}
               <button
                 disabled={loading}
                 onClick={handleCancelPoint}
@@ -380,7 +451,7 @@ export default function MercadoPagoModal({ open, orderId, createdAt, total, desc
         {step !== 'select' && (
           <div className="px-6 pb-4">
             <button
-              onClick={() => { stopPolling(); setStep('select'); setError(null) }}
+              onClick={() => { setStep('select'); setError(null) }}
               disabled={step === 'point_waiting' || step === 'point_success'}
               className="text-xs text-[hsl(var(--muted-foreground))] hover:text-[hsl(var(--foreground))] underline disabled:opacity-30 disabled:no-underline"
             >

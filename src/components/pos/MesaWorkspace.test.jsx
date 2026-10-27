@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import MesaWorkspace from './MesaWorkspace'
@@ -7,6 +7,7 @@ import { useMenuPOS } from '../../hooks/useMenuPOS'
 import { useOrderManagement } from '../../hooks/useOrderManagement'
 import { createOrder, addOrderItem, updateOrderItem, removeOrderItem, liberarMesa, listMesasConTotales, setMesaLibre } from '../../lib/salesApi'
 import { deshacerGrupoDeMesas, obtenerGrupoDeMesas } from '../../lib/mesaGroupsApi'
+import { getPointOrderStatus } from '../../lib/cobroTarjeta'
 
 vi.mock('../../hooks/useMesaDetail', () => ({ useMesaDetail: vi.fn() }))
 vi.mock('../../hooks/useMenuPOS', () => ({ useMenuPOS: vi.fn() }))
@@ -27,8 +28,14 @@ vi.mock('../../lib/apiClient', () => ({
   getSplitPaymentSummary: vi.fn().mockResolvedValue({ splits: [], is_fully_paid: false }),
 }))
 // Como en la app: la comanda encendida, el pago dividido apagado.
-vi.mock('../../lib/v2Features', () => ({ isV2FeatureEnabled: (k) => k === 'comandas' }))
-vi.mock('./MercadoPagoModal', () => ({ default: ({ open, onSuccess }) => open ? <button type="button" onClick={onSuccess}>Simular pago aprobado</button> : null }))
+const banderas = { mercadopagoPoint: false }
+vi.mock('../../lib/v2Features', () => ({ isV2FeatureEnabled: (k) => k === 'comandas' || Boolean(banderas[k]) }))
+vi.mock('../../lib/cobroTarjeta', () => ({ getPointOrderStatus: vi.fn() }))
+vi.mock('./MercadoPagoModal', () => ({
+  default: ({ open, onSuccess, total, description }) => open ? (
+    <div><p>{`Cobro de ${description}: ${total}`}</p><button type="button" onClick={onSuccess}>Simular pago aprobado</button></div>
+  ) : null,
+}))
 vi.mock('./MultiPaymentModal', () => ({ default: () => null }))
 vi.mock('./TicketModal', () => ({
   default: ({ tipo, orderId, createdAt }) => <p>{`${tipo} de ${orderId} (${createdAt})`}</p>,
@@ -100,6 +107,19 @@ describe('MesaWorkspace', () => {
     expect(await screen.findByText('409: Hay un cobro con tarjeta en curso')).toBeInTheDocument()
     await user.click(within(screen.getByRole('alert')).getByRole('button', { name: 'Liberar mesa' }))
     expect(screen.getByRole('dialog')).toHaveTextContent('Total actual que quedaría sin cobrar')
+  })
+
+  it('#156: junto a «Liberar mesa» se explica que cancela lo no cobrado, y la mesa se recarga', async () => {
+    const user = userEvent.setup()
+    const { refresh } = setup({ activeOrders: [{ id: 'order-1', items: [] }] })
+    setMesaLibre.mockRejectedValue(Object.assign(new Error('409: La mesa Mesa 1 tiene un pedido en curso'), { status: 409 }))
+    render(<MesaWorkspace mesa={{ ...mesa, state: 'ocupada' }} localId="local1" cajaId="caja1" puedeLiberarMesa onBack={vi.fn()} onTableUpdated={vi.fn()} />)
+
+    await user.click(screen.getByRole('button', { name: /cobrar/i }))
+    await user.click(screen.getByRole('button', { name: 'Simular pago aprobado' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Ojo: liberar la mesa cancela sin cobrar lo que quede pendiente.')
+    expect(refresh).toHaveBeenCalled()
   })
 
   it('Cobrar deshabilitado cuando la mesa no tiene orden activa', () => {
@@ -191,6 +211,58 @@ describe('MesaWorkspace', () => {
   })
 
   // La pantalla de Cocina está apagada: la comanda se ve e imprime desde la mesa.
+  it('#159: si falla un producto a mitad de camino, lo ya agregado sale del carrito y el reintento no lo repite', async () => {
+    const user = userEvent.setup()
+    const { refresh } = setup({ activeOrders: [{ id: 'order-existing', created_at: '2024-01-01T00:00:00Z', items: [] }] })
+    useMenuPOS.mockReturnValue({
+      data: { categories: [{ id: 'cat1', name: 'Bebidas', products: [{ id: 'prod1', name: 'Agua', price: 1000 }, { id: 'prod2', name: 'Jugo', price: 1500 }] }] },
+      loading: false, fetch: vi.fn(),
+    })
+    addOrderItem.mockResolvedValueOnce({}).mockRejectedValueOnce(new Error('400: El producto no está activo en este local')).mockResolvedValue({})
+    render(<MesaWorkspace mesa={mesa} localId="local1" cajaId="caja1" onBack={() => {}} onTableUpdated={() => {}} />)
+
+    const mas = screen.getAllByText('+')
+    await user.click(mas[0])
+    await user.click(mas[1])
+    await user.click(screen.getByRole('button', { name: /agregar al pedido/i }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Se agregaron 1 producto al pedido, pero falló el resto')
+    expect(refresh).toHaveBeenCalled()
+    const primeraClave = addOrderItem.mock.calls[0][3].split(':item:')[0]
+
+    await user.click(screen.getByRole('button', { name: /agregar al pedido/i }))
+    await waitFor(() => expect(addOrderItem).toHaveBeenCalledTimes(3))
+    // El reintento manda solo el producto que faltaba, con una clave nueva.
+    expect(addOrderItem.mock.calls[2][1]).toEqual({ product_id: 'prod2', quantity: 1, unit_price: 1500 })
+    expect(addOrderItem.mock.calls[2][3].split(':item:')[0]).not.toBe(primeraClave)
+  })
+
+  it('#156: si la mesa ya tiene un pedido (409), se recarga para mostrarlo y el mensaje se ve', async () => {
+    const user = userEvent.setup()
+    const { refresh } = setup({ activeOrders: [] })
+    createOrder.mockRejectedValueOnce(Object.assign(new Error('409: La mesa Mesa 1 ya tiene un pedido abierto: agrégale los productos a ese pedido'), { status: 409 }))
+    render(<MesaWorkspace mesa={mesa} localId="local1" cajaId="caja1" onBack={() => {}} onTableUpdated={() => {}} />)
+
+    await user.click(screen.getByText('+'))
+    await user.click(screen.getByRole('button', { name: /agregar al pedido/i }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('ya tiene un pedido abierto')
+    expect(refresh).toHaveBeenCalledTimes(1)
+  })
+
+  it('un error que no es 409 no recarga la mesa', async () => {
+    const user = userEvent.setup()
+    const { refresh } = setup({ activeOrders: [] })
+    createOrder.mockRejectedValueOnce(new Error('Sin conexión'))
+    render(<MesaWorkspace mesa={mesa} localId="local1" cajaId="caja1" onBack={() => {}} onTableUpdated={() => {}} />)
+
+    await user.click(screen.getByText('+'))
+    await user.click(screen.getByRole('button', { name: /agregar al pedido/i }))
+
+    expect(await screen.findByText('Sin conexión')).toBeInTheDocument()
+    expect(refresh).not.toHaveBeenCalled()
+  })
+
   it('con una orden activa abre la comanda de esa orden', async () => {
     const user = userEvent.setup()
     setup({ activeOrders: [{ id: 'order-1', created_at: '2024-01-01T00:00:00Z', items: [] }] })
@@ -410,5 +482,77 @@ describe('MesaWorkspace · cobrar una mesa de un grupo', () => {
     expect(obtenerGrupoDeMesas).not.toHaveBeenCalled()
     expect(listMesasConTotales).not.toHaveBeenCalled()
     expect(onGrupoActualizado).not.toHaveBeenCalled()
+  })
+})
+
+describe('MesaWorkspace · una mesa con dos pedidos (#156)', () => {
+  const pedidos = [
+    { id: 'order-1', created_at: '2026-10-24T12:00:00Z', items: [{ id: 'i1', product_name: 'Agua', quantity: 1, unit_price: 2200, total_price: 2200 }] },
+    { id: 'order-2', created_at: '2026-10-24T12:00:01Z', items: [{ id: 'i2', product_name: 'Jugo', quantity: 1, unit_price: 1800, total_price: 1800 }] },
+  ]
+
+  it('avisa que hay dos pedidos y cobra primero uno, por su monto', async () => {
+    const user = userEvent.setup()
+    setup({ activeOrders: pedidos })
+    render(<MesaWorkspace mesa={{ ...mesa, state: 'ocupada' }} localId="local1" cajaId="caja1" onBack={vi.fn()} onTableUpdated={vi.fn()} />)
+
+    expect(screen.getByRole('note')).toHaveTextContent('Esta mesa tiene 2 pedidos abiertos')
+    expect(screen.getByRole('note')).toHaveTextContent('ahora el pedido 1 de 2, por $2.200')
+    await user.click(screen.getByRole('button', { name: /cobrar/i }))
+    expect(screen.getByText('Cobro de Mesa Mesa 1 · pedido 1 de 2: 2200')).toBeInTheDocument()
+  })
+
+  it('cobrado el primero, la mesa sigue ocupada y dice cuánto falta', async () => {
+    const user = userEvent.setup()
+    const { refresh } = setup({ activeOrders: pedidos })
+    const onBack = vi.fn()
+    render(<MesaWorkspace mesa={{ ...mesa, state: 'ocupada' }} localId="local1" cajaId="caja1" onBack={onBack} onTableUpdated={vi.fn()} />)
+
+    await user.click(screen.getByRole('button', { name: /cobrar/i }))
+    await user.click(screen.getByRole('button', { name: 'Simular pago aprobado' }))
+
+    expect(await screen.findByRole('status')).toHaveTextContent('Pedido cobrado. Falta 1 pedido de esta mesa por $1.800: pulsa «Cobrar» de nuevo.')
+    expect(setMesaLibre).not.toHaveBeenCalled()
+    expect(onBack).not.toHaveBeenCalled()
+    expect(refresh).toHaveBeenCalled()
+  })
+
+  it('con un solo pedido se cobra el total y no aparece el aviso', async () => {
+    const user = userEvent.setup()
+    setup({ activeOrders: [pedidos[0]] })
+    render(<MesaWorkspace mesa={{ ...mesa, state: 'ocupada' }} localId="local1" cajaId="caja1" onBack={vi.fn()} onTableUpdated={vi.fn()} />)
+
+    expect(screen.queryByRole('note')).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: /cobrar/i }))
+    expect(screen.getByText('Cobro de Mesa Mesa 1: 2200')).toBeInTheDocument()
+  })
+})
+
+describe('MesaWorkspace · cobro con tarjeta vivo en la máquina (#160)', () => {
+  beforeEach(() => { banderas.mercadopagoPoint = true })
+  afterEach(() => { banderas.mercadopagoPoint = false })
+
+  const montar = () => {
+    setup({ activeOrders: [{ id: 'order-1', items: [] }] })
+    render(<MesaWorkspace mesa={{ ...mesa, state: 'ocupada' }} localId="local1" cajaId="caja1" puedeLiberarMesa onBack={vi.fn()} onTableUpdated={vi.fn()} />)
+  }
+
+  it('con el cobro vivo, «Cancelar orden» y «Liberar mesa» se bloquean y se dice por qué', async () => {
+    getPointOrderStatus.mockResolvedValue({ order_status: 'OPEN', point_charge_active: true })
+    montar()
+    expect(await screen.findByText(/Hay un cobro con tarjeta en la máquina/)).toBeInTheDocument()
+    expect(getPointOrderStatus).toHaveBeenCalledWith('order-1')
+    expect(screen.getByRole('button', { name: /Cancelar orden/ })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Liberar mesa' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: /cobrar/i })).toBeEnabled()
+  })
+
+  it('sin cobro vivo, todo sigue disponible', async () => {
+    getPointOrderStatus.mockResolvedValue({ order_status: 'OPEN', point_charge_active: false })
+    montar()
+    await waitFor(() => expect(getPointOrderStatus).toHaveBeenCalled())
+    expect(screen.queryByText(/Hay un cobro con tarjeta en la máquina/)).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Cancelar orden/ })).toBeEnabled()
+    expect(screen.getByRole('button', { name: 'Liberar mesa' })).toBeEnabled()
   })
 })
