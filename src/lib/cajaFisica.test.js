@@ -223,6 +223,24 @@ describe('separarTurnosAbiertos (#162)', () => {
     expect(ids(viejos)).toEqual(['b'])
   })
 
+  it('sin apertura_id, decide la hora de inicio contra la de la apertura actual', () => {
+    const conHora = [{ id: 'cf-1', abierta: true, apertura_actual: { id: 'ap-hoy', abierta_at: '2026-10-25T12:00:00Z' } }]
+    const { actuales, viejos } = separarTurnosAbiertos([
+      { id: 'f', is_active: true, caja_fisica_id: 'cf-1', opened_at: '2026-10-25T13:00:00Z', business_date: '2026-10-25' },
+      { id: 'g', is_active: true, caja_fisica_id: 'cf-1', opened_at: '2026-10-25T08:00:00Z', business_date: '2026-10-25' },
+    ], conHora, '2026-10-25')
+    expect(ids(actuales)).toEqual(['f'])
+    expect(ids(viejos)).toEqual(['g'])
+  })
+
+  it('si la hora del turno no trae zona, no se compara: decide el día', () => {
+    const conHora = [{ id: 'cf-1', abierta: true, apertura_actual: { id: 'ap-hoy', abierta_at: '2026-10-25T12:00:00Z' } }]
+    const { actuales } = separarTurnosAbiertos([
+      { id: 'h', is_active: true, caja_fisica_id: 'cf-1', opened_at: '2026-10-25T08:00:00', business_date: '2026-10-25' },
+    ], conHora, '2026-10-25')
+    expect(ids(actuales)).toEqual(['h'])
+  })
+
   it('un turno abierto sobre una caja cerrada es viejo', () => {
     const { actuales, viejos } = separarTurnosAbiertos([{ id: 'c', is_active: true, caja_fisica_id: 'cf-2', business_date: '2026-10-25' }], cajas, '2026-10-25')
     expect(actuales).toEqual([])

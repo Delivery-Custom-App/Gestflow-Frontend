@@ -71,22 +71,36 @@ export function cajasAbiertas(cajas) {
   return lista(cajas).filter((c) => c.is_active !== false && c.abierta === true)
 }
 
+/** Instante en ms de una hora con zona explícita (Z o ±hh:mm); null si no trae zona o no se entiende. */
+function instanteConZona(texto) {
+  if (typeof texto !== 'string' || !/(Z|[+-]\d{2}:?\d{2})$/i.test(texto)) return null
+  const ms = Date.parse(texto)
+  return Number.isNaN(ms) ? null : ms
+}
+
 /**
  * #162: separa los turnos abiertos en los de ahora y los viejos que quedaron abiertos.
- * Un turno es de ahora si es de la apertura actual de su caja física; si el turno no
- * trae `apertura_id` (o no se conocen las cajas), si es de hoy. Un turno abierto sobre
- * una caja ya cerrada es viejo. Devuelve { actuales, viejos }.
+ * Un turno es de ahora si es de la apertura actual de su caja física. Si no trae
+ * `apertura_id`, se compara su hora de inicio con la de la apertura actual (solo cuando
+ * las dos traen zona); y si tampoco se puede, si es de hoy. Un turno abierto sobre una
+ * caja ya cerrada es viejo. Devuelve { actuales, viejos }.
  */
 export function separarTurnosAbiertos(turnos, cajasFisicas, hoy) {
-  const aperturaDe = new Map(lista(cajasFisicas).map((c) => [String(c.id), c.abierta ? c.apertura_actual?.id ?? null : false]))
+  const aperturaDe = new Map(lista(cajasFisicas).map((c) => [
+    String(c.id),
+    c.abierta ? { id: c.apertura_actual?.id ?? null, desde: instanteConZona(c.apertura_actual?.abierta_at) } : false,
+  ]))
   const actuales = []
   const viejos = []
   for (const t of lista(turnos)) {
     if (!t.is_active) continue
     const apertura = aperturaDe.get(String(t.caja_fisica_id))
-    const esDeAhora = apertura === false ? false
-      : apertura && t.apertura_id ? String(t.apertura_id) === String(apertura)
-        : t.business_date === hoy
+    const inicio = instanteConZona(t.opened_at)
+    let esDeAhora
+    if (apertura === false) esDeAhora = false
+    else if (apertura?.id && t.apertura_id) esDeAhora = String(t.apertura_id) === String(apertura.id)
+    else if (apertura?.desde != null && inicio != null) esDeAhora = inicio >= apertura.desde
+    else esDeAhora = t.business_date === hoy
     ;(esDeAhora ? actuales : viejos).push(t)
   }
   return { actuales, viejos }
