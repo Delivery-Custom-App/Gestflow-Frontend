@@ -113,3 +113,87 @@ describe('authClient — cambiar de local activo (T-73)', () => {
     expect(fetch).not.toHaveBeenCalled()
   })
 })
+
+describe('authClient — el error se lee aunque `detail` sea una lista (#166)', () => {
+  let store
+
+  // Lo que responde el backend con «juan@gmail»: FastAPI manda `detail` como lista de errores.
+  const CORREO_INVALIDO = {
+    detail: [{
+      type: 'value_error',
+      loc: ['body', 'email'],
+      msg: 'value is not a valid email address: The part after the @-sign is not valid. It should have a period.',
+      input: 'juan@gmail',
+    }],
+  }
+
+  beforeEach(() => {
+    store = new Map()
+    vi.stubGlobal('localStorage', {
+      getItem: (k) => (store.has(k) ? store.get(k) : null),
+      setItem: (k, v) => store.set(k, String(v)),
+      removeItem: (k) => store.delete(k),
+    })
+    vi.stubGlobal('fetch', vi.fn())
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('un correo como «juan@gmail» muestra el motivo, no «[object Object]»', async () => {
+    fetch.mockResolvedValueOnce(jsonResponse(CORREO_INVALIDO, { ok: false, status: 422 }))
+
+    const err = await loginWithPassword({ email: 'juan@gmail', password: 'x' }).catch((e) => e)
+
+    expect(err.message).toBe('email: value is not a valid email address: The part after the @-sign is not valid. It should have a period.')
+    expect(err.message).not.toContain('[object Object]')
+    expect(store.has('gestflow-auth-token')).toBe(false)
+  })
+
+  it('con varios errores los junta, uno por línea', async () => {
+    fetch.mockResolvedValueOnce(jsonResponse({
+      detail: [
+        { loc: ['body', 'email'], msg: 'correo inválido' },
+        { loc: ['body', 'password'], msg: 'la contraseña es obligatoria' },
+      ],
+    }, { ok: false, status: 422 }))
+
+    const err = await loginWithPassword({ email: 'juan@gmail', password: '' }).catch((e) => e)
+
+    expect(err.message).toBe('email: correo inválido\npassword: la contraseña es obligatoria')
+  })
+
+  it('un `detail` de texto sigue mostrándose igual («Credenciales inválidas»)', async () => {
+    fetch.mockResolvedValueOnce(jsonResponse({ detail: 'Credenciales inválidas' }, { ok: false, status: 401 }))
+
+    await expect(loginWithPassword({ email: 'a@a.com', password: 'mala' })).rejects.toThrow('Credenciales inválidas')
+  })
+
+  it('si el `detail` no trae texto cae al `message`, al texto del estado o al mensaje genérico', async () => {
+    fetch.mockResolvedValueOnce(jsonResponse({ detail: [], message: 'Solicitud inválida' }, { ok: false, status: 422 }))
+    await expect(loginWithPassword({ email: 'a@a.com', password: 'x' })).rejects.toThrow('Solicitud inválida')
+
+    fetch.mockResolvedValueOnce({ ...jsonResponse({ detail: [] }, { ok: false, status: 422 }), statusText: 'Unprocessable Entity' })
+    await expect(loginWithPassword({ email: 'a@a.com', password: 'x' })).rejects.toThrow('Unprocessable Entity')
+
+    fetch.mockResolvedValueOnce(jsonResponse({}, { ok: false, status: 400 }))
+    await expect(loginWithPassword({ email: 'a@a.com', password: 'x' })).rejects.toThrow('Error de autenticacion')
+  })
+
+  it('un `detail` en forma de objeto tampoco queda como «[object Object]»', async () => {
+    fetch.mockResolvedValueOnce(jsonResponse({ detail: { mensaje: 'Cuenta bloqueada por el administrador' } }, { ok: false, status: 403 }))
+
+    await expect(loginWithPassword({ email: 'a@a.com', password: 'x' })).rejects.toThrow('Cuenta bloqueada por el administrador')
+  })
+
+  it('cambiar de local con un id inválido (422 en lista) también explica el motivo', async () => {
+    store.set('gestflow-auth-token', 'TOKEN-LOCAL-A')
+    fetch.mockResolvedValueOnce(jsonResponse({
+      detail: [{ loc: ['body', 'local_id'], msg: 'Input should be a valid UUID' }],
+    }, { ok: false, status: 422 }))
+
+    await expect(cambiarLocalActivo('no-es-uuid')).rejects.toThrow('local_id: Input should be a valid UUID')
+    expect(store.get('gestflow-auth-token')).toBe('TOKEN-LOCAL-A')
+  })
+})
