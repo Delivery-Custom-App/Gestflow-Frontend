@@ -11,22 +11,28 @@ const CAMPO = 'h-9 w-full rounded-md border border-[hsl(var(--border))] bg-[hsl(
  * Traspasar las mesas en curso de un vendedor a otro, todas juntas o una por
  * una. `mesas`: la atención de cada mesa en curso (atencionDeMesa), con su
  * nombre; `vendedores`: a quiénes se les puede pasar; `nombre(id)`: cómo
- * mostrar a cada persona.
+ * mostrar a cada persona. `onDone` se llama al pasar todas; `onParcial` cuando
+ * pasaron algunas y otras fallaron (la pantalla se refresca y aquí quedan solo
+ * las que fallaron).
  */
-export default function TraspasarMesasModal({ mesas, vendedores, nombre, onClose, onDone }) {
+export default function TraspasarMesasModal({ mesas, vendedores, nombre, onClose, onDone, onParcial }) {
+  // Las que ya pasaron en un traspaso parcial no vuelven a la lista, aunque `mesas` tarde en refrescarse.
+  const [pasadas, setPasadas] = useState(() => new Set())
+  const pendientes = useMemo(() => mesas.filter((m) => !pasadas.has(String(m.mesa.id))), [mesas, pasadas])
+
   const origenes = useMemo(() => {
     const cuenta = new Map()
-    for (const m of mesas) {
+    for (const m of pendientes) {
       const id = m.atiendeId || SIN_REGISTRAR
       cuenta.set(id, (cuenta.get(id) || 0) + 1)
     }
     return [...cuenta.entries()]
       .map(([id, n]) => ({ id, n, nombre: id === SIN_REGISTRAR ? 'Sin vendedor registrado' : nombre(id) }))
       .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'))
-  }, [mesas, nombre])
+  }, [pendientes, nombre])
 
   const [deId, setDeId] = useState(origenes.length === 1 ? origenes[0].id : '')
-  const delOrigen = mesas.filter((m) => (m.atiendeId || SIN_REGISTRAR) === deId)
+  const delOrigen = pendientes.filter((m) => (m.atiendeId || SIN_REGISTRAR) === deId)
   const [elegidas, setElegidas] = useState(() => new Set(delOrigen.map((m) => String(m.mesa.id))))
   const [aId, setAId] = useState('')
   const [motivo, setMotivo] = useState('')
@@ -37,7 +43,7 @@ export default function TraspasarMesasModal({ mesas, vendedores, nombre, onClose
     setDeId(id)
     setError('')
     // Por defecto van todas las mesas de esa persona; se pueden desmarcar.
-    setElegidas(new Set(mesas.filter((m) => (m.atiendeId || SIN_REGISTRAR) === id).map((m) => String(m.mesa.id))))
+    setElegidas(new Set(pendientes.filter((m) => (m.atiendeId || SIN_REGISTRAR) === id).map((m) => String(m.mesa.id))))
     if (aId === id) setAId('')
   }
 
@@ -59,6 +65,13 @@ export default function TraspasarMesasModal({ mesas, vendedores, nombre, onClose
     const fallidas = await traspasarMesas(aTraspasar, aId, motivo)
     setGuardando(false)
     if (fallidas.length) {
+      // Traspaso parcial: las que pasaron salen de la lista (un reintento no las vuelve a mandar) y la pantalla se refresca.
+      const fallaron = new Set(fallidas.map((f) => String(f.mesa.mesa.id)))
+      const pasaron = aTraspasar.filter((m) => !fallaron.has(String(m.mesa.id)))
+      if (pasaron.length) {
+        setPasadas((prev) => new Set([...prev, ...pasaron.map((m) => String(m.mesa.id))]))
+        onParcial?.({ cantidad: pasaron.length, a: nombre(aId) })
+      }
       setError(`No se pudieron traspasar: ${fallidas.map((f) => `${f.mesa.mesa.name} (${f.error})`).join(', ')}`)
       return
     }
