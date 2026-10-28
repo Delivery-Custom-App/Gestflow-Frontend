@@ -10,6 +10,7 @@ import { liberarGrupoAlCobrar } from '../../lib/liberarGrupo'
 import { getSplitPaymentSummary } from '../../lib/apiClient'
 import { getPointOrderStatus } from '../../lib/cobroTarjeta'
 import { isV2FeatureEnabled } from '../../lib/v2Features'
+import { MENSAJE_ENCARGADO_NO_ABRE_PEDIDOS } from '../../lib/rolesCaja'
 import { formatCLP } from '../../lib/formatCLP'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -49,6 +50,9 @@ export default function MesaWorkspace({ mesa, atencion = null, localId, cajaId, 
   const pedidosActivos = detail?.active_orders?.length ?? 0
   const variosPedidos = pedidosActivos > 1
   const totalACobrar = variosPedidos ? totalDeOrden(firstOrder) : total
+  // #167: el encargado de restaurante no abre pedidos (el backend responde 403: los abre el mesero con su turno), pero sí
+  // puede sumar productos a uno ya abierto. Solo en una mesa sin pedido no hay nada que ofrecerle.
+  const noPuedeAbrirPedido = !puedeCobrar && !firstOrder
 
   const [selectedQtys, setSelectedQtys] = useState({})
   const [guests, setGuests] = useState('1')
@@ -396,7 +400,14 @@ export default function MesaWorkspace({ mesa, atencion = null, localId, cajaId, 
   const menuPanel = (
     <div className="flex h-full min-h-0 flex-col">
       <div className="flex-1 overflow-y-auto no-scrollbar min-h-0 px-4 py-4 space-y-3">
-        {menuLoading ? (
+        {noPuedeAbrirPedido ? (
+          <div role="note" className="flex flex-col items-center justify-center py-12 text-center">
+            <p className="text-sm font-medium text-[hsl(var(--foreground))]">Esta mesa todavía no tiene pedido</p>
+            <p className="mt-1 max-w-xs text-xs text-[hsl(var(--muted-foreground))]">
+              {MENSAJE_ENCARGADO_NO_ABRE_PEDIDOS} Cuando el mesero lo abra, podrás sumarle productos.
+            </p>
+          </div>
+        ) : menuLoading ? (
           <div className="flex flex-col items-center gap-2 py-8 text-[hsl(var(--muted-foreground))]">
             <div className="w-5 h-5 border-2 border-[hsl(var(--primary))] border-t-transparent rounded-full animate-spin" />
             <p className="text-xs">Cargando menú...</p>
@@ -457,7 +468,7 @@ export default function MesaWorkspace({ mesa, atencion = null, localId, cajaId, 
   const orderPanel = (
     <div className="flex h-full min-h-0 flex-col">
       <div className="px-4 lg:px-5 py-4 border-b border-[hsl(var(--border))] shrink-0 space-y-3">
-        {!detail?.active_orders?.length ? (
+        {!detail?.active_orders?.length && !noPuedeAbrirPedido ? (
           <div className="flex items-center gap-3">
             <label htmlFor="mesa-comensales" className="text-sm font-medium">Comensales</label>
             <input

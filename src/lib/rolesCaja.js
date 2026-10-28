@@ -42,3 +42,6 @@ export const MENSAJE_SOLO_DUENO_CONECTA_MP = 'La cuenta de MercadoPago la conect
 
 /** Texto para un 403 al cerrar la caja. */
 export const MENSAJE_SOLO_ADMIN_CIERRA = 'Solo el administrador del local o el dueño cierran la caja. Termina tu turno y avísales.'
+
+/** #167: el encargado no abre pedidos en un restaurante (sin turno propio no hay caja que abrir). */
+export const MENSAJE_ENCARGADO_NO_ABRE_PEDIDOS = 'En un restaurante los pedidos los abre el mesero con su turno: el encargado no abre pedidos.'
