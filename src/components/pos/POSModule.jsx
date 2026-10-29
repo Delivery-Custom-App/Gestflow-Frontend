@@ -73,12 +73,17 @@ export default function POSModule() {
     antes: fueTraspasada(info) ? nombre(info.abrioId) : null,
   }])), [mesasEnCurso, nombre])
 
-  const handleTraspasoHecho = useCallback(({ cantidad, a }) => {
-    setTraspasando(false)
+  // También con un traspaso parcial: la ventana sigue abierta con las mesas que fallaron.
+  const handleTraspasoParcial = useCallback(({ cantidad, a }) => {
     toast.success(`${cantidad} mesa${cantidad === 1 ? '' : 's'} traspasada${cantidad === 1 ? '' : 's'} a ${a}`)
     refreshMesas()
     recargarAtencion()
   }, [refreshMesas, recargarAtencion])
+
+  const handleTraspasoHecho = useCallback((traspaso) => {
+    setTraspasando(false)
+    handleTraspasoParcial(traspaso)
+  }, [handleTraspasoParcial])
 
   // ── Agrupar mesas ───────────────────────────────────────────────────
   const { porMesa: gruposPorMesa, crear: crearGrupo, deshacer: deshacerGrupo, refresh: refreshGrupos } = useGruposDeMesas(localId)
@@ -459,6 +464,7 @@ export default function POSModule() {
           nombre={nombre}
           onClose={() => setTraspasando(false)}
           onDone={handleTraspasoHecho}
+          onParcial={handleTraspasoParcial}
         />
       )}
 

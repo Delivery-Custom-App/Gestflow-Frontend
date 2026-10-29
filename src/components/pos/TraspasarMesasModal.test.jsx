@@ -93,6 +93,51 @@ describe('TraspasarMesasModal', () => {
     expect(onDone).not.toHaveBeenCalled()
   })
 
+  it('#169: traspaso parcial, avisa a la pantalla y deja solo las que fallaron; el reintento no manda las que ya pasaron', async () => {
+    traspasarMesas.mockResolvedValueOnce([{ mesa: MESAS[1], error: 'La mesa ya es de ese empleado' }])
+    const onDone = vi.fn()
+    const onParcial = vi.fn()
+    const user = userEvent.setup()
+    montar({ onDone, onParcial })
+
+    await user.selectOptions(screen.getByLabelText('De'), 'ana')
+    await user.selectOptions(screen.getByLabelText('A'), 'carla')
+    await user.type(screen.getByLabelText('Motivo'), 'Ana se retiró')
+    await user.click(screen.getByRole('button', { name: 'Traspasar 2 mesas' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('No se pudieron traspasar: Mesa 2 (La mesa ya es de ese empleado)')
+    expect(onParcial).toHaveBeenCalledWith({ cantidad: 1, a: 'Carla Díaz' })
+    expect(onDone).not.toHaveBeenCalled()
+    expect(screen.queryByRole('checkbox', { name: /Mesa 1/ })).not.toBeInTheDocument()
+    expect(screen.getByRole('checkbox', { name: /Mesa 2/ })).toBeChecked()
+    expect(within(screen.getByLabelText('De')).getByRole('option', { name: 'Ana Rojas (1 mesa)' })).toBeInTheDocument()
+
+    traspasarMesas.mockResolvedValueOnce([])
+    await user.click(screen.getByRole('button', { name: 'Traspasar 1 mesa' }))
+
+    await waitFor(() => expect(onDone).toHaveBeenCalledWith({ cantidad: 1, a: 'Carla Díaz' }))
+    expect(traspasarMesas).toHaveBeenNthCalledWith(2, [MESAS[1]], 'carla', 'Ana se retiró')
+    expect(onParcial).toHaveBeenCalledTimes(1)
+  })
+
+  it('#169: si no pasó ninguna, no avisa a la pantalla y todas siguen marcadas para reintentar', async () => {
+    traspasarMesas.mockResolvedValue([{ mesa: MESAS[0], error: 'No autorizado' }, { mesa: MESAS[1], error: 'No autorizado' }])
+    const onParcial = vi.fn()
+    const user = userEvent.setup()
+    montar({ onParcial })
+
+    await user.selectOptions(screen.getByLabelText('De'), 'ana')
+    await user.selectOptions(screen.getByLabelText('A'), 'carla')
+    await user.type(screen.getByLabelText('Motivo'), 'Ana se retiró')
+    await user.click(screen.getByRole('button', { name: 'Traspasar 2 mesas' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Mesa 1 (No autorizado), Mesa 2 (No autorizado)')
+    expect(onParcial).not.toHaveBeenCalled()
+    expect(screen.getByRole('checkbox', { name: /Mesa 1/ })).toBeChecked()
+    expect(screen.getByRole('checkbox', { name: /Mesa 2/ })).toBeChecked()
+    expect(screen.getByRole('button', { name: 'Traspasar 2 mesas' })).toBeEnabled()
+  })
+
   it('sin destino elegido no deja traspasar', async () => {
     const user = userEvent.setup()
     montar()

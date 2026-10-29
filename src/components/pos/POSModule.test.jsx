@@ -1,8 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, within } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router'
 import POSModule from './POSModule'
+import { hoyEnChile } from '../../lib/fondoEmergencia'
 
 const sesion = vi.hoisted(() => ({ isWorker: false, user: { id: 'enc' } }))
 const bajaDeMesa = vi.hoisted(() => vi.fn())
@@ -15,6 +16,10 @@ const grupos = vi.hoisted(() => ({ porMesa: new Map(), deshacer: vi.fn(), refres
 const refrescarMesas = vi.hoisted(() => vi.fn())
 const toastExito = vi.hoisted(() => vi.fn())
 const liberarGrupoMock = vi.hoisted(() => vi.fn())
+// Traspasos (#169): los turnos abiertos hoy (a quién se le puede pasar), lo que hace el traspaso y el refresco de la atención.
+const turnos = vi.hoisted(() => ({ cajas: [] }))
+const traspasarMesasMock = vi.hoisted(() => vi.fn())
+const recargarAtencion = vi.hoisted(() => vi.fn())
 // Lo que le dice el cobro de una mesa al módulo cuando soltó el resto del grupo.
 const cobro = vi.hoisted(() => ({ resultado: null }))
 const MESAS = [
@@ -49,6 +54,7 @@ vi.mock('./MesaWorkspace', () => ({
 }))
 vi.mock('../../lib/atencionMesas', async (importOriginal) => ({
   ...(await importOriginal()),
+  traspasarMesas: traspasarMesasMock,
   useDatosDeAtencion: () => ({
     usuarios: [
       { id: 'ana', role: 'EMPLEADO', local_id: 'l1', first_name: 'Ana', last_name: 'Rojas' },
@@ -59,7 +65,8 @@ vi.mock('../../lib/atencionMesas', async (importOriginal) => ({
       ['beto', { id: 'beto', first_name: 'Beto', last_name: 'Soto' }],
     ]),
     duenoDeTurno: new Map([['caja-ana', 'ana']]),
-    recargar: vi.fn(),
+    cajas: turnos.cajas,
+    recargar: recargarAtencion,
   }),
 }))
 
@@ -76,6 +83,7 @@ beforeEach(() => {
   sesion.isWorker = false; sesion.user = { id: 'enc' }; bajaDeMesa.mockReset(); editarMesa.mockReset(); crearGrupo.mockReset(); tablero.mesas = null
   grupos.porMesa = new Map(); grupos.deshacer.mockReset(); grupos.refresh.mockReset()
   refrescarMesas.mockReset(); toastExito.mockReset(); liberarGrupoMock.mockReset(); cobro.resultado = null
+  turnos.cajas = []; traspasarMesasMock.mockReset(); recargarAtencion.mockReset()
 })
 
 describe('POSModule · quién atiende y traspasos', () => {
@@ -110,6 +118,60 @@ describe('POSModule · quién atiende y traspasos', () => {
     montar()
     await user.click(within(tarjeta('Mesa 1')).getAllByRole('button').at(-1))
     expect(screen.getByText('mesa abierta · atiende Beto Soto · antes Ana Rojas')).toBeInTheDocument()
+  })
+})
+
+describe('POSModule · traspasar mesas (#169)', () => {
+  const enCurso = (id, total) => ({
+    id, name: `Mesa ${id.slice(1)}`, nombre: `Mesa ${id.slice(1)}`, state: 'ocupada', capacidad: 4, total,
+    ordenes_en_curso: [{ id: `o${id.slice(1)}`, caja_id: 'caja-beto', waiter_user_id: 'beto' }],
+  })
+
+  // Beto atiende dos mesas y Ana tiene turno abierto hoy: se le pasan las dos.
+  async function traspasarLasDosAAna(user) {
+    tablero.mesas = [enCurso('m1', 5000), enCurso('m2', 3000)]
+    turnos.cajas = [{ id: 'caja-ana', status: 'open', business_date: hoyEnChile(), cashier_user_id: 'ana', local_id: 'l1' }]
+    montar()
+    await user.click(screen.getByRole('button', { name: 'Traspasar mesas' }))
+    const dialogo = screen.getByRole('dialog', { name: 'Traspasar mesas' })
+    await user.selectOptions(within(dialogo).getByLabelText('De'), 'beto')
+    await user.selectOptions(within(dialogo).getByLabelText('A'), 'ana')
+    await user.type(within(dialogo).getByLabelText('Motivo'), 'Beto se retiró')
+    await user.click(within(dialogo).getByRole('button', { name: 'Traspasar 2 mesas' }))
+    return dialogo
+  }
+
+  it('si pasaron todas, cierra la ventana, avisa y refresca las mesas y quién atiende', async () => {
+    traspasarMesasMock.mockResolvedValue([])
+    await traspasarLasDosAAna(userEvent.setup())
+
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Traspasar mesas' })).not.toBeInTheDocument())
+    expect(toastExito).toHaveBeenCalledWith('2 mesas traspasadas a Ana Rojas')
+    expect(refrescarMesas).toHaveBeenCalledTimes(1)
+    expect(recargarAtencion).toHaveBeenCalledTimes(1)
+  })
+
+  it('si pasaron algunas, refresca y avisa cuántas pasaron, y la ventana sigue abierta solo con las que fallaron', async () => {
+    traspasarMesasMock.mockImplementation(async (mesas) => [{ mesa: mesas[1], error: 'La mesa ya es de ese empleado' }])
+    const dialogo = await traspasarLasDosAAna(userEvent.setup())
+
+    expect(await within(dialogo).findByRole('alert')).toHaveTextContent('No se pudieron traspasar: Mesa 2 (La mesa ya es de ese empleado)')
+    expect(toastExito).toHaveBeenCalledWith('1 mesa traspasada a Ana Rojas')
+    expect(refrescarMesas).toHaveBeenCalledTimes(1)
+    expect(recargarAtencion).toHaveBeenCalledTimes(1)
+    expect(within(dialogo).queryByRole('checkbox', { name: /Mesa 1/ })).not.toBeInTheDocument()
+    expect(within(dialogo).getByRole('checkbox', { name: /Mesa 2/ })).toBeChecked()
+    expect(within(dialogo).getByRole('button', { name: 'Traspasar 1 mesa' })).toBeEnabled()
+  })
+
+  it('si no pasó ninguna, no refresca ni avisa: todas siguen para reintentar', async () => {
+    traspasarMesasMock.mockImplementation(async (mesas) => mesas.map((mesa) => ({ mesa, error: 'No autorizado' })))
+    const dialogo = await traspasarLasDosAAna(userEvent.setup())
+
+    expect(await within(dialogo).findByRole('alert')).toHaveTextContent('Mesa 1 (No autorizado), Mesa 2 (No autorizado)')
+    expect(toastExito).not.toHaveBeenCalled()
+    expect(refrescarMesas).not.toHaveBeenCalled()
+    expect(within(dialogo).getByRole('button', { name: 'Traspasar 2 mesas' })).toBeEnabled()
   })
 })
 
