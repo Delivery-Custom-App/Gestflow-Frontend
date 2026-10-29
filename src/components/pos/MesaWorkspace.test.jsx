@@ -363,6 +363,66 @@ describe('MesaWorkspace · roles de caja (A-03)', () => {
   })
 })
 
+describe('MesaWorkspace · el encargado de restaurante no abre pedidos (#167)', () => {
+  const orden = { id: 'order-1', created_at: '2026-10-14T12:00:00Z', items: [] }
+
+  it('en una mesa sin pedido explica que lo abre el mesero y no ofrece la carta ni los comensales', () => {
+    setup({ activeOrders: [] })
+    render(<MesaWorkspace mesa={mesa} localId="local1" cajaId={null} puedeCobrar={false} onBack={() => {}} onTableUpdated={() => {}} />)
+
+    const aviso = screen.getByRole('note')
+    expect(aviso).toHaveTextContent('Esta mesa todavía no tiene pedido')
+    expect(aviso).toHaveTextContent('los pedidos los abre el mesero con su turno')
+    expect(aviso).toHaveTextContent('Cuando el mesero lo abra, podrás sumarle productos.')
+    expect(screen.queryByText('Agua')).not.toBeInTheDocument()
+    expect(screen.queryByText('+')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('Comensales')).not.toBeInTheDocument()
+    expect(createOrder).not.toHaveBeenCalled()
+  })
+
+  it('con un pedido abierto sigue sumando productos: el backend lo permite y no necesita caja', async () => {
+    const user = userEvent.setup()
+    const { refresh } = setup({ activeOrders: [orden] })
+    addOrderItem.mockResolvedValue({})
+    render(<MesaWorkspace mesa={mesa} localId="local1" cajaId={null} puedeCobrar={false} onBack={() => {}} onTableUpdated={() => {}} />)
+
+    expect(screen.queryByText('Esta mesa todavía no tiene pedido')).not.toBeInTheDocument()
+    await user.click(screen.getByText('+'))
+    await user.click(screen.getByRole('button', { name: /agregar al pedido/i }))
+
+    await waitFor(() => expect(addOrderItem).toHaveBeenCalledWith(
+      'order-1',
+      { product_id: 'prod1', quantity: 1, unit_price: 1000 },
+      '2026-10-14T12:00:00Z',
+      expect.stringMatching(/:item:0$/),
+    ))
+    expect(createOrder).not.toHaveBeenCalled()
+    expect(refresh).toHaveBeenCalled()
+  })
+
+  it('el dueño y el vendedor ven la carta y los comensales en una mesa sin pedido, sin el aviso', () => {
+    setup({ activeOrders: [] })
+    render(<MesaWorkspace mesa={mesa} localId="local1" cajaId="caja1" onBack={() => {}} onTableUpdated={() => {}} />)
+
+    expect(screen.queryByRole('note')).not.toBeInTheDocument()
+    expect(screen.getByText('Agua')).toBeInTheDocument()
+    expect(screen.getByLabelText('Comensales')).toBeInTheDocument()
+  })
+
+  it('si otro equipo abre el pedido mientras el encargado mira la mesa, aparece la carta al recargar', () => {
+    setup({ activeOrders: [] })
+    const props = { mesa, localId: 'local1', cajaId: null, puedeCobrar: false, onBack: () => {}, onTableUpdated: () => {} }
+    const { rerender } = render(<MesaWorkspace {...props} />)
+    expect(screen.queryByText('Agua')).not.toBeInTheDocument()
+
+    useMesaDetail.mockReturnValue({ detail: { active_orders: [orden] }, loading: false, error: null, refresh: vi.fn(), updateAfterItemRemoval: vi.fn() })
+    rerender(<MesaWorkspace {...props} />)
+
+    expect(screen.queryByText('Esta mesa todavía no tiene pedido')).not.toBeInTheDocument()
+    expect(screen.getByText('Agua')).toBeInTheDocument()
+  })
+})
+
 describe('MesaWorkspace · nota del ítem (A-06)', () => {
   it('agrega una nota a un ítem con PATCH notes y vaciarla la borra', async () => {
     const user = userEvent.setup()

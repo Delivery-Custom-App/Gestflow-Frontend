@@ -315,6 +315,67 @@ describe('createOrder — quién atiende la mesa', () => {
   })
 })
 
+describe('createOrder — sin caja con la caja física mandando (#167)', () => {
+  const MENSAJE_CAJA = /No hay caja abierta en este local\. Abre una caja antes de vender\./
+  let V2_FEATURES
+
+  beforeEach(async () => {
+    vi.clearAllMocks()
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-09-01T15:00:00'))
+    ;({ V2_FEATURES } = await import('./v2Features'))
+    V2_FEATURES.cajaFisicaManda = true
+    // El turno de hoy es del cajero: quien pide la orden no tiene uno propio.
+    apiRequest.mockResolvedValue([{ id: 'caja-cajero', status: 'open', business_date: '2026-09-01', cashier_user_id: 'u-cajero' }])
+  })
+
+  afterEach(() => {
+    V2_FEATURES.cajaFisicaManda = false
+    vi.useRealTimers()
+  })
+
+  const pedirMesa = (role) => {
+    getOptionalAuthContext.mockResolvedValue({ user: { id: 'u-yo', role } })
+    return createOrder({ local_id: 'l1', mesa_id: 'm1', source: 'dine_in', guests: 2, items: [] })
+  }
+
+  it('el encargado de restaurante recibe la explicación (403), no «Abre una caja», y no se llama a /orders', async () => {
+    await expect(pedirMesa('ADMIN')).rejects.toMatchObject({
+      status: 403,
+      message: 'En un restaurante los pedidos los abre el mesero con su turno: el encargado no abre pedidos.',
+    })
+    expect(apiRequest).not.toHaveBeenCalledWith('/orders', expect.anything())
+  })
+
+  it('el vendedor sin turno propio sigue viendo que falta abrir una caja', async () => {
+    await expect(pedirMesa('EMPLEADO')).rejects.toThrow(MENSAJE_CAJA)
+  })
+
+  it('el dueño sin turno propio sigue viendo que falta abrir una caja (él sí vende)', async () => {
+    await expect(pedirMesa('ADMIN_NEGOCIO')).rejects.toThrow(MENSAJE_CAJA)
+  })
+
+  it('sin sesión se pide abrir una caja, como siempre', async () => {
+    getOptionalAuthContext.mockResolvedValue({ user: null })
+    await expect(createOrder({ local_id: 'l1', mesa_id: 'm1', items: [] })).rejects.toThrow(MENSAJE_CAJA)
+  })
+
+  it('una venta sin mesa (al paso) del administrador sigue pidiendo abrir una caja: ahí sí vende', async () => {
+    getOptionalAuthContext.mockResolvedValue({ user: { id: 'u-yo', role: 'ADMIN' } })
+    await expect(createOrder({ local_id: 'l1', source: 'mostrador', items: [] })).rejects.toThrow(MENSAJE_CAJA)
+  })
+
+  it('con turno propio el encargado no cae en la explicación: la orden sale al backend', async () => {
+    // El backend es quien responde 403 en ese caso; la librería no decide por él.
+    getOptionalAuthContext.mockResolvedValue({ user: { id: 'u-cajero', role: 'ADMIN' } })
+    apiRequest
+      .mockResolvedValueOnce([{ id: 'caja-cajero', status: 'open', business_date: '2026-09-01', cashier_user_id: 'u-cajero' }])
+      .mockResolvedValueOnce({ id: 'o-1', created_at: '2026-09-01T15:00:00Z' })
+    await createOrder({ local_id: 'l1', mesa_id: 'm1', source: 'dine_in', items: [] })
+    expect(apiRequest).toHaveBeenCalledWith('/orders', expect.objectContaining({ method: 'POST' }))
+  })
+})
+
 describe('Idempotency-Key (T-64)', () => {
   beforeEach(() => vi.clearAllMocks())
 

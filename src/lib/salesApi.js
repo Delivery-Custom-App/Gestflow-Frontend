@@ -6,6 +6,8 @@ import { apiRequest, getOptionalAuthContext } from './apiClient'
 import { fetchProductsMap, productoDeFila } from './v2CatalogApi'
 import { traducirErrorCobro } from './supervision'
 import { isV2FeatureEnabled } from './v2Features'
+import { MENSAJE_ENCARGADO_NO_ABRE_PEDIDOS, puedeVender } from './rolesCaja'
+import { SALES_MODEL } from './salesModel'
 
 /**
  * Ítems del pedido con el shape que esperan las pantallas
@@ -564,6 +566,14 @@ export async function createOrder(orderData = {}) {
     cajaId = caja?.id || null
   }
   if (!cajaId) {
+    // #167: el encargado de un restaurante no tiene turno propio (no vende): no le falta «abrir una caja».
+    // Una orden con mesa solo existe en restaurante, así que el rol basta para saberlo.
+    const { user } = await getOptionalAuthContext()
+    if (orderData.mesa_id && !puedeVender(user?.role, SALES_MODEL.RESTAURANT)) {
+      const e = new Error(MENSAJE_ENCARGADO_NO_ABRE_PEDIDOS)
+      e.status = 403
+      throw e
+    }
     throw new Error('No hay caja abierta en este local. Abre una caja antes de vender.')
   }
 
