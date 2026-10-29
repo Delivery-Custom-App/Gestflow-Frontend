@@ -97,7 +97,10 @@ async function parseAuthResponse(response) {
     // T-66: límite de intentos del login (429, el cuerpo trae `error`) y 503 temporal.
     if (response.status === 429) throw new Error('Demasiados intentos, espera un minuto.')
     if (response.status === 503) throw new Error('No se pudo verificar tu cuenta en este momento. Reintenta en unos segundos.')
-    throw new Error(json?.detail || json?.message || response.statusText || 'Error de autenticacion')
+    // #166: `detail` puede ser una lista de errores de validación (422): se da en texto.
+    // Import dinámico porque apiClient ya importa este archivo.
+    const { formatApiErrorDetail } = await import('./apiClient')
+    throw new Error(formatApiErrorDetail(json?.detail) || json?.message || response.statusText || 'Error de autenticacion')
   }
 
   // Backend V2: { access_token, token_type }
