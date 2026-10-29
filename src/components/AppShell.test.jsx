@@ -13,6 +13,9 @@
  *
  * Inicio reemplaza a "Tus franquicias": es lo primero del menú del dueño y se
  * queda dentro de una franquicia para volver.
+ *
+ * Fuera de su local (Configuración) el vendedor no queda con el menú vacío: tiene
+ * «Mi punto de venta» para volver a vender sin la flecha del navegador.
  */
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { render, screen, cleanup, within } from '@testing-library/react'
@@ -29,12 +32,18 @@ const mockLocales = [
 const session = vi.hoisted(() => ({
   email: 'admin@demo.gestflow.dev',
   role: 'Admin Negocio',
+  assignedLocalId: undefined,
   locales: null,
   loading: false,
 }))
 
 vi.mock('../context/AuthContext', () => ({
-  useAuth: () => ({ user: { email: session.email, ...session.perfil }, userRole: session.role, logout: vi.fn() }),
+  useAuth: () => ({
+    user: { email: session.email, ...session.perfil },
+    userRole: session.role,
+    assignedLocalId: session.assignedLocalId,
+    logout: vi.fn(),
+  }),
 }))
 vi.mock('../hooks/useLocals', () => ({
   useLocals: () => ({ locales: session.locales ?? mockLocales, loading: session.loading }),
@@ -59,7 +68,7 @@ const original = { ...V2_FEATURES }
 afterEach(() => {
   Object.assign(V2_FEATURES, original)
   Object.assign(session, {
-    email: 'admin@demo.gestflow.dev', role: 'Admin Negocio', locales: null, loading: false, perfil: undefined,
+    email: 'admin@demo.gestflow.dev', role: 'Admin Negocio', assignedLocalId: undefined, locales: null, loading: false, perfil: undefined,
   })
 })
 
@@ -455,6 +464,94 @@ describe('AppShell — Configuración junto al cambio de tema', () => {
     expect(screen.getByRole('button', { name: 'Configuración' })).toBeInTheDocument()
     expect(screen.queryByText('Descubrir')).not.toBeInTheDocument()
     expect(within(screen.getByRole('navigation')).getAllByRole('button')[0]).toHaveAccessibleName(/POS Restaurante/)
+  })
+})
+
+// Muestra a qué local llevó el menú: así la prueba ve que es el local asignado.
+function PuntoDeVentaDelLocal() {
+  const { localId } = useParams()
+  return <p>{`punto de venta de ${localId}`}</p>
+}
+
+function renderDesdeConfiguracion(path = '/configuracion') {
+  return render(
+    <MemoryRouter initialEntries={[path]}>
+      <Routes>
+        <Route element={<AppShell />}>
+          <Route path="/configuracion" element={<p>pantalla de configuración</p>} />
+          <Route path="/local/:localId/pos" element={<PuntoDeVentaDelLocal />} />
+          <Route path="/local/:localId/*" element={<p>contenido del local</p>} />
+        </Route>
+      </Routes>
+    </MemoryRouter>,
+  )
+}
+
+describe('AppShell — el vendedor vuelve a su punto de venta desde Configuración', () => {
+  const menu = () => within(screen.getByRole('navigation'))
+
+  afterEach(() => {
+    try { window.localStorage.removeItem('appSidebarCollapsed') } catch { /* sin storage */ }
+  })
+
+  it.each([['Empleado'], ['Cajero']])('el %s no queda con el menú vacío: tiene «Mi punto de venta» bajo Descubrir', (rol) => {
+    session.role = rol
+    session.assignedLocalId = 'loc-mesas'
+    renderDesdeConfiguracion()
+
+    expect(screen.getByText('Descubrir')).toBeInTheDocument()
+    expect(menu().getAllByRole('button')).toHaveLength(1)
+    expect(menu().getByRole('button', { name: 'Mi punto de venta' })).not.toHaveAttribute('aria-current')
+  })
+
+  it('lo lleva al punto de venta de SU local, no al primero de la lista', async () => {
+    const user = userEvent.setup()
+    session.role = 'Empleado'
+    session.assignedLocalId = 'loc-paso'
+    renderDesdeConfiguracion()
+
+    await user.click(menu().getByRole('button', { name: 'Mi punto de venta' }))
+
+    expect(screen.getByText('punto de venta de loc-paso')).toBeInTheDocument()
+    expect(screen.queryByText('pantalla de configuración')).not.toBeInTheDocument()
+  })
+
+  it('dentro de su local no se duplica: ahí tiene su sección de venta', () => {
+    session.role = 'Empleado'
+    session.assignedLocalId = 'loc-mesas'
+    renderDesdeConfiguracion('/local/loc-mesas/pos')
+
+    expect(menu().queryByRole('button', { name: 'Mi punto de venta' })).not.toBeInTheDocument()
+    expect(screen.queryByText('Descubrir')).not.toBeInTheDocument()
+    expect(menu().getByRole('button', { name: 'Gestión de Mesas' })).toBeInTheDocument()
+  })
+
+  it('sin local asignado no se ofrece un acceso que no lleva a ninguna parte', () => {
+    session.role = 'Empleado'
+    renderDesdeConfiguracion()
+
+    expect(menu().queryByRole('button', { name: 'Mi punto de venta' })).not.toBeInTheDocument()
+    expect(screen.queryByText('Descubrir')).not.toBeInTheDocument()
+  })
+
+  it.each([['el dueño', 'Admin Negocio'], ['el encargado', 'Admin'], ['el superadmin', 'Superadmin']])(
+    '%s no lo recibe: es solo del vendedor',
+    (_quien, rol) => {
+      session.role = rol
+      session.assignedLocalId = 'loc-mesas'
+      renderDesdeConfiguracion()
+
+      expect(menu().queryByRole('button', { name: 'Mi punto de venta' })).not.toBeInTheDocument()
+    },
+  )
+
+  it('con el menú colapsado se sigue entendiendo qué es', () => {
+    window.localStorage.setItem('appSidebarCollapsed', '1')
+    session.role = 'Empleado'
+    session.assignedLocalId = 'loc-mesas'
+    renderDesdeConfiguracion()
+
+    expect(menu().getByRole('button', { name: 'Mi punto de venta' })).toHaveAttribute('title', 'Mi punto de venta')
   })
 })
 
